@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 
 void main() {
   testWidgets('shows loading and empty states', (tester) async {
@@ -121,10 +122,27 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<List<ChatMessage>> listMessages(String conversationId) async {
+    return const [];
+  }
+
+  @override
   Future<String> getOrCreateDirectConversation(String otherUserId) async {
     return 'conversation-for-$otherUserId';
   }
 
   @override
+  Future<void> sendTextMessage({
+    required String conversationId,
+    required String body,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead(String conversationId) async {}
+
+  @override
   Stream<void> conversationChanges() => _changes.stream;
+
+  @override
+  Stream<void> messageChanges(String conversationId) => const Stream.empty();
 }

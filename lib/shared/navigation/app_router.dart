@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
@@ -78,7 +79,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/chats/:conversationId',
             builder: (context, state) {
-              return ChatThreadPlaceholderScreen(
+              return ChatThreadScreen(
                 conversationId: state.pathParameters['conversationId']!,
               );
             },
@@ -106,20 +107,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
   return router;
 });
-
-class ChatThreadPlaceholderScreen extends StatelessWidget {
-  const ChatThreadPlaceholderScreen({required this.conversationId, super.key});
-
-  final String conversationId;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
-      body: Center(child: Text('Conversation $conversationId')),
-    );
-  }
-}
 
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});

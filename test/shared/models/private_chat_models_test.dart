@@ -83,6 +83,23 @@ void main() {
     );
   });
 
+  test('FriendRequest toJson includes writable Supabase keys', () {
+    final request = FriendRequest.fromJson({
+      'id': 'request-1',
+      'requester_id': 'user-1',
+      'receiver_id': 'user-2',
+      'status': 'accepted',
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'updated_at': '2026-05-18T00:01:00.000Z',
+    });
+
+    expect(request.toJson(), {
+      'requester_id': 'user-1',
+      'receiver_id': 'user-2',
+      'status': 'accepted',
+    });
+  });
+
   test('Friendship parses Supabase rows and copies values', () {
     final friendship = Friendship.fromJson({
       'id': 'friendship-1',
@@ -100,6 +117,24 @@ void main() {
     expect(friendship.userHighRemark, isNull);
     expect(friendship.createdAt, DateTime.utc(2026, 5, 18));
     expect(friendship.copyWith(userHighRemark: 'Lex').userHighRemark, 'Lex');
+  });
+
+  test('Friendship toJson includes writable Supabase keys', () {
+    final friendship = Friendship.fromJson({
+      'id': 'friendship-1',
+      'user_low_id': 'user-1',
+      'user_high_id': 'user-2',
+      'user_low_remark': 'Al',
+      'user_high_remark': null,
+      'created_at': '2026-05-18T00:00:00.000Z',
+    });
+
+    expect(friendship.toJson(), {
+      'user_low_id': 'user-1',
+      'user_high_id': 'user-2',
+      'user_low_remark': 'Al',
+      'user_high_remark': null,
+    });
   });
 
   test('Friendship copyWith can clear remarks', () {
@@ -145,7 +180,7 @@ void main() {
     },
   );
 
-  test('Conversation copyWith can clear last message fields', () {
+  test('Conversation copyWith can clear nullable fields', () {
     final conversation = ConversationSummary.fromJson({
       'id': 'conversation-1',
       'type': 'direct',
@@ -157,12 +192,34 @@ void main() {
     });
 
     final updated = conversation.copyWith(
+      title: null,
+      avatarUrl: null,
       lastMessageBody: null,
       lastMessageAt: null,
     );
 
+    expect(updated.title, isNull);
+    expect(updated.avatarUrl, isNull);
     expect(updated.lastMessageBody, isNull);
     expect(updated.lastMessageAt, isNull);
+  });
+
+  test('Conversation toJson includes writable Supabase keys', () {
+    final conversation = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'group',
+      'title': 'Project',
+      'avatar_url': 'https://example.test/conversation.png',
+      'last_message_body': 'Hi',
+      'last_message_at': '2026-05-18T00:00:00.000Z',
+      'unread_count': 2,
+    });
+
+    expect(conversation.toJson(), {
+      'type': 'group',
+      'title': 'Project',
+      'avatar_url': 'https://example.test/conversation.png',
+    });
   });
 
   test('Message parses text rows and copies values', () {

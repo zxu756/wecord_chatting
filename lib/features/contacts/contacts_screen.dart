@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
-import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final contactsSearchQueryProvider = StateProvider.autoDispose<String>((ref) {
@@ -16,12 +15,18 @@ final contactsSearchResultsProvider = FutureProvider.autoDispose<List<Profile>>(
 );
 
 final incomingFriendRequestsProvider =
-    FutureProvider.autoDispose<List<FriendRequest>>((ref) {
+    FutureProvider.autoDispose<List<IncomingFriendRequest>>((ref) {
       return ref.watch(contactsRepositoryProvider).listIncomingRequests();
     });
 
 final friendsProvider = FutureProvider.autoDispose<List<Profile>>((ref) {
   return ref.watch(contactsRepositoryProvider).listFriends();
+});
+
+final sentFriendRequestIdsProvider = StateProvider.autoDispose<Set<String>>((
+  ref,
+) {
+  return const {};
 });
 
 class ContactsScreen extends ConsumerWidget {
@@ -85,20 +90,41 @@ class _SearchSection extends ConsumerWidget {
                       for (final profile in profiles)
                         _ProfileTile(
                           profile: profile,
-                          trailing: FilledButton(
-                            onPressed: () async {
-                              await ref
-                                  .read(contactsRepositoryProvider)
-                                  .sendFriendRequest(profile.id);
-                            },
-                            child: const Text('Add'),
-                          ),
+                          trailing: _AddFriendButton(profile: profile),
                         ),
                     ],
                   );
                 },
               ),
       ],
+    );
+  }
+}
+
+class _AddFriendButton extends ConsumerWidget {
+  const _AddFriendButton({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requested = ref
+        .watch(sentFriendRequestIdsProvider)
+        .contains(profile.id);
+
+    return FilledButton(
+      onPressed: requested
+          ? null
+          : () async {
+              await ref
+                  .read(contactsRepositoryProvider)
+                  .sendFriendRequest(profile.id);
+              ref.read(sentFriendRequestIdsProvider.notifier).update((ids) {
+                return {...ids, profile.id};
+              });
+              ref.invalidate(contactsSearchResultsProvider);
+            },
+      child: Text(requested ? 'Requested' : 'Add'),
     );
   }
 }
@@ -121,11 +147,11 @@ class _IncomingRequestsSection extends ConsumerWidget {
           }
           return Column(
             children: [
-              for (final request in requests)
+              for (final incomingRequest in requests)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(request.requesterId),
-                  subtitle: const Text('Pending friend request'),
+                  title: Text(incomingRequest.requester.displayName),
+                  subtitle: Text('@${incomingRequest.requester.username}'),
                   trailing: Wrap(
                     spacing: 8,
                     children: [
@@ -133,7 +159,7 @@ class _IncomingRequestsSection extends ConsumerWidget {
                         onPressed: () async {
                           await ref
                               .read(contactsRepositoryProvider)
-                              .acceptFriendRequest(request.id);
+                              .acceptFriendRequest(incomingRequest.request.id);
                           ref.invalidate(incomingFriendRequestsProvider);
                           ref.invalidate(friendsProvider);
                         },
@@ -143,7 +169,7 @@ class _IncomingRequestsSection extends ConsumerWidget {
                         onPressed: () async {
                           await ref
                               .read(contactsRepositoryProvider)
-                              .rejectFriendRequest(request.id);
+                              .rejectFriendRequest(incomingRequest.request.id);
                           ref.invalidate(incomingFriendRequestsProvider);
                         },
                         child: const Text('Reject'),

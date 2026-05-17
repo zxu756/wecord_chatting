@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
-import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -51,7 +50,7 @@ void main() {
   });
 
   test(
-    'listIncomingRequests fetches pending requests for the current user',
+    'listIncomingRequests maps pending requests to requester profiles',
     () async {
       final dataSource = FakeContactsDataSource()
         ..incomingRows = [
@@ -60,7 +59,8 @@ void main() {
             requesterId: 'friend-1',
             receiverId: 'current-user',
           ),
-        ];
+        ]
+        ..profilesByIdRows = [_profileRow(id: 'friend-1', username: 'grace')];
       final repository = SupabaseContactsRepository.withDataSource(
         dataSource,
         currentUserId: () => 'current-user',
@@ -69,9 +69,14 @@ void main() {
       final requests = await repository.listIncomingRequests();
 
       expect(requests, hasLength(1));
-      expect(requests.single, isA<FriendRequest>());
-      expect(requests.single.id, 'request-1');
+      expect(requests.single, isA<IncomingFriendRequest>());
+      expect(requests.single.request.id, 'request-1');
+      expect(requests.single.requester.id, 'friend-1');
+      expect(requests.single.requester.username, 'grace');
       expect(dataSource.incomingCalls, ['current-user']);
+      expect(dataSource.profilesByIdCalls, [
+        ['friend-1'],
+      ]);
     },
   );
 
@@ -123,9 +128,11 @@ class FakeContactsDataSource implements ContactsDataSource {
   var profileRows = <Map<String, dynamic>>[];
   var friendsRows = <Map<String, dynamic>>[];
   var incomingRows = <Map<String, dynamic>>[];
+  var profilesByIdRows = <Map<String, dynamic>>[];
   final searchCalls = <SearchCall>[];
   final friendsCalls = <String>[];
   final incomingCalls = <String>[];
+  final profilesByIdCalls = <List<String>>[];
   final inserts = <Map<String, dynamic>>[];
   final rpcCalls = <RpcCall>[];
 
@@ -150,6 +157,12 @@ class FakeContactsDataSource implements ContactsDataSource {
   ) async {
     incomingCalls.add(currentUserId);
     return incomingRows;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listProfilesByIds(List<String> ids) async {
+    profilesByIdCalls.add(ids);
+    return profilesByIdRows;
   }
 
   @override

@@ -13,13 +13,20 @@ abstract interface class ContactsRepository {
 
   Future<List<Profile>> listFriends();
 
-  Future<List<FriendRequest>> listIncomingRequests();
+  Future<List<IncomingFriendRequest>> listIncomingRequests();
 
   Future<void> sendFriendRequest(String receiverId);
 
   Future<void> acceptFriendRequest(String requestId);
 
   Future<void> rejectFriendRequest(String requestId);
+}
+
+class IncomingFriendRequest {
+  const IncomingFriendRequest({required this.request, required this.requester});
+
+  final FriendRequest request;
+  final Profile requester;
 }
 
 abstract interface class ContactsDataSource {
@@ -31,6 +38,8 @@ abstract interface class ContactsDataSource {
   Future<List<Map<String, dynamic>>> listFriends(String currentUserId);
 
   Future<List<Map<String, dynamic>>> listIncomingRequests(String currentUserId);
+
+  Future<List<Map<String, dynamic>>> listProfilesByIds(List<String> ids);
 
   Future<void> insertFriendRequest(Map<String, dynamic> values);
 
@@ -75,10 +84,29 @@ class SupabaseContactsRepository implements ContactsRepository {
   }
 
   @override
-  Future<List<FriendRequest>> listIncomingRequests() async {
+  Future<List<IncomingFriendRequest>> listIncomingRequests() async {
     final currentUserId = _requireCurrentUserId();
     final rows = await _dataSource.listIncomingRequests(currentUserId);
-    return rows.map(FriendRequest.fromJson).toList(growable: false);
+    final requests = rows.map(FriendRequest.fromJson).toList(growable: false);
+    final requesterIds = requests
+        .map((request) => request.requesterId)
+        .toSet()
+        .toList(growable: false);
+    if (requesterIds.isEmpty) {
+      return const [];
+    }
+
+    final profileRows = await _dataSource.listProfilesByIds(requesterIds);
+    final profilesById = {
+      for (final profile in profileRows.map(Profile.fromJson))
+        profile.id: profile,
+    };
+
+    return [
+      for (final request in requests)
+        if (profilesById[request.requesterId] case final requester?)
+          IncomingFriendRequest(request: request, requester: requester),
+    ];
   }
 
   @override
@@ -167,6 +195,20 @@ class SupabaseContactsDataSource implements ContactsDataSource {
         .eq('receiver_id', currentUserId)
         .eq('status', FriendRequestStatus.pending.toJson())
         .order('created_at');
+    return rows.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listProfilesByIds(List<String> ids) async {
+    if (ids.isEmpty) {
+      return const [];
+    }
+
+    final rows = await _client
+        .from('profiles')
+        .select()
+        .inFilter('id', ids)
+        .order('username');
     return rows.cast<Map<String, dynamic>>();
   }
 

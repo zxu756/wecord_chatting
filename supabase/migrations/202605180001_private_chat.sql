@@ -416,22 +416,10 @@ create policy friendships_select_participants
   to authenticated
   using (auth.uid() in (user_low_id, user_high_id));
 
-create policy friendships_update_participants
-  on public.friendships for update
-  to authenticated
-  using (auth.uid() in (user_low_id, user_high_id))
-  with check (auth.uid() in (user_low_id, user_high_id));
-
 create policy conversations_select_member
   on public.conversations for select
   to authenticated
   using (public.is_conversation_member(id, auth.uid()));
-
-create policy conversations_update_member
-  on public.conversations for update
-  to authenticated
-  using (public.is_conversation_member(id, auth.uid()))
-  with check (public.is_conversation_member(id, auth.uid()));
 
 create policy conversation_members_select_member
   on public.conversation_members for select

@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  final migration = File(
-    'supabase/migrations/202605180001_private_chat.sql',
-  );
+  final migration = File('supabase/migrations/202605180001_private_chat.sql');
 
   String functionBody(String sql, String functionName) {
     final match = RegExp(
@@ -13,6 +11,13 @@ void main() {
     ).firstMatch(sql);
     expect(match, isNotNull, reason: 'Missing function $functionName');
     return match!.group(0)!;
+  }
+
+  Iterable<String> policyBodiesFor(String sql, String tableName) {
+    return RegExp('create policy [\\s\\S]*?;', caseSensitive: false)
+        .allMatches(sql)
+        .map((match) => match.group(0)!)
+        .where((policy) => policy.contains('on public.$tableName'));
   }
 
   test('private chat migration declares required tables', () {
@@ -58,7 +63,14 @@ void main() {
     );
     expect(
       sql,
-      contains('create or replace function public.touch_conversation_from_message'),
+      contains(
+        'create or replace function public.touch_conversation_from_message',
+      ),
+    );
+    expect(sql, contains('create trigger messages_touch_conversation'));
+    expect(
+      sql,
+      contains('execute function public.touch_conversation_from_message()'),
     );
   });
 
@@ -70,7 +82,13 @@ void main() {
 
     expect(
       sql,
-      isNot(matches(RegExp(r'create policy \w+\s+on public\.friend_requests\s+for update'))),
+      isNot(
+        matches(
+          RegExp(
+            r'create policy \w+\s+on public\.friend_requests\s+for update',
+          ),
+        ),
+      ),
     );
     expect(acceptBody, contains('receiver_id = auth.uid()'));
     expect(acceptBody, contains("status = 'pending'"));
@@ -83,6 +101,33 @@ void main() {
     expect(cancelBody, contains("set status = 'cancelled'"));
   });
 
+  test('friendship rows cannot be directly updated by broad policies', () {
+    final sql = migration.readAsStringSync();
+    final friendshipPolicies = policyBodiesFor(sql, 'friendships');
+
+    expect(sql, isNot(contains('friendships_update_participants')));
+    expect(
+      friendshipPolicies,
+      everyElement(
+        isNot(matches(RegExp(r'\bfor\s+update\b', caseSensitive: false))),
+      ),
+    );
+  });
+
+  test('conversation rows cannot be directly updated by broad policies', () {
+    final sql = migration.readAsStringSync();
+    final conversationPolicies = policyBodiesFor(sql, 'conversations');
+
+    expect(sql, isNot(contains('conversations_update_members')));
+    expect(sql, isNot(contains('conversations_update_member')));
+    expect(
+      conversationPolicies,
+      everyElement(
+        isNot(matches(RegExp(r'\bfor\s+update\b', caseSensitive: false))),
+      ),
+    );
+  });
+
   test('conversation read state changes cannot update member roles', () {
     final sql = migration.readAsStringSync();
     final markReadBody = functionBody(sql, 'mark_conversation_read');
@@ -92,7 +137,10 @@ void main() {
     expect(markReadBody, contains('target_conversation_id'));
     expect(markReadBody, contains('auth.uid()'));
     expect(markReadBody, contains('update public.conversation_members'));
-    expect(markReadBody, contains('set last_read_message_id = target_message_id'));
+    expect(
+      markReadBody,
+      contains('set last_read_message_id = target_message_id'),
+    );
     expect(markReadBody, isNot(contains('set role')));
   });
 

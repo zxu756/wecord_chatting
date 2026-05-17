@@ -92,6 +92,37 @@ void main() {
     },
   );
 
+  testWidgets('incomplete profile bootstrap metadata blocks the shell', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository()
+      ..ensureProfileError = StateError(
+        'Profile setup is incomplete. Please sign out and sign up again, '
+        'or try again after your profile metadata is fixed.',
+      );
+    final authState = StreamController<AuthUser?>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: const WeCordApp(),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile setup failed'), findsOneWidget);
+    expect(find.textContaining('Profile setup is incomplete'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Chats'), findsNothing);
+    expect(find.text('No conversations yet'), findsNothing);
+    expect(repository.ensureProfileCalls, 1);
+  });
+
   test('appRouterProvider returns a stable router across auth changes', () {
     final repository = FakeAuthRepository();
     final authState = StreamController<AuthUser?>();

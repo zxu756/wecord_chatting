@@ -107,7 +107,10 @@ class SupabaseAuthRepository implements AuthRepository {
         displayName == null ||
         username.isEmpty ||
         displayName.isEmpty) {
-      return;
+      throw StateError(
+        'Profile setup is incomplete. Please sign out and sign up again, '
+        'or try again after your profile metadata is fixed.',
+      );
     }
 
     await _client.from('profiles').upsert({

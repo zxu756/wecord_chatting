@@ -28,4 +28,16 @@ flutter run -d chrome --dart-define-from-file=.env
 
 ## Current Status
 
-The foundation milestone contains app setup, typed configuration, theme, routing, and stub screens. Private chat is the next implementation milestone.
+The foundation and private chat milestones are implemented. WeCord now has email auth, profile bootstrap, friend search and requests, direct conversations, text messages, unread counts, and basic realtime refresh hooks.
+
+## Private Chat Milestone
+
+This milestone adds email auth, profiles, friends, direct conversations, text messages, unread state, and basic realtime refresh.
+
+Apply the Supabase migration before running against a real project:
+
+```bash
+supabase db push
+```
+
+Next milestones are group chat, circles/channels, media messages, typing/presence, and notifications.

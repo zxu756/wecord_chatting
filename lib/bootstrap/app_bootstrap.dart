@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
@@ -24,6 +25,7 @@ class WeCordApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(authProfileBootstrapProvider);
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

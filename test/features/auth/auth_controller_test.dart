@@ -75,13 +75,33 @@ void main() {
 
     expect(repository.signUpCalls, [
       const SignUpCall(
-        username: 'Ada_L',
+        username: 'ada_l',
         displayName: 'Ada Lovelace',
         email: 'ada@example.com',
         password: 'password123',
       ),
     ]);
     expect(container.read(authControllerProvider).errorMessage, isNull);
+  });
+
+  test('signUp rejects usernames that do not match profile rules', () async {
+    final repository = FakeAuthRepository();
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    for (final username in ['ab', 'ada-l', 'ada.lovelace', 'a' * 25]) {
+      await container
+          .read(authControllerProvider.notifier)
+          .signUp(username, 'Ada Lovelace', 'ada@example.com', 'password123');
+    }
+
+    expect(repository.signUpCalls, isEmpty);
+    expect(
+      container.read(authControllerProvider).errorMessage,
+      'Username must be 3-24 characters using lowercase letters, numbers, or underscores.',
+    );
   });
 
   test('repository failures are exposed as form errors', () async {
@@ -130,6 +150,9 @@ class FakeAuthRepository implements AuthRepository {
   Future<void> signOut() async {
     await onSignOut?.call();
   }
+
+  @override
+  Future<void> ensureCurrentUserProfile() async {}
 
   @override
   Future<void> signUp(

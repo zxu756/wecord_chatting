@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 
 final authControllerProvider =
-    StateNotifierProvider.autoDispose<AuthController, AuthActionState>((ref) {
+    StateNotifierProvider<AuthController, AuthActionState>((ref) {
       return AuthController(ref.watch(authRepositoryProvider));
     });
 
@@ -50,12 +50,14 @@ class AuthController extends StateNotifier<AuthActionState> {
       return;
     }
 
+    final normalizedUsername = username.trim().toLowerCase();
+
     await _run(() {
       return _repository.signUp(
         email.trim(),
         password,
-        username,
-        displayName,
+        normalizedUsername,
+        displayName.trim(),
       );
     });
   }
@@ -68,8 +70,14 @@ class AuthController extends StateNotifier<AuthActionState> {
     state = const AuthActionState(isLoading: true);
     try {
       await action();
+      if (!mounted) {
+        return;
+      }
       state = const AuthActionState();
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       state = AuthActionState(errorMessage: _errorMessage(error));
     }
   }
@@ -83,6 +91,10 @@ String? _validateSignUp({
 }) {
   if (username.trim().isEmpty) {
     return 'Username is required.';
+  }
+  final normalizedUsername = username.trim().toLowerCase();
+  if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(normalizedUsername)) {
+    return 'Username must be 3-24 characters using lowercase letters, numbers, or underscores.';
   }
   if (displayName.trim().isEmpty) {
     return 'Display name is required.';

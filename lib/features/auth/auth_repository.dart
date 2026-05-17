@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -8,6 +10,21 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final authStateProvider = StreamProvider<AuthUser?>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
+});
+
+final authProfileBootstrapProvider = Provider<void>((ref) {
+  ref.listen<AsyncValue<AuthUser?>>(authStateProvider, (previous, next) {
+    if (next.valueOrNull == null) {
+      return;
+    }
+
+    unawaited(
+      ref
+          .read(authRepositoryProvider)
+          .ensureCurrentUserProfile()
+          .catchError((Object _) {}),
+    );
+  }, fireImmediately: true);
 });
 
 class AuthUser {
@@ -30,6 +47,8 @@ abstract interface class AuthRepository {
     String username,
     String displayName,
   );
+
+  Future<void> ensureCurrentUserProfile();
 
   Future<void> signOut();
 }
@@ -67,17 +86,42 @@ class SupabaseAuthRepository implements AuthRepository {
     String username,
     String displayName,
   ) async {
-    final response = await _client.auth.signUp(email: email, password: password);
-    final user = response.user ?? _client.auth.currentUser;
+    await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {
+        'username': username.trim().toLowerCase(),
+        'display_name': displayName.trim(),
+      },
+    );
+  }
 
+  @override
+  Future<void> ensureCurrentUserProfile() async {
+    if (_client.auth.currentSession == null) {
+      return;
+    }
+
+    final user = _client.auth.currentUser;
     if (user == null) {
-      throw const AuthException('Account created, but no user session returned.');
+      return;
+    }
+
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final username = (metadata['username'] as String?)?.trim().toLowerCase();
+    final displayName = (metadata['display_name'] as String?)?.trim();
+
+    if (username == null ||
+        displayName == null ||
+        username.isEmpty ||
+        displayName.isEmpty) {
+      return;
     }
 
     await _client.from('profiles').upsert({
       'id': user.id,
-      'username': username.trim().toLowerCase(),
-      'display_name': displayName.trim(),
+      'username': username,
+      'display_name': displayName,
       'bio': '',
     });
   }

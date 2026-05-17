@@ -6,7 +6,7 @@
 
 **Architecture:** This plan creates a Flutter application at the repository root, then organizes app code by feature and shared services. Supabase initialization is isolated behind a small bootstrap layer so later auth, realtime, storage, and database repositories can depend on one configured client. The UI starts with a WeChat-first shell: Chats is the default tab, with Contacts, Circles, and Me available as secondary tabs.
 
-**Tech Stack:** Flutter, Dart, Supabase Flutter, flutter_dotenv, go_router, Riverpod, flutter_test.
+**Tech Stack:** Flutter, Dart, Supabase Flutter, go_router, Riverpod, flutter_test.
 
 ---
 
@@ -174,7 +174,6 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  flutter_dotenv: ^5.2.1
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.2
   supabase_flutter: ^2.8.2
@@ -408,7 +407,6 @@ Create `lib/bootstrap/app_bootstrap.dart`:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/config/app_config.dart';
@@ -416,15 +414,10 @@ import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
 Future<void> runWeCordApp() async {
-  await dotenv.load(
-    fileName: '.env',
-    isOptional: true,
-    mergeWith: const {
-      'SUPABASE_URL': String.fromEnvironment('SUPABASE_URL'),
-      'SUPABASE_ANON_KEY': String.fromEnvironment('SUPABASE_ANON_KEY'),
-    },
-  );
-  final config = AppConfig.fromMap(dotenv.env);
+  final config = AppConfig.fromMap(const {
+    'SUPABASE_URL': String.fromEnvironment('SUPABASE_URL'),
+    'SUPABASE_ANON_KEY': String.fromEnvironment('SUPABASE_ANON_KEY'),
+  });
 
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
@@ -555,7 +548,6 @@ Do not commit this task yet. Commit it together with Tasks 4 and 6.
 Create `test/shared/navigation/app_router_test.dart`:
 
 ```dart
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
@@ -580,13 +572,25 @@ import 'package:wecord/features/shell/wecord_shell.dart';
 
 void main() {
   testWidgets('switches between primary tabs', (tester) async {
+    var selectedIndex = 0;
+    final selectedIndexes = <int>[];
+
     await tester.pumpWidget(
-      MaterialApp(
-        home: WeCordShell(
-          selectedIndex: 0,
-          onDestinationSelected: (_) {},
-          child: const Text('Current screen'),
-        ),
+      StatefulBuilder(
+        builder: (context, setState) {
+          return MaterialApp(
+            home: WeCordShell(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) {
+                selectedIndexes.add(index);
+                setState(() {
+                  selectedIndex = index;
+                });
+              },
+              child: const Text('Current screen'),
+            ),
+          );
+        },
       ),
     );
 
@@ -594,6 +598,17 @@ void main() {
     expect(find.text('Contacts'), findsOneWidget);
     expect(find.text('Circles'), findsOneWidget);
     expect(find.text('Me'), findsOneWidget);
+
+    await tester.tap(find.text('Contacts'));
+    await tester.pump();
+
+    await tester.tap(find.text('Circles'));
+    await tester.pump();
+
+    await tester.tap(find.text('Me'));
+    await tester.pump();
+
+    expect(selectedIndexes, [1, 2, 3]);
   });
 }
 ```
@@ -627,7 +642,7 @@ import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: ChatsScreen.path,
     routes: [
       ShellRoute(
@@ -670,6 +685,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  ref.onDispose(router.dispose);
+  return router;
 });
 
 int _selectedIndexForLocation(String location) {

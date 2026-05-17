@@ -1,17 +1,31 @@
-# wecord
+# WeCord
 
-A new Flutter project.
+WeCord is a familiar-social real-time chat app: WeChat-first private and group messaging with a lightweight Discord-style circles and channels layer.
 
-## Getting Started
+## Stack
 
-This project is a starting point for a Flutter application.
+- Flutter for iOS, macOS, and Web
+- Supabase Auth, Postgres, Realtime, Storage, and Edge Functions
+- Riverpod, go_router, and flutter_test for app state, navigation, and tests
+- LiveKit reserved for future voice and video features
 
-A few resources to get you started if this is your first Flutter project:
+## Local Setup
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+1. Install Flutter.
+2. Copy `.env.example` to `.env`.
+3. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+4. Run `flutter pub get`.
+5. Run `flutter test`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Run
+
+Pass local config with dart defines. The `.env` file is not bundled as a Flutter asset.
+
+```bash
+flutter run -d macos --dart-define-from-file=.env
+flutter run -d chrome --dart-define-from-file=.env
+```
+
+## Current Status
+
+The foundation milestone contains app setup, typed configuration, theme, routing, and stub screens. Private chat is the next implementation milestone.

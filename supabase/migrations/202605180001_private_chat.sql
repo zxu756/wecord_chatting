@@ -172,6 +172,52 @@ begin
 end;
 $$;
 
+create or replace function public.reject_friend_request(request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rejected_request_id uuid;
+begin
+  update public.friend_requests
+  set status = 'rejected'
+  where id = request_id
+    and receiver_id = auth.uid()
+    and status = 'pending'
+  returning id into rejected_request_id;
+
+  if rejected_request_id is null then
+    raise exception 'Friend request not found or cannot be rejected'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+create or replace function public.cancel_friend_request(request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cancelled_request_id uuid;
+begin
+  update public.friend_requests
+  set status = 'cancelled'
+  where id = request_id
+    and requester_id = auth.uid()
+    and status = 'pending'
+  returning id into cancelled_request_id;
+
+  if cancelled_request_id is null then
+    raise exception 'Friend request not found or cannot be cancelled'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
 create or replace function public.get_or_create_direct_conversation(other_user_id uuid)
 returns uuid
 language plpgsql
@@ -286,6 +332,38 @@ as $$
   );
 $$;
 
+create or replace function public.mark_conversation_read(
+  target_conversation_id uuid,
+  target_message_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_conversation_member(target_conversation_id, auth.uid()) then
+    raise exception 'Conversation not found or caller is not a member'
+      using errcode = '42501';
+  end if;
+
+  if target_message_id is not null and not exists (
+    select 1
+    from public.messages m
+    where m.id = target_message_id
+      and m.conversation_id = target_conversation_id
+  ) then
+    raise exception 'Read marker message does not belong to conversation'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members
+  set last_read_message_id = target_message_id
+  where conversation_id = target_conversation_id
+    and user_id = auth.uid();
+end;
+$$;
+
 create trigger messages_touch_conversation
   after insert on public.messages
   for each row execute function public.touch_conversation_from_message();
@@ -328,12 +406,6 @@ create policy friend_requests_insert_requester
     and status = 'pending'
   );
 
-create policy friend_requests_update_participants
-  on public.friend_requests for update
-  to authenticated
-  using (requester_id = auth.uid() or receiver_id = auth.uid())
-  with check (requester_id = auth.uid() or receiver_id = auth.uid());
-
 create policy friend_requests_delete_requester
   on public.friend_requests for delete
   to authenticated
@@ -368,12 +440,6 @@ create policy conversation_members_select_member
     user_id = auth.uid()
     or public.is_conversation_member(conversation_id, auth.uid())
   );
-
-create policy conversation_members_update_self
-  on public.conversation_members for update
-  to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
 
 create policy messages_select_member
   on public.messages for select

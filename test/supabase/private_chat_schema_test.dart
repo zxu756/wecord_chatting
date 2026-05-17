@@ -7,6 +7,14 @@ void main() {
     'supabase/migrations/202605180001_private_chat.sql',
   );
 
+  String functionBody(String sql, String functionName) {
+    final match = RegExp(
+      'create or replace function public\\.$functionName[\\s\\S]*?\\n\\\$\\\$;',
+    ).firstMatch(sql);
+    expect(match, isNotNull, reason: 'Missing function $functionName');
+    return match!.group(0)!;
+  }
+
   test('private chat migration declares required tables', () {
     final sql = migration.readAsStringSync();
 
@@ -36,6 +44,14 @@ void main() {
     );
     expect(
       sql,
+      contains('create or replace function public.reject_friend_request'),
+    );
+    expect(
+      sql,
+      contains('create or replace function public.cancel_friend_request'),
+    );
+    expect(
+      sql,
       contains(
         'create or replace function public.get_or_create_direct_conversation',
       ),
@@ -46,12 +62,52 @@ void main() {
     );
   });
 
+  test('friend request status changes are protected by narrow RPCs', () {
+    final sql = migration.readAsStringSync();
+    final acceptBody = functionBody(sql, 'accept_friend_request');
+    final rejectBody = functionBody(sql, 'reject_friend_request');
+    final cancelBody = functionBody(sql, 'cancel_friend_request');
+
+    expect(
+      sql,
+      isNot(matches(RegExp(r'create policy \w+\s+on public\.friend_requests\s+for update'))),
+    );
+    expect(acceptBody, contains('receiver_id = auth.uid()'));
+    expect(acceptBody, contains("status = 'pending'"));
+    expect(acceptBody, contains("set status = 'accepted'"));
+    expect(rejectBody, contains('receiver_id = auth.uid()'));
+    expect(rejectBody, contains("status = 'pending'"));
+    expect(rejectBody, contains("set status = 'rejected'"));
+    expect(cancelBody, contains('requester_id = auth.uid()'));
+    expect(cancelBody, contains("status = 'pending'"));
+    expect(cancelBody, contains("set status = 'cancelled'"));
+  });
+
+  test('conversation read state changes cannot update member roles', () {
+    final sql = migration.readAsStringSync();
+    final markReadBody = functionBody(sql, 'mark_conversation_read');
+
+    expect(sql, isNot(contains('conversation_members_update_self')));
+    expect(markReadBody, contains('public.is_conversation_member'));
+    expect(markReadBody, contains('target_conversation_id'));
+    expect(markReadBody, contains('auth.uid()'));
+    expect(markReadBody, contains('update public.conversation_members'));
+    expect(markReadBody, contains('set last_read_message_id = target_message_id'));
+    expect(markReadBody, isNot(contains('set role')));
+  });
+
   test('private chat migration protects message access by membership', () {
     final sql = migration.readAsStringSync();
+    final insertPolicy = RegExp(
+      r'create policy messages_insert_member[\s\S]*?;',
+    ).firstMatch(sql);
 
     expect(sql, contains('messages_select_member'));
     expect(sql, contains('messages_insert_member'));
     expect(sql, contains('conversation_members'));
     expect(sql, contains('auth.uid()'));
+    expect(insertPolicy, isNotNull);
+    expect(insertPolicy!.group(0), contains('sender_id = auth.uid()'));
+    expect(insertPolicy.group(0), contains('public.is_conversation_member'));
   });
 }

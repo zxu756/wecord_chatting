@@ -1,3 +1,5 @@
+const _sentinel = Object();
+
 class Profile {
   const Profile({
     required this.id,
@@ -43,7 +45,7 @@ class Profile {
     String? id,
     String? username,
     String? displayName,
-    String? avatarUrl,
+    Object? avatarUrl = _sentinel,
     String? bio,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -52,7 +54,9 @@ class Profile {
       id: id ?? this.id,
       username: username ?? this.username,
       displayName: displayName ?? this.displayName,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: identical(avatarUrl, _sentinel)
+          ? this.avatarUrl
+          : avatarUrl as String?,
       bio: bio ?? this.bio,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

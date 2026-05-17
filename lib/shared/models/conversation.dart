@@ -1,3 +1,5 @@
+const _sentinel = Object();
+
 enum ConversationType {
   direct,
   group,
@@ -63,19 +65,25 @@ class ConversationSummary {
   ConversationSummary copyWith({
     String? id,
     ConversationType? type,
-    String? title,
-    String? avatarUrl,
-    String? lastMessageBody,
-    DateTime? lastMessageAt,
+    Object? title = _sentinel,
+    Object? avatarUrl = _sentinel,
+    Object? lastMessageBody = _sentinel,
+    Object? lastMessageAt = _sentinel,
     int? unreadCount,
   }) {
     return ConversationSummary(
       id: id ?? this.id,
       type: type ?? this.type,
-      title: title ?? this.title,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
-      lastMessageBody: lastMessageBody ?? this.lastMessageBody,
-      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      title: identical(title, _sentinel) ? this.title : title as String?,
+      avatarUrl: identical(avatarUrl, _sentinel)
+          ? this.avatarUrl
+          : avatarUrl as String?,
+      lastMessageBody: identical(lastMessageBody, _sentinel)
+          ? this.lastMessageBody
+          : lastMessageBody as String?,
+      lastMessageAt: identical(lastMessageAt, _sentinel)
+          ? this.lastMessageAt
+          : lastMessageAt as DateTime?,
       unreadCount: unreadCount ?? this.unreadCount,
     );
   }

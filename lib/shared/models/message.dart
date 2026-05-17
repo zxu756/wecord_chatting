@@ -1,3 +1,5 @@
+const _sentinel = Object();
+
 enum MessageType {
   text,
   image,
@@ -81,11 +83,11 @@ class ChatMessage {
     String? senderId,
     MessageType? type,
     String? body,
-    Map<String, dynamic>? attachment,
-    String? replyToMessageId,
+    Object? attachment = _sentinel,
+    Object? replyToMessageId = _sentinel,
     DateTime? createdAt,
-    DateTime? editedAt,
-    DateTime? recalledAt,
+    Object? editedAt = _sentinel,
+    Object? recalledAt = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -93,11 +95,19 @@ class ChatMessage {
       senderId: senderId ?? this.senderId,
       type: type ?? this.type,
       body: body ?? this.body,
-      attachment: attachment ?? this.attachment,
-      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      attachment: identical(attachment, _sentinel)
+          ? this.attachment
+          : attachment as Map<String, dynamic>?,
+      replyToMessageId: identical(replyToMessageId, _sentinel)
+          ? this.replyToMessageId
+          : replyToMessageId as String?,
       createdAt: createdAt ?? this.createdAt,
-      editedAt: editedAt ?? this.editedAt,
-      recalledAt: recalledAt ?? this.recalledAt,
+      editedAt: identical(editedAt, _sentinel)
+          ? this.editedAt
+          : editedAt as DateTime?,
+      recalledAt: identical(recalledAt, _sentinel)
+          ? this.recalledAt
+          : recalledAt as DateTime?,
     );
   }
 }

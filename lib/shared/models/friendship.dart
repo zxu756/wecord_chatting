@@ -1,3 +1,5 @@
+const _sentinel = Object();
+
 class Friendship {
   const Friendship({
     required this.id,
@@ -39,16 +41,20 @@ class Friendship {
     String? id,
     String? userLowId,
     String? userHighId,
-    String? userLowRemark,
-    String? userHighRemark,
+    Object? userLowRemark = _sentinel,
+    Object? userHighRemark = _sentinel,
     DateTime? createdAt,
   }) {
     return Friendship(
       id: id ?? this.id,
       userLowId: userLowId ?? this.userLowId,
       userHighId: userHighId ?? this.userHighId,
-      userLowRemark: userLowRemark ?? this.userLowRemark,
-      userHighRemark: userHighRemark ?? this.userHighRemark,
+      userLowRemark: identical(userLowRemark, _sentinel)
+          ? this.userLowRemark
+          : userLowRemark as String?,
+      userHighRemark: identical(userHighRemark, _sentinel)
+          ? this.userHighRemark
+          : userHighRemark as String?,
       createdAt: createdAt ?? this.createdAt,
     );
   }

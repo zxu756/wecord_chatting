@@ -27,6 +27,40 @@ void main() {
     expect(profile.copyWith(displayName: 'A').displayName, 'A');
   });
 
+  test('Profile copyWith can clear avatarUrl', () {
+    final profile = Profile.fromJson({
+      'id': 'user-1',
+      'username': 'alex',
+      'display_name': 'Alex',
+      'avatar_url': 'https://example.test/avatar.png',
+      'bio': 'hello',
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'updated_at': '2026-05-18T00:01:00.000Z',
+    });
+
+    expect(profile.copyWith(avatarUrl: null).avatarUrl, isNull);
+  });
+
+  test('Profile toJson includes writable Supabase keys', () {
+    final profile = Profile.fromJson({
+      'id': 'user-1',
+      'username': 'alex',
+      'display_name': 'Alex',
+      'avatar_url': 'https://example.test/avatar.png',
+      'bio': 'hello',
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'updated_at': '2026-05-18T00:01:00.000Z',
+    });
+
+    expect(profile.toJson(), {
+      'id': 'user-1',
+      'username': 'alex',
+      'display_name': 'Alex',
+      'avatar_url': 'https://example.test/avatar.png',
+      'bio': 'hello',
+    });
+  });
+
   test('FriendRequest parses Supabase rows and copies values', () {
     final request = FriendRequest.fromJson({
       'id': 'request-1',
@@ -68,6 +102,25 @@ void main() {
     expect(friendship.copyWith(userHighRemark: 'Lex').userHighRemark, 'Lex');
   });
 
+  test('Friendship copyWith can clear remarks', () {
+    final friendship = Friendship.fromJson({
+      'id': 'friendship-1',
+      'user_low_id': 'user-1',
+      'user_high_id': 'user-2',
+      'user_low_remark': 'Al',
+      'user_high_remark': 'Lex',
+      'created_at': '2026-05-18T00:00:00.000Z',
+    });
+
+    final updated = friendship.copyWith(
+      userLowRemark: null,
+      userHighRemark: null,
+    );
+
+    expect(updated.userLowRemark, isNull);
+    expect(updated.userHighRemark, isNull);
+  });
+
   test(
     'Conversation computes unread count from row value and copies values',
     () {
@@ -91,6 +144,26 @@ void main() {
       expect(conversation.copyWith(unreadCount: 0).unreadCount, 0);
     },
   );
+
+  test('Conversation copyWith can clear last message fields', () {
+    final conversation = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'direct',
+      'title': 'Alex',
+      'avatar_url': 'https://example.test/conversation.png',
+      'last_message_body': 'Hi',
+      'last_message_at': '2026-05-18T00:00:00.000Z',
+      'unread_count': 2,
+    });
+
+    final updated = conversation.copyWith(
+      lastMessageBody: null,
+      lastMessageAt: null,
+    );
+
+    expect(updated.lastMessageBody, isNull);
+    expect(updated.lastMessageAt, isNull);
+  });
 
   test('Message parses text rows and copies values', () {
     final message = ChatMessage.fromJson({
@@ -117,5 +190,56 @@ void main() {
     expect(message.editedAt, isNull);
     expect(message.recalledAt, isNull);
     expect(message.copyWith(body: 'Updated').body, 'Updated');
+  });
+
+  test('Message copyWith can clear nullable fields', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'text',
+      'body': 'Hello',
+      'attachment': {'path': 'file.png'},
+      'reply_to_message_id': 'message-0',
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'edited_at': '2026-05-18T00:02:00.000Z',
+      'recalled_at': '2026-05-18T00:03:00.000Z',
+    });
+
+    final updated = message.copyWith(
+      attachment: null,
+      replyToMessageId: null,
+      editedAt: null,
+      recalledAt: null,
+    );
+
+    expect(updated.attachment, isNull);
+    expect(updated.replyToMessageId, isNull);
+    expect(updated.editedAt, isNull);
+    expect(updated.recalledAt, isNull);
+  });
+
+  test('Message toJson includes writable Supabase keys', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'image',
+      'body': 'Hello',
+      'attachment': {'path': 'file.png'},
+      'reply_to_message_id': 'message-0',
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'edited_at': null,
+      'recalled_at': null,
+    });
+
+    expect(message.toJson(), {
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'image',
+      'body': 'Hello',
+      'attachment': {'path': 'file.png'},
+      'reply_to_message_id': 'message-0',
+    });
   });
 }

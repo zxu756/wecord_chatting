@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
@@ -54,21 +55,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         builder: (context, state, child) {
-          return WeCordShell(
-            selectedIndex: _selectedIndexForLocation(state.uri.path),
-            onDestinationSelected: (index) {
-              switch (index) {
-                case 0:
-                  context.go(ChatsScreen.path);
-                case 1:
-                  context.go(ContactsScreen.path);
-                case 2:
-                  context.go(CirclesScreen.path);
-                case 3:
-                  context.go(SettingsScreen.path);
-              }
-            },
-            child: child,
+          return ProfileBootstrapGate(
+            child: WeCordShell(
+              selectedIndex: _selectedIndexForLocation(state.uri.path),
+              onDestinationSelected: (index) {
+                switch (index) {
+                  case 0:
+                    context.go(ChatsScreen.path);
+                  case 1:
+                    context.go(ContactsScreen.path);
+                  case 2:
+                    context.go(CirclesScreen.path);
+                  case 3:
+                    context.go(SettingsScreen.path);
+                }
+              },
+              child: child,
+            ),
           );
         },
         routes: [

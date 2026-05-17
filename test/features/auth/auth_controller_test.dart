@@ -44,23 +44,26 @@ void main() {
     expect(container.read(authControllerProvider).isLoading, isFalse);
   });
 
-  test('signUp validates required fields before calling the repository', () async {
-    final repository = FakeAuthRepository();
-    final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
-    );
-    addTearDown(container.dispose);
+  test(
+    'signUp validates required fields before calling the repository',
+    () async {
+      final repository = FakeAuthRepository();
+      final container = ProviderContainer(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
 
-    await container
-        .read(authControllerProvider.notifier)
-        .signUp('', 'Display Name', 'me@example.com', 'password123');
+      await container
+          .read(authControllerProvider.notifier)
+          .signUp('', 'Display Name', 'me@example.com', 'password123');
 
-    expect(repository.signUpCalls, isEmpty);
-    expect(
-      container.read(authControllerProvider).errorMessage,
-      'Username is required.',
-    );
-  });
+      expect(repository.signUpCalls, isEmpty);
+      expect(
+        container.read(authControllerProvider).errorMessage,
+        'Username is required.',
+      );
+    },
+  );
 
   test('signUp passes valid account details to the repository', () async {
     final repository = FakeAuthRepository();
@@ -122,6 +125,42 @@ void main() {
       'Bad credentials',
     );
   });
+
+  test('profile bootstrap failures surface through provider state', () async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    repository.onEnsureCurrentUserProfile = () {
+      throw StateError('duplicate username');
+    };
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        authStateProvider.overrideWith((ref) => authState.stream),
+      ],
+    );
+    addTearDown(container.dispose);
+    addTearDown(authState.close);
+
+    final errorState = Completer<AsyncValue<void>>();
+    container.listen<AsyncValue<void>>(authProfileBootstrapProvider, (_, next) {
+      if (next.hasError && !errorState.isCompleted) {
+        errorState.complete(next);
+      }
+    }, fireImmediately: true);
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    final bootstrap = await errorState.future;
+
+    expect(repository.ensureProfileCalls, 1);
+    expect(
+      bootstrap.error,
+      isA<StateError>().having(
+        (error) => error.message,
+        'message',
+        'duplicate username',
+      ),
+    );
+  });
 }
 
 class FakeAuthRepository implements AuthRepository {
@@ -130,7 +169,9 @@ class FakeAuthRepository implements AuthRepository {
   Future<void> Function()? onSignIn;
   Future<void> Function()? onSignUp;
   Future<void> Function()? onSignOut;
+  Future<void> Function()? onEnsureCurrentUserProfile;
   AuthUser? user;
+  var ensureProfileCalls = 0;
   final signInCalls = <SignInCall>[];
   final signUpCalls = <SignUpCall>[];
 
@@ -152,7 +193,10 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> ensureCurrentUserProfile() async {}
+  Future<void> ensureCurrentUserProfile() async {
+    ensureProfileCalls += 1;
+    await onEnsureCurrentUserProfile?.call();
+  }
 
   @override
   Future<void> signUp(

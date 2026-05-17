@@ -57,6 +57,41 @@ void main() {
     expect(repository.ensureProfileCalls, 1);
   });
 
+  testWidgets(
+    'signed-in bootstrap failure shows retryable error instead of Chats',
+    (tester) async {
+      final repository = FakeAuthRepository()
+        ..ensureProfileError = StateError('duplicate username');
+      final authState = StreamController<AuthUser?>();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(repository),
+            authStateProvider.overrideWith((ref) => authState.stream),
+          ],
+          child: const WeCordApp(),
+        ),
+      );
+
+      authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Profile setup failed'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.text('Chats'), findsNothing);
+      expect(repository.ensureProfileCalls, 1);
+
+      repository.ensureProfileError = null;
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chats'), findsWidgets);
+      expect(find.text('No conversations yet'), findsOneWidget);
+      expect(repository.ensureProfileCalls, 2);
+    },
+  );
+
   test('appRouterProvider returns a stable router across auth changes', () {
     final repository = FakeAuthRepository();
     final authState = StreamController<AuthUser?>();
@@ -82,6 +117,7 @@ void main() {
 class FakeAuthRepository implements AuthRepository {
   final _controller = StreamController<AuthUser?>.broadcast();
   var ensureProfileCalls = 0;
+  Object? ensureProfileError;
 
   @override
   AuthUser? get currentUser => null;
@@ -98,6 +134,9 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<void> ensureCurrentUserProfile() async {
     ensureProfileCalls += 1;
+    if (ensureProfileError case final error?) {
+      throw error;
+    }
   }
 
   @override

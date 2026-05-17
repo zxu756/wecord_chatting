@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -12,19 +10,13 @@ final authStateProvider = StreamProvider<AuthUser?>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
 });
 
-final authProfileBootstrapProvider = Provider<void>((ref) {
-  ref.listen<AsyncValue<AuthUser?>>(authStateProvider, (previous, next) {
-    if (next.valueOrNull == null) {
-      return;
-    }
+final authProfileBootstrapProvider = FutureProvider<void>((ref) async {
+  final authState = ref.watch(authStateProvider);
+  if (authState.valueOrNull == null) {
+    return;
+  }
 
-    unawaited(
-      ref
-          .read(authRepositoryProvider)
-          .ensureCurrentUserProfile()
-          .catchError((Object _) {}),
-    );
-  }, fireImmediately: true);
+  await ref.watch(authRepositoryProvider).ensureCurrentUserProfile();
 });
 
 class AuthUser {

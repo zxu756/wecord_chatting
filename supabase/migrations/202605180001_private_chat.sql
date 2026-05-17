@@ -314,9 +314,8 @@ begin
 end;
 $$;
 
-create or replace function public.is_conversation_member(
-  check_conversation_id uuid,
-  check_user_id uuid
+create or replace function public.is_current_user_conversation_member(
+  check_conversation_id uuid
 )
 returns boolean
 language sql
@@ -328,7 +327,7 @@ as $$
     select 1
     from public.conversation_members cm
     where cm.conversation_id = check_conversation_id
-      and cm.user_id = check_user_id
+      and cm.user_id = auth.uid()
   );
 $$;
 
@@ -342,7 +341,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not public.is_conversation_member(target_conversation_id, auth.uid()) then
+  if not public.is_current_user_conversation_member(target_conversation_id) then
     raise exception 'Conversation not found or caller is not a member'
       using errcode = '42501';
   end if;
@@ -419,27 +418,27 @@ create policy friendships_select_participants
 create policy conversations_select_member
   on public.conversations for select
   to authenticated
-  using (public.is_conversation_member(id, auth.uid()));
+  using (public.is_current_user_conversation_member(id));
 
 create policy conversation_members_select_member
   on public.conversation_members for select
   to authenticated
   using (
     user_id = auth.uid()
-    or public.is_conversation_member(conversation_id, auth.uid())
+    or public.is_current_user_conversation_member(conversation_id)
   );
 
 create policy messages_select_member
   on public.messages for select
   to authenticated
-  using (public.is_conversation_member(conversation_id, auth.uid()));
+  using (public.is_current_user_conversation_member(conversation_id));
 
 create policy messages_insert_member
   on public.messages for insert
   to authenticated
   with check (
     sender_id = auth.uid()
-    and public.is_conversation_member(conversation_id, auth.uid())
+    and public.is_current_user_conversation_member(conversation_id)
   );
 
 create policy blocks_select_owner

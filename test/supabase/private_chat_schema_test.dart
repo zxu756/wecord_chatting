@@ -133,7 +133,10 @@ void main() {
     final markReadBody = functionBody(sql, 'mark_conversation_read');
 
     expect(sql, isNot(contains('conversation_members_update_self')));
-    expect(markReadBody, contains('public.is_conversation_member'));
+    expect(
+      markReadBody,
+      contains('public.is_current_user_conversation_member'),
+    );
     expect(markReadBody, contains('target_conversation_id'));
     expect(markReadBody, contains('auth.uid()'));
     expect(markReadBody, contains('update public.conversation_members'));
@@ -156,6 +159,37 @@ void main() {
     expect(sql, contains('auth.uid()'));
     expect(insertPolicy, isNotNull);
     expect(insertPolicy!.group(0), contains('sender_id = auth.uid()'));
-    expect(insertPolicy.group(0), contains('public.is_conversation_member'));
+    expect(
+      insertPolicy.group(0),
+      contains('public.is_current_user_conversation_member'),
+    );
+  });
+
+  test('membership helper cannot probe arbitrary users', () {
+    final sql = migration.readAsStringSync();
+    final helperBody = functionBody(sql, 'is_current_user_conversation_member');
+
+    expect(sql, isNot(contains('check_user_id')));
+    expect(
+      sql,
+      isNot(
+        matches(
+          RegExp(
+            r'create or replace function public\.is_conversation_member\s*\(\s*check_conversation_id\s+uuid\s*,\s*check_user_id\s+uuid\s*\)',
+            caseSensitive: false,
+          ),
+        ),
+      ),
+    );
+    expect(
+      sql,
+      matches(
+        RegExp(
+          r'create or replace function public\.is_current_user_conversation_member\s*\(\s*check_conversation_id\s+uuid\s*\)',
+          caseSensitive: false,
+        ),
+      ),
+    );
+    expect(helperBody, contains('auth.uid()'));
   });
 }

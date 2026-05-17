@@ -388,7 +388,7 @@ Expected:
 - Create: `lib/bootstrap/app_bootstrap.dart`
 - Modify: `lib/main.dart`
 
-- [ ] **Step 1: Replace `lib/main.dart` with a small bootstrap entrypoint**
+- [x] **Step 1: Replace `lib/main.dart` with a small bootstrap entrypoint**
 
 Use this exact `lib/main.dart`:
 
@@ -402,7 +402,7 @@ Future<void> main() async {
 }
 ```
 
-- [ ] **Step 2: Implement app bootstrap**
+- [x] **Step 2: Implement app bootstrap**
 
 Create `lib/bootstrap/app_bootstrap.dart`:
 
@@ -468,7 +468,7 @@ Target of URI doesn't exist: 'package:wecord/shared/theme/wecord_theme.dart'
 
 These failures are expected until Tasks 5 and 6 create theme and routing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Do not commit this task yet. Commit it together with Tasks 5 and 6 so the repository does not land in a non-analyzing state.
 
@@ -477,7 +477,7 @@ Do not commit this task yet. Commit it together with Tasks 5 and 6 so the reposi
 **Files:**
 - Create: `lib/shared/theme/wecord_theme.dart`
 
-- [ ] **Step 1: Implement WeCord theme**
+- [x] **Step 1: Implement WeCord theme**
 
 Create `lib/shared/theme/wecord_theme.dart`:
 
@@ -534,7 +534,7 @@ Expected:
 Target of URI doesn't exist: 'package:wecord/shared/navigation/app_router.dart'
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Do not commit this task yet. Commit it together with Tasks 4 and 6.
 
@@ -550,7 +550,7 @@ Do not commit this task yet. Commit it together with Tasks 4 and 6.
 - Create: `test/shared/navigation/app_router_test.dart`
 - Create: `test/features/shell/wecord_shell_test.dart`
 
-- [ ] **Step 1: Write routing and shell tests**
+- [x] **Step 1: Write routing and shell tests**
 
 Create `test/shared/navigation/app_router_test.dart`:
 
@@ -598,7 +598,7 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -613,7 +613,7 @@ Error: Not found: 'package:wecord/shared/navigation/app_router.dart'
 Error: Not found: 'package:wecord/features/shell/wecord_shell.dart'
 ```
 
-- [ ] **Step 3: Implement router**
+- [x] **Step 3: Implement router**
 
 Create `lib/shared/navigation/app_router.dart`:
 
@@ -686,7 +686,7 @@ int _selectedIndexForLocation(String location) {
 }
 ```
 
-- [ ] **Step 4: Implement responsive shell**
+- [x] **Step 4: Implement responsive shell**
 
 Create `lib/features/shell/wecord_shell.dart`:
 
@@ -780,7 +780,7 @@ class WeCordShell extends StatelessWidget {
 }
 ```
 
-- [ ] **Step 5: Implement stub screens**
+- [x] **Step 5: Implement stub screens**
 
 Create `lib/features/chats/chats_screen.dart`:
 
@@ -870,7 +870,7 @@ class SettingsScreen extends StatelessWidget {
 }
 ```
 
-- [ ] **Step 6: Run routing and shell tests**
+- [x] **Step 6: Run routing and shell tests**
 
 Run:
 
@@ -884,7 +884,7 @@ Expected:
 All tests passed!
 ```
 
-- [ ] **Step 7: Run analyzer**
+- [x] **Step 7: Run analyzer**
 
 Run:
 

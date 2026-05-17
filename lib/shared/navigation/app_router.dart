@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
@@ -7,9 +9,30 @@ import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authStateProvider);
   final router = GoRouter(
     initialLocation: ChatsScreen.path,
+    redirect: (context, state) {
+      if (authState.isLoading) {
+        return null;
+      }
+
+      final signedIn = authState.valueOrNull != null;
+      final onAuthRoute = state.uri.path == AuthScreen.path;
+
+      if (!signedIn && !onAuthRoute) {
+        return AuthScreen.path;
+      }
+      if (signedIn && onAuthRoute) {
+        return ChatsScreen.path;
+      }
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: AuthScreen.path,
+        builder: (context, state) => const AuthScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) {
           return WeCordShell(

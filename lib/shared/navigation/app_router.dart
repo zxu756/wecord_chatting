@@ -79,8 +79,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/chats/:conversationId',
             builder: (context, state) {
+              final title = state.extra is String
+                  ? state.extra! as String
+                  : null;
               return ChatThreadScreen(
                 conversationId: state.pathParameters['conversationId']!,
+                title: title,
               );
             },
           ),

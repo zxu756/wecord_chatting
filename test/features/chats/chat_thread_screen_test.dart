@@ -133,6 +133,41 @@ void main() {
     expect(find.byType(ChatThreadScreen), findsOneWidget);
     expect(find.text('Conversation'), findsOneWidget);
   });
+
+  testWidgets('app router passes route extra as the thread title', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final authRepository = FakeAuthRepository()
+      ..user = const AuthUser(id: 'user-1', email: 'me@example.com');
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          authRepositoryProvider.overrideWithValue(authRepository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go('/chats/conversation-1', extra: 'Ada Lovelace');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
 }
 
 Widget _app(FakeChatsRepository repository) {

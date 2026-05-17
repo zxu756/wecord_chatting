@@ -56,7 +56,7 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
-  testWidgets('tapping a conversation navigates to the thread route', (
+  testWidgets('tapping a conversation passes the title to the thread route', (
     tester,
   ) async {
     final repository = FakeChatsRepository()
@@ -79,7 +79,9 @@ void main() {
         GoRoute(
           path: '/chats/:conversationId',
           builder: (context, state) {
-            return Text('Thread ${state.pathParameters['conversationId']}');
+            return Text(
+              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+            );
           },
         ),
       ],
@@ -92,7 +94,7 @@ void main() {
     await tester.tap(find.text('Ada Lovelace'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Thread conversation-1'), findsOneWidget);
+    expect(find.text('Thread conversation-1 Ada Lovelace'), findsOneWidget);
   });
 }
 

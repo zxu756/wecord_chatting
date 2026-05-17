@@ -80,7 +80,7 @@ class _ConversationTile extends StatelessWidget {
         ],
       ),
       onTap: () {
-        context.go('${ChatsScreen.path}/${conversation.id}');
+        context.go('${ChatsScreen.path}/${conversation.id}', extra: title);
       },
     );
   }

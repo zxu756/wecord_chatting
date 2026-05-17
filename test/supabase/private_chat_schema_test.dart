@@ -63,6 +63,10 @@ void main() {
     );
     expect(
       sql,
+      contains('create or replace function public.list_conversation_summaries'),
+    );
+    expect(
+      sql,
       contains(
         'create or replace function public.touch_conversation_from_message',
       ),
@@ -145,6 +149,18 @@ void main() {
       contains('set last_read_message_id = target_message_id'),
     );
     expect(markReadBody, isNot(contains('set role')));
+  });
+
+  test('conversation summaries are scoped and compute unread counts', () {
+    final sql = migration.readAsStringSync();
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+
+    expect(summariesBody, contains('security definer'));
+    expect(summariesBody, contains('auth.uid()'));
+    expect(summariesBody, contains('conversation_members'));
+    expect(summariesBody, contains('last_read_message_id'));
+    expect(summariesBody, contains('unread_count'));
+    expect(summariesBody, contains('last_message_body'));
   });
 
   test('private chat migration protects message access by membership', () {

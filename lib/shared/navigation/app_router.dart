@@ -76,6 +76,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const ChatsScreen(),
           ),
           GoRoute(
+            path: '/chats/:conversationId',
+            builder: (context, state) {
+              return ChatThreadPlaceholderScreen(
+                conversationId: state.pathParameters['conversationId']!,
+              );
+            },
+          ),
+          GoRoute(
             path: ContactsScreen.path,
             builder: (context, state) => const ContactsScreen(),
           ),
@@ -98,6 +106,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
   return router;
 });
+
+class ChatThreadPlaceholderScreen extends StatelessWidget {
+  const ChatThreadPlaceholderScreen({required this.conversationId, super.key});
+
+  final String conversationId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chat')),
+      body: Center(child: Text('Conversation $conversationId')),
+    );
+  }
+}
 
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});

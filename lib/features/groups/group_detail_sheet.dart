@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -170,6 +171,9 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                     _MemberTile(
                       member: member,
                       canRemove: _canRemove(detail, member),
+                      onOpenProfile: () {
+                        context.push('/profile/${member.profile.id}');
+                      },
                       onRemove: () => _removeMember(detail, member),
                     ),
                 ],
@@ -503,11 +507,13 @@ class _MemberTile extends StatelessWidget {
   const _MemberTile({
     required this.member,
     required this.canRemove,
+    required this.onOpenProfile,
     required this.onRemove,
   });
 
   final GroupMember member;
   final bool canRemove;
+  final VoidCallback onOpenProfile;
   final VoidCallback onRemove;
 
   @override
@@ -519,6 +525,7 @@ class _MemberTile extends StatelessWidget {
       ),
       title: Text(member.profile.displayLabel),
       subtitle: Text('@${member.profile.username}'),
+      onTap: onOpenProfile,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

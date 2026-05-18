@@ -46,8 +46,6 @@ abstract interface class ContactsDataSource {
 
   Future<List<Map<String, dynamic>>> listProfilesByIds(List<String> ids);
 
-  Future<void> insertFriendRequest(Map<String, dynamic> values);
-
   Future<void> rpc(String functionName, Map<String, dynamic> params);
 }
 
@@ -116,10 +114,9 @@ class SupabaseContactsRepository implements ContactsRepository {
 
   @override
   Future<void> sendFriendRequest(String receiverId) async {
-    await _dataSource.insertFriendRequest({
-      'requester_id': _requireCurrentUserId(),
-      'receiver_id': receiverId,
-      'status': FriendRequestStatus.pending.toJson(),
+    _requireCurrentUserId();
+    await _dataSource.rpc('send_friend_request', {
+      'target_user_id': receiverId,
     });
   }
 
@@ -205,11 +202,6 @@ class SupabaseContactsDataSource implements ContactsDataSource {
         .inFilter('id', ids)
         .order('username');
     return rows.cast<Map<String, dynamic>>();
-  }
-
-  @override
-  Future<void> insertFriendRequest(Map<String, dynamic> values) async {
-    await _client.from('friend_requests').insert(values);
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/friendship.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/models/profile_relationship.dart';
 
 void main() {
   test('Profile parses Supabase rows and copies values', () {
@@ -75,6 +76,27 @@ void main() {
       'avatar_url': 'https://example.test/avatar.png',
       'bio': 'hello',
     });
+  });
+
+  test('ProfileRelationship parses profile summary status fields', () {
+    final summary = ProfileSummary.fromJson({
+      'id': 'user-2',
+      'username': 'ada',
+      'display_name': 'Ada',
+      'alias': 'A',
+      'avatar_url': null,
+      'bio': 'math',
+      'relationship_status': 'friend',
+      'incoming_request_id': null,
+      'outgoing_request_id': null,
+      'is_blocked_by_me': false,
+      'has_blocked_me': false,
+    });
+
+    expect(summary.profile.displayLabel, 'A');
+    expect(summary.relationshipStatus, ProfileRelationshipStatus.friend);
+    expect(summary.canStartChat, isTrue);
+    expect(summary.canSendFriendRequest, isFalse);
   });
 
   test('FriendRequest parses Supabase rows and copies values', () {

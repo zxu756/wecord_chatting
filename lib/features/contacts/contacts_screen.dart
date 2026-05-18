@@ -101,6 +101,7 @@ class _SearchSection extends ConsumerWidget {
                       for (final profile in profiles)
                         _ProfileTile(
                           profile: profile,
+                          onTap: () => context.push('/profile/${profile.id}'),
                           trailing: _AddFriendButton(profile: profile),
                         ),
                     ],
@@ -164,6 +165,9 @@ class _IncomingRequestsSection extends ConsumerWidget {
                   leading: _ProfileAvatar(profile: incomingRequest.requester),
                   title: Text(incomingRequest.requester.displayName),
                   subtitle: Text('@${incomingRequest.requester.username}'),
+                  onTap: () {
+                    context.push('/profile/${incomingRequest.requester.id}');
+                  },
                   trailing: Wrap(
                     spacing: 8,
                     children: [
@@ -248,6 +252,7 @@ class _FriendsSection extends ConsumerWidget {
                 for (final friend in visibleFriends)
                   _ProfileTile(
                     profile: friend,
+                    onTap: () => context.push('/profile/${friend.id}'),
                     trailing: _FriendActions(profile: friend),
                   ),
             ],
@@ -426,10 +431,11 @@ class _Section extends StatelessWidget {
 }
 
 class _ProfileTile extends StatelessWidget {
-  const _ProfileTile({required this.profile, this.trailing});
+  const _ProfileTile({required this.profile, this.trailing, this.onTap});
 
   final Profile profile;
   final Widget? trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -438,6 +444,7 @@ class _ProfileTile extends StatelessWidget {
       leading: _ProfileAvatar(profile: profile),
       title: Text(profile.displayLabel),
       subtitle: Text('@${profile.username}'),
+      onTap: onTap,
       trailing: trailing,
     );
   }

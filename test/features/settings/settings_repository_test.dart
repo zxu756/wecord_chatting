@@ -87,12 +87,58 @@ void main() {
     expect(url, 'https://example.com/avatar.png');
     expect(dataSource.signedUrls, isEmpty);
   });
+
+  test('listBlockedUsers calls scoped blocks query', () async {
+    final dataSource = FakeSettingsDataSource()
+      ..blockedRows = [
+        {
+          'blocked': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada',
+            'alias': null,
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T00:00:00Z',
+            'updated_at': '2026-05-18T00:00:00Z',
+          },
+        },
+      ];
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final users = await repository.listBlockedUsers();
+
+    expect(users.single.username, 'ada');
+    expect(dataSource.blockedUsersForUserIds, ['user-1']);
+  });
+
+  test('unblockUser calls scoped unblock RPC', () async {
+    final dataSource = FakeSettingsDataSource();
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.unblockUser('user-2');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'unblock_user',
+        params: {'target_user_id': 'user-2'},
+      ),
+    ]);
+  });
 }
 
 class FakeSettingsDataSource implements SettingsDataSource {
   final rpcCalls = <RpcCall>[];
   final uploads = <UploadedAvatar>[];
   final signedUrls = <SignedUrlCall>[];
+  final blockedUsersForUserIds = <String>[];
+  List<Map<String, dynamic>> blockedRows = const [];
 
   @override
   Future<Map<String, dynamic>> currentProfile(String currentUserId) {
@@ -131,6 +177,14 @@ class FakeSettingsDataSource implements SettingsDataSource {
       SignedUrlCall(bucket: bucket, path: path, expiresIn: expiresIn),
     );
     return 'https://signed.example.com/$path';
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBlockedUsers(
+    String currentUserId,
+  ) async {
+    blockedUsersForUserIds.add(currentUserId);
+    return blockedRows;
   }
 }
 

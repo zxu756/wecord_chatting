@@ -199,6 +199,30 @@ void main() {
     expect(find.text('Send test notification'), findsOneWidget);
   });
 
+  testWidgets('settings opens blocked users sheet', (tester) async {
+    final settingsRepository = FakeSettingsRepository()
+      ..blockedUsers = [
+        Profile(
+          id: 'user-2',
+          username: 'ada-2',
+          displayName: 'Ada',
+          avatarUrl: null,
+          bio: '',
+          createdAt: DateTime.utc(2026, 5, 18),
+          updatedAt: DateTime.utc(2026, 5, 18),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+
+    await tester.tap(find.text('Blocked users'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('Unblock'), findsOneWidget);
+  });
+
   testWidgets('toggles notification preferences', (tester) async {
     final settingsRepository = FakeSettingsRepository();
     final store = InMemoryNotificationPreferencesStore();
@@ -212,6 +236,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
     await tester.tap(find.widgetWithText(SwitchListTile, 'Notifications'));
     await tester.pump();
 
@@ -296,6 +322,8 @@ class FakeSettingsRepository implements SettingsRepository {
   final updateCalls = <UpdateProfileCall>[];
   final uploadCalls = <UploadAvatarCall>[];
   final createdAvatarUrls = <String>[];
+  final unblockedUserIds = <String>[];
+  List<Profile> blockedUsers = const [];
 
   @override
   Future<Profile> currentProfile() async => profile;
@@ -338,6 +366,18 @@ class FakeSettingsRepository implements SettingsRepository {
       return avatarPath;
     }
     return 'https://signed.example.com/ada.png';
+  }
+
+  @override
+  Future<List<Profile>> listBlockedUsers() async => blockedUsers;
+
+  @override
+  Future<void> unblockUser(String userId) async {
+    unblockedUserIds.add(userId);
+    blockedUsers = [
+      for (final user in blockedUsers)
+        if (user.id != userId) user,
+    ];
   }
 }
 

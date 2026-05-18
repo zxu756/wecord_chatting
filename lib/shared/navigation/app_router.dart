@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 
@@ -112,6 +113,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: ContactsScreen.path,
             builder: (context, state) => const ContactsScreen(),
+          ),
+          GoRoute(
+            path: '${UserProfileScreen.path}/:userId',
+            builder: (context, state) {
+              return UserProfileScreen(userId: state.pathParameters['userId']!);
+            },
           ),
           GoRoute(
             path: CirclesScreen.path,

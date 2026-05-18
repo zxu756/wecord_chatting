@@ -1478,6 +1478,14 @@ class FakeSettingsRepository implements SettingsRepository {
   Future<String> createAvatarUrl(String avatarPath) async {
     return 'https://signed.example.com/$avatarPath';
   }
+
+  @override
+  Future<List<Profile>> listBlockedUsers() async {
+    return const [];
+  }
+
+  @override
+  Future<void> unblockUser(String userId) async {}
 }
 
 ChatMessage _message({

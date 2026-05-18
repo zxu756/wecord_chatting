@@ -314,6 +314,99 @@ void main() {
     expect(sql, contains('voice_messages_insert_member'));
   });
 
+  test('identity safety v4 adds narrow profile safety RPCs', () {
+    final sql = allMigrationSql();
+
+    expect(
+      sql,
+      contains('create table if not exists public.user_privacy_settings'),
+    );
+    expect(sql, contains('create table if not exists public.reports'));
+    expect(
+      sql,
+      contains('create or replace function public.get_profile_summary'),
+    );
+    expect(sql, contains('create or replace function public.block_user'));
+    expect(sql, contains('create or replace function public.unblock_user'));
+    expect(sql, contains('create or replace function public.report_user'));
+
+    final blockBody = functionBody(sql, 'block_user');
+    expect(blockBody, contains('auth.uid()'));
+    expect(blockBody, contains('blocked_id <> auth.uid()'));
+    expect(blockBody, contains('delete from public.friend_requests'));
+
+    final reportBody = functionBody(sql, 'report_user');
+    expect(reportBody, contains('target_user_id <> auth.uid()'));
+    expect(reportBody, contains('insert into public.reports'));
+  });
+
+  test('identity safety v4 enforces blocks before social writes', () {
+    final sql = allMigrationSql();
+
+    expect(sql, isNot(contains('public.create_or_get_direct_conversation')));
+
+    final friendBody = functionBody(sql, 'send_friend_request');
+    expect(friendBody, contains('public.are_users_blocked'));
+
+    final directBody = functionBody(sql, 'get_or_create_direct_conversation');
+    expect(directBody, contains('public.are_users_blocked'));
+
+    final profileBody = functionBody(sql, 'get_profile_summary');
+    expect(profileBody, contains('relationship_status'));
+    expect(profileBody, contains('is_blocked_by_me'));
+    expect(profileBody, contains('has_blocked_me'));
+  });
+
+  test('identity safety v4 blocks writes into blocked direct conversations', () {
+    final sql = allMigrationSql();
+
+    expect(
+      sql,
+      contains(
+        'create or replace function public.is_current_user_blocked_in_conversation',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke execute on function public.are_users_blocked(uuid, uuid) from public',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke execute on function public.are_users_blocked(uuid, uuid) from authenticated',
+      ),
+    );
+
+    final sendBody = functionBody(sql, 'send_text_message');
+    expect(
+      sendBody,
+      contains('public.is_current_user_blocked_in_conversation'),
+    );
+
+    final forwardBody = functionBody(sql, 'forward_message');
+    expect(
+      forwardBody,
+      contains('public.is_current_user_blocked_in_conversation'),
+    );
+
+    final messageInsertPolicy = policyBody(sql, 'messages_insert_member');
+    expect(
+      messageInsertPolicy,
+      contains('not public.is_current_user_blocked_in_conversation'),
+    );
+  });
+
+  test('identity safety v4 enforces friend request privacy policy', () {
+    final sql = allMigrationSql();
+
+    final friendBody = functionBody(sql, 'send_friend_request');
+    expect(friendBody, contains('friend_request_policy'));
+    expect(friendBody, contains("'none'"));
+    expect(friendBody, contains("'friends_of_friends'"));
+  });
+
   test('direct conversation summaries prefer contact aliases for titles', () {
     final sql = allMigrationSql();
     final summariesBody = functionBody(sql, 'list_conversation_summaries');

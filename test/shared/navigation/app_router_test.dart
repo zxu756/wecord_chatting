@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
@@ -177,6 +178,54 @@ void main() {
 
     expect(find.byType(GlobalMessageSearchScreen), findsOneWidget);
   });
+
+  testWidgets('routes signed-in users to profile pages', (tester) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    final profileDataSource = FakeProfileDataSource()
+      ..rpcResult = [
+        {
+          'id': 'user-2',
+          'username': 'ada',
+          'display_name': 'Ada',
+          'alias': null,
+          'avatar_url': null,
+          'bio': '',
+          'relationship_status': 'none',
+          'incoming_request_id': null,
+          'outgoing_request_id': null,
+          'is_blocked_by_me': false,
+          'has_blocked_me': false,
+        },
+      ];
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+          profileRepositoryProvider.overrideWithValue(
+            ProfileRepository.withDataSource(profileDataSource),
+          ),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go('/profile/user-2');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile'), findsOneWidget);
+  });
 }
 
 class FakeAuthRepository implements AuthRepository {
@@ -211,4 +260,13 @@ class FakeAuthRepository implements AuthRepository {
     String username,
     String displayName,
   ) async {}
+}
+
+class FakeProfileDataSource implements ProfileDataSource {
+  Object? rpcResult;
+
+  @override
+  Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
+    return rpcResult;
+  }
 }

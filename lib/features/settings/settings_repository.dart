@@ -42,10 +42,16 @@ abstract interface class SettingsRepository {
   });
 
   Future<String> createAvatarUrl(String avatarPath);
+
+  Future<List<Profile>> listBlockedUsers();
+
+  Future<void> unblockUser(String userId);
 }
 
 abstract interface class SettingsDataSource {
   Future<Map<String, dynamic>> currentProfile(String currentUserId);
+
+  Future<List<Map<String, dynamic>>> listBlockedUsers(String currentUserId);
 
   Future<void> rpc(String functionName, Map<String, dynamic> params);
 
@@ -88,6 +94,19 @@ class SupabaseSettingsRepository implements SettingsRepository {
   Future<Profile> currentProfile() async {
     final row = await _dataSource.currentProfile(_requireCurrentUserId());
     return Profile.fromJson(row);
+  }
+
+  @override
+  Future<List<Profile>> listBlockedUsers() async {
+    final rows = await _dataSource.listBlockedUsers(_requireCurrentUserId());
+    return rows
+        .map((row) => Profile.fromJson(row['blocked'] as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> unblockUser(String userId) async {
+    await _dataSource.rpc('unblock_user', {'target_user_id': userId});
   }
 
   @override
@@ -210,6 +229,18 @@ class SupabaseSettingsDataSource implements SettingsDataSource {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> listBlockedUsers(
+    String currentUserId,
+  ) async {
+    final rows = await _client
+        .from('blocks')
+        .select('blocked:profiles!blocks_blocked_id_fkey(*)')
+        .eq('blocker_id', currentUserId)
+        .order('created_at');
+    return rows;
+  }
+
+  @override
   Future<void> rpc(String functionName, Map<String, dynamic> params) async {
     await _client.rpc(functionName, params: params);
   }
@@ -248,6 +279,16 @@ class _UninitializedSettingsRepository implements SettingsRepository {
   @override
   Future<Profile> currentProfile() {
     throw StateError('Supabase must be initialized before loading settings.');
+  }
+
+  @override
+  Future<List<Profile>> listBlockedUsers() {
+    throw StateError('Supabase must be initialized before loading settings.');
+  }
+
+  @override
+  Future<void> unblockUser(String userId) {
+    throw StateError('Supabase must be initialized before updating blocks.');
   }
 
   @override

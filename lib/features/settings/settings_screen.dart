@@ -11,6 +11,10 @@ final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
   return ref.watch(settingsRepositoryProvider).currentProfile();
 });
 
+final blockedUsersProvider = FutureProvider.autoDispose<List<Profile>>((ref) {
+  return ref.watch(settingsRepositoryProvider).listBlockedUsers();
+});
+
 final currentNotificationPreferencesProvider =
     FutureProvider.autoDispose<NotificationPreferences>((ref) {
       return ref.watch(notificationPreferencesRepositoryProvider).load();
@@ -125,7 +129,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       )
                     : const Text('Save'),
               ),
-              const SizedBox(height: 8),
+              const Divider(height: 32),
+              Text(
+                'Privacy & Safety',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Blocked users'),
+                subtitle: const Text('Manage people you have blocked'),
+                onTap: () => showBlockedUsersSheet(context, ref),
+              ),
               const Divider(height: 32),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -299,6 +314,109 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         setState(() {
           _errorText = 'Could not send test notification. Try again.';
+        });
+      }
+    }
+  }
+}
+
+Future<void> showBlockedUsersSheet(BuildContext context, WidgetRef ref) {
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => const _BlockedUsersSheet(),
+  );
+}
+
+class _BlockedUsersSheet extends ConsumerStatefulWidget {
+  const _BlockedUsersSheet();
+
+  @override
+  ConsumerState<_BlockedUsersSheet> createState() => _BlockedUsersSheetState();
+}
+
+class _BlockedUsersSheetState extends ConsumerState<_BlockedUsersSheet> {
+  String? _unblockingUserId;
+
+  @override
+  Widget build(BuildContext context) {
+    final blockedUsers = ref.watch(blockedUsersProvider);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Blocked users',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: blockedUsers.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, stackTrace) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: _ErrorText(error),
+                ),
+                data: (users) {
+                  if (users.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text('You have not blocked anyone.'),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: users.length,
+                    separatorBuilder: (context, index) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final user = users[index];
+                      final isUnblocking = _unblockingUserId == user.id;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(user.displayLabel),
+                        subtitle: Text('@${user.username}'),
+                        trailing: TextButton(
+                          onPressed: isUnblocking
+                              ? null
+                              : () => _unblockUser(user.id),
+                          child: isUnblocking
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Unblock'),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _unblockUser(String userId) async {
+    setState(() {
+      _unblockingUserId = userId;
+    });
+    try {
+      await ref.read(settingsRepositoryProvider).unblockUser(userId);
+      ref.invalidate(blockedUsersProvider);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _unblockingUserId = null;
         });
       }
     }

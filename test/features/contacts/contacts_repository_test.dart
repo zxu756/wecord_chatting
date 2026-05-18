@@ -80,26 +80,22 @@ void main() {
     },
   );
 
-  test(
-    'sendFriendRequest inserts a pending request from the current user',
-    () async {
-      final dataSource = FakeContactsDataSource();
-      final repository = SupabaseContactsRepository.withDataSource(
-        dataSource,
-        currentUserId: () => 'current-user',
-      );
+  test('sendFriendRequest calls the hardened RPC', () async {
+    final dataSource = FakeContactsDataSource();
+    final repository = SupabaseContactsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'current-user',
+    );
 
-      await repository.sendFriendRequest('friend-1');
+    await repository.sendFriendRequest('friend-1');
 
-      expect(dataSource.inserts, [
-        {
-          'requester_id': 'current-user',
-          'receiver_id': 'friend-1',
-          'status': 'pending',
-        },
-      ]);
-    },
-  );
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'send_friend_request',
+        params: {'target_user_id': 'friend-1'},
+      ),
+    ]);
+  });
 
   test('accept and reject friend requests call hardened RPCs', () async {
     final dataSource = FakeContactsDataSource();
@@ -150,7 +146,6 @@ class FakeContactsDataSource implements ContactsDataSource {
   final friendsCalls = <String>[];
   final incomingCalls = <String>[];
   final profilesByIdCalls = <List<String>>[];
-  final inserts = <Map<String, dynamic>>[];
   final rpcCalls = <RpcCall>[];
 
   @override
@@ -180,11 +175,6 @@ class FakeContactsDataSource implements ContactsDataSource {
   Future<List<Map<String, dynamic>>> listProfilesByIds(List<String> ids) async {
     profilesByIdCalls.add(ids);
     return profilesByIdRows;
-  }
-
-  @override
-  Future<void> insertFriendRequest(Map<String, dynamic> values) async {
-    inserts.add(values);
   }
 
   @override

@@ -224,12 +224,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   return const Center(child: Text('No matching messages'));
                 }
 
-                final oldestToNewest = _messagesOldestToNewest(visibleMessages);
-                final newestFirst = oldestToNewest.reversed.toList(
+                final fullOldestToNewest = _messagesOldestToNewest(messages);
+                final visibleOldestToNewest = _messagesOldestToNewest(
+                  visibleMessages,
+                );
+                final newestFirst = visibleOldestToNewest.reversed.toList(
                   growable: false,
                 );
                 final latestOutgoingReadState = _latestOutgoingReadState(
-                  messages: oldestToNewest,
+                  messages: fullOldestToNewest,
                   readMarkers: data.readMarkers,
                   currentUserId: currentUserId,
                 );

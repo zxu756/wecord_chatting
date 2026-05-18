@@ -895,15 +895,23 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
   if (normalizedQuery.isEmpty) {
     return messages;
   }
+  final recalledMessageIds = {
+    for (final message in messages)
+      if (message.recalledAt != null) message.id,
+  };
   return messages
       .where((message) {
         if (message.recalledAt != null) {
           return false;
         }
         final preview = message.replyPreview;
+        final previewParentIsRecalled =
+            message.replyToMessageId != null &&
+            recalledMessageIds.contains(message.replyToMessageId);
         return _containsQuery(message.body, normalizedQuery) ||
-            _containsQuery(preview?.body, normalizedQuery) ||
-            _containsQuery(preview?.senderName, normalizedQuery);
+            (!previewParentIsRecalled &&
+                (_containsQuery(preview?.body, normalizedQuery) ||
+                    _containsQuery(preview?.senderName, normalizedQuery)));
       })
       .toList(growable: false);
 }

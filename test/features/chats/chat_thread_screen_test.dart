@@ -255,6 +255,44 @@ void main() {
     expect(find.text('Read'), findsOneWidget);
   });
 
+  testWidgets('search does not move the read receipt to an older result', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Project kickoff',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Latest outgoing',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ]
+      ..readMarkers = const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-1',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Search messages'));
+    await tester.pump();
+    await tester.enterText(find.bySemanticsLabel('Search messages'), 'project');
+    await tester.pump();
+
+    expect(find.text('Project kickoff'), findsOneWidget);
+    expect(find.text('Latest outgoing'), findsNothing);
+    expect(find.text('Read'), findsNothing);
+  });
+
   testWidgets('renders image messages and opens a preview', (tester) async {
     final repository = FakeChatsRepository()
       ..messages = [

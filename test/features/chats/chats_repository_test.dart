@@ -531,6 +531,44 @@ void main() {
     expect(repository.searchMessages(messages, ''), messages);
   });
 
+  test('searchMessages hides previews for recalled parents in the thread', () {
+    final repository = SupabaseChatsRepository.withDataSource(
+      FakeChatsDataSource(),
+      currentUserId: () => 'user-1',
+    );
+    final messages = [
+      ChatMessage(
+        id: 'message-1',
+        conversationId: 'conversation-1',
+        senderId: 'user-1',
+        type: MessageType.text,
+        body: 'Deleted project secret',
+        recalledAt: DateTime.utc(2026, 5, 18, 1),
+        createdAt: DateTime.utc(2026, 5, 18),
+      ),
+      ChatMessage(
+        id: 'message-2',
+        conversationId: 'conversation-1',
+        senderId: 'user-2',
+        type: MessageType.text,
+        body: 'Acknowledged',
+        replyToMessageId: 'message-1',
+        replyPreview: const ReplyPreview(
+          messageId: 'message-1',
+          senderName: 'Ada',
+          body: 'Deleted project secret',
+          type: MessageType.text,
+        ),
+        createdAt: DateTime.utc(2026, 5, 18, 0, 1),
+      ),
+    ];
+
+    expect(repository.searchMessages(messages, 'project'), isEmpty);
+    expect(repository.searchMessages(messages, 'acknowledged'), [
+      messages.last,
+    ]);
+  });
+
   test('messageChanges emits when matching messages invalidate', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(

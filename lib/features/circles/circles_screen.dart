@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wecord/features/circles/circle_creation_sheet.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/circle.dart';
 
 class CirclesScreen extends ConsumerWidget {
   const CirclesScreen({super.key});
@@ -14,34 +17,43 @@ class CirclesScreen extends ConsumerWidget {
       body: FutureBuilder<List<CircleSummary>>(
         future: ref.watch(circlesRepositoryProvider).listCircles(),
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text(snapshot.error.toString()));
+          }
           final circles = snapshot.data ?? const <CircleSummary>[];
           if (circles.isEmpty) {
             return _EmptyCircles(
-              onCreate: () => showDialog<void>(
+              onCreate: () => showModalBottomSheet<void>(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Circle creation is coming next'),
-                  content: const Text(
-                    'Text channels, announcements, and invited members will live here.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
+                isScrollControlled: true,
+                builder: (context) => const CircleCreationSheet(),
               ),
             );
           }
-          return ListView(
-            children: [
-              for (final circle in circles)
-                ListTile(
-                  title: Text(circle.name),
-                  subtitle: Text('${circle.memberCount} members'),
+          return ListView.separated(
+            itemCount: circles.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final circle = circles[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: circle.avatarUrl == null
+                      ? null
+                      : NetworkImage(circle.avatarUrl!),
+                  child: circle.avatarUrl == null
+                      ? Text(_initials(circle.name))
+                      : null,
                 ),
-            ],
+                title: Text(circle.name),
+                subtitle: Text(
+                  '${circle.memberCount} members · ${circle.channelCount} channels',
+                ),
+                onTap: () => context.go('${CirclesScreen.path}/${circle.id}'),
+              );
+            },
           );
         },
       ),
@@ -87,4 +99,12 @@ class _EmptyCircles extends StatelessWidget {
       ),
     );
   }
+}
+
+String _initials(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '?';
+  }
+  return trimmed.characters.first.toUpperCase();
 }

@@ -28,6 +28,8 @@ abstract interface class SettingsRepository {
     required String mimeType,
     required Uint8List bytes,
   });
+
+  Future<String> createAvatarUrl(String avatarPath);
 }
 
 abstract interface class SettingsDataSource {
@@ -40,6 +42,12 @@ abstract interface class SettingsDataSource {
     required String path,
     required Uint8List bytes,
     required String mimeType,
+  });
+
+  Future<String> createSignedUrl({
+    required String bucket,
+    required String path,
+    required Duration expiresIn,
   });
 }
 
@@ -101,6 +109,21 @@ class SupabaseSettingsRepository implements SettingsRepository {
       ),
     );
     return path;
+  }
+
+  @override
+  Future<String> createAvatarUrl(String avatarPath) {
+    final uri = Uri.tryParse(avatarPath);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      return Future.value(avatarPath);
+    }
+    return _withStorageTimeout(
+      _dataSource.createSignedUrl(
+        bucket: 'profile-avatars',
+        path: avatarPath,
+        expiresIn: const Duration(hours: 1),
+      ),
+    );
   }
 
   String _requireCurrentUserId() {
@@ -173,6 +196,17 @@ class SupabaseSettingsDataSource implements SettingsDataSource {
           fileOptions: FileOptions(contentType: mimeType, upsert: false),
         );
   }
+
+  @override
+  Future<String> createSignedUrl({
+    required String bucket,
+    required String path,
+    required Duration expiresIn,
+  }) {
+    return _client.storage
+        .from(bucket)
+        .createSignedUrl(path, expiresIn.inSeconds);
+  }
 }
 
 class _UninitializedSettingsRepository implements SettingsRepository {
@@ -199,5 +233,10 @@ class _UninitializedSettingsRepository implements SettingsRepository {
     required Uint8List bytes,
   }) {
     throw StateError('Supabase must be initialized before uploading avatars.');
+  }
+
+  @override
+  Future<String> createAvatarUrl(String avatarPath) {
+    throw StateError('Supabase must be initialized before loading avatars.');
   }
 }

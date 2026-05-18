@@ -9,6 +9,14 @@ final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
   return ref.watch(settingsRepositoryProvider).currentProfile();
 });
 
+final avatarDisplayUrlProvider = FutureProvider.autoDispose
+    .family<String?, String?>((ref, avatarUrl) {
+      if (avatarUrl == null || avatarUrl.trim().isEmpty) {
+        return Future.value();
+      }
+      return ref.watch(settingsRepositoryProvider).createAvatarUrl(avatarUrl);
+    });
+
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -202,7 +210,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-class _ProfileAvatar extends StatelessWidget {
+class _ProfileAvatar extends ConsumerWidget {
   const _ProfileAvatar({
     required this.displayName,
     required this.avatarUrl,
@@ -214,26 +222,18 @@ class _ProfileAvatar extends StatelessWidget {
   final double radius;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayUrl = ref.watch(avatarDisplayUrlProvider(avatarUrl));
+    final image = displayUrl.valueOrNull == null
+        ? null
+        : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       radius: radius,
-      backgroundImage: _publicAvatarImage(avatarUrl),
-      child: _publicAvatarImage(avatarUrl) == null
-          ? Text(_initials(displayName))
-          : null,
+      backgroundImage: image,
+      onBackgroundImageError: image == null ? null : (_, _) {},
+      child: image == null ? Text(_initials(displayName)) : null,
     );
   }
-}
-
-ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
-  final uri = Uri.tryParse(avatarUrl ?? '');
-  if (uri == null || !uri.hasScheme) {
-    return null;
-  }
-  if (uri.scheme != 'http' && uri.scheme != 'https') {
-    return null;
-  }
-  return NetworkImage(uri.toString());
 }
 
 String _initials(String value) {

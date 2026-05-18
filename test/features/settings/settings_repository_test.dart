@@ -53,11 +53,46 @@ void main() {
       ),
     ]);
   });
+
+  test('createAvatarUrl signs private avatar paths', () async {
+    final dataSource = FakeSettingsDataSource();
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final url = await repository.createAvatarUrl('user-1/avatar.png');
+
+    expect(url, 'https://signed.example.com/user-1/avatar.png');
+    expect(dataSource.signedUrls, [
+      const SignedUrlCall(
+        bucket: 'profile-avatars',
+        path: 'user-1/avatar.png',
+        expiresIn: Duration(hours: 1),
+      ),
+    ]);
+  });
+
+  test('createAvatarUrl returns public avatar URLs without signing', () async {
+    final dataSource = FakeSettingsDataSource();
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final url = await repository.createAvatarUrl(
+      'https://example.com/avatar.png',
+    );
+
+    expect(url, 'https://example.com/avatar.png');
+    expect(dataSource.signedUrls, isEmpty);
+  });
 }
 
 class FakeSettingsDataSource implements SettingsDataSource {
   final rpcCalls = <RpcCall>[];
   final uploads = <UploadedAvatar>[];
+  final signedUrls = <SignedUrlCall>[];
 
   @override
   Future<Map<String, dynamic>> currentProfile(String currentUserId) {
@@ -84,6 +119,18 @@ class FakeSettingsDataSource implements SettingsDataSource {
         mimeType: mimeType,
       ),
     );
+  }
+
+  @override
+  Future<String> createSignedUrl({
+    required String bucket,
+    required String path,
+    required Duration expiresIn,
+  }) async {
+    signedUrls.add(
+      SignedUrlCall(bucket: bucket, path: path, expiresIn: expiresIn),
+    );
+    return 'https://signed.example.com/$path';
   }
 }
 
@@ -129,6 +176,29 @@ class UploadedAvatar {
   @override
   int get hashCode =>
       Object.hash(bucket, path, Object.hashAll(bytes), mimeType);
+}
+
+class SignedUrlCall {
+  const SignedUrlCall({
+    required this.bucket,
+    required this.path,
+    required this.expiresIn,
+  });
+
+  final String bucket;
+  final String path;
+  final Duration expiresIn;
+
+  @override
+  bool operator ==(Object other) {
+    return other is SignedUrlCall &&
+        other.bucket == bucket &&
+        other.path == path &&
+        other.expiresIn == expiresIn;
+  }
+
+  @override
+  int get hashCode => Object.hash(bucket, path, expiresIn);
 }
 
 bool _mapsEqual(Map<String, dynamic> left, Map<String, dynamic> right) {

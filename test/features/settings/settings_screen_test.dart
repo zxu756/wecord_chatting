@@ -92,6 +92,62 @@ void main() {
     expect(settingsRepository.updateCalls.single.avatarUrl, 'avatars/ada.png');
   });
 
+  testWidgets('renders uploaded private avatar paths with signed URLs', (
+    tester,
+  ) async {
+    final settingsRepository = FakeSettingsRepository();
+    final imagePickerService = FakeImagePickerService()
+      ..nextImage = ChatImageUpload(
+        fileName: 'avatar.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3]),
+      );
+
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: settingsRepository,
+        imagePickerService: imagePickerService,
+      ),
+    );
+    await tester.pump();
+    settingsRepository.createdAvatarUrls.clear();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
+    await tester.pump();
+    await tester.pump();
+
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    final image = avatar.backgroundImage;
+    expect(settingsRepository.createdAvatarUrls, ['avatars/ada.png']);
+    expect(image, isA<NetworkImage>());
+    expect((image! as NetworkImage).url, 'https://signed.example.com/ada.png');
+  });
+
+  testWidgets('renders public avatar URLs without signing', (tester) async {
+    final settingsRepository = FakeSettingsRepository()
+      ..profile = Profile(
+        id: 'user-1',
+        username: 'ada',
+        displayName: 'Ada Lovelace',
+        avatarUrl: 'https://example.com/ada.png',
+        bio: 'Computing pioneer',
+        createdAt: DateTime.utc(2026, 5, 18),
+        updatedAt: DateTime.utc(2026, 5, 18),
+      );
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+    await tester.pump();
+
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    final image = avatar.backgroundImage;
+    expect(settingsRepository.createdAvatarUrls, [
+      'https://example.com/ada.png',
+    ]);
+    expect(image, isA<NetworkImage>());
+    expect((image! as NetworkImage).url, 'https://example.com/ada.png');
+  });
+
   testWidgets('keeps text edits when avatar upload fails', (tester) async {
     final settingsRepository = FakeSettingsRepository()
       ..uploadError = Exception('storage failed');
@@ -159,6 +215,7 @@ class FakeSettingsRepository implements SettingsRepository {
   Object? uploadError;
   final updateCalls = <UpdateProfileCall>[];
   final uploadCalls = <UploadAvatarCall>[];
+  final createdAvatarUrls = <String>[];
 
   @override
   Future<Profile> currentProfile() async => profile;
@@ -191,6 +248,16 @@ class FakeSettingsRepository implements SettingsRepository {
       UploadAvatarCall(fileName: fileName, mimeType: mimeType, bytes: bytes),
     );
     return 'avatars/ada.png';
+  }
+
+  @override
+  Future<String> createAvatarUrl(String avatarPath) async {
+    createdAvatarUrls.add(avatarPath);
+    final uri = Uri.tryParse(avatarPath);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      return avatarPath;
+    }
+    return 'https://signed.example.com/ada.png';
   }
 }
 

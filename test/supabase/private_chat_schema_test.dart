@@ -14,6 +14,28 @@ void main() {
         .join('\n');
   }
 
+  String effectiveMigrationSql() {
+    var sql = allMigrationSql();
+    final droppedPolicies = RegExp(
+      r'drop policy if exists (\w+) on public\.(\w+);',
+      caseSensitive: false,
+    ).allMatches(sql);
+
+    for (final policy in droppedPolicies) {
+      final policyName = policy.group(1)!;
+      final tableName = policy.group(2)!;
+      sql = sql.replaceAll(
+        RegExp(
+          'create policy $policyName[\\s\\S]*?on public\\.$tableName[\\s\\S]*?;',
+          caseSensitive: false,
+        ),
+        '',
+      );
+    }
+
+    return sql;
+  }
+
   String functionBody(String sql, String functionName) {
     final match = RegExp(
       'create or replace function public\\.$functionName[\\s\\S]*?\\n\\\$\\\$;',
@@ -266,5 +288,77 @@ void main() {
       ),
     );
     expect(helperBody, contains('auth.uid()'));
+  });
+
+  test('social chat v2 RPCs are narrow and role scoped', () {
+    final sql = allMigrationSql();
+
+    expect(
+      sql,
+      contains('create or replace function public.create_group_conversation'),
+    );
+    expect(
+      sql,
+      contains('create or replace function public.rename_group_conversation'),
+    );
+    expect(
+      sql,
+      contains('create or replace function public.add_group_members'),
+    );
+    expect(
+      sql,
+      contains('create or replace function public.update_current_user_profile'),
+    );
+    expect(sql, contains('create or replace function public.edit_message'));
+
+    final createGroupBody = functionBody(sql, 'create_group_conversation');
+    expect(createGroupBody, contains('auth.uid()'));
+    expect(createGroupBody, contains('friendships'));
+    expect(createGroupBody, contains("role, 'owner'"));
+    expect(createGroupBody, contains("role, 'member'"));
+
+    final renameBody = functionBody(sql, 'rename_group_conversation');
+    expect(renameBody, contains("role in ('owner', 'admin')"));
+
+    final addMembersBody = functionBody(sql, 'add_group_members');
+    expect(addMembersBody, contains("role in ('owner', 'admin')"));
+
+    final editBody = functionBody(sql, 'edit_message');
+    expect(editBody, contains('sender_id = auth.uid()'));
+    expect(editBody, contains("type = 'text'"));
+    expect(editBody, contains('recalled_at is null'));
+
+    final profileBody = functionBody(sql, 'update_current_user_profile');
+    expect(profileBody, contains('id = auth.uid()'));
+  });
+
+  test('social chat v2 avoids broad sensitive update policies', () {
+    final sql = effectiveMigrationSql();
+
+    expect(
+      sql,
+      isNot(
+        contains(
+          RegExp(r'create policy \w+\s+on public\.messages\s+for update'),
+        ),
+      ),
+    );
+    expect(
+      sql,
+      isNot(
+        contains(
+          RegExp(r'create policy \w+\s+on public\.profiles\s+for update'),
+        ),
+      ),
+    );
+  });
+
+  test('profile avatar storage is owner scoped', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains("insert into storage.buckets (id, name, public)"));
+    expect(sql, contains("'profile-avatars'"));
+    expect(sql, contains("bucket_id = 'profile-avatars'"));
+    expect(sql, contains("(storage.foldername(name))[1] = auth.uid()::text"));
   });
 }

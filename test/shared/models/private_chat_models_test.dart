@@ -249,6 +249,32 @@ void main() {
     expect(message.copyWith(body: 'Updated').body, 'Updated');
   });
 
+  test('ChatMessage parses reply preview and edited timestamp', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'text',
+      'body': 'Reply body',
+      'attachment': null,
+      'reply_to_message_id': 'message-0',
+      'reply_preview': {
+        'message_id': 'message-0',
+        'sender_name': 'Ada',
+        'body': 'Original body',
+        'type': 'text',
+      },
+      'created_at': '2026-05-18T00:00:00Z',
+      'edited_at': '2026-05-18T00:01:00Z',
+      'recalled_at': null,
+    });
+
+    expect(message.replyToMessageId, 'message-0');
+    expect(message.replyPreview?.senderName, 'Ada');
+    expect(message.replyPreview?.body, 'Original body');
+    expect(message.editedAt, DateTime.utc(2026, 5, 18, 0, 1));
+  });
+
   test('Message copyWith can clear nullable fields', () {
     final message = ChatMessage.fromJson({
       'id': 'message-1',
@@ -348,6 +374,7 @@ void main() {
       'body': 'Hello',
       'attachment': {'path': 'file.png'},
       'reply_to_message_id': 'message-0',
+      'reply_preview': null,
     });
   });
 }

@@ -36,6 +36,7 @@ class ChatMessage {
     required this.createdAt,
     this.attachment,
     this.replyToMessageId,
+    this.replyPreview,
     this.editedAt,
     this.recalledAt,
   });
@@ -49,6 +50,11 @@ class ChatMessage {
       body: json['body'] as String,
       attachment: json['attachment'] as Map<String, dynamic>?,
       replyToMessageId: json['reply_to_message_id'] as String?,
+      replyPreview: json['reply_preview'] == null
+          ? null
+          : ReplyPreview.fromJson(
+              json['reply_preview'] as Map<String, dynamic>,
+            ),
       createdAt: _parseTimestamp(json['created_at']),
       editedAt: _parseOptionalTimestamp(json['edited_at']),
       recalledAt: _parseOptionalTimestamp(json['recalled_at']),
@@ -62,6 +68,7 @@ class ChatMessage {
   final String body;
   final Map<String, dynamic>? attachment;
   final String? replyToMessageId;
+  final ReplyPreview? replyPreview;
   final DateTime createdAt;
   final DateTime? editedAt;
   final DateTime? recalledAt;
@@ -82,6 +89,7 @@ class ChatMessage {
       'body': body,
       'attachment': attachment,
       'reply_to_message_id': replyToMessageId,
+      'reply_preview': replyPreview?.toJson(),
     };
   }
 
@@ -93,6 +101,7 @@ class ChatMessage {
     String? body,
     Object? attachment = _sentinel,
     Object? replyToMessageId = _sentinel,
+    Object? replyPreview = _sentinel,
     DateTime? createdAt,
     Object? editedAt = _sentinel,
     Object? recalledAt = _sentinel,
@@ -109,6 +118,9 @@ class ChatMessage {
       replyToMessageId: identical(replyToMessageId, _sentinel)
           ? this.replyToMessageId
           : replyToMessageId as String?,
+      replyPreview: identical(replyPreview, _sentinel)
+          ? this.replyPreview
+          : replyPreview as ReplyPreview?,
       createdAt: createdAt ?? this.createdAt,
       editedAt: identical(editedAt, _sentinel)
           ? this.editedAt
@@ -117,6 +129,38 @@ class ChatMessage {
           ? this.recalledAt
           : recalledAt as DateTime?,
     );
+  }
+}
+
+class ReplyPreview {
+  const ReplyPreview({
+    required this.messageId,
+    required this.senderName,
+    required this.body,
+    required this.type,
+  });
+
+  factory ReplyPreview.fromJson(Map<String, dynamic> json) {
+    return ReplyPreview(
+      messageId: json['message_id'] as String,
+      senderName: json['sender_name'] as String,
+      body: json['body'] as String,
+      type: MessageType.fromJson(json['type'] as String),
+    );
+  }
+
+  final String messageId;
+  final String senderName;
+  final String body;
+  final MessageType type;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'message_id': messageId,
+      'sender_name': senderName,
+      'body': body,
+      'type': type.toJson(),
+    };
   }
 }
 

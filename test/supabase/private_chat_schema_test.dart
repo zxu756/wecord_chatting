@@ -37,11 +37,11 @@ void main() {
   }
 
   String functionBody(String sql, String functionName) {
-    final match = RegExp(
+    final matches = RegExp(
       'create or replace function public\\.$functionName[\\s\\S]*?\\n\\\$\\\$;',
-    ).firstMatch(sql);
-    expect(match, isNotNull, reason: 'Missing function $functionName');
-    return match!.group(0)!;
+    ).allMatches(sql);
+    expect(matches, isNotEmpty, reason: 'Missing function $functionName');
+    return matches.last.group(0)!;
   }
 
   Iterable<String> policyBodiesFor(String sql, String tableName) {
@@ -183,7 +183,7 @@ void main() {
   });
 
   test('conversation summaries are scoped and compute unread counts', () {
-    final sql = migration.readAsStringSync();
+    final sql = effectiveMigrationSql();
     final summariesBody = functionBody(sql, 'list_conversation_summaries');
 
     expect(summariesBody, contains('security definer'));
@@ -192,6 +192,8 @@ void main() {
     expect(summariesBody, contains('last_read_message_id'));
     expect(summariesBody, contains('unread_count'));
     expect(summariesBody, contains('last_message_body'));
+    expect(summariesBody, contains('last_message.recalled_at'));
+    expect(summariesBody, contains("'Message deleted'"));
   });
 
   test('private chat migration protects message access by membership', () {

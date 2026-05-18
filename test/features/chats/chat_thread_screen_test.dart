@@ -75,7 +75,7 @@ void main() {
         ),
       ];
 
-    await tester.pumpWidget(_app(repository));
+    await tester.pumpWidget(_app(repository, title: null));
     await tester.pump();
 
     await tester.tap(find.byTooltip('Search messages'));
@@ -1133,11 +1133,33 @@ void main() {
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsWidgets);
   });
+
+  testWidgets('loads group metadata when route extras are absent', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.group,
+          title: 'Launch Crew',
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository, title: null));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Launch Crew'), findsOneWidget);
+    expect(find.byTooltip('Group details'), findsOneWidget);
+  });
 }
 
 Widget _app(
   FakeChatsRepository repository, {
   ImagePickerService? imagePickerService,
+  String? title = 'Ada Lovelace',
   ConversationType? conversationType,
 }) {
   return ProviderScope(
@@ -1154,7 +1176,7 @@ Widget _app(
     child: MaterialApp(
       home: ChatThreadScreen(
         conversationId: 'conversation-1',
-        title: 'Ada Lovelace',
+        title: title,
         conversationType: conversationType,
       ),
     ),
@@ -1240,6 +1262,18 @@ class FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<ConversationSummary>> listConversations() async => conversations;
+
+  @override
+  Future<ConversationSummary?> getConversationSummary(
+    String conversationId,
+  ) async {
+    for (final conversation in conversations) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
+    }
+    return null;
+  }
 
   @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {

@@ -36,6 +36,13 @@ final chatActivityProvider = StreamProvider.autoDispose
           .conversationActivity(conversationId);
     });
 
+final chatConversationSummaryProvider = FutureProvider.autoDispose
+    .family<ConversationSummary?, String>((ref, conversationId) {
+      return ref
+          .watch(chatsRepositoryProvider)
+          .getConversationSummary(conversationId);
+    });
+
 class ChatThreadData {
   const ChatThreadData({required this.messages, required this.readMarkers});
 
@@ -96,10 +103,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
     final activity = ref.watch(chatActivityProvider(widget.conversationId));
+    final conversationSummary = ref
+        .watch(chatConversationSummaryProvider(widget.conversationId))
+        .valueOrNull;
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
     final title = widget.title?.trim().isNotEmpty == true
         ? widget.title!.trim()
+        : conversationSummary?.title?.trim().isNotEmpty == true
+        ? conversationSummary!.title!.trim()
         : 'Conversation';
+    final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
+    final conversationType =
+        widget.conversationType ?? conversationSummary?.type;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
     final peerIsOnline = currentActivity.onlineUserIds.any((id) {
@@ -113,7 +128,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8),
-          child: _ThreadAvatar(title: title, avatarUrl: widget.avatarUrl),
+          child: _ThreadAvatar(title: title, avatarUrl: avatarUrl),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +155,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               });
             },
           ),
-          if (widget.conversationType == ConversationType.group)
+          if (conversationType == ConversationType.group)
             IconButton(
               tooltip: 'Group details',
               icon: const Icon(Icons.group_outlined),

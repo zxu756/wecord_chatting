@@ -479,6 +479,27 @@ void main() {
     expect(repository.searchConversations(conversations, ' '), conversations);
   });
 
+  test('searchConversations does not match deleted original text', () {
+    final repository = SupabaseChatsRepository.withDataSource(
+      FakeChatsDataSource(),
+      currentUserId: () => 'user-1',
+    );
+    final conversations = [
+      const ConversationSummary(
+        id: 'conversation-1',
+        type: ConversationType.direct,
+        title: 'Ada Lovelace',
+        lastMessageBody: 'Message deleted',
+        unreadCount: 0,
+      ),
+    ];
+
+    expect(
+      repository.searchConversations(conversations, 'secret draft'),
+      isEmpty,
+    );
+  });
+
   test('searchMessages skips recalled messages entirely', () {
     final repository = SupabaseChatsRepository.withDataSource(
       FakeChatsDataSource(),

@@ -20,6 +20,8 @@ final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
 abstract interface class ChatsRepository {
   Future<List<ConversationSummary>> listConversations();
 
+  Future<ConversationSummary?> getConversationSummary(String conversationId);
+
   Future<List<ChatMessage>> listMessages(String conversationId);
 
   Future<List<ConversationReadMarker>> listReadMarkers(String conversationId);
@@ -155,6 +157,19 @@ class SupabaseChatsRepository implements ChatsRepository {
   Future<List<ConversationSummary>> listConversations() async {
     final rows = await _dataSource.listConversationSummaries();
     return rows.map(ConversationSummary.fromJson).toList(growable: false);
+  }
+
+  @override
+  Future<ConversationSummary?> getConversationSummary(
+    String conversationId,
+  ) async {
+    final conversations = await listConversations();
+    for (final conversation in conversations) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
+    }
+    return null;
   }
 
   @override
@@ -750,6 +765,13 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<List<ConversationSummary>> listConversations() async {
     return const [];
+  }
+
+  @override
+  Future<ConversationSummary?> getConversationSummary(
+    String conversationId,
+  ) async {
+    return null;
   }
 
   @override

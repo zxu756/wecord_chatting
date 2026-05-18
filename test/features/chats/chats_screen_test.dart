@@ -71,6 +71,27 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
+  testWidgets('shows safe deleted text for recalled latest messages', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: 'Message deleted',
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Message deleted'), findsOneWidget);
+    expect(find.text('private secret'), findsNothing);
+  });
+
   testWidgets('filters visible conversations by search query', (tester) async {
     final repository = FakeChatsRepository()
       ..conversations = [
@@ -202,6 +223,18 @@ class FakeChatsRepository implements ChatsRepository {
       return future;
     }
     return Future.value(conversations);
+  }
+
+  @override
+  Future<ConversationSummary?> getConversationSummary(
+    String conversationId,
+  ) async {
+    for (final conversation in conversations) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
+    }
+    return null;
   }
 
   @override

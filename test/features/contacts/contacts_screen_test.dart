@@ -398,6 +398,13 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<ConversationSummary?> getConversationSummary(
+    String conversationId,
+  ) async {
+    return null;
+  }
+
+  @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {
     return const [];
   }

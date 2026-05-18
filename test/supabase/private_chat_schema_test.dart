@@ -511,6 +511,8 @@ void main() {
 
     expect(detailBody, contains("'profile',"));
     expect(detailBody, contains("'username', p.username"));
+    expect(detailBody, contains("'circle_id', cc.circle_id"));
+    expect(detailBody, contains("'circle_id', cp.circle_id"));
     expect(detailBody, contains("'author',"));
     expect(detailBody, contains("'comments',"));
     expect(detailBody, contains("'is_own_post'"));

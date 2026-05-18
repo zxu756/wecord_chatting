@@ -383,6 +383,7 @@ as $$
       select jsonb_agg(
         jsonb_build_object(
           'id', cc.id,
+          'circle_id', cc.circle_id,
           'conversation_id', cc.conversation_id,
           'name', cc.name,
           'position', cc.position,
@@ -398,6 +399,7 @@ as $$
       select jsonb_agg(
         jsonb_build_object(
           'id', cp.id,
+          'circle_id', cp.circle_id,
           'author_id', cp.author_id,
           'author',
           jsonb_build_object(

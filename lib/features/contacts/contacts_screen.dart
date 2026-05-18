@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
+import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -380,31 +381,23 @@ class _ProfileTile extends StatelessWidget {
   }
 }
 
-class _ProfileAvatar extends StatelessWidget {
+class _ProfileAvatar extends ConsumerWidget {
   const _ProfileAvatar({required this.profile});
 
   final Profile profile;
 
   @override
-  Widget build(BuildContext context) {
-    final image = _publicAvatarImage(profile.avatarUrl);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayUrl = ref.watch(avatarDisplayUrlProvider(profile.avatarUrl));
+    final image = displayUrl.valueOrNull == null
+        ? null
+        : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       backgroundImage: image,
       onBackgroundImageError: image == null ? null : (_, _) {},
       child: image == null ? Text(_initials(profile.displayName)) : null,
     );
   }
-}
-
-ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
-  final uri = Uri.tryParse(avatarUrl ?? '');
-  if (uri == null || !uri.hasScheme) {
-    return null;
-  }
-  if (uri.scheme != 'http' && uri.scheme != 'https') {
-    return null;
-  }
-  return NetworkImage(uri.toString());
 }
 
 String _initials(String value) {

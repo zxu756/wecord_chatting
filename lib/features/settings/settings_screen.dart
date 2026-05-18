@@ -9,14 +9,6 @@ final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
   return ref.watch(settingsRepositoryProvider).currentProfile();
 });
 
-final avatarDisplayUrlProvider = FutureProvider.autoDispose
-    .family<String?, String?>((ref, avatarUrl) {
-      if (avatarUrl == null || avatarUrl.trim().isEmpty) {
-        return Future.value();
-      }
-      return ref.watch(settingsRepositoryProvider).createAvatarUrl(avatarUrl);
-    });
-
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 

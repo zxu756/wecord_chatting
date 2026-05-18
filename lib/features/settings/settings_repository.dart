@@ -14,6 +14,18 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   }
 });
 
+final avatarDisplayUrlProvider = FutureProvider.autoDispose
+    .family<String?, String?>((ref, avatarUrl) {
+      if (avatarUrl == null || avatarUrl.trim().isEmpty) {
+        return Future.value();
+      }
+      final uri = Uri.tryParse(avatarUrl);
+      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+        return Future.value(avatarUrl);
+      }
+      return ref.watch(settingsRepositoryProvider).createAvatarUrl(avatarUrl);
+    });
+
 abstract interface class SettingsRepository {
   Future<Profile> currentProfile();
 

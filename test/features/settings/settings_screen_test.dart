@@ -141,9 +141,7 @@ void main() {
 
     final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
     final image = avatar.backgroundImage;
-    expect(settingsRepository.createdAvatarUrls, [
-      'https://example.com/ada.png',
-    ]);
+    expect(settingsRepository.createdAvatarUrls, isEmpty);
     expect(image, isA<NetworkImage>());
     expect((image! as NetworkImage).url, 'https://example.com/ada.png');
   });

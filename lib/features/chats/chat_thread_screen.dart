@@ -7,6 +7,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -371,15 +372,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 }
 
-class _ThreadAvatar extends StatelessWidget {
+class _ThreadAvatar extends ConsumerWidget {
   const _ThreadAvatar({required this.title, required this.avatarUrl});
 
   final String title;
   final String? avatarUrl;
 
   @override
-  Widget build(BuildContext context) {
-    final image = _publicAvatarImage(avatarUrl);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayUrl = ref.watch(avatarDisplayUrlProvider(avatarUrl));
+    final image = displayUrl.valueOrNull == null
+        ? null
+        : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       backgroundImage: image,
       onBackgroundImageError: image == null ? null : (_, _) {},
@@ -746,17 +750,6 @@ String _imageSendErrorText(Object error) {
     return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
   }
   return 'Could not send image. Try again. $error';
-}
-
-ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
-  final uri = Uri.tryParse(avatarUrl ?? '');
-  if (uri == null || !uri.hasScheme) {
-    return null;
-  }
-  if (uri.scheme != 'http' && uri.scheme != 'https') {
-    return null;
-  }
-  return NetworkImage(uri.toString());
 }
 
 String _initials(String value) {

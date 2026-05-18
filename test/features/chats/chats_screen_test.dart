@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 
 void main() {
   testWidgets('shows loading and empty states', (tester) async {
@@ -50,12 +53,20 @@ void main() {
 
     await tester.pumpWidget(_app(repository));
     await tester.pump();
+    await tester.pump();
 
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('See you soon'), findsOneWidget);
     expect(find.text('04:30'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
-    expect(find.text('AL'), findsOneWidget);
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar).first);
+    final image = avatar.backgroundImage;
+    expect(image, isA<NetworkImage>());
+    expect(
+      (image! as NetworkImage).url,
+      'https://signed.example.com/profile-avatars/user-2/ada.png',
+    );
+    expect(find.text('AL'), findsNothing);
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('No messages yet'), findsOneWidget);
   });
@@ -112,9 +123,42 @@ Widget _app(FakeChatsRepository repository, {GoRouter? router}) {
       : MaterialApp.router(routerConfig: router);
 
   return ProviderScope(
-    overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      chatsRepositoryProvider.overrideWithValue(repository),
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+    ],
     child: child,
   );
+}
+
+class FakeSettingsRepository implements SettingsRepository {
+  @override
+  Future<Profile> currentProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> updateProfile({
+    required String displayName,
+    required String bio,
+    required String? avatarUrl,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> uploadAvatar({
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> createAvatarUrl(String avatarPath) async {
+    return 'https://signed.example.com/$avatarPath';
+  }
 }
 
 class FakeChatsRepository implements ChatsRepository {

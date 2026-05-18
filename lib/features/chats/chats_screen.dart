@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 class ChatThreadRouteExtra {
@@ -109,31 +110,24 @@ class _ConversationTile extends StatelessWidget {
   }
 }
 
-class _ConversationAvatar extends StatelessWidget {
+class _ConversationAvatar extends ConsumerWidget {
   const _ConversationAvatar({required this.title, required this.avatarUrl});
 
   final String title;
   final String? avatarUrl;
 
   @override
-  Widget build(BuildContext context) {
-    final image = _publicAvatarImage(avatarUrl);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayUrl = ref.watch(avatarDisplayUrlProvider(avatarUrl));
+    final image = displayUrl.valueOrNull == null
+        ? null
+        : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       backgroundImage: image,
+      onBackgroundImageError: image == null ? null : (_, _) {},
       child: image == null ? Text(_initials(title)) : null,
     );
   }
-}
-
-ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
-  final uri = Uri.tryParse(avatarUrl ?? '');
-  if (uri == null || !uri.hasScheme) {
-    return null;
-  }
-  if (uri.scheme != 'http' && uri.scheme != 'https') {
-    return null;
-  }
-  return NetworkImage(uri.toString());
 }
 
 String _initials(String value) {

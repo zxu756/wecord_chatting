@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -544,6 +545,9 @@ void main() {
       ProviderScope(
         overrides: [
           chatsRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
           authRepositoryProvider.overrideWithValue(authRepository),
           authStateProvider.overrideWith((ref) => authState.stream),
         ],
@@ -579,6 +583,9 @@ void main() {
       ProviderScope(
         overrides: [
           chatsRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
           authRepositoryProvider.overrideWithValue(authRepository),
           authStateProvider.overrideWith((ref) => authState.stream),
         ],
@@ -614,6 +621,9 @@ void main() {
       ProviderScope(
         overrides: [
           chatsRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
           authRepositoryProvider.overrideWithValue(authRepository),
           authStateProvider.overrideWith((ref) => authState.stream),
         ],
@@ -634,15 +644,30 @@ void main() {
       extra: const ChatThreadRouteExtra(
         title: 'Ada Lovelace',
         type: ConversationType.direct,
-        avatarUrl: 'https://example.com/ada.png',
+        avatarUrl: 'profile-avatars/user-2/ada.png',
       ),
     );
     await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
 
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    final screen = tester.widget<ChatThreadScreen>(
+      find.byType(ChatThreadScreen),
+    );
+    expect(screen.avatarUrl, 'profile-avatars/user-2/ada.png');
+    final avatar = tester.widget<CircleAvatar>(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byType(CircleAvatar),
+      ),
+    );
     final image = avatar.backgroundImage;
     expect(image, isA<NetworkImage>());
-    expect((image! as NetworkImage).url, 'https://example.com/ada.png');
+    expect(
+      (image! as NetworkImage).url,
+      'https://signed.example.com/profile-avatars/user-2/ada.png',
+    );
   });
 
   testWidgets('does not show group details for direct conversations', (
@@ -704,6 +729,7 @@ Widget _app(
   return ProviderScope(
     overrides: [
       chatsRepositoryProvider.overrideWithValue(repository),
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
       authRepositoryProvider.overrideWithValue(
@@ -719,6 +745,36 @@ Widget _app(
       ),
     ),
   );
+}
+
+class FakeSettingsRepository implements SettingsRepository {
+  @override
+  Future<Profile> currentProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> updateProfile({
+    required String displayName,
+    required String bio,
+    required String? avatarUrl,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> uploadAvatar({
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> createAvatarUrl(String avatarPath) async {
+    return 'https://signed.example.com/$avatarPath';
+  }
 }
 
 ChatMessage _message({

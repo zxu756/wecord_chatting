@@ -28,7 +28,7 @@ flutter run -d chrome --dart-define-from-file=.env
 
 ## Current Status
 
-The foundation, private chat, and social chat v2 MVP milestones are implemented. WeCord now has email auth, profile bootstrap, friend search and requests, direct and group conversations, text and image messages, unread counts, realtime message refresh, online status, typing indicators, read receipts, profile settings with avatars, reply/edit/recall actions, and chat search.
+The foundation, private chat, social chat v2, and local notifications MVP milestones are implemented. WeCord now has email auth, profile bootstrap, friend search and requests, direct and group conversations, text and image messages, unread counts, realtime message refresh, online status, typing indicators, read receipts, profile settings with avatars, reply/edit/recall actions, chat search, local message notifications, and notification preview controls.
 
 ## Social Chat v2 MVP
 
@@ -40,4 +40,4 @@ Apply the Supabase migration before running against a real project:
 supabase db push
 ```
 
-Next milestones are richer group management, circles/channels, notifications, and deeper chat polish.
+Next milestones are richer group management, circles/channels, remote push notifications, and deeper chat polish.

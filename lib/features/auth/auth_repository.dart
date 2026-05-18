@@ -113,7 +113,16 @@ class SupabaseAuthRepository implements AuthRepository {
       );
     }
 
-    await _client.from('profiles').upsert({
+    final existingProfile = await _client
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+    if (existingProfile != null) {
+      return;
+    }
+
+    await _client.from('profiles').insert({
       'id': user.id,
       'username': username,
       'display_name': displayName,

@@ -5,6 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final migration = File('supabase/migrations/202605180001_private_chat.sql');
 
+  String allMigrationSql() {
+    return Directory('supabase/migrations')
+        .listSync()
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.sql'))
+        .map((file) => file.readAsStringSync())
+        .join('\n');
+  }
+
   String functionBody(String sql, String functionName) {
     final match = RegExp(
       'create or replace function public\\.$functionName[\\s\\S]*?\\n\\\$\\\$;',
@@ -179,6 +188,56 @@ void main() {
       insertPolicy.group(0),
       contains('public.is_current_user_conversation_member'),
     );
+  });
+
+  test('message recall is scoped to the sender through a narrow RPC', () {
+    final sql = allMigrationSql();
+    final recallBody = functionBody(sql, 'recall_message');
+
+    expect(sql, contains('create or replace function public.recall_message'));
+    expect(recallBody, contains('target_message_id uuid'));
+    expect(recallBody, contains('sender_id = auth.uid()'));
+    expect(recallBody, contains('recalled_at = now()'));
+    expect(recallBody, contains('public.is_current_user_conversation_member'));
+    expect(
+      sql,
+      isNot(
+        matches(
+          RegExp(
+            r'create policy messages_\w+\s+on public\.messages\s+for update',
+            caseSensitive: false,
+          ),
+        ),
+      ),
+    );
+  });
+
+  test('chat tables are included in the realtime publication', () {
+    final sql = allMigrationSql();
+
+    for (final table in [
+      'public.conversations',
+      'public.conversation_members',
+      'public.messages',
+    ]) {
+      expect(
+        sql,
+        contains('alter publication supabase_realtime add table $table'),
+      );
+    }
+  });
+
+  test('image message storage bucket is private and scoped by membership', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains("insert into storage.buckets"));
+    expect(sql, contains("'chat-images'"));
+    expect(sql, contains('public = false'));
+    expect(sql, contains('chat_images_select_member'));
+    expect(sql, contains('chat_images_insert_member'));
+    expect(sql, contains("bucket_id = 'chat-images'"));
+    expect(sql, contains('storage.foldername(name)'));
+    expect(sql, contains('public.is_current_user_conversation_member'));
   });
 
   test('membership helper cannot probe arbitrary users', () {

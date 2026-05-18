@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -203,12 +206,77 @@ class _FriendsSection extends ConsumerWidget {
           }
           return Column(
             children: [
-              for (final friend in friends) _ProfileTile(profile: friend),
+              for (final friend in friends)
+                _ProfileTile(
+                  profile: friend,
+                  trailing: _MessageFriendButton(profile: friend),
+                ),
             ],
           );
         },
       ),
     );
+  }
+}
+
+class _MessageFriendButton extends ConsumerStatefulWidget {
+  const _MessageFriendButton({required this.profile});
+
+  final Profile profile;
+
+  @override
+  ConsumerState<_MessageFriendButton> createState() =>
+      _MessageFriendButtonState();
+}
+
+class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
+  var _opening = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: _opening ? null : _openConversation,
+      icon: _opening
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.chat_bubble_outline),
+      label: const Text('Message'),
+    );
+  }
+
+  Future<void> _openConversation() async {
+    setState(() {
+      _opening = true;
+    });
+
+    try {
+      final conversationId = await ref
+          .read(chatsRepositoryProvider)
+          .getOrCreateDirectConversation(widget.profile.id);
+      ref.invalidate(conversationsProvider);
+      if (!mounted) {
+        return;
+      }
+      context.go(
+        '${ChatsScreen.path}/$conversationId',
+        extra: widget.profile.displayName,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to start chat: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _opening = false;
+        });
+      }
+    }
   }
 }
 

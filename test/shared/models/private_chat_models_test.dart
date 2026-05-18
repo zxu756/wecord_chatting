@@ -276,6 +276,57 @@ void main() {
     expect(updated.recalledAt, isNull);
   });
 
+  test('ImageAttachment serializes storage metadata for image messages', () {
+    const attachment = ImageAttachment(
+      bucket: 'chat-images',
+      path: 'conversation-1/message-1/photo.jpg',
+      mimeType: 'image/jpeg',
+      size: 2048,
+      width: 640,
+      height: 480,
+    );
+
+    expect(attachment.toJson(), {
+      'kind': 'image',
+      'bucket': 'chat-images',
+      'path': 'conversation-1/message-1/photo.jpg',
+      'mime_type': 'image/jpeg',
+      'size': 2048,
+      'width': 640,
+      'height': 480,
+    });
+
+    expect(ImageAttachment.fromJson(attachment.toJson()).path, attachment.path);
+  });
+
+  test('ImageAttachment can be read from an image message', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'image',
+      'body': '',
+      'attachment': {
+        'kind': 'image',
+        'bucket': 'chat-images',
+        'path': 'conversation-1/message-1/photo.jpg',
+        'mime_type': 'image/jpeg',
+        'size': 2048,
+        'width': null,
+        'height': null,
+      },
+      'reply_to_message_id': null,
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'edited_at': null,
+      'recalled_at': null,
+    });
+
+    expect(message.imageAttachment?.bucket, 'chat-images');
+    expect(message.imageAttachment?.path, 'conversation-1/message-1/photo.jpg');
+    expect(message.imageAttachment?.mimeType, 'image/jpeg');
+    expect(message.imageAttachment?.size, 2048);
+  });
+
   test('Message toJson includes writable Supabase keys', () {
     final message = ChatMessage.fromJson({
       'id': 'message-1',

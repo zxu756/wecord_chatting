@@ -66,6 +66,14 @@ class ChatMessage {
   final DateTime? editedAt;
   final DateTime? recalledAt;
 
+  ImageAttachment? get imageAttachment {
+    final value = attachment;
+    if (type != MessageType.image || value == null) {
+      return null;
+    }
+    return ImageAttachment.fromJson(value);
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'conversation_id': conversationId,
@@ -109,6 +117,50 @@ class ChatMessage {
           ? this.recalledAt
           : recalledAt as DateTime?,
     );
+  }
+}
+
+class ImageAttachment {
+  const ImageAttachment({
+    required this.bucket,
+    required this.path,
+    required this.mimeType,
+    required this.size,
+    this.width,
+    this.height,
+  });
+
+  factory ImageAttachment.fromJson(Map<String, dynamic> json) {
+    if (json['kind'] != 'image') {
+      throw ArgumentError.value(json['kind'], 'kind', 'Expected image');
+    }
+    return ImageAttachment(
+      bucket: json['bucket'] as String,
+      path: json['path'] as String,
+      mimeType: json['mime_type'] as String,
+      size: json['size'] as int,
+      width: json['width'] as int?,
+      height: json['height'] as int?,
+    );
+  }
+
+  final String bucket;
+  final String path;
+  final String mimeType;
+  final int size;
+  final int? width;
+  final int? height;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'kind': 'image',
+      'bucket': bucket,
+      'path': path,
+      'mime_type': mimeType,
+      'size': size,
+      'width': width,
+      'height': height,
+    };
   }
 }
 

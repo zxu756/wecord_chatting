@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -129,6 +130,13 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<List<ConversationReadMarker>> listReadMarkers(
+    String conversationId,
+  ) async {
+    return const [];
+  }
+
+  @override
   Future<String> getOrCreateDirectConversation(String otherUserId) async {
     return 'conversation-for-$otherUserId';
   }
@@ -140,6 +148,20 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
+  Future<void> sendImageMessage({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {}
+
+  @override
+  Future<String> createImageUrl(ImageAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<void> recallMessage({required String messageId}) async {}
+
+  @override
   Future<void> markConversationRead(String conversationId) async {}
 
   @override
@@ -147,4 +169,18 @@ class FakeChatsRepository implements ChatsRepository {
 
   @override
   Stream<void> messageChanges(String conversationId) => const Stream.empty();
+
+  @override
+  Stream<void> threadChanges(String conversationId) => const Stream.empty();
+
+  @override
+  Stream<ConversationActivity> conversationActivity(String conversationId) {
+    return const Stream.empty();
+  }
+
+  @override
+  Future<void> setTyping({
+    required String conversationId,
+    required bool isTyping,
+  }) async {}
 }

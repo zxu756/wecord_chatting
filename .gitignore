@@ -11,6 +11,7 @@ coverage/
 # Local environment files
 .env
 .env.local
+supabase/.temp/
 
 # IDE state
 .idea/

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/shared/models/friend_request.dart';
+import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -97,6 +102,54 @@ void main() {
     expect(find.text('@grace'), findsOneWidget);
   });
 
+  testWidgets('starts a direct conversation from a friend row', (tester) async {
+    final contactsRepository = FakeContactsRepository()
+      ..friends = [
+        _profile(
+          id: 'friend-1',
+          username: 'grace',
+          displayName: 'Grace Hopper',
+        ),
+      ];
+    final chatsRepository = FakeChatsRepository();
+    final router = GoRouter(
+      initialLocation: ContactsScreen.path,
+      routes: [
+        GoRoute(
+          path: ContactsScreen.path,
+          builder: (context, state) => const ContactsScreen(),
+        ),
+        GoRoute(
+          path: '/chats/:conversationId',
+          builder: (context, state) {
+            return Text(
+              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+            );
+          },
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      _app(
+        contactsRepository,
+        chatsRepository: chatsRepository,
+        router: router,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Message'));
+    await tester.pumpAndSettle();
+
+    expect(chatsRepository.directConversationUserIds, ['friend-1']);
+    expect(
+      find.text('Thread conversation-for-friend-1 Grace Hopper'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('shows async loading and error states', (tester) async {
     final repository = FakeContactsRepository()
       ..friendsFuture = Future<List<Profile>>.delayed(
@@ -115,10 +168,22 @@ void main() {
   });
 }
 
-Widget _app(FakeContactsRepository repository) {
+Widget _app(
+  FakeContactsRepository repository, {
+  FakeChatsRepository? chatsRepository,
+  GoRouter? router,
+}) {
+  final child = router == null
+      ? const MaterialApp(home: ContactsScreen())
+      : MaterialApp.router(routerConfig: router);
+
   return ProviderScope(
-    overrides: [contactsRepositoryProvider.overrideWithValue(repository)],
-    child: const MaterialApp(home: ContactsScreen()),
+    overrides: [
+      contactsRepositoryProvider.overrideWithValue(repository),
+      if (chatsRepository != null)
+        chatsRepositoryProvider.overrideWithValue(chatsRepository),
+    ],
+    child: child,
   );
 }
 
@@ -172,6 +237,76 @@ class FakeContactsRepository implements ContactsRepository {
         .where((request) => request.request.id != requestId)
         .toList();
   }
+}
+
+class FakeChatsRepository implements ChatsRepository {
+  final directConversationUserIds = <String>[];
+
+  @override
+  Future<List<ConversationSummary>> listConversations() async {
+    return const [];
+  }
+
+  @override
+  Future<List<ChatMessage>> listMessages(String conversationId) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ConversationReadMarker>> listReadMarkers(
+    String conversationId,
+  ) async {
+    return const [];
+  }
+
+  @override
+  Future<String> getOrCreateDirectConversation(String otherUserId) async {
+    directConversationUserIds.add(otherUserId);
+    return 'conversation-for-$otherUserId';
+  }
+
+  @override
+  Future<void> sendTextMessage({
+    required String conversationId,
+    required String body,
+  }) async {}
+
+  @override
+  Future<void> sendImageMessage({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {}
+
+  @override
+  Future<String> createImageUrl(ImageAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<void> recallMessage({required String messageId}) async {}
+
+  @override
+  Future<void> markConversationRead(String conversationId) async {}
+
+  @override
+  Stream<void> conversationChanges() => const Stream.empty();
+
+  @override
+  Stream<void> messageChanges(String conversationId) => const Stream.empty();
+
+  @override
+  Stream<void> threadChanges(String conversationId) => const Stream.empty();
+
+  @override
+  Stream<ConversationActivity> conversationActivity(String conversationId) {
+    return const Stream.empty();
+  }
+
+  @override
+  Future<void> setTyping({
+    required String conversationId,
+    required bool isTyping,
+  }) async {}
 }
 
 Profile _profile({

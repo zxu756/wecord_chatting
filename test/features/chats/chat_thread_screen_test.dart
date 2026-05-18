@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
@@ -46,6 +49,431 @@ void main() {
       greaterThan(tester.getCenter(find.text('Older message')).dx),
     );
     expect(repository.markReadCalls, ['conversation-1']);
+  });
+
+  testWidgets('keeps the newest message closest to the composer', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Older message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Newer message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    final composerTop = tester.getTopLeft(find.byType(TextField)).dy;
+    final olderDistance =
+        composerTop - tester.getBottomLeft(find.text('Older message')).dy;
+    final newerDistance =
+        composerTop - tester.getBottomLeft(find.text('Newer message')).dy;
+
+    expect(newerDistance, lessThan(olderDistance));
+    expect(newerDistance, lessThan(96));
+  });
+
+  testWidgets(
+    'keeps the newest message closest when repository returns latest first',
+    (tester) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-2',
+            senderId: 'user-1',
+            body: 'Newer message',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+          ),
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'Older message',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+
+      final composerTop = tester.getTopLeft(find.byType(TextField)).dy;
+      final olderDistance =
+          composerTop - tester.getBottomLeft(find.text('Older message')).dy;
+      final newerDistance =
+          composerTop - tester.getBottomLeft(find.text('Newer message')).dy;
+
+      expect(
+        tester.getTopLeft(find.text('Older message')).dy,
+        lessThan(tester.getTopLeft(find.text('Newer message')).dy),
+      );
+      expect(newerDistance, lessThan(olderDistance));
+      expect(newerDistance, lessThan(96));
+    },
+  );
+
+  testWidgets('refreshes the visible thread when realtime emits a message', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Initial message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Initial message'), findsOneWidget);
+
+    repository.messages = [
+      ...repository.messages,
+      _message(
+        id: 'message-2',
+        senderId: 'user-2',
+        body: 'Incoming message',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Incoming message'), findsOneWidget);
+  });
+
+  testWidgets('shows online and typing activity from the peer', (tester) async {
+    final repository = FakeChatsRepository()
+      ..activity = const ConversationActivity(
+        onlineUserIds: {'user-2'},
+        typingUserIds: {'user-2'},
+      );
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Online'), findsOneWidget);
+    expect(find.text('typing...'), findsOneWidget);
+  });
+
+  testWidgets('sends typing activity while composing and clears it on send', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'Hello');
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+
+    expect(repository.typingUpdates, [
+      const TypingUpdate(conversationId: 'conversation-1', isTyping: true),
+      const TypingUpdate(conversationId: 'conversation-1', isTyping: false),
+    ]);
+  });
+
+  testWidgets('shows read receipt for the latest outgoing message', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Incoming',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Outgoing',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ]
+      ..readMarkers = const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-2',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Read'), findsOneWidget);
+  });
+
+  testWidgets('renders image messages and opens a preview', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: '',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          type: MessageType.image,
+          attachment: const ImageAttachment(
+            bucket: 'chat-images',
+            path: 'conversation-1/photo.png',
+            mimeType: 'image/png',
+            size: 3,
+          ).toJson(),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Image), findsOneWidget);
+
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image preview'), findsOneWidget);
+    expect(repository.createdImageUrls, hasLength(1));
+    expect(repository.createdImageUrls.single.bucket, 'chat-images');
+    expect(repository.createdImageUrls.single.path, 'conversation-1/photo.png');
+    expect(repository.createdImageUrls.single.mimeType, 'image/png');
+  });
+
+  testWidgets('picks and sends an image from the composer', (tester) async {
+    final repository = FakeChatsRepository();
+    final picker = FakeImagePickerService()
+      ..nextImage = ChatImageUpload(
+        bytes: Uint8List.fromList([1, 2, 3]),
+        fileName: 'Photo.PNG',
+        mimeType: 'image/png',
+      );
+
+    await tester.pumpWidget(_app(repository, imagePickerService: picker));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.pump();
+
+    expect(picker.pickCalls, 1);
+    expect(repository.sentImages, [
+      SentImage(conversationId: 'conversation-1', image: picker.nextImage!),
+    ]);
+  });
+
+  testWidgets('does not show upload progress while the image picker is open', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final picker = FakeImagePickerService()
+      ..pickCompleter = Completer<ChatImageUpload?>();
+
+    await tester.pumpWidget(_app(repository, imagePickerService: picker));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.image_outlined),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    picker.pickCompleter!.complete(null);
+    await tester.pump();
+  });
+
+  testWidgets('failed local image read shows a local file error', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final picker = FakeImagePickerService()
+      ..pickError = const ImagePickerException(
+        'Could not read the selected image from this Mac. Try moving it to a local folder and choosing it again.',
+      );
+
+    await tester.pumpWidget(_app(repository, imagePickerService: picker));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.pump();
+
+    expect(repository.sentImages, isEmpty);
+    expect(
+      find.textContaining('Could not read the selected image'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('failed image send clears progress and shows the root error', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..sendError = Exception('storage denied');
+    final picker = FakeImagePickerService()
+      ..nextImage = ChatImageUpload(
+        bytes: Uint8List.fromList([1, 2, 3]),
+        fileName: 'Photo.PNG',
+        mimeType: 'image/png',
+      );
+
+    await tester.pumpWidget(_app(repository, imagePickerService: picker));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    expect(find.textContaining('storage denied'), findsOneWidget);
+  });
+
+  testWidgets('long pressing a text message can copy it', (tester) async {
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copiedText =
+                (call.arguments as Map<dynamic, dynamic>)['text'] as String?;
+            return null;
+          }
+          if (call.method == 'Clipboard.getData') {
+            return {'text': copiedText};
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Copy this',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Copy this'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Delete'), findsNothing);
+
+    await tester.tap(find.text('Copy'));
+    await tester.pumpAndSettle();
+
+    expect(copiedText, 'Copy this');
+  });
+
+  testWidgets('long pressing an outgoing text message can delete it', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Remove this',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Remove this'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recalledMessageIds, ['message-1']);
+  });
+
+  testWidgets('recalled messages render deleted text and have no actions', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Already gone',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          recalledAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Message deleted'), findsOneWidget);
+    expect(find.text('Already gone'), findsNothing);
+
+    await tester.longPress(find.text('Message deleted'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
+  });
+
+  testWidgets('image action menu can open preview', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: '',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          type: MessageType.image,
+          attachment: const ImageAttachment(
+            bucket: 'chat-images',
+            path: 'conversation-1/photo.png',
+            mimeType: 'image/png',
+            size: 3,
+          ).toJson(),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byType(Image));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preview'), findsOneWidget);
+
+    await tester.tap(find.text('Preview'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image preview'), findsOneWidget);
   });
 
   testWidgets('empty composer does not send', (tester) async {
@@ -170,10 +598,15 @@ void main() {
   });
 }
 
-Widget _app(FakeChatsRepository repository) {
+Widget _app(
+  FakeChatsRepository repository, {
+  ImagePickerService? imagePickerService,
+}) {
   return ProviderScope(
     overrides: [
       chatsRepositoryProvider.overrideWithValue(repository),
+      if (imagePickerService != null)
+        imagePickerServiceProvider.overrideWithValue(imagePickerService),
       authRepositoryProvider.overrideWithValue(
         FakeAuthRepository()
           ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
@@ -193,25 +626,37 @@ ChatMessage _message({
   required String senderId,
   required String body,
   required DateTime createdAt,
+  MessageType type = MessageType.text,
+  Map<String, dynamic>? attachment,
+  DateTime? recalledAt,
 }) {
   return ChatMessage(
     id: id,
     conversationId: 'conversation-1',
     senderId: senderId,
-    type: MessageType.text,
+    type: type,
     body: body,
+    attachment: attachment,
     createdAt: createdAt,
+    recalledAt: recalledAt,
   );
 }
 
 class FakeChatsRepository implements ChatsRepository {
   var conversations = <ConversationSummary>[];
   var messages = <ChatMessage>[];
+  var readMarkers = <ConversationReadMarker>[];
+  var activity = const ConversationActivity();
   Object? sendError;
   final sentMessages = <SentMessage>[];
+  final sentImages = <SentImage>[];
+  final createdImageUrls = <ImageAttachment>[];
+  final recalledMessageIds = <String>[];
+  final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
   final _conversationChanges = StreamController<void>.broadcast();
   final _messageChanges = StreamController<void>.broadcast();
+  final _activityChanges = StreamController<ConversationActivity>.broadcast();
 
   @override
   Future<List<ConversationSummary>> listConversations() async => conversations;
@@ -219,6 +664,13 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {
     return messages;
+  }
+
+  @override
+  Future<List<ConversationReadMarker>> listReadMarkers(
+    String conversationId,
+  ) async {
+    return readMarkers;
   }
 
   @override
@@ -238,6 +690,28 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendImageMessage({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {
+    if (sendError case final error?) {
+      throw error;
+    }
+    sentImages.add(SentImage(conversationId: conversationId, image: image));
+  }
+
+  @override
+  Future<String> createImageUrl(ImageAttachment attachment) async {
+    createdImageUrls.add(attachment);
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<void> recallMessage({required String messageId}) async {
+    recalledMessageIds.add(messageId);
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     markReadCalls.add(conversationId);
   }
@@ -247,6 +721,31 @@ class FakeChatsRepository implements ChatsRepository {
 
   @override
   Stream<void> messageChanges(String conversationId) => _messageChanges.stream;
+
+  @override
+  Stream<void> threadChanges(String conversationId) => _messageChanges.stream;
+
+  @override
+  Stream<ConversationActivity> conversationActivity(String conversationId) {
+    Future<void>.microtask(() {
+      _activityChanges.add(activity);
+    });
+    return _activityChanges.stream;
+  }
+
+  @override
+  Future<void> setTyping({
+    required String conversationId,
+    required bool isTyping,
+  }) async {
+    typingUpdates.add(
+      TypingUpdate(conversationId: conversationId, isTyping: isTyping),
+    );
+  }
+
+  void emitMessageChange() {
+    _messageChanges.add(null);
+  }
 }
 
 class SentMessage {
@@ -264,6 +763,61 @@ class SentMessage {
 
   @override
   int get hashCode => Object.hash(conversationId, body);
+}
+
+class SentImage {
+  const SentImage({required this.conversationId, required this.image});
+
+  final String conversationId;
+  final ChatImageUpload image;
+
+  @override
+  bool operator ==(Object other) {
+    return other is SentImage &&
+        other.conversationId == conversationId &&
+        identical(other.image, image);
+  }
+
+  @override
+  int get hashCode => Object.hash(conversationId, identityHashCode(image));
+}
+
+class TypingUpdate {
+  const TypingUpdate({required this.conversationId, required this.isTyping});
+
+  final String conversationId;
+  final bool isTyping;
+
+  @override
+  bool operator ==(Object other) {
+    return other is TypingUpdate &&
+        other.conversationId == conversationId &&
+        other.isTyping == isTyping;
+  }
+
+  @override
+  int get hashCode => Object.hash(conversationId, isTyping);
+}
+
+class FakeImagePickerService implements ImagePickerService {
+  ChatImageUpload? nextImage;
+  Completer<ChatImageUpload?>? pickCompleter;
+  Object? pickError;
+  var pickCalls = 0;
+
+  @override
+  Future<ChatImageUpload?> pickImage() async {
+    pickCalls += 1;
+    final error = pickError;
+    if (error != null) {
+      throw error;
+    }
+    final completer = pickCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
+    return nextImage;
+  }
 }
 
 class FakeAuthRepository implements AuthRepository {

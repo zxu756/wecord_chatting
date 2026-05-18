@@ -35,6 +35,7 @@ class ConversationSummary {
     this.title,
     this.avatarUrl,
     this.lastMessageBody,
+    this.lastMessageSenderId,
     this.lastMessageAt,
   });
 
@@ -45,6 +46,7 @@ class ConversationSummary {
       title: json['title'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       lastMessageBody: json['last_message_body'] as String?,
+      lastMessageSenderId: json['last_message_sender_id'] as String?,
       lastMessageAt: _parseOptionalTimestamp(json['last_message_at']),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
     );
@@ -55,6 +57,7 @@ class ConversationSummary {
   final String? title;
   final String? avatarUrl;
   final String? lastMessageBody;
+  final String? lastMessageSenderId;
   final DateTime? lastMessageAt;
   final int unreadCount;
 
@@ -68,6 +71,7 @@ class ConversationSummary {
     Object? title = _sentinel,
     Object? avatarUrl = _sentinel,
     Object? lastMessageBody = _sentinel,
+    Object? lastMessageSenderId = _sentinel,
     Object? lastMessageAt = _sentinel,
     int? unreadCount,
   }) {
@@ -81,6 +85,9 @@ class ConversationSummary {
       lastMessageBody: identical(lastMessageBody, _sentinel)
           ? this.lastMessageBody
           : lastMessageBody as String?,
+      lastMessageSenderId: identical(lastMessageSenderId, _sentinel)
+          ? this.lastMessageSenderId
+          : lastMessageSenderId as String?,
       lastMessageAt: identical(lastMessageAt, _sentinel)
           ? this.lastMessageAt
           : lastMessageAt as DateTime?,

@@ -20,6 +20,7 @@ void main() {
             'title': 'Ada Lovelace',
             'avatar_url': null,
             'last_message_body': 'See you soon',
+            'last_message_sender_id': 'user-2',
             'last_message_at': '2026-05-18T04:30:00.000Z',
             'unread_count': 3,
           },
@@ -37,6 +38,7 @@ void main() {
       expect(conversations.single.type, ConversationType.direct);
       expect(conversations.single.title, 'Ada Lovelace');
       expect(conversations.single.lastMessageBody, 'See you soon');
+      expect(conversations.single.lastMessageSenderId, 'user-2');
       expect(
         conversations.single.lastMessageAt,
         DateTime.utc(2026, 5, 18, 4, 30),
@@ -102,6 +104,7 @@ void main() {
           'title': 'Launch Crew',
           'avatar_url': null,
           'last_message_body': null,
+          'last_message_sender_id': null,
           'last_message_at': null,
           'unread_count': 0,
         },

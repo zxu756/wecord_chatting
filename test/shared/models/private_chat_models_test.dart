@@ -165,6 +165,7 @@ void main() {
         'title': null,
         'avatar_url': null,
         'last_message_body': 'Hi',
+        'last_message_sender_id': 'user-2',
         'last_message_at': '2026-05-18T00:00:00.000Z',
         'unread_count': 2,
       });
@@ -174,6 +175,7 @@ void main() {
       expect(conversation.title, isNull);
       expect(conversation.avatarUrl, isNull);
       expect(conversation.lastMessageBody, 'Hi');
+      expect(conversation.lastMessageSenderId, 'user-2');
       expect(conversation.lastMessageAt, DateTime.utc(2026, 5, 18));
       expect(conversation.unreadCount, 2);
       expect(conversation.copyWith(unreadCount: 0).unreadCount, 0);
@@ -187,6 +189,7 @@ void main() {
       'title': 'Alex',
       'avatar_url': 'https://example.test/conversation.png',
       'last_message_body': 'Hi',
+      'last_message_sender_id': 'user-2',
       'last_message_at': '2026-05-18T00:00:00.000Z',
       'unread_count': 2,
     });
@@ -195,13 +198,34 @@ void main() {
       title: null,
       avatarUrl: null,
       lastMessageBody: null,
+      lastMessageSenderId: null,
       lastMessageAt: null,
     );
 
     expect(updated.title, isNull);
     expect(updated.avatarUrl, isNull);
     expect(updated.lastMessageBody, isNull);
+    expect(updated.lastMessageSenderId, isNull);
     expect(updated.lastMessageAt, isNull);
+  });
+
+  test('Conversation parses latest message sender id', () {
+    final conversation = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'direct',
+      'title': 'Ada',
+      'avatar_url': null,
+      'last_message_body': 'Hi',
+      'last_message_sender_id': 'user-2',
+      'last_message_at': '2026-05-18T00:00:00.000Z',
+      'unread_count': 1,
+    });
+
+    expect(conversation.lastMessageSenderId, 'user-2');
+    expect(
+      conversation.copyWith(lastMessageSenderId: null).lastMessageSenderId,
+      isNull,
+    );
   });
 
   test('Conversation toJson includes writable Supabase keys', () {
@@ -211,6 +235,7 @@ void main() {
       'title': 'Project',
       'avatar_url': 'https://example.test/conversation.png',
       'last_message_body': 'Hi',
+      'last_message_sender_id': 'user-2',
       'last_message_at': '2026-05-18T00:00:00.000Z',
       'unread_count': 2,
     });

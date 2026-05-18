@@ -6,12 +6,15 @@ void main() {
   final migration = File('supabase/migrations/202605180001_private_chat.sql');
 
   String allMigrationSql() {
-    return Directory('supabase/migrations')
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.sql'))
-        .map((file) => file.readAsStringSync())
-        .join('\n');
+    final files =
+        Directory('supabase/migrations')
+            .listSync()
+            .whereType<File>()
+            .where((file) => file.path.endsWith('.sql'))
+            .toList()
+          ..sort((a, b) => a.path.compareTo(b.path));
+
+    return files.map((file) => file.readAsStringSync()).join('\n');
   }
 
   String effectiveMigrationSql() {
@@ -195,6 +198,20 @@ void main() {
     expect(summariesBody, contains('last_message.recalled_at'));
     expect(summariesBody, contains("'Message deleted'"));
   });
+
+  test(
+    'conversation summaries include latest message sender for notifications',
+    () {
+      final sql = allMigrationSql();
+      final summariesBody = functionBody(sql, 'list_conversation_summaries');
+
+      expect(summariesBody, contains('last_message_sender_id'));
+      expect(
+        summariesBody,
+        contains('last_message.sender_id as last_message_sender_id'),
+      );
+    },
+  );
 
   test('private chat migration protects message access by membership', () {
     final sql = migration.readAsStringSync();

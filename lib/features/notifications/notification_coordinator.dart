@@ -31,12 +31,15 @@ class NotificationCoordinator {
     required LocalNotificationService notificationService,
     required String? Function() activeConversationId,
     DateTime Function()? now,
+    Stream<void>? pollTicks,
   }) : _authRepository = authRepository,
        _chatsRepository = chatsRepository,
        _preferencesRepository = preferencesRepository,
        _notificationService = notificationService,
        _activeConversationId = activeConversationId,
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _pollTicks =
+           pollTicks ?? Stream<void>.periodic(const Duration(seconds: 5));
 
   final AuthRepository _authRepository;
   final ChatsRepository _chatsRepository;
@@ -44,8 +47,10 @@ class NotificationCoordinator {
   final LocalNotificationService _notificationService;
   final String? Function() _activeConversationId;
   final DateTime Function() _now;
+  final Stream<void> _pollTicks;
 
   StreamSubscription<void>? _subscription;
+  StreamSubscription<void>? _pollSubscription;
   Map<String, ConversationSummary> _previousById = {};
   Future<void>? _baselineLoad;
   var _started = false;
@@ -67,14 +72,21 @@ class NotificationCoordinator {
     _subscription = _chatsRepository.conversationChanges().listen((_) {
       _queueReload();
     });
+    _pollSubscription = _pollTicks.listen((_) {
+      _queueReload();
+    });
 
     await _ensureBaselineLoaded();
   }
 
   Future<void> dispose() async {
     _disposed = true;
-    await _subscription?.cancel();
+    final pollSubscription = _pollSubscription;
+    final subscription = _subscription;
     _subscription = null;
+    _pollSubscription = null;
+    await pollSubscription?.cancel();
+    await subscription?.cancel();
   }
 
   void _queueReload() {

@@ -35,6 +35,30 @@ void main() {
 
     expect(coordinator.startCount, 1);
   });
+
+  testWidgets('disposes the notification coordinator', (tester) async {
+    final coordinator = _RecordingNotificationCoordinator();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationCoordinatorProvider.overrideWithValue(coordinator),
+          localNotificationServiceProvider.overrideWithValue(
+            FakeLocalNotificationService(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: NotificationShellListener(child: Text('child')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(coordinator.disposeCount, 1);
+  });
 }
 
 class _RecordingNotificationCoordinator extends NotificationCoordinator {
@@ -50,10 +74,16 @@ class _RecordingNotificationCoordinator extends NotificationCoordinator {
       );
 
   int startCount = 0;
+  int disposeCount = 0;
 
   @override
   Future<void> start() async {
     startCount += 1;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCount += 1;
   }
 }
 

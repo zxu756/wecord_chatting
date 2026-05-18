@@ -324,6 +324,18 @@ void main() {
     expect(harness.notifications.single.payload, 'c2');
   });
 
+  test('notifies when polling sees a newer unread incoming message', () async {
+    final harness = NotificationCoordinatorHarness();
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.poll([
+      harness.summary(id: 'c1', unreadCount: 1, body: 'poll fallback'),
+    ]);
+
+    expect(harness.notifications.single.body, 'poll fallback');
+  });
+
   test('stops listening after dispose', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);
@@ -346,6 +358,7 @@ class NotificationCoordinatorHarness {
        _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
        _notificationService = _ThrowingFakeLocalNotificationService(),
+       _pollTicks = StreamController<void>.broadcast(),
        _preferencesRepository = NotificationPreferencesRepository.withStore(
          InMemoryNotificationPreferencesStore(
            NotificationPreferences(
@@ -361,6 +374,7 @@ class NotificationCoordinatorHarness {
       notificationService: _notificationService,
       activeConversationId: () => _activeConversationId,
       now: () => DateTime.utc(2026, 5, 18, 12, 30),
+      pollTicks: _pollTicks.stream,
     );
   }
 
@@ -368,6 +382,7 @@ class NotificationCoordinatorHarness {
   final _FakeAuthRepository _authRepository;
   final _FakeChatsRepository _chatsRepository;
   final _ThrowingFakeLocalNotificationService _notificationService;
+  final StreamController<void> _pollTicks;
   final NotificationPreferencesRepository _preferencesRepository;
   late final NotificationCoordinator coordinator;
 
@@ -421,6 +436,12 @@ class NotificationCoordinatorHarness {
   Future<void> emit(List<ConversationSummary> conversations) async {
     _chatsRepository.conversations = conversations;
     _chatsRepository.emitChange();
+    await pump();
+  }
+
+  Future<void> poll(List<ConversationSummary> conversations) async {
+    _chatsRepository.conversations = conversations;
+    _pollTicks.add(null);
     await pump();
   }
 

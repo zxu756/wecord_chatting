@@ -20,10 +20,12 @@ class NotificationShellListener extends ConsumerStatefulWidget {
 class _NotificationShellListenerState
     extends ConsumerState<NotificationShellListener> {
   StreamSubscription<String>? _tapSubscription;
+  late final NotificationCoordinator _coordinator;
 
   @override
   void initState() {
     super.initState();
+    _coordinator = ref.read(notificationCoordinatorProvider);
     _tapSubscription = ref
         .read(localNotificationServiceProvider)
         .notificationTaps()
@@ -32,13 +34,14 @@ class _NotificationShellListenerState
       if (!mounted) {
         return;
       }
-      unawaited(ref.read(notificationCoordinatorProvider).start());
+      unawaited(_coordinator.start());
     });
   }
 
   @override
   void dispose() {
     unawaited(_tapSubscription?.cancel());
+    unawaited(_coordinator.dispose());
     super.dispose();
   }
 

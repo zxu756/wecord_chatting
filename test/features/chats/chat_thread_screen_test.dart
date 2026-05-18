@@ -421,6 +421,80 @@ void main() {
     expect(repository.recalledMessageIds, ['message-1']);
   });
 
+  testWidgets('replies to a message from the action menu', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Original',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Original'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reply'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Replying to Original'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'A reply');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+
+    expect(repository.sentReplyToMessageId, 'message-1');
+    expect(repository.sentReplyPreview?.messageId, 'message-1');
+    expect(repository.sentReplyPreview?.body, 'Original');
+    expect(repository.sentReplyPreview?.type, MessageType.text);
+    expect(find.text('Replying to Original'), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
+  });
+
+  testWidgets('edits an outgoing text message from the action menu', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Before',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Before',
+    );
+
+    await tester.enterText(find.byType(TextField), 'After');
+    await tester.tap(find.byTooltip('Save edit'));
+    await tester.pump();
+
+    expect(repository.editedMessageId, 'message-1');
+    expect(repository.editedBody, 'After');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
+  });
+
   testWidgets('recalled messages render deleted text and have no actions', (
     tester,
   ) async {
@@ -446,6 +520,55 @@ void main() {
 
     expect(find.text('Copy'), findsNothing);
     expect(find.text('Delete'), findsNothing);
+    expect(find.text('Reply'), findsNothing);
+    expect(find.text('Edit'), findsNothing);
+  });
+
+  testWidgets('renders reply previews above message content', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Reply body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+          replyPreview: const ReplyPreview(
+            messageId: 'message-0',
+            senderName: 'Ada',
+            body: 'Original preview',
+            type: MessageType.text,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.text('Original preview'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Original preview')).dy,
+      lessThan(tester.getTopLeft(find.text('Reply body')).dy),
+    );
+  });
+
+  testWidgets('edited messages render an edited marker', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Updated',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          editedAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Updated'), findsOneWidget);
+    expect(find.text('edited'), findsOneWidget);
   });
 
   testWidgets('image action menu can open preview', (tester) async {
@@ -529,6 +652,36 @@ void main() {
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'Hello Ada',
+    );
+  });
+
+  testWidgets('failed edit keeps the composer text', (tester) async {
+    final repository = FakeChatsRepository()
+      ..editError = Exception('offline')
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Before',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'After');
+    await tester.tap(find.byTooltip('Save edit'));
+    await tester.pump();
+
+    expect(find.text('Could not save edit. Try again.'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'After',
     );
   });
 
@@ -784,6 +937,8 @@ ChatMessage _message({
   required DateTime createdAt,
   MessageType type = MessageType.text,
   Map<String, dynamic>? attachment,
+  ReplyPreview? replyPreview,
+  DateTime? editedAt,
   DateTime? recalledAt,
 }) {
   return ChatMessage(
@@ -793,7 +948,9 @@ ChatMessage _message({
     type: type,
     body: body,
     attachment: attachment,
+    replyPreview: replyPreview,
     createdAt: createdAt,
+    editedAt: editedAt,
     recalledAt: recalledAt,
   );
 }
@@ -805,12 +962,17 @@ class FakeChatsRepository implements ChatsRepository {
   var activity = const ConversationActivity();
   GroupDetail? groupDetail;
   Object? sendError;
+  Object? editError;
   final sentMessages = <SentMessage>[];
   final sentImages = <SentImage>[];
   final createdImageUrls = <ImageAttachment>[];
   final recalledMessageIds = <String>[];
   final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
+  String? sentReplyToMessageId;
+  ReplyPreview? sentReplyPreview;
+  String? editedMessageId;
+  String? editedBody;
   final _conversationChanges = StreamController<void>.broadcast();
   final _messageChanges = StreamController<void>.broadcast();
   final _activityChanges = StreamController<ConversationActivity>.broadcast();
@@ -845,6 +1007,8 @@ class FakeChatsRepository implements ChatsRepository {
     if (sendError case final error?) {
       throw error;
     }
+    sentReplyToMessageId = replyToMessageId;
+    sentReplyPreview = replyPreview;
     sentMessages.add(SentMessage(conversationId: conversationId, body: body));
   }
 
@@ -904,7 +1068,13 @@ class FakeChatsRepository implements ChatsRepository {
   Future<void> editMessage({
     required String messageId,
     required String body,
-  }) async {}
+  }) async {
+    if (editError case final error?) {
+      throw error;
+    }
+    editedMessageId = messageId;
+    editedBody = body;
+  }
 
   @override
   Future<void> markConversationRead(String conversationId) async {

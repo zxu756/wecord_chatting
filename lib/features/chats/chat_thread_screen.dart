@@ -71,6 +71,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _isTypingShared = false;
   String? _sendError;
   String? _lastMarkedMessageId;
+  ChatMessage? _replyingTo;
+  ChatMessage? _editingMessage;
 
   @override
   void dispose() {
@@ -181,6 +183,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           latestOutgoingReadState.latestOutgoingMessageId ==
                               message.id &&
                           latestOutgoingReadState.isRead,
+                      onReply: _startReply,
+                      onEdit: _startEdit,
                       onDelete: _deleteMessage,
                       onPreviewImage: _previewImage,
                     );
@@ -203,9 +207,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             isPickingImage: _isPickingImage,
             isSendingImage: _isSendingImage,
             errorText: _sendError,
+            replyPreviewText: _replyingTo == null
+                ? null
+                : _replyPreviewBody(_replyingTo!),
+            isEditing: _editingMessage != null,
             onChanged: _handleComposerChanged,
             onSend: _sendMessage,
             onPickImage: _pickAndSendImage,
+            onCancelReply: _cancelReply,
+            onCancelEdit: _cancelEdit,
           ),
         ],
       ),
@@ -237,6 +247,50 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
 
+    final editingMessage = _editingMessage;
+    if (editingMessage != null) {
+      await _saveEdit(editingMessage, body);
+      return;
+    }
+
+    final replyingTo = _replyingTo;
+    setState(() {
+      _isSending = true;
+      _sendError = null;
+    });
+
+    try {
+      final replyPreview = replyingTo == null
+          ? null
+          : _replyPreviewForMessage(replyingTo);
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendTextMessage(
+            conversationId: widget.conversationId,
+            body: body,
+            replyToMessageId: replyingTo?.id,
+            replyPreview: replyPreview,
+          );
+      await _setTyping(false);
+      _composerController.clear();
+      _replyingTo = null;
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sendError = 'Could not send message. Try again.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveEdit(ChatMessage message, String body) async {
     setState(() {
       _isSending = true;
       _sendError = null;
@@ -245,14 +299,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     try {
       await ref
           .read(chatsRepositoryProvider)
-          .sendTextMessage(conversationId: widget.conversationId, body: body);
+          .editMessage(messageId: message.id, body: body);
       await _setTyping(false);
       _composerController.clear();
+      _editingMessage = null;
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not send message. Try again.';
+          _sendError = 'Could not save edit. Try again.';
         });
       }
     } finally {
@@ -353,6 +408,45 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  void _startReply(ChatMessage message) {
+    if (message.recalledAt != null) {
+      return;
+    }
+    setState(() {
+      _replyingTo = message;
+      _editingMessage = null;
+      _sendError = null;
+    });
+  }
+
+  void _startEdit(ChatMessage message) {
+    if (message.recalledAt != null || message.type != MessageType.text) {
+      return;
+    }
+    setState(() {
+      _editingMessage = message;
+      _replyingTo = null;
+      _sendError = null;
+      _composerController.text = message.body;
+      _composerController.selection = TextSelection.collapsed(
+        offset: _composerController.text.length,
+      );
+    });
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyingTo = null;
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editingMessage = null;
+      _composerController.clear();
+    });
+  }
+
   Future<void> _previewImage(ImageAttachment attachment) async {
     try {
       final url = await ref
@@ -397,6 +491,8 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.isCurrentUser,
     required this.showReadReceipt,
+    required this.onReply,
+    required this.onEdit,
     required this.onDelete,
     required this.onPreviewImage,
   });
@@ -404,6 +500,8 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isCurrentUser;
   final bool showReadReceipt;
+  final ValueChanged<ChatMessage> onReply;
+  final ValueChanged<ChatMessage> onEdit;
   final Future<void> Function(ChatMessage message) onDelete;
   final Future<void> Function(ImageAttachment attachment) onPreviewImage;
 
@@ -418,9 +516,7 @@ class _MessageBubble extends StatelessWidget {
         : colorScheme.onSurfaceVariant;
     final isRecalled = message.recalledAt != null;
     final imageAttachment = isRecalled ? null : message.imageAttachment;
-    final canShowActions =
-        !isRecalled &&
-        (message.type == MessageType.text || imageAttachment != null);
+    final canShowActions = !isRecalled;
 
     return Column(
       crossAxisAlignment: isCurrentUser
@@ -483,6 +579,23 @@ class _MessageBubble extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: const Icon(Icons.reply_outlined),
+                title: const Text('Reply'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onReply(message);
+                },
+              ),
+              if (isCurrentUser && message.type == MessageType.text)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Edit'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onEdit(message);
+                  },
+                ),
               if (imageAttachment != null)
                 ListTile(
                   leading: const Icon(Icons.visibility_outlined),
@@ -544,12 +657,86 @@ class _MessageContent extends StatelessWidget {
       );
     }
 
+    final content = <Widget>[
+      if (message.replyPreview != null) ...[
+        _QuotedReplyPreview(
+          preview: message.replyPreview!,
+          foregroundColor: textColor,
+        ),
+        const SizedBox(height: 8),
+      ],
+    ];
+
     final attachment = imageAttachment;
     if (attachment != null) {
-      return _ImageMessageContent(attachment: attachment);
+      content.add(_ImageMessageContent(attachment: attachment));
+    } else {
+      content.add(Text(message.body, style: TextStyle(color: textColor)));
     }
 
-    return Text(message.body, style: TextStyle(color: textColor));
+    if (message.editedAt != null) {
+      content.add(const SizedBox(height: 4));
+      content.add(
+        Text(
+          'edited',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: textColor.withValues(alpha: 0.72),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: content,
+    );
+  }
+}
+
+class _QuotedReplyPreview extends StatelessWidget {
+  const _QuotedReplyPreview({
+    required this.preview,
+    required this.foregroundColor,
+  });
+
+  final ReplyPreview preview;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: foregroundColor, width: 3)),
+        color: foregroundColor.withValues(alpha: 0.08),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            preview.senderName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foregroundColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            preview.body,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: foregroundColor),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -657,9 +844,13 @@ class _Composer extends StatelessWidget {
     required this.isPickingImage,
     required this.isSendingImage,
     required this.errorText,
+    required this.replyPreviewText,
+    required this.isEditing,
     required this.onChanged,
     required this.onSend,
     required this.onPickImage,
+    required this.onCancelReply,
+    required this.onCancelEdit,
   });
 
   final TextEditingController controller;
@@ -667,9 +858,13 @@ class _Composer extends StatelessWidget {
   final bool isPickingImage;
   final bool isSendingImage;
   final String? errorText;
+  final String? replyPreviewText;
+  final bool isEditing;
   final ValueChanged<String> onChanged;
   final Future<void> Function() onSend;
   final Future<void> Function() onPickImage;
+  final VoidCallback onCancelReply;
+  final VoidCallback onCancelEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -692,11 +887,31 @@ class _Composer extends StatelessWidget {
                 Text(errorText!, style: TextStyle(color: colorScheme.error)),
                 const SizedBox(height: 8),
               ],
+              if (replyPreviewText != null) ...[
+                _ComposerModeBanner(
+                  text: 'Replying to $replyPreviewText',
+                  tooltip: 'Cancel reply',
+                  icon: Icons.close,
+                  onPressed: onCancelReply,
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (isEditing) ...[
+                _ComposerModeBanner(
+                  text: 'Editing message',
+                  tooltip: 'Cancel edit',
+                  icon: Icons.close,
+                  onPressed: onCancelEdit,
+                ),
+                const SizedBox(height: 8),
+              ],
               Row(
                 children: [
                   IconButton(
                     tooltip: 'Send image',
-                    onPressed: isBusy ? null : () => unawaited(onPickImage()),
+                    onPressed: isBusy || isEditing
+                        ? null
+                        : () => unawaited(onPickImage()),
                     icon: isSendingImage
                         ? const SizedBox.square(
                             dimension: 18,
@@ -723,7 +938,7 @@ class _Composer extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
-                    tooltip: 'Send',
+                    tooltip: isEditing ? 'Save edit' : 'Send',
                     onPressed: isBusy ? null : () => unawaited(onSend()),
                     icon: isSending
                         ? const SizedBox.square(
@@ -740,6 +955,67 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ComposerModeBanner extends StatelessWidget {
+  const _ComposerModeBanner({
+    required this.text,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String text;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: tooltip,
+          visualDensity: VisualDensity.compact,
+          onPressed: onPressed,
+          icon: Icon(icon),
+        ),
+      ],
+    );
+  }
+}
+
+ReplyPreview _replyPreviewForMessage(ChatMessage message) {
+  return ReplyPreview(
+    messageId: message.id,
+    senderName: 'Message',
+    body: _replyPreviewBody(message),
+    type: message.type,
+  );
+}
+
+String _replyPreviewBody(ChatMessage message) {
+  if (message.recalledAt != null) {
+    return 'Message';
+  }
+  return switch (message.type) {
+    MessageType.text =>
+      message.body.trim().isEmpty ? 'Message' : message.body.trim(),
+    MessageType.image => 'Image',
+    MessageType.file => 'File',
+    MessageType.voice => 'Voice message',
+  };
 }
 
 String _imageSendErrorText(Object error) {

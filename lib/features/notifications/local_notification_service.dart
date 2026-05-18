@@ -4,6 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wecord/features/notifications/notification_service_base.dart';
+import 'package:wecord/features/notifications/web_local_notification_service.dart';
+import 'package:wecord/features/notifications/web_notification_gateway_stub.dart'
+    if (dart.library.html) 'package:wecord/features/notifications/web_notification_gateway_html.dart';
+
+export 'package:wecord/features/notifications/notification_service_base.dart';
 
 const _permissionRequestedKey = 'wecord.notifications.permission_requested';
 
@@ -12,8 +18,8 @@ final localNotificationServiceProvider = Provider<LocalNotificationService>((
 ) {
   late final LocalNotificationService service;
   if (kIsWeb) {
-    service = FakeLocalNotificationService(
-      status: NotificationPermissionStatus.unavailable,
+    service = WebLocalNotificationService(
+      gateway: createWebNotificationGateway(),
     );
   } else {
     service = FlutterLocalNotificationService();
@@ -21,24 +27,6 @@ final localNotificationServiceProvider = Provider<LocalNotificationService>((
   ref.onDispose(service.dispose);
   return service;
 });
-
-enum NotificationPermissionStatus { notRequested, granted, denied, unavailable }
-
-abstract interface class LocalNotificationService {
-  Future<NotificationPermissionStatus> permissionStatus();
-
-  Future<NotificationPermissionStatus> requestPermission();
-
-  Future<void> showMessageNotification({
-    required String conversationId,
-    required String title,
-    required String body,
-  });
-
-  Stream<String> notificationTaps();
-
-  void dispose();
-}
 
 class FlutterLocalNotificationService implements LocalNotificationService {
   FlutterLocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
@@ -123,6 +111,10 @@ class FlutterLocalNotificationService implements LocalNotificationService {
       return;
     }
     await _ensureInitialized();
+    final status = await _permissionStatusForShow();
+    if (status != NotificationPermissionStatus.granted) {
+      return;
+    }
     await _plugin.show(
       id: _notificationIdForConversation(conversationId),
       title: title,
@@ -135,8 +127,20 @@ class FlutterLocalNotificationService implements LocalNotificationService {
           importance: Importance.high,
           priority: Priority.high,
         ),
-        iOS: DarwinNotificationDetails(),
-        macOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          presentBanner: true,
+          presentList: true,
+        ),
+        macOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          presentBanner: true,
+          presentList: true,
+        ),
       ),
       payload: conversationId,
     );
@@ -214,6 +218,14 @@ class FlutterLocalNotificationService implements LocalNotificationService {
     return enabled == null ? null : _statusFromGranted(enabled);
   }
 
+  Future<NotificationPermissionStatus> _permissionStatusForShow() async {
+    final status = await permissionStatus();
+    if (status == NotificationPermissionStatus.notRequested) {
+      return requestPermission();
+    }
+    return status;
+  }
+
   NotificationPermissionStatus _statusFromGranted(bool granted) {
     return granted
         ? NotificationPermissionStatus.granted
@@ -244,65 +256,4 @@ class FlutterLocalNotificationService implements LocalNotificationService {
   int _notificationIdForConversation(String conversationId) {
     return conversationId.hashCode & 0x7fffffff;
   }
-}
-
-class FakeLocalNotificationService implements LocalNotificationService {
-  FakeLocalNotificationService({
-    NotificationPermissionStatus status =
-        NotificationPermissionStatus.notRequested,
-  }) : _status = status;
-
-  final shownNotifications = <ShownMessageNotification>[];
-  final _tapController = StreamController<String>.broadcast();
-  NotificationPermissionStatus _status;
-
-  @override
-  Future<NotificationPermissionStatus> permissionStatus() async => _status;
-
-  @override
-  Future<NotificationPermissionStatus> requestPermission() async {
-    if (_status == NotificationPermissionStatus.notRequested) {
-      _status = NotificationPermissionStatus.granted;
-    }
-    return _status;
-  }
-
-  @override
-  Future<void> showMessageNotification({
-    required String conversationId,
-    required String title,
-    required String body,
-  }) async {
-    shownNotifications.add(
-      ShownMessageNotification(
-        title: title,
-        body: body,
-        payload: conversationId,
-      ),
-    );
-  }
-
-  @override
-  Stream<String> notificationTaps() => _tapController.stream;
-
-  @override
-  void dispose() {
-    unawaited(_tapController.close());
-  }
-
-  void emitTap(String conversationId) {
-    _tapController.add(conversationId);
-  }
-}
-
-class ShownMessageNotification {
-  const ShownMessageNotification({
-    required this.title,
-    required this.body,
-    required this.payload,
-  });
-
-  final String title;
-  final String body;
-  final String payload;
 }

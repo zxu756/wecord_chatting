@@ -196,6 +196,7 @@ void main() {
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('Message previews'), findsOneWidget);
     expect(find.text('Request permission'), findsOneWidget);
+    expect(find.text('Send test notification'), findsOneWidget);
   });
 
   testWidgets('toggles notification preferences', (tester) async {
@@ -215,6 +216,40 @@ void main() {
     await tester.pump();
 
     expect((await store.load())?.enabled, isFalse);
+  });
+
+  testWidgets('sends a test notification from settings', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+    final notificationService = FakeLocalNotificationService();
+
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: settingsRepository,
+        localNotificationService: notificationService,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
+
+    await tester.tap(
+      find.widgetWithText(OutlinedButton, 'Send test notification'),
+    );
+    await tester.pump();
+
+    expect(
+      await notificationService.permissionStatus(),
+      NotificationPermissionStatus.granted,
+    );
+    expect(notificationService.shownNotifications.single.title, 'WeCord');
+    expect(
+      notificationService.shownNotifications.single.body,
+      'Notifications are working.',
+    );
+    expect(
+      notificationService.shownNotifications.single.payload,
+      'settings-test',
+    );
   });
 }
 

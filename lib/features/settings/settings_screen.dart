@@ -156,12 +156,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(
-                  onPressed: _requestNotificationPermission,
-                  child: const Text('Request permission'),
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: _requestNotificationPermission,
+                    child: const Text('Request permission'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _sendTestNotification,
+                    child: const Text('Send test notification'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               OutlinedButton(
@@ -267,6 +274,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _requestNotificationPermission() async {
     await ref.read(localNotificationServiceProvider).requestPermission();
     ref.invalidate(currentNotificationPermissionStatusProvider);
+  }
+
+  Future<void> _sendTestNotification() async {
+    final notificationService = ref.read(localNotificationServiceProvider);
+    final status = await notificationService.requestPermission();
+    ref.invalidate(currentNotificationPermissionStatusProvider);
+    if (status != NotificationPermissionStatus.granted) {
+      if (mounted) {
+        setState(() {
+          _errorText = 'Notifications are not allowed on this device.';
+        });
+      }
+      return;
+    }
+
+    try {
+      await notificationService.showMessageNotification(
+        conversationId: 'settings-test',
+        title: 'WeCord',
+        body: 'Notifications are working.',
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorText = 'Could not send test notification. Try again.';
+        });
+      }
+    }
   }
 }
 

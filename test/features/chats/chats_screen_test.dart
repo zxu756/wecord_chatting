@@ -197,12 +197,12 @@ class FakeChatsRepository implements ChatsRepository {
     List<ConversationSummary> conversations,
     String query,
   ) {
-    return conversations;
+    return _searchConversations(conversations, query);
   }
 
   @override
   List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
-    return messages;
+    return _searchMessages(messages, query);
   }
 
   @override
@@ -224,4 +224,43 @@ class FakeChatsRepository implements ChatsRepository {
     required String conversationId,
     required bool isTyping,
   }) async {}
+}
+
+List<ConversationSummary> _searchConversations(
+  List<ConversationSummary> conversations,
+  String query,
+) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) {
+    return conversations;
+  }
+  return conversations
+      .where(
+        (conversation) =>
+            _containsQuery(conversation.title, normalizedQuery) ||
+            _containsQuery(conversation.lastMessageBody, normalizedQuery),
+      )
+      .toList(growable: false);
+}
+
+List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) {
+    return messages;
+  }
+  return messages
+      .where((message) {
+        if (message.recalledAt != null) {
+          return false;
+        }
+        final preview = message.replyPreview;
+        return _containsQuery(message.body, normalizedQuery) ||
+            _containsQuery(preview?.body, normalizedQuery) ||
+            _containsQuery(preview?.senderName, normalizedQuery);
+      })
+      .toList(growable: false);
+}
+
+bool _containsQuery(String? value, String query) {
+  return value?.toLowerCase().contains(query) ?? false;
 }

@@ -851,9 +851,11 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
   }
   return messages
       .where((message) {
+        if (message.recalledAt != null) {
+          return false;
+        }
         final preview = message.replyPreview;
-        return (message.recalledAt == null &&
-                _containsQuery(message.body, normalizedQuery)) ||
+        return _containsQuery(message.body, normalizedQuery) ||
             _containsQuery(preview?.body, normalizedQuery) ||
             _containsQuery(preview?.senderName, normalizedQuery);
       })

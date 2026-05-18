@@ -420,7 +420,7 @@ void main() {
     expect(repository.searchConversations(conversations, ' '), conversations);
   });
 
-  test('searchMessages matches reply preview but not recalled body', () {
+  test('searchMessages skips recalled messages entirely', () {
     final repository = SupabaseChatsRepository.withDataSource(
       FakeChatsDataSource(),
       currentUserId: () => 'user-1',
@@ -439,6 +439,20 @@ void main() {
         conversationId: 'conversation-1',
         senderId: 'user-2',
         type: MessageType.text,
+        body: 'Plain reply',
+        replyPreview: const ReplyPreview(
+          messageId: 'message-1',
+          senderName: 'Grace',
+          body: 'Earlier context',
+          type: MessageType.text,
+        ),
+        createdAt: DateTime.utc(2026, 5, 18, 0, 1),
+      ),
+      ChatMessage(
+        id: 'message-3',
+        conversationId: 'conversation-1',
+        senderId: 'user-2',
+        type: MessageType.text,
         body: 'Secret recalled body',
         replyPreview: const ReplyPreview(
           messageId: 'message-1',
@@ -447,13 +461,14 @@ void main() {
           type: MessageType.text,
         ),
         recalledAt: DateTime.utc(2026, 5, 18, 1),
-        createdAt: DateTime.utc(2026, 5, 18, 0, 1),
+        createdAt: DateTime.utc(2026, 5, 18, 0, 2),
       ),
     ];
 
     expect(repository.searchMessages(messages, 'visible'), [messages.first]);
-    expect(repository.searchMessages(messages, 'grace'), [messages.last]);
+    expect(repository.searchMessages(messages, 'grace'), [messages[1]]);
     expect(repository.searchMessages(messages, 'secret'), isEmpty);
+    expect(repository.searchMessages(messages, 'earlier'), [messages[1]]);
     expect(repository.searchMessages(messages, ''), messages);
   });
 

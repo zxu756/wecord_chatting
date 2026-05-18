@@ -155,7 +155,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
               data: (data) {
                 final messages = data.messages;
+                final messagesById = {
+                  for (final message in messages) message.id: message,
+                };
                 _markReadAfterLoad(messages);
+                _reconcileActiveMessageState(messagesById);
                 if (messages.isEmpty) {
                   return const Center(child: Text('No messages yet'));
                 }
@@ -178,6 +182,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     final message = newestFirst[index];
                     return _MessageBubble(
                       message: message,
+                      messagesById: messagesById,
                       isCurrentUser: message.senderId == currentUserId,
                       showReadReceipt:
                           latestOutgoingReadState.latestOutgoingMessageId ==
@@ -238,6 +243,66 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .markConversationRead(widget.conversationId)
             .catchError((Object _) {}),
       );
+    });
+  }
+
+  void _reconcileActiveMessageState(Map<String, ChatMessage> messagesById) {
+    final replyingTo = _replyingTo;
+    final editingMessage = _editingMessage;
+    if (replyingTo == null && editingMessage == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      var shouldUpdate = false;
+      ChatMessage? nextReplyingTo = _replyingTo;
+      ChatMessage? nextEditingMessage = _editingMessage;
+      var shouldClearComposer = false;
+
+      final activeReply = _replyingTo;
+      if (activeReply != null) {
+        final latestReply = messagesById[activeReply.id];
+        if (latestReply == null || latestReply.recalledAt != null) {
+          nextReplyingTo = null;
+          shouldUpdate = true;
+        } else if (!identical(latestReply, activeReply)) {
+          nextReplyingTo = latestReply;
+          shouldUpdate = true;
+        }
+      }
+
+      final activeEdit = _editingMessage;
+      if (activeEdit != null) {
+        final latestEdit = messagesById[activeEdit.id];
+        if (latestEdit == null || latestEdit.recalledAt != null) {
+          nextEditingMessage = null;
+          shouldClearComposer = true;
+          shouldUpdate = true;
+        } else if (!identical(latestEdit, activeEdit)) {
+          nextEditingMessage = latestEdit;
+          _composerController.text = latestEdit.body;
+          _composerController.selection = TextSelection.collapsed(
+            offset: _composerController.text.length,
+          );
+          shouldUpdate = true;
+        }
+      }
+
+      if (!shouldUpdate) {
+        return;
+      }
+
+      setState(() {
+        _replyingTo = nextReplyingTo;
+        _editingMessage = nextEditingMessage;
+        if (shouldClearComposer) {
+          _composerController.clear();
+        }
+      });
     });
   }
 
@@ -489,6 +554,7 @@ class _ThreadAvatar extends ConsumerWidget {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.messagesById,
     required this.isCurrentUser,
     required this.showReadReceipt,
     required this.onReply,
@@ -498,6 +564,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final ChatMessage message;
+  final Map<String, ChatMessage> messagesById;
   final bool isCurrentUser;
   final bool showReadReceipt;
   final ValueChanged<ChatMessage> onReply;
@@ -548,6 +615,7 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 child: _MessageContent(
                   message: message,
+                  messagesById: messagesById,
                   imageAttachment: imageAttachment,
                   textColor: textColor,
                   isRecalled: isRecalled,
@@ -638,12 +706,14 @@ class _MessageBubble extends StatelessWidget {
 class _MessageContent extends StatelessWidget {
   const _MessageContent({
     required this.message,
+    required this.messagesById,
     required this.imageAttachment,
     required this.textColor,
     required this.isRecalled,
   });
 
   final ChatMessage message;
+  final Map<String, ChatMessage> messagesById;
   final ImageAttachment? imageAttachment;
   final Color textColor;
   final bool isRecalled;
@@ -660,7 +730,8 @@ class _MessageContent extends StatelessWidget {
     final content = <Widget>[
       if (message.replyPreview != null) ...[
         _QuotedReplyPreview(
-          preview: message.replyPreview!,
+          senderName: message.replyPreview!.senderName,
+          body: _displayBodyForReplyPreview(message.replyPreview!),
           foregroundColor: textColor,
         ),
         const SizedBox(height: 8),
@@ -693,15 +764,28 @@ class _MessageContent extends StatelessWidget {
       children: content,
     );
   }
+
+  String _displayBodyForReplyPreview(ReplyPreview preview) {
+    final referencedMessage = messagesById[preview.messageId];
+    if (referencedMessage == null) {
+      return preview.body;
+    }
+    if (referencedMessage.recalledAt != null) {
+      return 'Message deleted';
+    }
+    return _replyPreviewBody(referencedMessage);
+  }
 }
 
 class _QuotedReplyPreview extends StatelessWidget {
   const _QuotedReplyPreview({
-    required this.preview,
+    required this.senderName,
+    required this.body,
     required this.foregroundColor,
   });
 
-  final ReplyPreview preview;
+  final String senderName;
+  final String body;
   final Color foregroundColor;
 
   @override
@@ -718,7 +802,7 @@ class _QuotedReplyPreview extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            preview.senderName,
+            senderName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -727,7 +811,7 @@ class _QuotedReplyPreview extends StatelessWidget {
             ),
           ),
           Text(
-            preview.body,
+            body,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(

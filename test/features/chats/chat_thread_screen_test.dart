@@ -457,6 +457,45 @@ void main() {
     );
   });
 
+  testWidgets('reply state clears when replied-to message becomes recalled', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Original',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.longPress(find.text('Original'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reply'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Replying to Original'), findsOneWidget);
+
+    repository.messages = [
+      _message(
+        id: 'message-1',
+        senderId: 'user-2',
+        body: 'Original',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        recalledAt: DateTime.utc(2026, 5, 18, 4, 31),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Replying to Original'), findsNothing);
+    expect(find.text('Original'), findsNothing);
+    expect(find.text('Message deleted'), findsOneWidget);
+  });
+
   testWidgets('edits an outgoing text message from the action menu', (
     tester,
   ) async {
@@ -489,6 +528,53 @@ void main() {
 
     expect(repository.editedMessageId, 'message-1');
     expect(repository.editedBody, 'After');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
+  });
+
+  testWidgets('edit state clears when edited message becomes recalled', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Before',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.longPress(find.text('Before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Save edit'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Before',
+    );
+
+    repository.messages = [
+      _message(
+        id: 'message-1',
+        senderId: 'user-1',
+        body: 'Before',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        recalledAt: DateTime.utc(2026, 5, 18, 4, 31),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Save edit'), findsNothing);
+    expect(find.text('Before'), findsNothing);
+    expect(find.text('Message deleted'), findsOneWidget);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       '',
@@ -550,6 +636,40 @@ void main() {
       tester.getTopLeft(find.text('Original preview')).dy,
       lessThan(tester.getTopLeft(find.text('Reply body')).dy),
     );
+  });
+
+  testWidgets('reply preview redacts recalled message bodies in thread', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Original secret',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          recalledAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Reply body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 32),
+          replyPreview: const ReplyPreview(
+            messageId: 'message-1',
+            senderName: 'Ada',
+            body: 'Original secret',
+            type: MessageType.text,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Reply body'), findsOneWidget);
+    expect(find.text('Original secret'), findsNothing);
+    expect(find.text('Message deleted'), findsWidgets);
   });
 
   testWidgets('edited messages render an edited marker', (tester) async {

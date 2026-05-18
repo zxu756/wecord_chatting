@@ -155,6 +155,7 @@ class _IncomingRequestsSection extends ConsumerWidget {
               for (final incomingRequest in requests)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
+                  leading: _ProfileAvatar(profile: incomingRequest.requester),
                   title: Text(incomingRequest.requester.displayName),
                   subtitle: Text('@${incomingRequest.requester.username}'),
                   trailing: Wrap(
@@ -389,6 +390,7 @@ class _ProfileAvatar extends StatelessWidget {
     final image = _publicAvatarImage(profile.avatarUrl);
     return CircleAvatar(
       backgroundImage: image,
+      onBackgroundImageError: image == null ? null : (_, _) {},
       child: image == null ? Text(_initials(profile.displayName)) : null,
     );
   }

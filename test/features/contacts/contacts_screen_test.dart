@@ -50,6 +50,7 @@ void main() {
             id: 'user-2',
             username: 'ada',
             displayName: 'Ada Lovelace',
+            avatarUrl: 'profile-avatars/user-2/ada.png',
           ),
         ),
         _incomingRequest(
@@ -68,6 +69,7 @@ void main() {
     expect(find.text('Incoming requests'), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('@ada'), findsOneWidget);
+    expect(find.text('AL'), findsOneWidget);
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('@grace'), findsOneWidget);
 

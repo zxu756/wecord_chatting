@@ -382,6 +382,7 @@ class _ThreadAvatar extends StatelessWidget {
     final image = _publicAvatarImage(avatarUrl);
     return CircleAvatar(
       backgroundImage: image,
+      onBackgroundImageError: image == null ? null : (_, _) {},
       child: image == null ? Text(_initials(title)) : null,
     );
   }

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -598,6 +599,50 @@ void main() {
 
     expect(find.byType(ChatThreadScreen), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
+
+  testWidgets('app router passes route extra avatarUrl to the thread', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final authRepository = FakeAuthRepository()
+      ..user = const AuthUser(id: 'user-1', email: 'me@example.com');
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          authRepositoryProvider.overrideWithValue(authRepository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go(
+      '/chats/conversation-1',
+      extra: const ChatThreadRouteExtra(
+        title: 'Ada Lovelace',
+        type: ConversationType.direct,
+        avatarUrl: 'https://example.com/ada.png',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    final image = avatar.backgroundImage;
+    expect(image, isA<NetworkImage>());
+    expect((image! as NetworkImage).url, 'https://example.com/ada.png');
   });
 
   testWidgets('does not show group details for direct conversations', (

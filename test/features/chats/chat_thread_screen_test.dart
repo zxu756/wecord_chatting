@@ -534,6 +534,44 @@ void main() {
     );
   });
 
+  testWidgets('keeps an in-progress edit draft across equivalent refreshes', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Before',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.longPress(find.text('Before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Draft in progress');
+
+    repository.messages = [
+      _message(
+        id: 'message-1',
+        senderId: 'user-1',
+        body: 'Before',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Draft in progress',
+    );
+  });
+
   testWidgets('edit state clears when edited message becomes recalled', (
     tester,
   ) async {

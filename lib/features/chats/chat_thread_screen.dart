@@ -284,10 +284,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           shouldUpdate = true;
         } else if (!identical(latestEdit, activeEdit)) {
           nextEditingMessage = latestEdit;
-          _composerController.text = latestEdit.body;
-          _composerController.selection = TextSelection.collapsed(
-            offset: _composerController.text.length,
-          );
           shouldUpdate = true;
         }
       }

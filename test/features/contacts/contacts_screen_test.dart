@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/shared/models/friend_request.dart';
@@ -123,8 +124,12 @@ void main() {
         GoRoute(
           path: '/chats/:conversationId',
           builder: (context, state) {
+            final title = switch (state.extra) {
+              ChatThreadRouteExtra(:final title) => title,
+              final extra => extra,
+            };
             return Text(
-              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+              'Thread ${state.pathParameters['conversationId']} $title',
             );
           },
         ),
@@ -179,8 +184,12 @@ void main() {
         GoRoute(
           path: '/chats/:conversationId',
           builder: (context, state) {
+            final title = switch (state.extra) {
+              ChatThreadRouteExtra(:final title) => title,
+              final extra => extra,
+            };
             return Text(
-              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+              'Thread ${state.pathParameters['conversationId']} $title',
             );
           },
         ),

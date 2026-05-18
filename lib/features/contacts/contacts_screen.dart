@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final contactsSearchQueryProvider = StateProvider.autoDispose<String>((ref) {
@@ -257,7 +258,10 @@ class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
     ref.invalidate(conversationsProvider);
     context.go(
       '${ChatsScreen.path}/${result.conversationId}',
-      extra: result.title,
+      extra: ChatThreadRouteExtra(
+        title: result.title,
+        type: ConversationType.group,
+      ),
     );
   }
 }
@@ -304,7 +308,10 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
       }
       context.go(
         '${ChatsScreen.path}/$conversationId',
-        extra: widget.profile.displayName,
+        extra: ChatThreadRouteExtra(
+          title: widget.profile.displayName,
+          type: ConversationType.direct,
+        ),
       );
     } catch (error) {
       if (!mounted) {

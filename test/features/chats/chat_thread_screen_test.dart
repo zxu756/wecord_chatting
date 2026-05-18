@@ -599,6 +599,17 @@ void main() {
     expect(find.text('Ada Lovelace'), findsOneWidget);
   });
 
+  testWidgets('does not show group details for direct conversations', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.byTooltip('Group details'), findsNothing);
+  });
+
   testWidgets('opens group details from the chat app bar', (tester) async {
     final repository = FakeChatsRepository()
       ..groupDetail = GroupDetail(
@@ -624,7 +635,9 @@ void main() {
         ],
       );
 
-    await tester.pumpWidget(_app(repository));
+    await tester.pumpWidget(
+      _app(repository, conversationType: ConversationType.group),
+    );
     await tester.pump();
 
     await tester.tap(find.byTooltip('Group details'));
@@ -640,6 +653,7 @@ void main() {
 Widget _app(
   FakeChatsRepository repository, {
   ImagePickerService? imagePickerService,
+  ConversationType? conversationType,
 }) {
   return ProviderScope(
     overrides: [
@@ -651,10 +665,11 @@ Widget _app(
           ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
       ),
     ],
-    child: const MaterialApp(
+    child: MaterialApp(
       home: ChatThreadScreen(
         conversationId: 'conversation-1',
         title: 'Ada Lovelace',
+        conversationType: conversationType,
       ),
     ),
   );

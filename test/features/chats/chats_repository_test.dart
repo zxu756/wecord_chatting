@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
@@ -90,6 +91,64 @@ void main() {
         },
       ),
     ]);
+  });
+
+  test('getGroupDetail loads group title and member profile rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..conversationRows = [
+        {
+          'id': 'conversation-1',
+          'type': 'group',
+          'title': 'Launch Crew',
+          'avatar_url': null,
+          'last_message_body': null,
+          'last_message_at': null,
+          'unread_count': 0,
+        },
+      ]
+      ..groupMemberRows = [
+        {
+          'role': 'owner',
+          'profile': {
+            'id': 'user-1',
+            'username': 'grace',
+            'display_name': 'Grace Hopper',
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T04:30:00.000Z',
+            'updated_at': '2026-05-18T04:31:00.000Z',
+          },
+        },
+        {
+          'role': 'member',
+          'profile': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada Lovelace',
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T04:32:00.000Z',
+            'updated_at': '2026-05-18T04:33:00.000Z',
+          },
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final detail = await repository.getGroupDetail('conversation-1');
+
+    expect(detail.conversationId, 'conversation-1');
+    expect(detail.title, 'Launch Crew');
+    expect(detail.members, hasLength(2));
+    expect(detail.members.first, isA<GroupMember>());
+    expect(detail.members.first.role, 'owner');
+    expect(detail.members.first.profile.displayName, 'Grace Hopper');
+    expect(detail.members.last.role, 'member');
+    expect(detail.members.last.profile.username, 'ada');
+    expect(dataSource.listCalls, 1);
+    expect(dataSource.listGroupMemberCalls, ['conversation-1']);
   });
 
   test('conversationChanges emits when the data source invalidates', () async {
@@ -562,6 +621,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   var conversationRows = <Map<String, dynamic>>[];
   var messageRows = <Map<String, dynamic>>[];
   var readMarkerRows = <Map<String, dynamic>>[];
+  var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
   String? latestMessageResult;
   String signedUrlResult = 'https://signed.example.test/default.jpg';
@@ -569,6 +629,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   Completer<void>? uploadCompleter;
   final listMessageCalls = <String>[];
   final listReadMarkerCalls = <String>[];
+  final listGroupMemberCalls = <String>[];
   final latestMessageCalls = <String>[];
   final insertedMessages = <Map<String, dynamic>>[];
   final uploadedImages = <UploadedImage>[];
@@ -601,6 +662,14 @@ class FakeChatsDataSource implements ChatsDataSource {
   ) async {
     listReadMarkerCalls.add(conversationId);
     return readMarkerRows;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listGroupMembers(
+    String conversationId,
+  ) async {
+    listGroupMemberCalls.add(conversationId);
+    return groupMemberRows;
   }
 
   @override

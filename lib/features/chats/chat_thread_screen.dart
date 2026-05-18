@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
 final chatThreadProvider = FutureProvider.autoDispose
@@ -42,10 +43,16 @@ class ChatThreadData {
 }
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
-  const ChatThreadScreen({required this.conversationId, this.title, super.key});
+  const ChatThreadScreen({
+    required this.conversationId,
+    this.title,
+    this.conversationType,
+    super.key,
+  });
 
   final String conversationId;
   final String? title;
+  final ConversationType? conversationType;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -107,22 +114,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Group details',
-            icon: const Icon(Icons.group_outlined),
-            onPressed: () {
-              showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                builder: (context) {
-                  return GroupDetailSheet(
-                    conversationId: widget.conversationId,
-                    title: title,
-                  );
-                },
-              );
-            },
-          ),
+          if (widget.conversationType == ConversationType.group)
+            IconButton(
+              tooltip: 'Group details',
+              icon: const Icon(Icons.group_outlined),
+              onPressed: () {
+                showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (context) {
+                    return GroupDetailSheet(
+                      conversationId: widget.conversationId,
+                      title: title,
+                    );
+                  },
+                );
+              },
+            ),
         ],
       ),
       body: Column(

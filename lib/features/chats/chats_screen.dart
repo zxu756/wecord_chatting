@@ -4,6 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
+class ChatThreadRouteExtra {
+  const ChatThreadRouteExtra({required this.title, required this.type});
+
+  final String title;
+  final ConversationType type;
+}
+
 final conversationsProvider =
     FutureProvider.autoDispose<List<ConversationSummary>>((ref) {
       final repository = ref.watch(chatsRepositoryProvider);
@@ -80,7 +87,10 @@ class _ConversationTile extends StatelessWidget {
         ],
       ),
       onTap: () {
-        context.go('${ChatsScreen.path}/${conversation.id}', extra: title);
+        context.go(
+          '${ChatsScreen.path}/${conversation.id}',
+          extra: ChatThreadRouteExtra(title: title, type: conversation.type),
+        );
       },
     );
   }

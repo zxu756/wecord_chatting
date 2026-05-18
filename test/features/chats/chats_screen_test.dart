@@ -81,8 +81,12 @@ void main() {
         GoRoute(
           path: '/chats/:conversationId',
           builder: (context, state) {
+            final title = switch (state.extra) {
+              ChatThreadRouteExtra(:final title) => title,
+              final extra => extra,
+            };
             return Text(
-              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+              'Thread ${state.pathParameters['conversationId']} $title',
             );
           },
         ),

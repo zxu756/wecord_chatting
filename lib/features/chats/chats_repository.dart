@@ -91,6 +91,8 @@ abstract interface class ChatsDataSource {
 
   Future<List<Map<String, dynamic>>> listReadMarkers(String conversationId);
 
+  Future<List<Map<String, dynamic>>> listGroupMembers(String conversationId);
+
   Future<String?> latestMessageId(String conversationId);
 
   Future<void> insertMessage(Map<String, dynamic> values);
@@ -188,10 +190,11 @@ class SupabaseChatsRepository implements ChatsRepository {
         break;
       }
     }
+    final memberRows = await _dataSource.listGroupMembers(conversationId);
     return GroupDetail(
       conversationId: conversationId,
       title: conversation?.title ?? conversationId,
-      members: const [],
+      members: memberRows.map(GroupMember.fromJson).toList(growable: false),
     );
   }
 
@@ -444,6 +447,20 @@ class SupabaseChatsDataSource implements ChatsDataSource {
         .from('conversation_members')
         .select('user_id,last_read_message_id')
         .eq('conversation_id', conversationId);
+    return rows.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listGroupMembers(
+    String conversationId,
+  ) async {
+    final rows = await _client
+        .from('conversation_members')
+        .select(
+          'role,profile:profiles(id,username,display_name,avatar_url,bio,created_at,updated_at)',
+        )
+        .eq('conversation_id', conversationId)
+        .order('joined_at', ascending: true);
     return rows.cast<Map<String, dynamic>>();
   }
 

@@ -8,6 +8,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -150,6 +151,66 @@ void main() {
     );
   });
 
+  testWidgets('creates a group conversation from selected friends', (
+    tester,
+  ) async {
+    final contactsRepository = FakeContactsRepository()
+      ..friends = [
+        _profile(
+          id: 'friend-1',
+          username: 'grace',
+          displayName: 'Grace Hopper',
+        ),
+        _profile(id: 'friend-2', username: 'ada', displayName: 'Ada Lovelace'),
+        _profile(
+          id: 'friend-3',
+          username: 'katherine',
+          displayName: 'Katherine Johnson',
+        ),
+      ];
+    final chatsRepository = FakeChatsRepository();
+    final router = GoRouter(
+      initialLocation: ContactsScreen.path,
+      routes: [
+        GoRoute(
+          path: ContactsScreen.path,
+          builder: (context, state) => const ContactsScreen(),
+        ),
+        GoRoute(
+          path: '/chats/:conversationId',
+          builder: (context, state) {
+            return Text(
+              'Thread ${state.pathParameters['conversationId']} ${state.extra}',
+            );
+          },
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      _app(
+        contactsRepository,
+        chatsRepository: chatsRepository,
+        router: router,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'New Group'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Group name'), 'Launch Crew');
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Grace Hopper'));
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Ada Lovelace'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    expect(chatsRepository.createdGroupTitle, 'Launch Crew');
+    expect(chatsRepository.createdGroupMemberIds, ['friend-1', 'friend-2']);
+    expect(find.text('Thread group-conversation Launch Crew'), findsOneWidget);
+  });
+
   testWidgets('shows async loading and error states', (tester) async {
     final repository = FakeContactsRepository()
       ..friendsFuture = Future<List<Profile>>.delayed(
@@ -241,6 +302,8 @@ class FakeContactsRepository implements ContactsRepository {
 
 class FakeChatsRepository implements ChatsRepository {
   final directConversationUserIds = <String>[];
+  String? createdGroupTitle;
+  List<String>? createdGroupMemberIds;
 
   @override
   Future<List<ConversationSummary>> listConversations() async {
@@ -263,6 +326,15 @@ class FakeChatsRepository implements ChatsRepository {
   Future<String> getOrCreateDirectConversation(String otherUserId) async {
     directConversationUserIds.add(otherUserId);
     return 'conversation-for-$otherUserId';
+  }
+
+  @override
+  Future<GroupDetail> getGroupDetail(String conversationId) async {
+    return GroupDetail(
+      conversationId: conversationId,
+      title: conversationId,
+      members: const [],
+    );
   }
 
   @override
@@ -289,6 +361,8 @@ class FakeChatsRepository implements ChatsRepository {
     required String title,
     required List<String> memberIds,
   }) async {
+    createdGroupTitle = title;
+    createdGroupMemberIds = memberIds;
     return 'group-conversation';
   }
 

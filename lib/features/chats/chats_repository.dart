@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
@@ -24,6 +25,8 @@ abstract interface class ChatsRepository {
   Future<List<ConversationReadMarker>> listReadMarkers(String conversationId);
 
   Future<String> getOrCreateDirectConversation(String otherUserId);
+
+  Future<GroupDetail> getGroupDetail(String conversationId);
 
   Future<void> sendTextMessage({
     required String conversationId,
@@ -173,6 +176,23 @@ class SupabaseChatsRepository implements ChatsRepository {
       {'other_user_id': otherUserId},
     );
     return conversationId as String;
+  }
+
+  @override
+  Future<GroupDetail> getGroupDetail(String conversationId) async {
+    final conversations = await listConversations();
+    ConversationSummary? conversation;
+    for (final item in conversations) {
+      if (item.id == conversationId) {
+        conversation = item;
+        break;
+      }
+    }
+    return GroupDetail(
+      conversationId: conversationId,
+      title: conversation?.title ?? conversationId,
+      members: const [],
+    );
   }
 
   @override
@@ -730,6 +750,15 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<String> getOrCreateDirectConversation(String otherUserId) {
     throw StateError('Supabase must be initialized before opening chats.');
+  }
+
+  @override
+  Future<GroupDetail> getGroupDetail(String conversationId) async {
+    return GroupDetail(
+      conversationId: conversationId,
+      title: conversationId,
+      members: const [],
+    );
   }
 
   @override

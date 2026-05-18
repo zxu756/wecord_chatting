@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final contactsSearchQueryProvider = StateProvider.autoDispose<String>((ref) {
@@ -197,6 +198,10 @@ class _FriendsSection extends ConsumerWidget {
 
     return _Section(
       title: 'Friends',
+      trailing: friends.maybeWhen(
+        data: (friends) => _NewGroupButton(friends: friends),
+        orElse: () => const _NewGroupButton(friends: []),
+      ),
       child: friends.when(
         loading: () => const _LoadingRow(label: 'Loading friends'),
         error: (error, stackTrace) => _ErrorText(error),
@@ -215,6 +220,44 @@ class _FriendsSection extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _NewGroupButton extends ConsumerStatefulWidget {
+  const _NewGroupButton({required this.friends});
+
+  final List<Profile> friends;
+
+  @override
+  ConsumerState<_NewGroupButton> createState() => _NewGroupButtonState();
+}
+
+class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: widget.friends.length < 2 ? null : _openGroupCreation,
+      icon: const Icon(Icons.group_add_outlined),
+      label: const Text('New Group'),
+    );
+  }
+
+  Future<void> _openGroupCreation() async {
+    final result = await showModalBottomSheet<GroupCreationResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return GroupCreationSheet(friends: widget.friends);
+      },
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    ref.invalidate(conversationsProvider);
+    context.go(
+      '${ChatsScreen.path}/${result.conversationId}',
+      extra: result.title,
     );
   }
 }
@@ -281,17 +324,28 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+  const _Section({required this.title, required this.child, this.trailing});
 
   final String title;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
+        ),
         const SizedBox(height: 8),
         child,
       ],

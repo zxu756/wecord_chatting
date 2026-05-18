@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
@@ -139,6 +140,15 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<String> getOrCreateDirectConversation(String otherUserId) async {
     return 'conversation-for-$otherUserId';
+  }
+
+  @override
+  Future<GroupDetail> getGroupDetail(String conversationId) async {
+    return GroupDetail(
+      conversationId: conversationId,
+      title: conversationId,
+      members: const [],
+    );
   }
 
   @override

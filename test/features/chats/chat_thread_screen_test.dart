@@ -11,7 +11,9 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
@@ -596,6 +598,43 @@ void main() {
     expect(find.byType(ChatThreadScreen), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsOneWidget);
   });
+
+  testWidgets('opens group details from the chat app bar', (tester) async {
+    final repository = FakeChatsRepository()
+      ..groupDetail = GroupDetail(
+        conversationId: 'conversation-1',
+        title: 'Launch Crew',
+        members: [
+          GroupMember(
+            profile: _profile(
+              id: 'friend-1',
+              username: 'grace',
+              displayName: 'Grace Hopper',
+            ),
+            role: 'owner',
+          ),
+          GroupMember(
+            profile: _profile(
+              id: 'friend-2',
+              username: 'ada',
+              displayName: 'Ada Lovelace',
+            ),
+            role: 'member',
+          ),
+        ],
+      );
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Group details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Group members'), findsOneWidget);
+    expect(find.text('Launch Crew'), findsOneWidget);
+    expect(find.text('Grace Hopper'), findsOneWidget);
+    expect(find.text('Ada Lovelace'), findsWidgets);
+  });
 }
 
 Widget _app(
@@ -647,6 +686,7 @@ class FakeChatsRepository implements ChatsRepository {
   var messages = <ChatMessage>[];
   var readMarkers = <ConversationReadMarker>[];
   var activity = const ConversationActivity();
+  GroupDetail? groupDetail;
   Object? sendError;
   final sentMessages = <SentMessage>[];
   final sentImages = <SentImage>[];
@@ -714,6 +754,16 @@ class FakeChatsRepository implements ChatsRepository {
     required List<String> memberIds,
   }) async {
     return 'group-conversation';
+  }
+
+  @override
+  Future<GroupDetail> getGroupDetail(String conversationId) async {
+    return groupDetail ??
+        GroupDetail(
+          conversationId: conversationId,
+          title: conversationId,
+          members: const [],
+        );
   }
 
   @override
@@ -826,6 +876,24 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
 
 bool _containsQuery(String? value, String query) {
   return value?.toLowerCase().contains(query) ?? false;
+}
+
+Profile _profile({
+  required String id,
+  required String username,
+  String? displayName,
+}) {
+  return Profile(
+    id: id,
+    username: username,
+    displayName:
+        displayName ??
+        '${username[0].toUpperCase()}${username.substring(1)} Lovelace',
+    avatarUrl: null,
+    bio: '',
+    createdAt: DateTime.utc(2026, 5, 18),
+    updatedAt: DateTime.utc(2026, 5, 18),
+  );
 }
 
 class SentMessage {

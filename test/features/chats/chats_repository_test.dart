@@ -205,6 +205,8 @@ void main() {
           'is_marked_unread': false,
           'member_count': 2,
           'announcement': 'Ship it carefully',
+          'announcement_updated_at': '2026-05-19T09:30:00.000Z',
+          'announcement_updated_by': 'user-1',
         },
       ]
       ..groupMemberRows = [
@@ -243,6 +245,8 @@ void main() {
     expect(detail.conversationId, 'conversation-1');
     expect(detail.title, 'Launch Crew');
     expect(detail.announcement, 'Ship it carefully');
+    expect(detail.announcementUpdatedAt, DateTime.utc(2026, 5, 19, 9, 30));
+    expect(detail.announcementUpdatedBy, 'user-1');
     expect(detail.avatarUrl, isNull);
     expect(detail.currentUserRole, 'owner');
     expect(detail.members, hasLength(2));

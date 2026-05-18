@@ -264,6 +264,8 @@ class SupabaseChatsRepository implements ChatsRepository {
       title: conversation?.title ?? conversationId,
       avatarUrl: conversation?.avatarUrl,
       announcement: conversation?.announcement ?? '',
+      announcementUpdatedAt: conversation?.announcementUpdatedAt,
+      announcementUpdatedBy: conversation?.announcementUpdatedBy,
       currentUserRole: _currentUserRole(memberRows),
       members: memberRows.map(_groupMemberFromJson).toList(growable: false),
     );

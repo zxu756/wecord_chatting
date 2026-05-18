@@ -106,6 +106,15 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                       labelText: 'Announcement',
                     ),
                   ),
+                  if (_announcementMetaText(detail) case final metaText?) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      metaText,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   if (_errorText != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -217,6 +226,24 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
       return true;
     }
     return detail.currentUserRole == 'admin' && member.role == 'member';
+  }
+
+  String? _announcementMetaText(GroupDetail detail) {
+    if (detail.announcement.trim().isEmpty ||
+        detail.announcementUpdatedAt == null) {
+      return null;
+    }
+    GroupMember? updater;
+    for (final member in detail.members) {
+      if (member.profile.id == detail.announcementUpdatedBy) {
+        updater = member;
+        break;
+      }
+    }
+    if (updater == null) {
+      return 'Updated ${_formatAnnouncementTime(detail.announcementUpdatedAt!)}';
+    }
+    return 'Updated by ${updater.profile.displayLabel}';
   }
 
   Future<void> _pickAvatar(GroupDetail detail) async {
@@ -556,4 +583,11 @@ String _initials(String value) {
   final first = parts.first.characters.first;
   final second = parts.length > 1 ? parts.last.characters.first : '';
   return '$first$second'.toUpperCase();
+}
+
+String _formatAnnouncementTime(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}/${local.day} $hour:$minute';
 }

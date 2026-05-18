@@ -67,6 +67,47 @@ class _MentionSelection {
   final String displayName;
 }
 
+class _AnnouncementStrip extends StatelessWidget {
+  const _AnnouncementStrip({required this.announcement});
+
+  final String announcement;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.campaign_outlined,
+            size: 18,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              announcement,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({
     required this.conversationId,
@@ -242,6 +283,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       body: Column(
         children: [
+          if (conversationType == ConversationType.group &&
+              conversationSummary?.announcement.trim().isNotEmpty == true)
+            _AnnouncementStrip(
+              announcement: conversationSummary!.announcement.trim(),
+            ),
           if (_isSearchingMessages)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

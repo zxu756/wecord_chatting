@@ -223,6 +223,30 @@ void main() {
     },
   );
 
+  test('Conversation maps group announcement metadata', () {
+    final conversation = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'group',
+      'title': 'Launch Crew',
+      'avatar_url': null,
+      'last_message_body': null,
+      'last_message_sender_id': null,
+      'last_message_at': null,
+      'last_message_type': null,
+      'unread_count': 0,
+      'announcement': 'Deploy at noon',
+      'announcement_updated_at': '2026-05-19T09:30:00.000Z',
+      'announcement_updated_by': 'user-1',
+    });
+
+    expect(conversation.announcement, 'Deploy at noon');
+    expect(
+      conversation.announcementUpdatedAt,
+      DateTime.utc(2026, 5, 19, 9, 30),
+    );
+    expect(conversation.announcementUpdatedBy, 'user-1');
+  });
+
   test('Conversation copyWith can clear nullable fields', () {
     final conversation = ConversationSummary.fromJson({
       'id': 'conversation-1',

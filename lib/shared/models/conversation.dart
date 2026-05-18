@@ -47,6 +47,8 @@ class ConversationSummary {
     this.memberCount = 0,
     this.mentionedUserIds = const <String>{},
     this.announcement = '',
+    this.announcementUpdatedAt,
+    this.announcementUpdatedBy,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,10 @@ class ConversationSummary {
               .toSet() ??
           const <String>{},
       announcement: json['announcement'] as String? ?? '',
+      announcementUpdatedAt: _parseOptionalTimestamp(
+        json['announcement_updated_at'],
+      ),
+      announcementUpdatedBy: json['announcement_updated_by'] as String?,
     );
   }
 
@@ -92,6 +98,8 @@ class ConversationSummary {
   final int memberCount;
   final Set<String> mentionedUserIds;
   final String announcement;
+  final DateTime? announcementUpdatedAt;
+  final String? announcementUpdatedBy;
 
   Map<String, dynamic> toJson() {
     return {'type': type.toJson(), 'title': title, 'avatar_url': avatarUrl};
@@ -114,6 +122,8 @@ class ConversationSummary {
     int? memberCount,
     Set<String>? mentionedUserIds,
     String? announcement,
+    Object? announcementUpdatedAt = _sentinel,
+    Object? announcementUpdatedBy = _sentinel,
   }) {
     return ConversationSummary(
       id: id ?? this.id,
@@ -146,6 +156,12 @@ class ConversationSummary {
       memberCount: memberCount ?? this.memberCount,
       mentionedUserIds: mentionedUserIds ?? this.mentionedUserIds,
       announcement: announcement ?? this.announcement,
+      announcementUpdatedAt: identical(announcementUpdatedAt, _sentinel)
+          ? this.announcementUpdatedAt
+          : announcementUpdatedAt as DateTime?,
+      announcementUpdatedBy: identical(announcementUpdatedBy, _sentinel)
+          ? this.announcementUpdatedBy
+          : announcementUpdatedBy as String?,
     );
   }
 }

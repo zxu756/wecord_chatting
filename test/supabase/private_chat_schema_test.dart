@@ -479,6 +479,14 @@ void main() {
       functionBody(sql, 'update_group_profile'),
       contains('announcement_updated_at'),
     );
+    expect(
+      functionBody(sql, 'list_conversation_summaries'),
+      contains('c.announcement_updated_at'),
+    );
+    expect(
+      functionBody(sql, 'list_conversation_summaries'),
+      contains('c.announcement_updated_by'),
+    );
     expect(functionBody(sql, 'search_discovery'), contains('circle_channels'));
     expect(
       functionBody(sql, 'list_conversation_media'),
@@ -521,12 +529,20 @@ void main() {
       'circle_post_comments_select_member',
     );
 
-    expect(sql, contains('target_post_id uuid references public.circle_posts(id) on delete set null'));
+    expect(
+      sql,
+      contains(
+        'target_post_id uuid references public.circle_posts(id) on delete set null',
+      ),
+    );
     expect(createCircleBody, contains('Invalid circle invite members'));
     expect(inviteBody, contains('Invalid circle invite members'));
     expect(inviteBody, contains('already a circle member'));
     expect(postSelectPolicy, contains('deleted_at is null'));
-    expect(commentSelectPolicy, contains('circle_post_comments.deleted_at is null'));
+    expect(
+      commentSelectPolicy,
+      contains('circle_post_comments.deleted_at is null'),
+    );
   });
 
   test('community discovery v1 returns rich circle detail payloads', () {

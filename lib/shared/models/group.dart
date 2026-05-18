@@ -21,6 +21,8 @@ class GroupDetail {
     required this.members,
     this.avatarUrl,
     this.announcement = '',
+    this.announcementUpdatedAt,
+    this.announcementUpdatedBy,
     this.currentUserRole,
   });
 
@@ -28,6 +30,8 @@ class GroupDetail {
   final String title;
   final String? avatarUrl;
   final String announcement;
+  final DateTime? announcementUpdatedAt;
+  final String? announcementUpdatedBy;
   final String? currentUserRole;
   final List<GroupMember> members;
 

@@ -24,6 +24,9 @@ void main() {
       detail: GroupDetail(
         conversationId: 'group-1',
         title: 'Launch Crew',
+        announcement: 'Deploy at noon',
+        announcementUpdatedAt: DateTime.utc(2026, 5, 19, 9, 30),
+        announcementUpdatedBy: 'owner-1',
         currentUserRole: 'owner',
         members: [
           GroupMember(
@@ -51,6 +54,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.text('Updated by Grace Lovelace'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Invite friends'));
     await tester.pumpAndSettle();

@@ -1384,6 +1384,35 @@ void main() {
     expect(find.byTooltip('Group details'), findsOneWidget);
   });
 
+  testWidgets('shows group announcement above messages', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.group,
+          title: 'Launch Crew',
+          unreadCount: 0,
+          announcement: 'Deploy at noon',
+        ),
+      ]
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Ready',
+          createdAt: DateTime.utc(2026, 5, 19, 9, 45),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      _app(repository, conversationType: ConversationType.group),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Deploy at noon'), findsOneWidget);
+  });
+
   testWidgets('marks the active conversation while mounted', (tester) async {
     final repository = FakeChatsRepository();
     final container = ProviderContainer(

@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/friendship.dart';
+import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/profile_relationship.dart';
@@ -515,5 +518,220 @@ void main() {
       'reply_to_message_id': 'message-0',
       'reply_preview': null,
     });
+  });
+
+  test('Circle summary and detail parse RPC payloads', () {
+    final summary = CircleSummary.fromJson({
+      'id': 'circle-1',
+      'name': 'Close Friends',
+      'avatar_url': 'circle-avatars/circle-1/a.jpg',
+      'member_count': 4,
+      'channel_count': 2,
+      'latest_activity_at': '2026-05-19T01:02:03Z',
+      'current_user_role': 'owner',
+    });
+
+    expect(summary.name, 'Close Friends');
+    expect(summary.memberCount, 4);
+    expect(summary.currentUserRole, 'owner');
+
+    final detail = CircleDetail.fromJson({
+      'circle': summary.toJson(),
+      'members': [
+        {
+          'role': 'owner',
+          'profile': {
+            'id': 'user-1',
+            'username': 'xu',
+            'display_name': 'Xu',
+            'bio': '',
+            'created_at': '2026-05-19T01:00:00Z',
+            'updated_at': '2026-05-19T01:00:00Z',
+          },
+        },
+      ],
+      'channels': [
+        {
+          'id': 'channel-1',
+          'circle_id': 'circle-1',
+          'conversation_id': 'conversation-1',
+          'name': 'general',
+          'position': 0,
+        },
+      ],
+      'posts': const [],
+    });
+
+    expect(detail.circle.id, 'circle-1');
+    expect(detail.members.single.profile.username, 'xu');
+    expect(detail.channels.single.name, 'general');
+    expect(detail.canManageCircle, isTrue);
+  });
+
+  test('CirclePost parses nested author comments and image metadata', () {
+    final post = CirclePost.fromJson({
+      'id': 'post-1',
+      'circle_id': 'circle-1',
+      'author_id': 'user-1',
+      'body': 'Photo drop',
+      'attachment': {
+        'kind': 'image',
+        'bucket': 'circle-media',
+        'path': 'circle-1/post-1/photo.jpg',
+        'mime_type': 'image/jpeg',
+        'size': 1234,
+        'width': 800,
+        'height': 600,
+      },
+      'created_at': '2026-05-19T01:02:03Z',
+      'updated_at': '2026-05-19T01:03:03Z',
+      'deleted_at': null,
+      'author': {
+        'id': 'user-1',
+        'username': 'xu',
+        'display_name': 'Xu',
+        'bio': '',
+        'created_at': '2026-05-19T01:00:00Z',
+        'updated_at': '2026-05-19T01:00:00Z',
+      },
+      'comments': [
+        {
+          'id': 'comment-1',
+          'post_id': 'post-1',
+          'author_id': 'user-2',
+          'body': 'Nice',
+          'created_at': '2026-05-19T01:04:03Z',
+          'updated_at': '2026-05-19T01:04:03Z',
+          'deleted_at': null,
+          'author': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada',
+            'bio': '',
+            'created_at': '2026-05-19T01:00:00Z',
+            'updated_at': '2026-05-19T01:00:00Z',
+          },
+        },
+      ],
+      'is_own_post': true,
+      'can_manage_post': true,
+      'like_count': 3,
+      'comment_count': 1,
+      'liked_by_current_user': true,
+    });
+
+    expect(post.author.username, 'xu');
+    expect(post.comments.single.author.username, 'ada');
+    expect(post.imageAttachment?.path, 'circle-1/post-1/photo.jpg');
+    expect(post.isOwnPost, isTrue);
+    expect(post.canManagePost, isTrue);
+    expect(post.likeCount, 3);
+    expect(post.commentCount, 1);
+    expect(post.likedByCurrentUser, isTrue);
+  });
+
+  test('DiscoveryResult parses known result types', () {
+    final rows = {
+      'contact': DiscoveryResultType.contact,
+      'group': DiscoveryResultType.group,
+      'circle': DiscoveryResultType.circle,
+      'circle_channel': DiscoveryResultType.circleChannel,
+      'message': DiscoveryResultType.message,
+    };
+
+    for (final entry in rows.entries) {
+      final result = DiscoveryResult.fromJson({
+        'result_type': entry.key,
+        'id': 'result-1',
+        'title': 'Result',
+        'subtitle': 'Subtitle',
+        'rank': 0.8,
+      });
+
+      expect(result.type, entry.value);
+      expect(result.rank, 0.8);
+    }
+  });
+
+  test('DiscoveryResult falls back to message only for conversation rows', () {
+    final result = DiscoveryResult.fromJson({
+      'result_type': 'legacy_message',
+      'id': 'message-1',
+      'title': 'Hello',
+      'subtitle': 'Xu',
+      'conversation_id': 'conversation-1',
+      'rank': 0.8,
+    });
+
+    expect(result.type, DiscoveryResultType.message);
+    expect(result.conversationId, 'conversation-1');
+    expect(
+      () => DiscoveryResult.fromJson({
+        'result_type': 'mystery',
+        'id': 'result-1',
+        'title': 'Mystery',
+      }),
+      throwsArgumentError,
+    );
+  });
+
+  test('Discovery and media models parse RPC rows', () {
+    final result = DiscoveryResult.fromJson({
+      'result_type': 'circle_channel',
+      'id': 'channel-1',
+      'title': 'general',
+      'subtitle': 'Close Friends',
+      'conversation_id': 'conversation-1',
+      'circle_id': 'circle-1',
+      'channel_id': 'channel-1',
+      'rank': 0.8,
+    });
+
+    expect(result.type, DiscoveryResultType.circleChannel);
+    expect(result.conversationId, 'conversation-1');
+
+    final media = ConversationMediaItem.fromJson({
+      'message_id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'sender_name': 'Xu',
+      'type': 'image',
+      'body': '',
+      'attachment': {
+        'kind': 'image',
+        'bucket': 'chat-media',
+        'path': 'conversation-1/image.jpg',
+        'mime_type': 'image/jpeg',
+        'size': 123,
+      },
+      'created_at': '2026-05-19T01:02:03Z',
+    });
+
+    expect(media.type, MessageType.image);
+    expect(media.imageAttachment?.path, 'conversation-1/image.jpg');
+  });
+
+  test('ConversationMediaItem exposes voice attachments', () {
+    final media = ConversationMediaItem.fromJson({
+      'message_id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'sender_name': 'Xu',
+      'type': 'voice',
+      'body': '',
+      'attachment': {
+        'kind': 'voice',
+        'bucket': 'chat-media',
+        'path': 'conversation-1/voice.m4a',
+        'mime_type': 'audio/mp4',
+        'size': 456,
+        'duration_ms': 3200,
+      },
+      'created_at': '2026-05-19T01:02:03Z',
+    });
+
+    expect(media.type, MessageType.voice);
+    expect(media.voiceAttachment?.durationMs, 3200);
+    expect(media.imageAttachment, isNull);
   });
 }

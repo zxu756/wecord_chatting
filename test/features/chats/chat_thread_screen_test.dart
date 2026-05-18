@@ -710,6 +710,39 @@ void main() {
     expect(find.text('Message deleted'), findsWidgets);
   });
 
+  testWidgets('reply preview preserves stored body after parent edits', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Edited body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          editedAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Reply body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 32),
+          replyPreview: const ReplyPreview(
+            messageId: 'message-1',
+            senderName: 'Ada',
+            body: 'Original body',
+            type: MessageType.text,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Original body'), findsOneWidget);
+    expect(find.text('Edited body'), findsOneWidget);
+  });
+
   testWidgets('edited messages render an edited marker', (tester) async {
     final repository = FakeChatsRepository()
       ..messages = [

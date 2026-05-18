@@ -763,13 +763,10 @@ class _MessageContent extends StatelessWidget {
 
   String _displayBodyForReplyPreview(ReplyPreview preview) {
     final referencedMessage = messagesById[preview.messageId];
-    if (referencedMessage == null) {
-      return preview.body;
-    }
-    if (referencedMessage.recalledAt != null) {
+    if (referencedMessage?.recalledAt != null) {
       return 'Message deleted';
     }
-    return _replyPreviewBody(referencedMessage);
+    return preview.body;
   }
 }
 

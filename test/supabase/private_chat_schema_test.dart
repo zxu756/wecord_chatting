@@ -486,6 +486,30 @@ void main() {
     );
   });
 
+  test('community discovery v1 provisions realtime and media storage', () {
+    final sql = allMigrationSql();
+
+    for (final table in [
+      'public.circles',
+      'public.circle_members',
+      'public.circle_channels',
+      'public.circle_posts',
+      'public.circle_post_likes',
+      'public.circle_post_comments',
+    ]) {
+      expect(
+        sql,
+        contains('alter publication supabase_realtime add table $table'),
+      );
+    }
+
+    expect(sql, contains("values ('chat-media', 'chat-media', false)"));
+    expect(sql, contains('chat_media_select_authenticated'));
+    expect(sql, contains('chat_media_insert_authenticated'));
+    expect(sql, contains("bucket_id = 'chat-media'"));
+    expect(sql, contains('public.is_current_user_circle_member'));
+  });
+
   test('community discovery v1 preserves reports and validates invites', () {
     final sql = effectiveMigrationSql();
     final rawSql = allMigrationSql();

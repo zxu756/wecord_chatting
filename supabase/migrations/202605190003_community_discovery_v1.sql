@@ -93,6 +93,88 @@ alter table public.circle_posts enable row level security;
 alter table public.circle_post_likes enable row level security;
 alter table public.circle_post_comments enable row level security;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circles'
+  ) then
+    alter publication supabase_realtime add table public.circles;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circle_members'
+  ) then
+    alter publication supabase_realtime add table public.circle_members;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circle_channels'
+  ) then
+    alter publication supabase_realtime add table public.circle_channels;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circle_posts'
+  ) then
+    alter publication supabase_realtime add table public.circle_posts;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circle_post_likes'
+  ) then
+    alter publication supabase_realtime add table public.circle_post_likes;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'circle_post_comments'
+  ) then
+    alter publication supabase_realtime add table public.circle_post_comments;
+  end if;
+end $$;
+
+insert into storage.buckets (id, name, public)
+values ('chat-media', 'chat-media', false)
+on conflict (id) do update
+set public = false;
+
+create policy chat_media_select_authenticated
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'chat-media'
+    and public.is_current_user_circle_member(
+      ((storage.foldername(name))[1])::uuid
+    )
+  );
+
+create policy chat_media_insert_authenticated
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'chat-media'
+    and public.is_current_user_circle_member(
+      ((storage.foldername(name))[1])::uuid
+    )
+  );
+
 drop trigger if exists circles_set_updated_at on public.circles;
 create trigger circles_set_updated_at
   before update on public.circles

@@ -48,7 +48,10 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Create account'));
     await tester.pump();
 
-    await tester.enterText(find.widgetWithText(TextFormField, 'Username'), 'ada');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Username'),
+      'ada',
+    );
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Display name'),
       'Ada Lovelace',

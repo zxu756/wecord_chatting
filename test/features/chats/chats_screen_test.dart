@@ -71,6 +71,35 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
+  testWidgets('filters visible conversations by search query', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: 'Math notes',
+          unreadCount: 0,
+        ),
+        const ConversationSummary(
+          id: 'conversation-2',
+          type: ConversationType.direct,
+          title: 'Grace Hopper',
+          lastMessageBody: 'Compiler update',
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.enterText(find.bySemanticsLabel('Search chats'), 'math');
+    await tester.pump();
+
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(find.text('Grace Hopper'), findsNothing);
+  });
+
   testWidgets('tapping a conversation passes the title to the thread route', (
     tester,
   ) async {

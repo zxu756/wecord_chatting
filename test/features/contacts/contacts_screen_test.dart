@@ -129,6 +129,28 @@ void main() {
     expect(find.text('GH'), findsNothing);
   });
 
+  testWidgets('filters friends by display name or username', (tester) async {
+    final repository = FakeContactsRepository()
+      ..friends = [
+        _profile(
+          id: 'friend-1',
+          username: 'grace',
+          displayName: 'Grace Hopper',
+        ),
+        _profile(id: 'friend-2', username: 'ada', displayName: 'Ada Lovelace'),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.enterText(find.bySemanticsLabel('Search friends'), 'ADA');
+    await tester.pump();
+
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(find.text('Grace Hopper'), findsNothing);
+  });
+
   testWidgets('starts a direct conversation from a friend row', (tester) async {
     final contactsRepository = FakeContactsRepository()
       ..friends = [

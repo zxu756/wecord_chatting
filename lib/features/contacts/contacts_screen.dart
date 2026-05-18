@@ -29,6 +29,10 @@ final friendsProvider = FutureProvider.autoDispose<List<Profile>>((ref) {
   return ref.watch(contactsRepositoryProvider).listFriends();
 });
 
+final friendsSearchQueryProvider = StateProvider.autoDispose<String>((ref) {
+  return '';
+});
+
 final sentFriendRequestIdsProvider = StateProvider.autoDispose<Set<String>>((
   ref,
 ) {
@@ -198,6 +202,7 @@ class _FriendsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final friends = ref.watch(friendsProvider);
+    final query = ref.watch(friendsSearchQueryProvider).trim().toLowerCase();
 
     return _Section(
       title: 'Friends',
@@ -212,13 +217,37 @@ class _FriendsSection extends ConsumerWidget {
           if (friends.isEmpty) {
             return const Text('No friends yet.');
           }
+
+          final visibleFriends = query.isEmpty
+              ? friends
+              : friends
+                    .where((friend) {
+                      return friend.displayName.toLowerCase().contains(query) ||
+                          friend.username.toLowerCase().contains(query);
+                    })
+                    .toList(growable: false);
+
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final friend in friends)
-                _ProfileTile(
-                  profile: friend,
-                  trailing: _MessageFriendButton(profile: friend),
+              TextField(
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Search friends',
                 ),
+                onChanged: (value) {
+                  ref.read(friendsSearchQueryProvider.notifier).state = value;
+                },
+              ),
+              const SizedBox(height: 12),
+              if (visibleFriends.isEmpty)
+                const Text('No matching friends.')
+              else
+                for (final friend in visibleFriends)
+                  _ProfileTile(
+                    profile: friend,
+                    trailing: _MessageFriendButton(profile: friend),
+                  ),
             ],
           );
         },

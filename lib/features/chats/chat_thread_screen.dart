@@ -63,6 +63,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _composerController = TextEditingController();
+  final _searchController = TextEditingController();
   Timer? _typingTimer;
   ChatsRepository? _typingRepository;
   var _isSending = false;
@@ -73,6 +74,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String? _lastMarkedMessageId;
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
+  var _isSearchingMessages = false;
+  var _messageSearchQuery = '';
 
   @override
   void dispose() {
@@ -85,6 +88,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       );
     }
     _composerController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -123,6 +127,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Search messages',
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearchingMessages = !_isSearchingMessages;
+                if (!_isSearchingMessages) {
+                  _searchController.clear();
+                  _messageSearchQuery = '';
+                }
+              });
+            },
+          ),
           if (widget.conversationType == ConversationType.group)
             IconButton(
               tooltip: 'Group details',
@@ -144,6 +161,43 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       body: Column(
         children: [
+          if (_isSearchingMessages)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Search messages',
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _messageSearchQuery = value;
+                        });
+                      },
+                    ),
+                  ),
+                  if (_messageSearchQuery.trim().isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    thread.maybeWhen(
+                      data: (data) {
+                        final resultCount = ref
+                            .read(chatsRepositoryProvider)
+                            .searchMessages(data.messages, _messageSearchQuery)
+                            .length;
+                        return Text(
+                          '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
+                        );
+                      },
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           Expanded(
             child: thread.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -155,6 +209,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
               data: (data) {
                 final messages = data.messages;
+                final visibleMessages = ref
+                    .read(chatsRepositoryProvider)
+                    .searchMessages(messages, _messageSearchQuery);
                 final messagesById = {
                   for (final message in messages) message.id: message,
                 };
@@ -163,8 +220,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 if (messages.isEmpty) {
                   return const Center(child: Text('No messages yet'));
                 }
+                if (visibleMessages.isEmpty) {
+                  return const Center(child: Text('No matching messages'));
+                }
 
-                final oldestToNewest = _messagesOldestToNewest(messages);
+                final oldestToNewest = _messagesOldestToNewest(visibleMessages);
                 final newestFirst = oldestToNewest.reversed.toList(
                   growable: false,
                 );

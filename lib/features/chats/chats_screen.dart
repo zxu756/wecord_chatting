@@ -27,13 +27,20 @@ final conversationsProvider =
       return repository.listConversations();
     });
 
-class ChatsScreen extends ConsumerWidget {
+class ChatsScreen extends ConsumerStatefulWidget {
   const ChatsScreen({super.key});
 
   static const path = '/chats';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatsScreen> createState() => _ChatsScreenState();
+}
+
+class _ChatsScreenState extends ConsumerState<ChatsScreen> {
+  var _query = '';
+
+  @override
+  Widget build(BuildContext context) {
     final conversations = ref.watch(conversationsProvider);
 
     return Scaffold(
@@ -47,16 +54,43 @@ class ChatsScreen extends ConsumerWidget {
           ),
         ),
         data: (conversations) {
-          if (conversations.isEmpty) {
-            return const Center(child: Text('No conversations yet'));
-          }
+          final visibleConversations = ref
+              .read(chatsRepositoryProvider)
+              .searchConversations(conversations, _query);
 
-          return ListView.separated(
-            itemCount: conversations.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              return _ConversationTile(conversation: conversations[index]);
-            },
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Search chats',
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _query = value;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: conversations.isEmpty
+                    ? const Center(child: Text('No conversations yet'))
+                    : visibleConversations.isEmpty
+                    ? const Center(child: Text('No matching conversations'))
+                    : ListView.separated(
+                        itemCount: visibleConversations.length,
+                        separatorBuilder: (context, index) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          return _ConversationTile(
+                            conversation: visibleConversations[index],
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),

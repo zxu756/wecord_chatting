@@ -265,10 +265,14 @@ values ('profile-avatars', 'profile-avatars', false)
 on conflict (id) do update
 set public = false;
 
+drop policy if exists profile_avatars_select_authenticated on storage.objects;
+
 create policy profile_avatars_select_authenticated
   on storage.objects for select
   to authenticated
   using (bucket_id = 'profile-avatars');
+
+drop policy if exists profile_avatars_insert_owner on storage.objects;
 
 create policy profile_avatars_insert_owner
   on storage.objects for insert

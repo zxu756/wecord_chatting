@@ -358,6 +358,18 @@ void main() {
 
     expect(sql, contains("insert into storage.buckets (id, name, public)"));
     expect(sql, contains("'profile-avatars'"));
+    expect(
+      sql,
+      contains(
+        'drop policy if exists profile_avatars_select_authenticated on storage.objects',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'drop policy if exists profile_avatars_insert_owner on storage.objects',
+      ),
+    );
     expect(sql, contains("bucket_id = 'profile-avatars'"));
     expect(sql, contains("(storage.foldername(name))[1] = auth.uid()::text"));
   });

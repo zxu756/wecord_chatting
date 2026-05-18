@@ -2,12 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/notifications/local_notification_service.dart';
+import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
   return ref.watch(settingsRepositoryProvider).currentProfile();
 });
+
+final currentNotificationPreferencesProvider =
+    FutureProvider.autoDispose<NotificationPreferences>((ref) {
+      return ref.watch(notificationPreferencesRepositoryProvider).load();
+    });
+
+final currentNotificationPermissionStatusProvider =
+    FutureProvider.autoDispose<NotificationPermissionStatus>((ref) {
+      return ref.watch(localNotificationServiceProvider).permissionStatus();
+    });
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -37,6 +49,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(currentProfileProvider);
+    final notificationPreferences =
+        ref.watch(currentNotificationPreferencesProvider).valueOrNull ??
+        NotificationPreferences.defaults;
+    final notificationPermissionStatus =
+        ref.watch(currentNotificationPermissionStatusProvider).valueOrNull ??
+        NotificationPermissionStatus.notRequested;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Me')),
@@ -106,6 +124,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Save'),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 32),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Notifications'),
+                value: notificationPreferences.enabled,
+                onChanged: (enabled) {
+                  _saveNotificationPreferences(
+                    notificationPreferences.copyWith(enabled: enabled),
+                  );
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Message previews'),
+                value: notificationPreferences.showPreviews,
+                onChanged: notificationPreferences.enabled
+                    ? (showPreviews) {
+                        _saveNotificationPreferences(
+                          notificationPreferences.copyWith(
+                            showPreviews: showPreviews,
+                          ),
+                        );
+                      }
+                    : null,
+              ),
+              Text(
+                _permissionStatusLabel(notificationPermissionStatus),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  onPressed: _requestNotificationPermission,
+                  child: const Text('Request permission'),
+                ),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
@@ -200,6 +256,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _signOut() {
     return ref.read(authRepositoryProvider).signOut();
   }
+
+  Future<void> _saveNotificationPreferences(
+    NotificationPreferences preferences,
+  ) async {
+    await ref.read(notificationPreferencesRepositoryProvider).save(preferences);
+    ref.invalidate(currentNotificationPreferencesProvider);
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    await ref.read(localNotificationServiceProvider).requestPermission();
+    ref.invalidate(currentNotificationPermissionStatusProvider);
+  }
 }
 
 class _ProfileAvatar extends ConsumerWidget {
@@ -254,4 +322,13 @@ class _ErrorText extends StatelessWidget {
       style: TextStyle(color: Theme.of(context).colorScheme.error),
     );
   }
+}
+
+String _permissionStatusLabel(NotificationPermissionStatus status) {
+  return switch (status) {
+    NotificationPermissionStatus.notRequested => 'Permission not requested',
+    NotificationPermissionStatus.granted => 'Permission granted',
+    NotificationPermissionStatus.denied => 'Permission denied',
+    NotificationPermissionStatus.unavailable => 'Notifications unavailable',
+  };
 }

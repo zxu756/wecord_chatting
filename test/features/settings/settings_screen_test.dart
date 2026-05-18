@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/notifications/local_notification_service.dart';
+import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -54,6 +56,8 @@ void main() {
     );
     await tester.pump();
 
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Sign out'));
     await tester.pump();
 
@@ -180,12 +184,46 @@ void main() {
     expect(find.text('First programmer'), findsOneWidget);
     expect(settingsRepository.updateCalls, isEmpty);
   });
+
+  testWidgets('renders notification controls', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
+
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('Message previews'), findsOneWidget);
+    expect(find.text('Request permission'), findsOneWidget);
+  });
+
+  testWidgets('toggles notification preferences', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+    final store = InMemoryNotificationPreferencesStore();
+
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: settingsRepository,
+        notificationPreferencesRepository:
+            NotificationPreferencesRepository.withStore(store),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Notifications'));
+    await tester.pump();
+
+    expect((await store.load())?.enabled, isFalse);
+  });
 }
 
 Widget _app({
   required FakeSettingsRepository settingsRepository,
   FakeAuthRepository? authRepository,
   FakeImagePickerService? imagePickerService,
+  NotificationPreferencesRepository? notificationPreferencesRepository,
+  LocalNotificationService? localNotificationService,
 }) {
   return ProviderScope(
     overrides: [
@@ -195,6 +233,15 @@ Widget _app({
       ),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
+      notificationPreferencesRepositoryProvider.overrideWithValue(
+        notificationPreferencesRepository ??
+            NotificationPreferencesRepository.withStore(
+              InMemoryNotificationPreferencesStore(),
+            ),
+      ),
+      localNotificationServiceProvider.overrideWithValue(
+        localNotificationService ?? FakeLocalNotificationService(),
+      ),
     ],
     child: const MaterialApp(home: SettingsScreen()),
   );

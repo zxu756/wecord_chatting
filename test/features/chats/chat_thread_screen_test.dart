@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -1153,6 +1154,41 @@ void main() {
 
     expect(find.text('Launch Crew'), findsOneWidget);
     expect(find.byTooltip('Group details'), findsOneWidget);
+  });
+
+  testWidgets('marks the active conversation while mounted', (tester) async {
+    final repository = FakeChatsRepository();
+    final container = ProviderContainer(
+      overrides: [
+        chatsRepositoryProvider.overrideWithValue(repository),
+        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        authRepositoryProvider.overrideWithValue(
+          FakeAuthRepository()
+            ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: ChatThreadScreen(
+            conversationId: 'conversation-1',
+            title: 'Ada Lovelace',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(container.read(activeConversationIdProvider), 'conversation-1');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(container.read(activeConversationIdProvider), isNull);
   });
 }
 

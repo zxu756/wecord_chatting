@@ -7,6 +7,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -73,6 +74,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _searchController = TextEditingController();
   Timer? _typingTimer;
   ChatsRepository? _typingRepository;
+  late final StateController<String?> _activeConversationController;
   var _isSending = false;
   var _isPickingImage = false;
   var _isSendingImage = false;
@@ -85,6 +87,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _messageSearchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    _activeConversationController = ref.read(
+      activeConversationIdProvider.notifier,
+    );
+    _scheduleActiveConversationUpdate(widget.conversationId);
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatThreadScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversationId != widget.conversationId) {
+      _scheduleActiveConversationUpdate(widget.conversationId);
+    }
+  }
+
+  @override
   void dispose() {
     _typingTimer?.cancel();
     if (_isTypingShared) {
@@ -94,9 +113,27 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .catchError((Object _) {}),
       );
     }
+    final conversationId = widget.conversationId;
+    Future<void>.microtask(() {
+      if (!_activeConversationController.mounted) {
+        return;
+      }
+      if (_activeConversationController.state == conversationId) {
+        _activeConversationController.state = null;
+      }
+    });
     _composerController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _scheduleActiveConversationUpdate(String conversationId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _activeConversationController.state = conversationId;
+    });
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/features/notifications/notification_shell_listener.dart';
 
 class WeCordShell extends StatelessWidget {
   const WeCordShell({
@@ -15,6 +16,7 @@ class WeCordShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final useRail = MediaQuery.sizeOf(context).width >= 720;
+    final shellChild = NotificationShellListener(child: child);
 
     if (useRail) {
       return Scaffold(
@@ -48,14 +50,14 @@ class WeCordShell extends StatelessWidget {
               ],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: child),
+            Expanded(child: shellChild),
           ],
         ),
       );
     }
 
     return Scaffold(
-      body: child,
+      body: shellChild,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: onDestinationSelected,

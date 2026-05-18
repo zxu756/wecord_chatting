@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,66 +8,37 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
-import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
-  testWidgets('switches between primary tabs', (tester) async {
-    var selectedIndex = 0;
-    final selectedIndexes = <int>[];
+  testWidgets('starts the notification coordinator', (tester) async {
+    final coordinator = _RecordingNotificationCoordinator();
 
     await tester.pumpWidget(
-      StatefulBuilder(
-        builder: (context, setState) {
-          return MaterialApp(
-            home: ProviderScope(
-              overrides: [
-                notificationCoordinatorProvider.overrideWithValue(
-                  _NoopNotificationCoordinator(),
-                ),
-                localNotificationServiceProvider.overrideWithValue(
-                  FakeLocalNotificationService(),
-                ),
-              ],
-              child: WeCordShell(
-                selectedIndex: selectedIndex,
-                onDestinationSelected: (index) {
-                  selectedIndexes.add(index);
-                  setState(() {
-                    selectedIndex = index;
-                  });
-                },
-                child: const Text('Current screen'),
-              ),
-            ),
-          );
-        },
+      ProviderScope(
+        overrides: [
+          notificationCoordinatorProvider.overrideWithValue(coordinator),
+          localNotificationServiceProvider.overrideWithValue(
+            FakeLocalNotificationService(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: NotificationShellListener(child: Text('child')),
+        ),
       ),
     );
-
-    expect(find.text('Chats'), findsWidgets);
-    expect(find.text('Contacts'), findsOneWidget);
-    expect(find.text('Circles'), findsOneWidget);
-    expect(find.text('Me'), findsOneWidget);
-
-    await tester.tap(find.text('Contacts'));
     await tester.pump();
 
-    await tester.tap(find.text('Circles'));
-    await tester.pump();
-
-    await tester.tap(find.text('Me'));
-    await tester.pump();
-
-    expect(selectedIndexes, [1, 2, 3]);
+    expect(coordinator.startCount, 1);
   });
 }
 
-class _NoopNotificationCoordinator extends NotificationCoordinator {
-  _NoopNotificationCoordinator()
+class _RecordingNotificationCoordinator extends NotificationCoordinator {
+  _RecordingNotificationCoordinator()
     : super(
         authRepository: _FakeAuthRepository(),
         chatsRepository: _FakeChatsRepository(),
@@ -76,8 +49,12 @@ class _NoopNotificationCoordinator extends NotificationCoordinator {
         activeConversationId: () => null,
       );
 
+  int startCount = 0;
+
   @override
-  Future<void> start() async {}
+  Future<void> start() async {
+    startCount += 1;
+  }
 }
 
 class _FakeAuthRepository implements AuthRepository {

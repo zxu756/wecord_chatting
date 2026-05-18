@@ -68,6 +68,30 @@ void main() {
     },
   );
 
+  test('createGroupConversation calls the group creation RPC', () async {
+    final dataSource = FakeChatsDataSource()..rpcResult = 'conversation-3';
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final conversationId = await repository.createGroupConversation(
+      title: '  Dream Team  ',
+      memberIds: ['user-2', 'user-3'],
+    );
+
+    expect(conversationId, 'conversation-3');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'create_group_conversation',
+        params: {
+          'group_title': 'Dream Team',
+          'member_ids': ['user-2', 'user-3'],
+        },
+      ),
+    ]);
+  });
+
   test('conversationChanges emits when the data source invalidates', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -163,6 +187,42 @@ void main() {
         'sender_id': 'user-1',
         'type': 'text',
         'body': 'Hello Ada',
+      },
+    ]);
+  });
+
+  test('sendTextMessage can include reply preview', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.sendTextMessage(
+      conversationId: 'conversation-1',
+      body: '  Replying  ',
+      replyToMessageId: 'message-1',
+      replyPreview: const ReplyPreview(
+        messageId: 'message-1',
+        senderName: 'Ada',
+        body: 'Original',
+        type: MessageType.text,
+      ),
+    );
+
+    expect(dataSource.insertedMessages, [
+      {
+        'conversation_id': 'conversation-1',
+        'sender_id': 'user-1',
+        'type': 'text',
+        'body': 'Replying',
+        'reply_to_message_id': 'message-1',
+        'reply_preview': {
+          'message_id': 'message-1',
+          'sender_name': 'Ada',
+          'body': 'Original',
+          'type': 'text',
+        },
       },
     ]);
   });
@@ -311,6 +371,91 @@ void main() {
       ]);
     },
   );
+
+  test('editMessage calls the edit RPC', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.editMessage(messageId: 'message-1', body: '  Fixed  ');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'edit_message',
+        params: {'target_message_id': 'message-1', 'body': 'Fixed'},
+      ),
+    ]);
+  });
+
+  test('searchConversations matches title or last message body', () {
+    final repository = SupabaseChatsRepository.withDataSource(
+      FakeChatsDataSource(),
+      currentUserId: () => 'user-1',
+    );
+    final conversations = [
+      const ConversationSummary(
+        id: 'conversation-1',
+        type: ConversationType.direct,
+        title: 'Ada Lovelace',
+        lastMessageBody: 'See you soon',
+        unreadCount: 0,
+      ),
+      const ConversationSummary(
+        id: 'conversation-2',
+        type: ConversationType.group,
+        title: 'Planning',
+        lastMessageBody: 'Bring the notes',
+        unreadCount: 0,
+      ),
+    ];
+
+    expect(repository.searchConversations(conversations, ' ada '), [
+      conversations.first,
+    ]);
+    expect(repository.searchConversations(conversations, 'NOTES'), [
+      conversations.last,
+    ]);
+    expect(repository.searchConversations(conversations, ' '), conversations);
+  });
+
+  test('searchMessages matches reply preview but not recalled body', () {
+    final repository = SupabaseChatsRepository.withDataSource(
+      FakeChatsDataSource(),
+      currentUserId: () => 'user-1',
+    );
+    final messages = [
+      ChatMessage(
+        id: 'message-1',
+        conversationId: 'conversation-1',
+        senderId: 'user-1',
+        type: MessageType.text,
+        body: 'Visible body',
+        createdAt: DateTime.utc(2026, 5, 18),
+      ),
+      ChatMessage(
+        id: 'message-2',
+        conversationId: 'conversation-1',
+        senderId: 'user-2',
+        type: MessageType.text,
+        body: 'Secret recalled body',
+        replyPreview: const ReplyPreview(
+          messageId: 'message-1',
+          senderName: 'Grace',
+          body: 'Earlier context',
+          type: MessageType.text,
+        ),
+        recalledAt: DateTime.utc(2026, 5, 18, 1),
+        createdAt: DateTime.utc(2026, 5, 18, 0, 1),
+      ),
+    ];
+
+    expect(repository.searchMessages(messages, 'visible'), [messages.first]);
+    expect(repository.searchMessages(messages, 'grace'), [messages.last]);
+    expect(repository.searchMessages(messages, 'secret'), isEmpty);
+    expect(repository.searchMessages(messages, ''), messages);
+  });
 
   test('messageChanges emits when matching messages invalidate', () async {
     final dataSource = FakeChatsDataSource();
@@ -674,14 +819,22 @@ bool _mapsEqual(Map<String, dynamic> left, Map<String, dynamic> right) {
     return false;
   }
   for (final entry in left.entries) {
-    if (right[entry.key] != entry.value) {
+    final leftValue = entry.value;
+    final rightValue = right[entry.key];
+    if (leftValue is List && rightValue is List) {
+      if (!_listsEqual(leftValue.cast<Object?>(), rightValue.cast<Object?>())) {
+        return false;
+      }
+      continue;
+    }
+    if (rightValue != leftValue) {
       return false;
     }
   }
   return true;
 }
 
-bool _listsEqual(List<int> left, List<int> right) {
+bool _listsEqual<T>(List<T> left, List<T> right) {
   if (left.length != right.length) {
     return false;
   }

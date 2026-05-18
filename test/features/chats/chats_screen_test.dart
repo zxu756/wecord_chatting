@@ -145,6 +145,8 @@ class FakeChatsRepository implements ChatsRepository {
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
   }) async {}
 
   @override
@@ -159,10 +161,49 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> createGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    return 'group-conversation';
+  }
+
+  @override
+  Future<void> renameGroupConversation({
+    required String conversationId,
+    required String title,
+  }) async {}
+
+  @override
+  Future<void> addGroupMembers({
+    required String conversationId,
+    required List<String> memberIds,
+  }) async {}
+
+  @override
   Future<void> recallMessage({required String messageId}) async {}
 
   @override
+  Future<void> editMessage({
+    required String messageId,
+    required String body,
+  }) async {}
+
+  @override
   Future<void> markConversationRead(String conversationId) async {}
+
+  @override
+  List<ConversationSummary> searchConversations(
+    List<ConversationSummary> conversations,
+    String query,
+  ) {
+    return conversations;
+  }
+
+  @override
+  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+    return messages;
+  }
 
   @override
   Stream<void> conversationChanges() => _changes.stream;

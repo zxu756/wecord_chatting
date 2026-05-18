@@ -28,6 +28,8 @@ abstract interface class ChatsRepository {
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
   });
 
   Future<void> sendImageMessage({
@@ -35,11 +37,35 @@ abstract interface class ChatsRepository {
     required ChatImageUpload image,
   });
 
+  Future<String> createGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  });
+
+  Future<void> renameGroupConversation({
+    required String conversationId,
+    required String title,
+  });
+
+  Future<void> addGroupMembers({
+    required String conversationId,
+    required List<String> memberIds,
+  });
+
   Future<String> createImageUrl(ImageAttachment attachment);
 
   Future<void> recallMessage({required String messageId});
 
+  Future<void> editMessage({required String messageId, required String body});
+
   Future<void> markConversationRead(String conversationId);
+
+  List<ConversationSummary> searchConversations(
+    List<ConversationSummary> conversations,
+    String query,
+  );
+
+  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query);
 
   Stream<void> conversationChanges();
 
@@ -153,13 +179,18 @@ class SupabaseChatsRepository implements ChatsRepository {
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
   }) async {
-    await _dataSource.insertMessage({
+    final values = {
       'conversation_id': conversationId,
       'sender_id': _requireCurrentUserId(),
       'type': MessageType.text.toJson(),
       'body': body.trim(),
-    });
+      if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+      if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
+    };
+    await _dataSource.insertMessage(values);
   }
 
   @override
@@ -207,8 +238,53 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> createGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) async {
+    final conversationId = await _dataSource.rpc('create_group_conversation', {
+      'group_title': title.trim(),
+      'member_ids': memberIds,
+    });
+    return conversationId as String;
+  }
+
+  @override
+  Future<void> renameGroupConversation({
+    required String conversationId,
+    required String title,
+  }) async {
+    await _dataSource.rpc('rename_group_conversation', {
+      'target_conversation_id': conversationId,
+      'group_title': title.trim(),
+    });
+  }
+
+  @override
+  Future<void> addGroupMembers({
+    required String conversationId,
+    required List<String> memberIds,
+  }) async {
+    await _dataSource.rpc('add_group_members', {
+      'target_conversation_id': conversationId,
+      'member_ids': memberIds,
+    });
+  }
+
+  @override
   Future<void> recallMessage({required String messageId}) async {
     await _dataSource.rpc('recall_message', {'target_message_id': messageId});
+  }
+
+  @override
+  Future<void> editMessage({
+    required String messageId,
+    required String body,
+  }) async {
+    await _dataSource.rpc('edit_message', {
+      'target_message_id': messageId,
+      'body': body.trim(),
+    });
   }
 
   @override
@@ -217,6 +293,19 @@ class SupabaseChatsRepository implements ChatsRepository {
       'target_conversation_id': conversationId,
       'target_message_id': await _dataSource.latestMessageId(conversationId),
     });
+  }
+
+  @override
+  List<ConversationSummary> searchConversations(
+    List<ConversationSummary> conversations,
+    String query,
+  ) {
+    return _searchConversations(conversations, query);
+  }
+
+  @override
+  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+    return _searchMessages(messages, query);
   }
 
   @override
@@ -647,6 +736,8 @@ class _UninitializedChatsRepository implements ChatsRepository {
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
   }) {
     throw StateError('Supabase must be initialized before sending messages.');
   }
@@ -665,12 +756,54 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> createGroupConversation({
+    required String title,
+    required List<String> memberIds,
+  }) {
+    throw StateError('Supabase must be initialized before creating groups.');
+  }
+
+  @override
+  Future<void> renameGroupConversation({
+    required String conversationId,
+    required String title,
+  }) {
+    throw StateError('Supabase must be initialized before renaming groups.');
+  }
+
+  @override
+  Future<void> addGroupMembers({
+    required String conversationId,
+    required List<String> memberIds,
+  }) {
+    throw StateError('Supabase must be initialized before adding members.');
+  }
+
+  @override
   Future<void> recallMessage({required String messageId}) {
     throw StateError('Supabase must be initialized before deleting messages.');
   }
 
   @override
+  Future<void> editMessage({required String messageId, required String body}) {
+    throw StateError('Supabase must be initialized before editing messages.');
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {}
+
+  @override
+  List<ConversationSummary> searchConversations(
+    List<ConversationSummary> conversations,
+    String query,
+  ) {
+    return _searchConversations(conversations, query);
+  }
+
+  @override
+  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+    return _searchMessages(messages, query);
+  }
 
   @override
   Stream<void> conversationChanges() => const Stream.empty();
@@ -693,4 +826,40 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }) {
     throw StateError('Supabase must be initialized before sharing activity.');
   }
+}
+
+List<ConversationSummary> _searchConversations(
+  List<ConversationSummary> conversations,
+  String query,
+) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) {
+    return conversations;
+  }
+  return conversations
+      .where((conversation) {
+        return _containsQuery(conversation.title, normalizedQuery) ||
+            _containsQuery(conversation.lastMessageBody, normalizedQuery);
+      })
+      .toList(growable: false);
+}
+
+List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) {
+    return messages;
+  }
+  return messages
+      .where((message) {
+        final preview = message.replyPreview;
+        return (message.recalledAt == null &&
+                _containsQuery(message.body, normalizedQuery)) ||
+            _containsQuery(preview?.body, normalizedQuery) ||
+            _containsQuery(preview?.senderName, normalizedQuery);
+      })
+      .toList(growable: false);
+}
+
+bool _containsQuery(String? value, String query) {
+  return value?.toLowerCase().contains(query) ?? false;
 }

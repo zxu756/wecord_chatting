@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>WeCord lets you choose photos to send in chats.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>WeCord uses the microphone to record voice messages.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

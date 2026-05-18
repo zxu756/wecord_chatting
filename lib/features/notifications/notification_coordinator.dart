@@ -208,6 +208,9 @@ class NotificationCoordinator {
     if (conversation.unreadCount <= 0) {
       return false;
     }
+    if (conversation.isMuted && !_mentionsCurrentUser(conversation)) {
+      return false;
+    }
 
     final lastMessageAt = conversation.lastMessageAt;
     if (lastMessageAt == null) {
@@ -234,6 +237,12 @@ class NotificationCoordinator {
     }
 
     return true;
+  }
+
+  bool _mentionsCurrentUser(ConversationSummary conversation) {
+    final currentUserId = _authRepository.currentUser?.id;
+    return currentUserId != null &&
+        conversation.mentionedUserIds.contains(currentUserId);
   }
 
   Future<void> _ensureBaselineLoaded() {

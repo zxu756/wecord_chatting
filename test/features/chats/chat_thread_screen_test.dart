@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
@@ -349,6 +350,131 @@ void main() {
     ]);
   });
 
+  testWidgets('composer can record and send a voice message', (tester) async {
+    final repository = FakeChatsRepository();
+    final recorder = FakeVoiceMessageRecorder()
+      ..nextRecording = RecordedVoiceMessage(
+        bytes: Uint8List.fromList([4, 5, 6]),
+        mimeType: 'audio/mp4',
+        durationMs: 4200,
+      );
+
+    await tester.pumpWidget(_app(repository, voiceMessageRecorder: recorder));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Record voice message'));
+    await tester.pump();
+    expect(find.text('Recording...'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Send voice message'));
+    await tester.pumpAndSettle();
+
+    expect(recorder.startCalls, 1);
+    expect(recorder.stopCalls, 1);
+    expect(repository.sentVoiceMessages, [
+      SentVoiceMessage(
+        conversationId: 'conversation-1',
+        bytes: Uint8List.fromList([4, 5, 6]),
+        mimeType: 'audio/mp4',
+        durationMs: 4200,
+      ),
+    ]);
+  });
+
+  testWidgets('keeps the active voice recorder alive while mounted', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final createdRecorders = <FakeVoiceMessageRecorder>[];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          voiceMessageRecorderProvider.overrideWith((ref) {
+            final recorder = FakeVoiceMessageRecorder()
+              ..nextRecording = RecordedVoiceMessage(
+                bytes: Uint8List.fromList([9, 8, 7]),
+                mimeType: 'audio/wav',
+                durationMs: 1200,
+              );
+            createdRecorders.add(recorder);
+            return recorder;
+          }),
+          authRepositoryProvider.overrideWithValue(
+            FakeAuthRepository()
+              ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
+          ),
+        ],
+        child: const MaterialApp(
+          home: ChatThreadScreen(
+            conversationId: 'conversation-1',
+            title: 'Ada Lovelace',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Record voice message'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send voice message'));
+    await tester.pumpAndSettle();
+
+    expect(createdRecorders, hasLength(1));
+    expect(createdRecorders.single.startCalls, 1);
+    expect(createdRecorders.single.stopCalls, 1);
+    expect(repository.sentVoiceMessages.single.mimeType, 'audio/wav');
+  });
+
+  testWidgets('cancels an active voice recording when disposed', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final recorder = FakeVoiceMessageRecorder();
+
+    await tester.pumpWidget(_app(repository, voiceMessageRecorder: recorder));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Record voice message'));
+    await tester.pump();
+    expect(find.text('Recording...'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(recorder.cancelCalls, 1);
+  });
+
+  testWidgets('voice messages render a playback control', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: '',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          type: MessageType.voice,
+          attachment: const VoiceAttachment(
+            bucket: 'voice-messages',
+            path: 'conversation-1/message-1.m4a',
+            mimeType: 'audio/mp4',
+            size: 3,
+            durationMs: 4200,
+          ).toJson(),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.byTooltip('Play voice message'), findsOneWidget);
+    expect(find.text('0:04'), findsOneWidget);
+  });
+
   testWidgets('does not show upload progress while the image picker is open', (
     tester,
   ) async {
@@ -526,6 +652,78 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       '',
     );
+  });
+
+  testWidgets('message action menu can open the forward sheet', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'hello',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forward'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Forward to'), findsOneWidget);
+  });
+
+  testWidgets('forward sheet filters target conversations by title only', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          unreadCount: 0,
+        ),
+        const ConversationSummary(
+          id: 'conversation-2',
+          type: ConversationType.group,
+          title: 'Project Room',
+          lastMessageBody: 'needle in the last message',
+          unreadCount: 0,
+        ),
+        const ConversationSummary(
+          id: 'conversation-3',
+          type: ConversationType.direct,
+          title: 'Needlepoint Club',
+          lastMessageBody: 'craft plans',
+          unreadCount: 0,
+        ),
+      ]
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'hello',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository, title: 'Current Chat'));
+    await tester.pump();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forward'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Search chats'), 'needle');
+    await tester.pump();
+
+    expect(find.text('Needlepoint Club'), findsOneWidget);
+    expect(find.text('Project Room'), findsNothing);
+    expect(find.text('Ada Lovelace'), findsNothing);
   });
 
   testWidgets('reply state clears when replied-to message becomes recalled', (
@@ -744,6 +942,36 @@ void main() {
     expect(
       tester.getTopLeft(find.text('Original preview')).dy,
       lessThan(tester.getTopLeft(find.text('Reply body')).dy),
+    );
+  });
+
+  testWidgets('renders forwarded previews above message content', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-1',
+          body: 'Forwarded body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+          forwardPreview: const ForwardPreview(
+            messageId: 'message-0',
+            senderName: 'Grace Hopper',
+            type: MessageType.text,
+            body: 'Original body',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Forwarded from Grace Hopper'), findsOneWidget);
+    expect(find.text('Original body'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Original body')).dy,
+      lessThan(tester.getTopLeft(find.text('Forwarded body')).dy),
     );
   });
 
@@ -1195,6 +1423,7 @@ void main() {
 Widget _app(
   FakeChatsRepository repository, {
   ImagePickerService? imagePickerService,
+  VoiceMessageRecorder? voiceMessageRecorder,
   String? title = 'Ada Lovelace',
   ConversationType? conversationType,
 }) {
@@ -1204,6 +1433,8 @@ Widget _app(
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
+      if (voiceMessageRecorder != null)
+        voiceMessageRecorderProvider.overrideWithValue(voiceMessageRecorder),
       authRepositoryProvider.overrideWithValue(
         FakeAuthRepository()
           ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
@@ -1257,6 +1488,7 @@ ChatMessage _message({
   MessageType type = MessageType.text,
   Map<String, dynamic>? attachment,
   ReplyPreview? replyPreview,
+  ForwardPreview? forwardPreview,
   DateTime? editedAt,
   DateTime? recalledAt,
 }) {
@@ -1268,6 +1500,7 @@ ChatMessage _message({
     body: body,
     attachment: attachment,
     replyPreview: replyPreview,
+    forwardPreview: forwardPreview,
     createdAt: createdAt,
     editedAt: editedAt,
     recalledAt: recalledAt,
@@ -1284,6 +1517,8 @@ class FakeChatsRepository implements ChatsRepository {
   Object? editError;
   final sentMessages = <SentMessage>[];
   final sentImages = <SentImage>[];
+  final sentVoiceMessages = <SentVoiceMessage>[];
+  final forwardedMessages = <ForwardedMessage>[];
   final createdImageUrls = <ImageAttachment>[];
   final recalledMessageIds = <String>[];
   final typingUpdates = <TypingUpdate>[];
@@ -1334,6 +1569,7 @@ class FakeChatsRepository implements ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) async {
     if (sendError case final error?) {
       throw error;
@@ -1355,8 +1591,46 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) async {
+    if (sendError case final error?) {
+      throw error;
+    }
+    sentVoiceMessages.add(
+      SentVoiceMessage(
+        conversationId: conversationId,
+        bytes: bytes,
+        mimeType: mimeType,
+        durationMs: durationMs,
+      ),
+    );
+  }
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) async {
+    forwardedMessages.add(
+      ForwardedMessage(
+        sourceMessageId: sourceMessageId,
+        targetConversationId: targetConversationId,
+      ),
+    );
+  }
+
+  @override
   Future<String> createImageUrl(ImageAttachment attachment) async {
     createdImageUrls.add(attachment);
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) async {
     return 'https://example.com/${attachment.path}';
   }
 
@@ -1413,6 +1687,49 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> markConversationUnread(String conversationId) async {}
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) async {}
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) async {}
+
+  @override
+  Future<void> hideConversation(String conversationId) async {}
+
+  @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {
+    return 'group-avatars/$conversationId/avatar.png';
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) async {}
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) async {}
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) async {}
+
+  @override
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
@@ -1421,7 +1738,15 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  Future<List<MessageSearchResult>> searchMessages(String query) async {
+    return const [];
+  }
+
+  @override
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     return _searchMessages(messages, query);
   }
 
@@ -1548,6 +1873,53 @@ class SentImage {
   int get hashCode => Object.hash(conversationId, identityHashCode(image));
 }
 
+class SentVoiceMessage {
+  const SentVoiceMessage({
+    required this.conversationId,
+    required this.bytes,
+    required this.mimeType,
+    required this.durationMs,
+  });
+
+  final String conversationId;
+  final Uint8List bytes;
+  final String mimeType;
+  final int durationMs;
+
+  @override
+  bool operator ==(Object other) {
+    return other is SentVoiceMessage &&
+        other.conversationId == conversationId &&
+        _listEquals(other.bytes, bytes) &&
+        other.mimeType == mimeType &&
+        other.durationMs == durationMs;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(conversationId, Object.hashAll(bytes), mimeType, durationMs);
+}
+
+class ForwardedMessage {
+  const ForwardedMessage({
+    required this.sourceMessageId,
+    required this.targetConversationId,
+  });
+
+  final String sourceMessageId;
+  final String targetConversationId;
+
+  @override
+  bool operator ==(Object other) {
+    return other is ForwardedMessage &&
+        other.sourceMessageId == sourceMessageId &&
+        other.targetConversationId == targetConversationId;
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceMessageId, targetConversationId);
+}
+
 class TypingUpdate {
   const TypingUpdate({required this.conversationId, required this.isTyping});
 
@@ -1584,6 +1956,41 @@ class FakeImagePickerService implements ImagePickerService {
     }
     return nextImage;
   }
+}
+
+class FakeVoiceMessageRecorder implements VoiceMessageRecorder {
+  RecordedVoiceMessage? nextRecording;
+  var startCalls = 0;
+  var stopCalls = 0;
+  var cancelCalls = 0;
+
+  @override
+  Future<void> start() async {
+    startCalls += 1;
+  }
+
+  @override
+  Future<RecordedVoiceMessage?> stop() async {
+    stopCalls += 1;
+    return nextRecording;
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancelCalls += 1;
+  }
+}
+
+bool _listEquals(Uint8List left, Uint8List right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 class FakeAuthRepository implements AuthRepository {

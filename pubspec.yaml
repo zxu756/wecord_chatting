@@ -18,6 +18,8 @@ dependencies:
   flutter_local_notifications: ^21.0.0
   shared_preferences: ^2.5.5
   web: ^1.1.1
+  record: ^6.2.0
+  just_audio: ^0.10.5
 
 dev_dependencies:
   flutter_test:

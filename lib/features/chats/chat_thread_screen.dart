@@ -6,11 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/message_forward_sheet.dart';
+import 'package:wecord/features/chats/voice_message_player.dart';
+import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 final chatThreadProvider = FutureProvider.autoDispose
@@ -51,6 +55,18 @@ class ChatThreadData {
   final List<ConversationReadMarker> readMarkers;
 }
 
+class _MentionSelection {
+  const _MentionSelection({
+    required this.userId,
+    required this.username,
+    required this.displayName,
+  });
+
+  final String userId;
+  final String username;
+  final String displayName;
+}
+
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({
     required this.conversationId,
@@ -74,10 +90,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _searchController = TextEditingController();
   Timer? _typingTimer;
   ChatsRepository? _typingRepository;
+  VoiceMessageRecorder? _voiceMessageRecorder;
   late final StateController<String?> _activeConversationController;
   var _isSending = false;
   var _isPickingImage = false;
   var _isSendingImage = false;
+  var _isRecordingVoice = false;
+  var _isSendingVoice = false;
   var _isTypingShared = false;
   String? _sendError;
   String? _lastMarkedMessageId;
@@ -85,6 +104,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   ChatMessage? _editingMessage;
   var _isSearchingMessages = false;
   var _messageSearchQuery = '';
+  var _isMentioning = false;
+  var _mentionQuery = '';
+  final _mentionSelections = <String, _MentionSelection>{};
 
   @override
   void initState() {
@@ -113,6 +135,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .catchError((Object _) {}),
       );
     }
+    if (_isRecordingVoice) {
+      unawaited(_voiceMessageRecorder?.cancel().catchError((Object _) {}));
+    }
     final conversationId = widget.conversationId;
     Future<void>.microtask(() {
       if (!_activeConversationController.mounted) {
@@ -140,6 +165,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
     final activity = ref.watch(chatActivityProvider(widget.conversationId));
+    _voiceMessageRecorder = ref.watch(voiceMessageRecorderProvider);
     final conversationSummary = ref
         .watch(chatConversationSummaryProvider(widget.conversationId))
         .valueOrNull;
@@ -152,6 +178,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
+    final groupDetail = conversationType == ConversationType.group
+        ? ref.watch(groupDetailProvider(widget.conversationId)).valueOrNull
+        : null;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
     final peerIsOnline = currentActivity.onlineUserIds.any((id) {
@@ -238,7 +267,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       data: (data) {
                         final resultCount = ref
                             .read(chatsRepositoryProvider)
-                            .searchMessages(data.messages, _messageSearchQuery)
+                            .searchThreadMessages(
+                              data.messages,
+                              _messageSearchQuery,
+                            )
                             .length;
                         return Text(
                           '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
@@ -263,7 +295,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 final messages = data.messages;
                 final visibleMessages = ref
                     .read(chatsRepositoryProvider)
-                    .searchMessages(messages, _messageSearchQuery);
+                    .searchThreadMessages(messages, _messageSearchQuery);
                 final messagesById = {
                   for (final message in messages) message.id: message,
                 };
@@ -305,6 +337,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           latestOutgoingReadState.isRead,
                       onReply: _startReply,
                       onEdit: _startEdit,
+                      onForward: _showForwardSheet,
                       onDelete: _deleteMessage,
                       onPreviewImage: _previewImage,
                     );
@@ -327,6 +360,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             isPickingImage: _isPickingImage,
             isSendingImage: _isSendingImage,
             errorText: _sendError,
+            mentionCandidates: _mentionCandidates(groupDetail),
+            onSelectMention: _insertMention,
             replyPreviewText: _replyingTo == null
                 ? null
                 : _replyPreviewBody(_replyingTo!),
@@ -334,6 +369,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onChanged: _handleComposerChanged,
             onSend: _sendMessage,
             onPickImage: _pickAndSendImage,
+            isRecordingVoice: _isRecordingVoice,
+            isSendingVoice: _isSendingVoice,
+            onStartVoiceRecording: _startVoiceRecording,
+            onCancelVoiceRecording: _cancelVoiceRecording,
+            onSendVoiceRecording: _sendVoiceRecording,
             onCancelReply: _cancelReply,
             onCancelEdit: _cancelEdit,
           ),
@@ -446,9 +486,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             body: body,
             replyToMessageId: replyingTo?.id,
             replyPreview: replyPreview,
+            mentions: _mentionsForBody(body),
           );
       await _setTyping(false);
       _composerController.clear();
+      _mentionSelections.clear();
+      _isMentioning = false;
+      _mentionQuery = '';
       _replyingTo = null;
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
@@ -540,7 +584,96 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _startVoiceRecording() async {
+    if (_isRecordingVoice ||
+        _isSendingVoice ||
+        _isSending ||
+        _editingMessage != null) {
+      return;
+    }
+
+    setState(() {
+      _sendError = null;
+    });
+
+    try {
+      await _voiceRecorder.start();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isRecordingVoice = true;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sendError = 'Could not start recording. Check microphone access.';
+        });
+      }
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecordingVoice || _isSendingVoice) {
+      return;
+    }
+
+    try {
+      await _voiceRecorder.cancel();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRecordingVoice = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _sendVoiceRecording() async {
+    if (!_isRecordingVoice || _isSendingVoice) {
+      return;
+    }
+
+    setState(() {
+      _isSendingVoice = true;
+      _sendError = null;
+    });
+
+    try {
+      final recording = await _voiceRecorder.stop();
+      if (recording == null) {
+        return;
+      }
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendVoiceMessage(
+            conversationId: widget.conversationId,
+            bytes: recording.bytes,
+            mimeType: recording.mimeType,
+            durationMs: recording.durationMs,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sendError = 'Could not send voice message. Try again.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRecordingVoice = false;
+          _isSendingVoice = false;
+        });
+      }
+    }
+  }
+
+  VoiceMessageRecorder get _voiceRecorder =>
+      _voiceMessageRecorder ?? ref.read(voiceMessageRecorderProvider);
+
   void _handleComposerChanged(String value) {
+    _updateMentionQuery();
     _typingTimer?.cancel();
     if (value.trim().isEmpty) {
       unawaited(_setTyping(false));
@@ -551,6 +684,88 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _typingTimer = Timer(const Duration(seconds: 3), () {
       unawaited(_setTyping(false));
     });
+  }
+
+  void _updateMentionQuery() {
+    final selection = _composerController.selection;
+    final cursor = selection.isValid
+        ? selection.baseOffset
+        : _composerController.text.length;
+    final safeCursor = cursor.clamp(0, _composerController.text.length);
+    final prefix = _composerController.text.substring(0, safeCursor);
+    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(prefix);
+    final isMentioning = match != null;
+    final nextQuery = match?.group(1)?.toLowerCase() ?? '';
+    if (_isMentioning == isMentioning && _mentionQuery == nextQuery) {
+      return;
+    }
+    setState(() {
+      _isMentioning = isMentioning;
+      _mentionQuery = nextQuery;
+    });
+  }
+
+  List<GroupMember> _mentionCandidates(GroupDetail? detail) {
+    if (detail == null || !_isMentioning) {
+      return const [];
+    }
+    final query = _mentionQuery;
+    return detail.members
+        .where((member) {
+          return member.profile.username.toLowerCase().contains(query) ||
+              member.profile.displayName.toLowerCase().contains(query);
+        })
+        .take(6)
+        .toList(growable: false);
+  }
+
+  void _insertMention(GroupMember member) {
+    final text = _composerController.text;
+    final selection = _composerController.selection;
+    final cursor = selection.isValid ? selection.baseOffset : text.length;
+    final safeCursor = cursor.clamp(0, text.length);
+    final prefix = text.substring(0, safeCursor);
+    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(prefix);
+    if (match == null) {
+      return;
+    }
+    final tokenStart = match.start + (prefix[match.start] == '@' ? 0 : 1);
+    final mentionText = '@${member.profile.username} ';
+    final nextText = text.replaceRange(tokenStart, safeCursor, mentionText);
+    _composerController.text = nextText;
+    _composerController.selection = TextSelection.collapsed(
+      offset: tokenStart + mentionText.length,
+    );
+    _mentionSelections[member.profile.username] = _MentionSelection(
+      userId: member.profile.id,
+      username: member.profile.username,
+      displayName: member.profile.displayName,
+    );
+    setState(() {
+      _isMentioning = false;
+      _mentionQuery = '';
+    });
+  }
+
+  List<MessageMention> _mentionsForBody(String body) {
+    final mentions = <MessageMention>[];
+    for (final selection in _mentionSelections.values) {
+      final token = '@${selection.username}';
+      var start = body.indexOf(token);
+      while (start != -1) {
+        mentions.add(
+          MessageMention(
+            userId: selection.userId,
+            displayName: selection.displayName,
+            start: start,
+            end: start + token.length,
+          ),
+        );
+        start = body.indexOf(token, start + token.length);
+      }
+    }
+    mentions.sort((a, b) => a.start.compareTo(b.start));
+    return mentions;
   }
 
   Future<void> _setTyping(bool isTyping) async {
@@ -608,6 +823,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         offset: _composerController.text.length,
       );
     });
+  }
+
+  void _showForwardSheet(ChatMessage message) {
+    if (message.recalledAt != null) {
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => MessageForwardSheet(message: message),
+    );
   }
 
   void _cancelReply() {
@@ -670,6 +896,7 @@ class _MessageBubble extends StatelessWidget {
     required this.showReadReceipt,
     required this.onReply,
     required this.onEdit,
+    required this.onForward,
     required this.onDelete,
     required this.onPreviewImage,
   });
@@ -680,6 +907,7 @@ class _MessageBubble extends StatelessWidget {
   final bool showReadReceipt;
   final ValueChanged<ChatMessage> onReply;
   final ValueChanged<ChatMessage> onEdit;
+  final ValueChanged<ChatMessage> onForward;
   final Future<void> Function(ChatMessage message) onDelete;
   final Future<void> Function(ImageAttachment attachment) onPreviewImage;
 
@@ -694,6 +922,7 @@ class _MessageBubble extends StatelessWidget {
         : colorScheme.onSurfaceVariant;
     final isRecalled = message.recalledAt != null;
     final imageAttachment = isRecalled ? null : message.imageAttachment;
+    final voiceAttachment = isRecalled ? null : message.voiceAttachment;
     final canShowActions = !isRecalled;
 
     return Column(
@@ -728,6 +957,7 @@ class _MessageBubble extends StatelessWidget {
                   message: message,
                   messagesById: messagesById,
                   imageAttachment: imageAttachment,
+                  voiceAttachment: voiceAttachment,
                   textColor: textColor,
                   isRecalled: isRecalled,
                 ),
@@ -764,6 +994,14 @@ class _MessageBubble extends StatelessWidget {
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   onReply(message);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.forward_outlined),
+                title: const Text('Forward'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onForward(message);
                 },
               ),
               if (isCurrentUser && message.type == MessageType.text)
@@ -819,6 +1057,7 @@ class _MessageContent extends StatelessWidget {
     required this.message,
     required this.messagesById,
     required this.imageAttachment,
+    required this.voiceAttachment,
     required this.textColor,
     required this.isRecalled,
   });
@@ -826,6 +1065,7 @@ class _MessageContent extends StatelessWidget {
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
   final ImageAttachment? imageAttachment;
+  final VoiceAttachment? voiceAttachment;
   final Color textColor;
   final bool isRecalled;
 
@@ -847,13 +1087,28 @@ class _MessageContent extends StatelessWidget {
         ),
         const SizedBox(height: 8),
       ],
+      if (message.forwardPreview != null) ...[
+        _ForwardedPreview(
+          preview: message.forwardPreview!,
+          foregroundColor: textColor,
+        ),
+        const SizedBox(height: 8),
+      ],
     ];
 
     final attachment = imageAttachment;
     if (attachment != null) {
       content.add(_ImageMessageContent(attachment: attachment));
+    } else if (voiceAttachment != null) {
+      content.add(VoiceMessagePlayer(attachment: voiceAttachment!));
     } else {
-      content.add(Text(message.body, style: TextStyle(color: textColor)));
+      content.add(
+        _MentionText(
+          body: message.body,
+          mentions: message.mentions,
+          color: textColor,
+        ),
+      );
     }
 
     if (message.editedAt != null) {
@@ -882,6 +1137,51 @@ class _MessageContent extends StatelessWidget {
       return 'Message deleted';
     }
     return preview.body;
+  }
+}
+
+class _ForwardedPreview extends StatelessWidget {
+  const _ForwardedPreview({
+    required this.preview,
+    required this.foregroundColor,
+  });
+
+  final ForwardPreview preview;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        color: foregroundColor.withValues(alpha: 0.08),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Forwarded from ${preview.senderName}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foregroundColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            _displayBodyForForwardPreview(preview),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: foregroundColor),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -927,6 +1227,73 @@ class _QuotedReplyPreview extends StatelessWidget {
             ).textTheme.bodySmall?.copyWith(color: foregroundColor),
           ),
         ],
+      ),
+    );
+  }
+}
+
+String _displayBodyForForwardPreview(ForwardPreview preview) {
+  final body = preview.body.trim();
+  return switch (preview.type) {
+    MessageType.text => body.isEmpty ? 'Message' : body,
+    MessageType.image => 'Image',
+    MessageType.file => 'File',
+    MessageType.voice => 'Voice message',
+  };
+}
+
+class _MentionText extends StatelessWidget {
+  const _MentionText({
+    required this.body,
+    required this.mentions,
+    required this.color,
+  });
+
+  final String body;
+  final List<MessageMention> mentions;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (mentions.isEmpty) {
+      return Text(body, style: TextStyle(color: color));
+    }
+
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    final sortedMentions = [...mentions]
+      ..sort((a, b) => a.start.compareTo(b.start));
+
+    for (final mention in sortedMentions) {
+      if (mention.start < cursor ||
+          mention.start < 0 ||
+          mention.end > body.length ||
+          mention.end <= mention.start) {
+        continue;
+      }
+      if (mention.start > cursor) {
+        spans.add(TextSpan(text: body.substring(cursor, mention.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: body.substring(mention.start, mention.end),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      cursor = mention.end;
+    }
+
+    if (cursor < body.length) {
+      spans.add(TextSpan(text: body.substring(cursor)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(color: color),
+        children: spans,
       ),
     );
   }
@@ -1036,11 +1403,18 @@ class _Composer extends StatelessWidget {
     required this.isPickingImage,
     required this.isSendingImage,
     required this.errorText,
+    required this.mentionCandidates,
+    required this.onSelectMention,
     required this.replyPreviewText,
     required this.isEditing,
     required this.onChanged,
     required this.onSend,
     required this.onPickImage,
+    required this.isRecordingVoice,
+    required this.isSendingVoice,
+    required this.onStartVoiceRecording,
+    required this.onCancelVoiceRecording,
+    required this.onSendVoiceRecording,
     required this.onCancelReply,
     required this.onCancelEdit,
   });
@@ -1050,18 +1424,25 @@ class _Composer extends StatelessWidget {
   final bool isPickingImage;
   final bool isSendingImage;
   final String? errorText;
+  final List<GroupMember> mentionCandidates;
+  final ValueChanged<GroupMember> onSelectMention;
   final String? replyPreviewText;
   final bool isEditing;
   final ValueChanged<String> onChanged;
   final Future<void> Function() onSend;
   final Future<void> Function() onPickImage;
+  final bool isRecordingVoice;
+  final bool isSendingVoice;
+  final Future<void> Function() onStartVoiceRecording;
+  final Future<void> Function() onCancelVoiceRecording;
+  final Future<void> Function() onSendVoiceRecording;
   final VoidCallback onCancelReply;
   final VoidCallback onCancelEdit;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isBusy = isSending || isSendingImage;
+    final isBusy = isSending || isSendingImage || isSendingVoice;
 
     return SafeArea(
       top: false,
@@ -1097,11 +1478,38 @@ class _Composer extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
+              if (mentionCandidates.isNotEmpty) ...[
+                Material(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final member in mentionCandidates)
+                          ListTile(
+                            dense: true,
+                            leading: CircleAvatar(
+                              child: Text(
+                                _initials(member.profile.displayName),
+                              ),
+                            ),
+                            title: Text(member.profile.displayName),
+                            subtitle: Text('@${member.profile.username}'),
+                            onTap: () => onSelectMention(member),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Row(
                 children: [
                   IconButton(
                     tooltip: 'Send image',
-                    onPressed: isBusy || isEditing
+                    onPressed: isBusy || isEditing || isRecordingVoice
                         ? null
                         : () => unawaited(onPickImage()),
                     icon: isSendingImage
@@ -1112,33 +1520,78 @@ class _Composer extends StatelessWidget {
                         : const Icon(Icons.image_outlined),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
-                        border: OutlineInputBorder(),
+                  if (isRecordingVoice)
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.mic,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text('Recording...')),
+                        ],
                       ),
-                      onChanged: onChanged,
-                      onSubmitted: (_) {
-                        unawaited(onSend());
-                      },
+                    )
+                  else
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        decoration: const InputDecoration(
+                          hintText: 'Message',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: onChanged,
+                        onSubmitted: (_) {
+                          unawaited(onSend());
+                        },
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: isEditing ? 'Save edit' : 'Send',
-                    onPressed: isBusy ? null : () => unawaited(onSend()),
-                    icon: isSending
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                  ),
+                  if (isRecordingVoice) ...[
+                    IconButton(
+                      tooltip: 'Cancel voice message',
+                      onPressed: isSendingVoice
+                          ? null
+                          : () => unawaited(onCancelVoiceRecording()),
+                      icon: const Icon(Icons.close),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      tooltip: 'Send voice message',
+                      onPressed: isSendingVoice
+                          ? null
+                          : () => unawaited(onSendVoiceRecording()),
+                      icon: isSendingVoice
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send),
+                    ),
+                  ] else ...[
+                    IconButton(
+                      tooltip: 'Record voice message',
+                      onPressed: isBusy || isEditing
+                          ? null
+                          : () => unawaited(onStartVoiceRecording()),
+                      icon: const Icon(Icons.mic_none_outlined),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      tooltip: isEditing ? 'Save edit' : 'Send',
+                      onPressed: isBusy ? null : () => unawaited(onSend()),
+                      icon: isSending
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send),
+                    ),
+                  ],
                 ],
               ),
             ],

@@ -71,6 +71,105 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
+  testWidgets('previews latest voice messages as voice', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: '',
+          lastMessageType: MessageType.voice,
+          lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('[Voice]'), findsOneWidget);
+    expect(find.text('No messages yet'), findsNothing);
+  });
+
+  testWidgets('renders conversation management indicators', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.group,
+          title: 'Launch Crew',
+          lastMessageBody: '[Image]',
+          unreadCount: 0,
+          pinnedAt: DateTime.utc(2026, 5, 18),
+          isMuted: true,
+          isMarkedUnread: true,
+          memberCount: 3,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Launch Crew'), findsOneWidget);
+    expect(find.text('[Image]'), findsOneWidget);
+    expect(find.byIcon(Icons.push_pin), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
+    expect(find.text('3 members'), findsOneWidget);
+    expect(find.byType(Badge), findsOneWidget);
+  });
+
+  testWidgets('conversation menu calls management actions', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: 'See you soon',
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Conversation actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin chat'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Conversation actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mute'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Conversation actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark unread'));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Conversation actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete conversation'));
+    await tester.pump();
+
+    expect(repository.pinnedCalls, [
+      const ConversationToggleCall(
+        conversationId: 'conversation-1',
+        value: true,
+      ),
+    ]);
+    expect(repository.mutedCalls, [
+      const ConversationToggleCall(
+        conversationId: 'conversation-1',
+        value: true,
+      ),
+    ]);
+    expect(repository.markUnreadCalls, ['conversation-1']);
+    expect(repository.hideCalls, ['conversation-1']);
+  });
+
   testWidgets('shows safe deleted text for recalled latest messages', (
     tester,
   ) async {
@@ -214,6 +313,11 @@ class FakeSettingsRepository implements SettingsRepository {
 class FakeChatsRepository implements ChatsRepository {
   var conversations = <ConversationSummary>[];
   Future<List<ConversationSummary>>? conversationsFuture;
+  final pinnedCalls = <ConversationToggleCall>[];
+  final mutedCalls = <ConversationToggleCall>[];
+  final markUnreadCalls = <String>[];
+  final markReadCalls = <String>[];
+  final hideCalls = <String>[];
   final _changes = StreamController<void>.broadcast();
 
   @override
@@ -269,6 +373,7 @@ class FakeChatsRepository implements ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) async {}
 
   @override
@@ -278,7 +383,26 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) async {}
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) async {}
+
+  @override
   Future<String> createImageUrl(ImageAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) async {
     return 'https://example.com/${attachment.path}';
   }
 
@@ -312,7 +436,64 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
-  Future<void> markConversationRead(String conversationId) async {}
+  Future<void> markConversationRead(String conversationId) async {
+    markReadCalls.add(conversationId);
+  }
+
+  @override
+  Future<void> markConversationUnread(String conversationId) async {
+    markUnreadCalls.add(conversationId);
+  }
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) async {
+    pinnedCalls.add(
+      ConversationToggleCall(conversationId: conversationId, value: pinned),
+    );
+  }
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) async {
+    mutedCalls.add(
+      ConversationToggleCall(conversationId: conversationId, value: muted),
+    );
+  }
+
+  @override
+  Future<void> hideConversation(String conversationId) async {
+    hideCalls.add(conversationId);
+  }
+
+  @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {
+    return 'group-avatars/$conversationId/avatar.png';
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) async {}
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) async {}
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) async {}
 
   @override
   List<ConversationSummary> searchConversations(
@@ -323,7 +504,15 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  Future<List<MessageSearchResult>> searchMessages(String query) async {
+    return const [];
+  }
+
+  @override
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     return _searchMessages(messages, query);
   }
 
@@ -346,6 +535,26 @@ class FakeChatsRepository implements ChatsRepository {
     required String conversationId,
     required bool isTyping,
   }) async {}
+}
+
+class ConversationToggleCall {
+  const ConversationToggleCall({
+    required this.conversationId,
+    required this.value,
+  });
+
+  final String conversationId;
+  final bool value;
+
+  @override
+  bool operator ==(Object other) {
+    return other is ConversationToggleCall &&
+        other.conversationId == conversationId &&
+        other.value == value;
+  }
+
+  @override
+  int get hashCode => Object.hash(conversationId, value);
 }
 
 List<ConversationSummary> _searchConversations(

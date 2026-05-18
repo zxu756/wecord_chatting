@@ -37,8 +37,10 @@ class ChatMessage {
     this.attachment,
     this.replyToMessageId,
     this.replyPreview,
+    this.forwardPreview,
     this.editedAt,
     this.recalledAt,
+    this.mentions = const <MessageMention>[],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -55,9 +57,15 @@ class ChatMessage {
           : ReplyPreview.fromJson(
               json['reply_preview'] as Map<String, dynamic>,
             ),
+      forwardPreview: json['forwarded_from'] == null
+          ? null
+          : ForwardPreview.fromJson(
+              json['forwarded_from'] as Map<String, dynamic>,
+            ),
       createdAt: _parseTimestamp(json['created_at']),
       editedAt: _parseOptionalTimestamp(json['edited_at']),
       recalledAt: _parseOptionalTimestamp(json['recalled_at']),
+      mentions: _parseMentions(json['mentions']),
     );
   }
 
@@ -69,9 +77,11 @@ class ChatMessage {
   final Map<String, dynamic>? attachment;
   final String? replyToMessageId;
   final ReplyPreview? replyPreview;
+  final ForwardPreview? forwardPreview;
   final DateTime createdAt;
   final DateTime? editedAt;
   final DateTime? recalledAt;
+  final List<MessageMention> mentions;
 
   ImageAttachment? get imageAttachment {
     final value = attachment;
@@ -79,6 +89,14 @@ class ChatMessage {
       return null;
     }
     return ImageAttachment.fromJson(value);
+  }
+
+  VoiceAttachment? get voiceAttachment {
+    final value = attachment;
+    if (type != MessageType.voice || value == null) {
+      return null;
+    }
+    return VoiceAttachment.fromJson(value);
   }
 
   Map<String, dynamic> toJson() {
@@ -90,6 +108,9 @@ class ChatMessage {
       'attachment': attachment,
       'reply_to_message_id': replyToMessageId,
       'reply_preview': replyPreview?.toJson(),
+      if (forwardPreview != null) 'forwarded_from': forwardPreview?.toJson(),
+      if (mentions.isNotEmpty)
+        'mentions': mentions.map((mention) => mention.toJson()).toList(),
     };
   }
 
@@ -102,9 +123,11 @@ class ChatMessage {
     Object? attachment = _sentinel,
     Object? replyToMessageId = _sentinel,
     Object? replyPreview = _sentinel,
+    Object? forwardPreview = _sentinel,
     DateTime? createdAt,
     Object? editedAt = _sentinel,
     Object? recalledAt = _sentinel,
+    List<MessageMention>? mentions,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -121,6 +144,9 @@ class ChatMessage {
       replyPreview: identical(replyPreview, _sentinel)
           ? this.replyPreview
           : replyPreview as ReplyPreview?,
+      forwardPreview: identical(forwardPreview, _sentinel)
+          ? this.forwardPreview
+          : forwardPreview as ForwardPreview?,
       createdAt: createdAt ?? this.createdAt,
       editedAt: identical(editedAt, _sentinel)
           ? this.editedAt
@@ -128,7 +154,44 @@ class ChatMessage {
       recalledAt: identical(recalledAt, _sentinel)
           ? this.recalledAt
           : recalledAt as DateTime?,
+      mentions: mentions ?? this.mentions,
     );
+  }
+}
+
+class MessageMention {
+  const MessageMention({
+    required this.userId,
+    required this.displayName,
+    required this.start,
+    required this.end,
+    this.kind = 'user',
+  });
+
+  factory MessageMention.fromJson(Map<String, dynamic> json) {
+    return MessageMention(
+      userId: json['user_id'] as String,
+      displayName: json['display_name'] as String? ?? '',
+      start: (json['start'] as num?)?.toInt() ?? 0,
+      end: (json['end'] as num?)?.toInt() ?? 0,
+      kind: json['kind'] as String? ?? 'user',
+    );
+  }
+
+  final String userId;
+  final String displayName;
+  final int start;
+  final int end;
+  final String kind;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'user_id': userId,
+      'display_name': displayName,
+      'start': start,
+      'end': end,
+      'kind': kind,
+    };
   }
 }
 
@@ -160,6 +223,38 @@ class ReplyPreview {
       'sender_name': senderName,
       'body': body,
       'type': type.toJson(),
+    };
+  }
+}
+
+class ForwardPreview {
+  const ForwardPreview({
+    required this.messageId,
+    required this.senderName,
+    required this.type,
+    required this.body,
+  });
+
+  factory ForwardPreview.fromJson(Map<String, dynamic> json) {
+    return ForwardPreview(
+      messageId: json['message_id'] as String,
+      senderName: json['sender_name'] as String,
+      type: MessageType.fromJson(json['type'] as String),
+      body: json['body'] as String,
+    );
+  }
+
+  final String messageId;
+  final String senderName;
+  final MessageType type;
+  final String body;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'message_id': messageId,
+      'sender_name': senderName,
+      'type': type.toJson(),
+      'body': body,
     };
   }
 }
@@ -208,6 +303,46 @@ class ImageAttachment {
   }
 }
 
+class VoiceAttachment {
+  const VoiceAttachment({
+    required this.bucket,
+    required this.path,
+    required this.mimeType,
+    required this.size,
+    required this.durationMs,
+  });
+
+  factory VoiceAttachment.fromJson(Map<String, dynamic> json) {
+    if (json['kind'] != 'voice') {
+      throw ArgumentError.value(json['kind'], 'kind', 'Expected voice');
+    }
+    return VoiceAttachment(
+      bucket: json['bucket'] as String,
+      path: json['path'] as String,
+      mimeType: json['mime_type'] as String,
+      size: json['size'] as int,
+      durationMs: json['duration_ms'] as int,
+    );
+  }
+
+  final String bucket;
+  final String path;
+  final String mimeType;
+  final int size;
+  final int durationMs;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'kind': 'voice',
+      'bucket': bucket,
+      'path': path,
+      'mime_type': mimeType,
+      'size': size,
+      'duration_ms': durationMs,
+    };
+  }
+}
+
 DateTime _parseTimestamp(Object? value) {
   return DateTime.parse(value as String).toUtc();
 }
@@ -217,4 +352,25 @@ DateTime? _parseOptionalTimestamp(Object? value) {
     return null;
   }
   return DateTime.parse(value as String).toUtc();
+}
+
+List<MessageMention> _parseMentions(Object? value) {
+  if (value is! List) {
+    return const <MessageMention>[];
+  }
+  final mentions = <MessageMention>[];
+  for (final item in value) {
+    if (item is! Map) {
+      continue;
+    }
+    final json = Map<String, dynamic>.from(item);
+    final userId = json['user_id'];
+    final start = json['start'];
+    final end = json['end'];
+    if (userId is! String || userId.isEmpty || start is! num || end is! num) {
+      continue;
+    }
+    mentions.add(MessageMention.fromJson(json));
+  }
+  return mentions;
 }

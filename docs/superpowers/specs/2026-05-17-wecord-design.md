@@ -347,6 +347,15 @@ Database policies need dedicated tests or repeatable SQL verification scripts be
 - Cross-platform QA.
 - Basic deployment documentation.
 
+### Milestone 7: Daily Chat Polish
+
+- Contact aliases that appear consistently across contacts, chat summaries, and group member pickers.
+- Voice messages with cross-platform recording, upload, playback, and voice previews in the chat list.
+- Message forwarding for text, image, and voice messages with forwarded context in the thread.
+- Global message search across visible conversations with jump-to-thread navigation.
+
+This milestone completes the daily-driver chat layer before familiar-social features such as moments, shared albums, and later Discord-style circles/channels.
+
 ## MVP Defaults
 
 - Use email/password auth first. Add magic link and Apple login later.

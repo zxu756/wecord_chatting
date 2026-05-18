@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -223,6 +224,7 @@ class _FriendsSection extends ConsumerWidget {
               : friends
                     .where((friend) {
                       return friend.displayName.toLowerCase().contains(query) ||
+                          friend.displayLabel.toLowerCase().contains(query) ||
                           friend.username.toLowerCase().contains(query);
                     })
                     .toList(growable: false);
@@ -246,7 +248,7 @@ class _FriendsSection extends ConsumerWidget {
                 for (final friend in visibleFriends)
                   _ProfileTile(
                     profile: friend,
-                    trailing: _MessageFriendButton(profile: friend),
+                    trailing: _FriendActions(profile: friend),
                   ),
             ],
           );
@@ -340,7 +342,7 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
       context.go(
         '${ChatsScreen.path}/$conversationId',
         extra: ChatThreadRouteExtra(
-          title: widget.profile.displayName,
+          title: widget.profile.displayLabel,
           type: ConversationType.direct,
           avatarUrl: widget.profile.avatarUrl,
         ),
@@ -359,6 +361,37 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
         });
       }
     }
+  }
+}
+
+class _FriendActions extends ConsumerWidget {
+  const _FriendActions({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 4,
+      children: [
+        IconButton(
+          tooltip: 'Edit alias',
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: () async {
+            final saved = await showModalBottomSheet<bool>(
+              context: context,
+              isScrollControlled: true,
+              builder: (context) => ContactAliasSheet(profile: profile),
+            );
+            if (saved == true) {
+              ref.invalidate(friendsProvider);
+            }
+          },
+        ),
+        _MessageFriendButton(profile: profile),
+      ],
+    );
   }
 }
 
@@ -403,7 +436,7 @@ class _ProfileTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _ProfileAvatar(profile: profile),
-      title: Text(profile.displayName),
+      title: Text(profile.displayLabel),
       subtitle: Text('@${profile.username}'),
       trailing: trailing,
     );
@@ -424,7 +457,7 @@ class _ProfileAvatar extends ConsumerWidget {
     return CircleAvatar(
       backgroundImage: image,
       onBackgroundImageError: image == null ? null : (_, _) {},
-      child: image == null ? Text(_initials(profile.displayName)) : null,
+      child: image == null ? Text(_initials(profile.displayLabel)) : null,
     );
   }
 }

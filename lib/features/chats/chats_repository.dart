@@ -35,12 +35,27 @@ abstract interface class ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   });
 
   Future<void> sendImageMessage({
     required String conversationId,
     required ChatImageUpload image,
   });
+
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  });
+
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  });
+
+  Future<List<MessageSearchResult>> searchMessages(String query);
 
   Future<String> createGroupConversation({
     required String title,
@@ -57,7 +72,28 @@ abstract interface class ChatsRepository {
     required List<String> memberIds,
   });
 
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  });
+
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  });
+
+  Future<void> leaveGroupConversation(String conversationId);
+
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  });
+
   Future<String> createImageUrl(ImageAttachment attachment);
+
+  Future<String> createVoiceUrl(VoiceAttachment attachment);
 
   Future<void> recallMessage({required String messageId});
 
@@ -65,12 +101,29 @@ abstract interface class ChatsRepository {
 
   Future<void> markConversationRead(String conversationId);
 
+  Future<void> markConversationUnread(String conversationId);
+
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  });
+
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  });
+
+  Future<void> hideConversation(String conversationId);
+
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
   );
 
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query);
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  );
 
   Stream<void> conversationChanges();
 
@@ -209,7 +262,10 @@ class SupabaseChatsRepository implements ChatsRepository {
     return GroupDetail(
       conversationId: conversationId,
       title: conversation?.title ?? conversationId,
-      members: memberRows.map(GroupMember.fromJson).toList(growable: false),
+      avatarUrl: conversation?.avatarUrl,
+      announcement: conversation?.announcement ?? '',
+      currentUserRole: _currentUserRole(memberRows),
+      members: memberRows.map(_groupMemberFromJson).toList(growable: false),
     );
   }
 
@@ -219,12 +275,24 @@ class SupabaseChatsRepository implements ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) async {
+    final trimmedBody = body.trim();
+    if (mentions.isNotEmpty) {
+      await _dataSource.rpc('send_text_message', {
+        'target_conversation_id': conversationId,
+        'body': trimmedBody,
+        'reply_to_message_id': replyToMessageId,
+        'reply_preview': replyPreview?.toJson(),
+        'mentions': mentions.map((mention) => mention.toJson()).toList(),
+      });
+      return;
+    }
     final values = {
       'conversation_id': conversationId,
       'sender_id': _requireCurrentUserId(),
       'type': MessageType.text.toJson(),
-      'body': body.trim(),
+      'body': trimmedBody,
       if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
       if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
     };
@@ -265,6 +333,40 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) async {
+    const bucket = 'voice-messages';
+    final extension = _voiceStorageExtension(mimeType);
+    final path = '$conversationId/${_nextStoragePathSeed()}.$extension';
+    await _withStorageTimeout(
+      _dataSource.uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        mimeType: mimeType,
+      ),
+    );
+    final attachment = VoiceAttachment(
+      bucket: bucket,
+      path: path,
+      mimeType: mimeType,
+      size: bytes.length,
+      durationMs: durationMs,
+    );
+    await _dataSource.insertMessage({
+      'conversation_id': conversationId,
+      'sender_id': _requireCurrentUserId(),
+      'type': MessageType.voice.toJson(),
+      'body': '',
+      'attachment': attachment.toJson(),
+    });
+  }
+
+  @override
   Future<String> createImageUrl(ImageAttachment attachment) {
     return _withStorageTimeout(
       _dataSource.createSignedUrl(
@@ -273,6 +375,43 @@ class SupabaseChatsRepository implements ChatsRepository {
         expiresIn: const Duration(hours: 1),
       ),
     );
+  }
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) {
+    return _withStorageTimeout(
+      _dataSource.createSignedUrl(
+        bucket: attachment.bucket,
+        path: attachment.path,
+        expiresIn: const Duration(hours: 1),
+      ),
+    );
+  }
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) async {
+    await _dataSource.rpc('forward_message', {
+      'source_message_id': sourceMessageId,
+      'target_conversation_id': targetConversationId,
+    });
+  }
+
+  @override
+  Future<List<MessageSearchResult>> searchMessages(String query) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      return const [];
+    }
+    final rows = await _dataSource.rpc('search_messages', {
+      'search_query': trimmedQuery,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(MessageSearchResult.fromJson)
+        .toList(growable: false);
   }
 
   @override
@@ -310,6 +449,58 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {
+    const bucket = 'group-avatars';
+    final path =
+        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(image.fileName)}';
+    await _withStorageTimeout(
+      _dataSource.uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
+      ),
+    );
+    return '$bucket/$path';
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) async {
+    await _dataSource.rpc('update_group_profile', {
+      'target_conversation_id': conversationId,
+      'group_title': title.trim(),
+      'avatar_url': avatarUrl,
+      'announcement': announcement.trim(),
+    });
+  }
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) async {
+    await _dataSource.rpc('leave_group_conversation', {
+      'target_conversation_id': conversationId,
+    });
+  }
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) async {
+    await _dataSource.rpc('remove_group_member', {
+      'target_conversation_id': conversationId,
+      'target_user_id': memberId,
+    });
+  }
+
+  @override
   Future<void> recallMessage({required String messageId}) async {
     await _dataSource.rpc('recall_message', {'target_message_id': messageId});
   }
@@ -334,6 +525,42 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> markConversationUnread(String conversationId) async {
+    await _dataSource.rpc('mark_conversation_unread', {
+      'target_conversation_id': conversationId,
+    });
+  }
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) async {
+    await _dataSource.rpc('set_conversation_pinned', {
+      'target_conversation_id': conversationId,
+      'pinned': pinned,
+    });
+  }
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) async {
+    await _dataSource.rpc('set_conversation_muted', {
+      'target_conversation_id': conversationId,
+      'muted': muted,
+    });
+  }
+
+  @override
+  Future<void> hideConversation(String conversationId) async {
+    await _dataSource.rpc('hide_conversation', {
+      'target_conversation_id': conversationId,
+    });
+  }
+
+  @override
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
@@ -342,7 +569,10 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     return _searchMessages(messages, query);
   }
 
@@ -412,6 +642,42 @@ class SupabaseChatsRepository implements ChatsRepository {
         .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
     return sanitized.isEmpty ? 'image.jpg' : sanitized;
   }
+
+  String _voiceStorageExtension(String mimeType) {
+    switch (mimeType.toLowerCase().split(';').first.trim()) {
+      case 'audio/wav':
+      case 'audio/wave':
+      case 'audio/x-wav':
+        return 'wav';
+      case 'audio/pcm':
+      case 'audio/l16':
+        return 'pcm';
+      case 'audio/mpeg':
+        return 'mp3';
+      case 'audio/ogg':
+        return 'ogg';
+      case 'audio/webm':
+        return 'webm';
+      case 'audio/mp4':
+      case 'audio/aac':
+      default:
+        return 'm4a';
+    }
+  }
+
+  String? _currentUserRole(List<Map<String, dynamic>> memberRows) {
+    final currentUserId = _currentUserId();
+    if (currentUserId == null) {
+      return null;
+    }
+    for (final row in memberRows) {
+      final profile = row['profile'] as Map<String, dynamic>?;
+      if (profile?['id'] == currentUserId) {
+        return row['role'] as String?;
+      }
+    }
+    return null;
+  }
 }
 
 class ChatImageUpload {
@@ -428,6 +694,45 @@ class ChatImageUpload {
   final String mimeType;
   final int? width;
   final int? height;
+}
+
+class MessageSearchResult {
+  const MessageSearchResult({
+    required this.messageId,
+    required this.conversationId,
+    required this.conversationTitle,
+    required this.senderId,
+    required this.senderName,
+    required this.body,
+    required this.type,
+    required this.createdAt,
+    required this.rank,
+  });
+
+  factory MessageSearchResult.fromJson(Map<String, dynamic> json) {
+    return MessageSearchResult(
+      messageId: json['message_id'] as String,
+      conversationId: json['conversation_id'] as String,
+      conversationTitle:
+          json['conversation_title'] as String? ?? 'Conversation',
+      senderId: json['sender_id'] as String,
+      senderName: json['sender_name'] as String? ?? 'Someone',
+      body: json['body'] as String? ?? '',
+      type: MessageType.fromJson(json['type'] as String? ?? 'text'),
+      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+      rank: (json['rank'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  final String messageId;
+  final String conversationId;
+  final String conversationTitle;
+  final String senderId;
+  final String senderName;
+  final String body;
+  final MessageType type;
+  final DateTime createdAt;
+  final double rank;
 }
 
 class SupabaseChatsDataSource implements ChatsDataSource {
@@ -472,7 +777,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('conversation_members')
         .select(
-          'role,profile:profiles(id,username,display_name,avatar_url,bio,created_at,updated_at)',
+          'role,profile:profiles(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('joined_at', ascending: true);
@@ -806,6 +1111,7 @@ class _UninitializedChatsRepository implements ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) {
     throw StateError('Supabase must be initialized before sending messages.');
   }
@@ -819,8 +1125,38 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) {
+    throw StateError('Supabase must be initialized before sending audio.');
+  }
+
+  @override
   Future<String> createImageUrl(ImageAttachment attachment) {
     throw StateError('Supabase must be initialized before loading images.');
+  }
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) {
+    throw StateError('Supabase must be initialized before loading audio.');
+  }
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before forwarding messages.',
+    );
+  }
+
+  @override
+  Future<List<MessageSearchResult>> searchMessages(String query) {
+    throw StateError('Supabase must be initialized before searching messages.');
   }
 
   @override
@@ -848,6 +1184,37 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) {
+    throw StateError('Supabase must be initialized before uploading groups.');
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) {
+    throw StateError('Supabase must be initialized before updating groups.');
+  }
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) {
+    throw StateError('Supabase must be initialized before leaving groups.');
+  }
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) {
+    throw StateError('Supabase must be initialized before removing members.');
+  }
+
+  @override
   Future<void> recallMessage({required String messageId}) {
     throw StateError('Supabase must be initialized before deleting messages.');
   }
@@ -861,6 +1228,24 @@ class _UninitializedChatsRepository implements ChatsRepository {
   Future<void> markConversationRead(String conversationId) async {}
 
   @override
+  Future<void> markConversationUnread(String conversationId) async {}
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) async {}
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) async {}
+
+  @override
+  Future<void> hideConversation(String conversationId) async {}
+
+  @override
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
@@ -869,7 +1254,10 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     return _searchMessages(messages, query);
   }
 
@@ -940,4 +1328,30 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
 
 bool _containsQuery(String? value, String query) {
   return value?.toLowerCase().contains(query) ?? false;
+}
+
+GroupMember _groupMemberFromJson(Map<String, dynamic> row) {
+  final profile = row['profile'] as Map<String, dynamic>;
+  final alias = _embeddedContactAlias(profile);
+  if (alias == null || profile['alias'] != null) {
+    return GroupMember.fromJson(row);
+  }
+  return GroupMember.fromJson({
+    ...row,
+    'profile': {...profile, 'alias': alias},
+  });
+}
+
+String? _embeddedContactAlias(Map<String, dynamic> profile) {
+  final rawAlias = profile['contact_alias'] ?? profile['contact_aliases'];
+  if (rawAlias is List && rawAlias.isNotEmpty) {
+    final firstAlias = rawAlias.first;
+    if (firstAlias is Map<String, dynamic>) {
+      return firstAlias['alias'] as String?;
+    }
+  }
+  if (rawAlias is Map<String, dynamic>) {
+    return rawAlias['alias'] as String?;
+  }
+  return null;
 }

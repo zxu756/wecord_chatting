@@ -47,6 +47,15 @@ void main() {
     return matches.last.group(0)!;
   }
 
+  String policyBody(String sql, String policyName) {
+    final matches = RegExp(
+      'create policy $policyName[\\s\\S]*?;',
+      caseSensitive: false,
+    ).allMatches(sql);
+    expect(matches, isNotEmpty, reason: 'Missing policy $policyName');
+    return matches.last.group(0)!;
+  }
+
   Iterable<String> policyBodiesFor(String sql, String tableName) {
     return RegExp('create policy [\\s\\S]*?;', caseSensitive: false)
         .allMatches(sql)
@@ -195,8 +204,178 @@ void main() {
     expect(summariesBody, contains('last_read_message_id'));
     expect(summariesBody, contains('unread_count'));
     expect(summariesBody, contains('last_message_body'));
+    expect(summariesBody, contains('last_message_type'));
+    expect(summariesBody, contains('pinned_at'));
+    expect(summariesBody, contains('muted_until'));
+    expect(summariesBody, contains('is_marked_unread'));
+    expect(summariesBody, contains('member_count'));
+    expect(summariesBody, contains('last_message_mentions'));
+    expect(summariesBody, contains("'[Image]'"));
+    expect(summariesBody, contains('hidden_at is null'));
+    expect(summariesBody, contains('c.last_message_at > cm.hidden_at'));
     expect(summariesBody, contains('last_message.recalled_at'));
     expect(summariesBody, contains("'Message deleted'"));
+  });
+
+  test('conversation management uses narrow member-scoped RPCs', () {
+    final sql = allMigrationSql();
+
+    for (final functionName in [
+      'set_conversation_pinned',
+      'set_conversation_muted',
+      'mark_conversation_unread',
+      'hide_conversation',
+    ]) {
+      final body = functionBody(sql, functionName);
+      expect(body, contains('auth.uid()'));
+      expect(body, contains('target_conversation_id'));
+      expect(body, contains('update public.conversation_members'));
+    }
+  });
+
+  test('group management uses narrow role-scoped RPCs and storage', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains('alter table public.conversations'));
+    expect(sql, contains('add column if not exists announcement'));
+    expect(sql, contains("'group-avatars'"));
+    expect(sql, contains('group_avatars_select_member'));
+    expect(sql, contains('group_avatars_insert_admin'));
+
+    final updateBody = functionBody(sql, 'update_group_profile');
+    expect(updateBody, contains("role in ('owner', 'admin')"));
+    expect(updateBody, contains('announcement'));
+
+    final leaveBody = functionBody(sql, 'leave_group_conversation');
+    expect(leaveBody, contains("role = 'owner'"));
+    expect(leaveBody, contains('delete from public.conversation_members'));
+
+    final removeBody = functionBody(sql, 'remove_group_member');
+    expect(removeBody, contains("actor.role = 'owner'"));
+    expect(removeBody, contains("actor.role = 'admin'"));
+    expect(removeBody, contains('delete from public.conversation_members'));
+  });
+
+  test('mentions are stored and sent through a validating RPC', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains('add column if not exists mentions jsonb'));
+    expect(sql, contains('message_mentions_is_array'));
+    expect(sql, contains('message_mentions_have_valid_shape'));
+    expect(sql, contains('create table if not exists public.message_mentions'));
+    expect(sql, contains('message_mentions_select_member'));
+
+    final sendBody = functionBody(sql, 'send_text_message');
+    expect(sendBody, contains('public.is_current_user_conversation_member'));
+    expect(sendBody, contains('message_mentions'));
+    expect(sendBody, contains('mentioned users must be conversation members'));
+  });
+
+  test('daily chat polish adds narrow alias forward and search contracts', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains('create table if not exists public.contact_aliases'));
+    expect(
+      sql,
+      contains('create or replace function public.set_contact_alias'),
+    );
+    expect(
+      sql,
+      contains('create or replace function public.list_friends_with_aliases'),
+    );
+    expect(sql, contains('create or replace function public.forward_message'));
+    expect(sql, contains('create or replace function public.search_messages'));
+
+    final aliasBody = functionBody(sql, 'set_contact_alias');
+    expect(aliasBody, contains('auth.uid()'));
+    expect(aliasBody, contains('friendships'));
+    expect(
+      aliasBody.indexOf('from public.friendships'),
+      lessThan(aliasBody.indexOf('delete from public.contact_aliases')),
+    );
+
+    final forwardBody = functionBody(sql, 'forward_message');
+    expect(forwardBody, contains('public.is_current_user_conversation_member'));
+    expect(forwardBody, contains('forwarded_from'));
+    expect(forwardBody, contains("'sender_name'"));
+    expect(forwardBody, contains("'source_attachment_bucket'"));
+    expect(forwardBody, contains("'source_attachment_path'"));
+
+    final searchBody = functionBody(sql, 'search_messages');
+    expect(searchBody, contains('websearch_to_tsquery'));
+    expect(searchBody, contains('public.is_current_user_conversation_member'));
+  });
+
+  test('daily chat polish scopes voice storage to conversation members', () {
+    final sql = allMigrationSql();
+
+    expect(sql, contains("'voice-messages'"));
+    expect(sql, contains('voice_messages_select_member'));
+    expect(sql, contains('voice_messages_insert_member'));
+  });
+
+  test('direct conversation summaries prefer contact aliases for titles', () {
+    final sql = allMigrationSql();
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+
+    expect(summariesBody, contains('public.contact_aliases'));
+    expect(summariesBody, contains('ca.owner_id = auth.uid()'));
+    expect(summariesBody, contains('ca.friend_id = p.id'));
+    expect(
+      summariesBody,
+      contains('coalesce(ca.alias, p.display_name) as display_name'),
+    );
+    expect(summariesBody, contains('coalesce(c.title, dp.display_name)'));
+  });
+
+  test('forwarded media stays readable through trusted provenance', () {
+    final sql = allMigrationSql();
+    final imageReadBody = policyBody(sql, 'chat_images_select_member');
+    final voiceReadBody = policyBody(sql, 'voice_messages_select_member');
+    final imageInsertBody = policyBody(sql, 'chat_images_insert_member');
+    final voiceInsertBody = policyBody(sql, 'voice_messages_insert_member');
+
+    for (final body in [imageReadBody, voiceReadBody]) {
+      expect(body, contains('from public.messages m'));
+      expect(
+        body,
+        contains("m.forwarded_from->>'source_attachment_path' = name"),
+      );
+      expect(
+        body,
+        contains("m.forwarded_from->>'source_attachment_bucket' = bucket_id"),
+      );
+      expect(body, isNot(contains("m.attachment->>'path' = name")));
+      expect(body, isNot(contains("m.attachment->>'bucket' = bucket_id")));
+      expect(
+        body,
+        contains(
+          'public.is_current_user_conversation_member(m.conversation_id)',
+        ),
+      );
+    }
+
+    for (final body in [imageInsertBody, voiceInsertBody]) {
+      expect(body, isNot(contains('from public.messages m')));
+      expect(body, isNot(contains("m.attachment->>'path' = name")));
+    }
+  });
+
+  test('forwarded provenance is only writable through forward_message', () {
+    final sql = allMigrationSql();
+    final insertBody = policyBody(sql, 'messages_insert_member');
+    final forwardBody = functionBody(sql, 'forward_message');
+
+    expect(insertBody, contains('forwarded_from is null'));
+    expect(forwardBody, contains('security definer'));
+    expect(forwardBody, contains('forwarded_from'));
+  });
+
+  test('send_text_message disambiguates the reply parameter', () {
+    final sql = allMigrationSql();
+    final sendBody = functionBody(sql, 'send_text_message');
+
+    expect(sendBody, contains('send_text_message.reply_to_message_id'));
   });
 
   test(
@@ -212,6 +391,27 @@ void main() {
       );
     },
   );
+
+  test('conversation summary mentions describe the latest message only', () {
+    final sql = allMigrationSql();
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+
+    expect(summariesBody, contains('last_message_mentions'));
+    expect(
+      summariesBody,
+      contains(
+        'coalesce(lmm.mentioned_user_ids, array[]::uuid[]) as mentioned_user_ids',
+      ),
+    );
+    expect(
+      summariesBody,
+      isNot(
+        contains(
+          'coalesce(um.mentioned_user_ids, lmm.mentioned_user_ids, array[]::uuid[])',
+        ),
+      ),
+    );
+  });
 
   test('private chat migration protects message access by membership', () {
     final sql = migration.readAsStringSync();

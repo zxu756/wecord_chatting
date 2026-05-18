@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
@@ -142,6 +145,37 @@ void main() {
     container.pump();
 
     expect(container.read(appRouterProvider), same(router));
+  });
+
+  testWidgets('routes signed-in users to global message search', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go(GlobalMessageSearchScreen.path);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GlobalMessageSearchScreen), findsOneWidget);
   });
 }
 

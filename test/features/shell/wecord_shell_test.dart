@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -139,6 +141,19 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> editMessage({required String messageId, required String body}) {
     throw UnimplementedError();
   }
@@ -174,6 +189,32 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> markConversationUnread(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> hideConversation(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Stream<void> messageChanges(String conversationId) {
     throw UnimplementedError();
   }
@@ -200,7 +241,15 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  Future<List<MessageSearchResult>> searchMessages(String query) {
+    throw UnimplementedError();
+  }
+
+  @override
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     throw UnimplementedError();
   }
 
@@ -213,11 +262,53 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
   }) {
     throw UnimplementedError();
   }

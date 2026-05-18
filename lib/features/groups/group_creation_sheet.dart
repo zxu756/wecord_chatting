@@ -75,7 +75,7 @@ class _GroupCreationSheetState extends ConsumerState<GroupCreationSheet> {
                   for (final friend in widget.friends)
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(friend.displayName),
+                      title: Text(friend.displayLabel),
                       subtitle: Text('@${friend.username}'),
                       value: _selectedFriendIds.contains(friend.id),
                       onChanged: _isCreating

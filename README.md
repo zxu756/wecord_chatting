@@ -28,7 +28,7 @@ flutter run -d chrome --dart-define-from-file=.env
 
 ## Current Status
 
-The foundation, private chat, social chat v2, and local notifications MVP milestones are implemented. WeCord now has email auth, profile bootstrap, friend search and requests, direct and group conversations, text and image messages, unread counts, realtime message refresh, online status, typing indicators, read receipts, profile settings with avatars, reply/edit/recall actions, chat search, local message notifications, and notification preview controls.
+The foundation, private chat, social chat v2, local notifications MVP, and daily chat polish v3 milestones are implemented. WeCord now has email auth, profile bootstrap, friend search and requests, contact aliases, direct and group conversations, text/image/voice messages, unread counts, realtime message refresh, online status, typing indicators, read receipts, profile settings with avatars, reply/edit/recall/forward actions, in-thread and global message search, local message notifications, and notification preview controls.
 
 ## Social Chat v2 MVP
 
@@ -41,3 +41,7 @@ supabase db push
 ```
 
 Next milestones are richer group management, circles/channels, remote push notifications, and deeper chat polish.
+
+## Daily Chat Polish v3
+
+This milestone adds contact aliases, voice message recording/playback, message forwarding, and global message search. It completes the daily-driver chat layer before WeCord moves into familiar-social features such as moments, shared albums, and later Discord-style circles/channels.

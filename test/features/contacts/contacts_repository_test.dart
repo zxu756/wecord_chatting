@@ -122,6 +122,23 @@ void main() {
       ),
     ]);
   });
+
+  test('setContactAlias calls the scoped RPC', () async {
+    final dataSource = FakeContactsDataSource();
+    final repository = SupabaseContactsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'current-user',
+    );
+
+    await repository.setContactAlias(friendId: 'user-2', alias: 'Ada L.');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'set_contact_alias',
+        params: {'target_friend_id': 'user-2', 'new_alias': 'Ada L.'},
+      ),
+    ]);
+  });
 }
 
 class FakeContactsDataSource implements ContactsDataSource {

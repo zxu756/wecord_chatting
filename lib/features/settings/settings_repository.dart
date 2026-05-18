@@ -129,10 +129,11 @@ class SupabaseSettingsRepository implements SettingsRepository {
     if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
       return Future.value(avatarPath);
     }
+    final storagePath = _avatarStoragePath(avatarPath);
     return _withStorageTimeout(
       _dataSource.createSignedUrl(
-        bucket: 'profile-avatars',
-        path: avatarPath,
+        bucket: storagePath.bucket,
+        path: storagePath.path,
         expiresIn: const Duration(hours: 1),
       ),
     );
@@ -171,6 +172,26 @@ class SupabaseSettingsRepository implements SettingsRepository {
         .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
     return sanitized.isEmpty ? 'avatar.jpg' : sanitized;
   }
+
+  _AvatarStoragePath _avatarStoragePath(String avatarPath) {
+    for (final bucket in ['profile-avatars', 'group-avatars']) {
+      final prefix = '$bucket/';
+      if (avatarPath.startsWith(prefix)) {
+        return _AvatarStoragePath(
+          bucket: bucket,
+          path: avatarPath.substring(prefix.length),
+        );
+      }
+    }
+    return _AvatarStoragePath(bucket: 'profile-avatars', path: avatarPath);
+  }
+}
+
+class _AvatarStoragePath {
+  const _AvatarStoragePath({required this.bucket, required this.path});
+
+  final String bucket;
+  final String path;
 }
 
 class SupabaseSettingsDataSource implements SettingsDataSource {

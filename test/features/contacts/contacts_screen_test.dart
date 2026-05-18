@@ -129,6 +129,114 @@ void main() {
     expect(find.text('GH'), findsNothing);
   });
 
+  testWidgets('friend tile shows alias and opens alias editor', (tester) async {
+    final repository = FakeContactsRepository()
+      ..friends = [
+        _profile(
+          id: 'friend-1',
+          username: 'ada',
+          displayName: 'Ada Lovelace',
+          alias: 'Ada L.',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Ada L.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Edit alias'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit alias'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+      'Ada L.',
+    );
+  });
+
+  testWidgets('alias editor trims saves and removes aliases', (tester) async {
+    final repository = FakeContactsRepository()
+      ..friends = [
+        _profile(
+          id: 'friend-1',
+          username: 'ada',
+          displayName: 'Ada Lovelace',
+          alias: 'Ada L.',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Edit alias'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Alias'), '  Countess  ');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.aliasUpdates, [
+      const AliasUpdate(friendId: 'friend-1', alias: 'Countess'),
+    ]);
+    expect(find.text('Countess'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Edit alias'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Alias'), '   ');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.aliasUpdates, [
+      const AliasUpdate(friendId: 'friend-1', alias: 'Countess'),
+      const AliasUpdate(friendId: 'friend-1', alias: null),
+    ]);
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
+
+  testWidgets('alias editor keeps errors visible after failed saves', (
+    tester,
+  ) async {
+    final repository = FakeContactsRepository()
+      ..friends = [
+        _profile(id: 'friend-1', username: 'ada', displayName: 'Ada Lovelace'),
+      ]
+      ..aliasError = Exception('alias failed');
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Edit alias'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Alias'), 'Ada L.');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit alias'), findsOneWidget);
+    expect(find.textContaining('alias failed'), findsOneWidget);
+  });
+
+  testWidgets('alias editor validates the 48 character alias limit locally', (
+    tester,
+  ) async {
+    final repository = FakeContactsRepository()
+      ..friends = [
+        _profile(id: 'friend-1', username: 'ada', displayName: 'Ada Lovelace'),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Edit alias'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.bySemanticsLabel('Alias'), 'A' * 49);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pump();
+
+    expect(repository.aliasUpdates, isEmpty);
+    expect(find.textContaining('48 characters'), findsOneWidget);
+    expect(find.text('Edit alias'), findsOneWidget);
+  });
+
   testWidgets('filters friends by display name or username', (tester) async {
     final repository = FakeContactsRepository()
       ..friends = [
@@ -212,8 +320,14 @@ void main() {
           id: 'friend-1',
           username: 'grace',
           displayName: 'Grace Hopper',
+          alias: 'Amazing Grace',
         ),
-        _profile(id: 'friend-2', username: 'ada', displayName: 'Ada Lovelace'),
+        _profile(
+          id: 'friend-2',
+          username: 'ada',
+          displayName: 'Ada Lovelace',
+          alias: 'Ada L.',
+        ),
         _profile(
           id: 'friend-3',
           username: 'katherine',
@@ -255,9 +369,14 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, 'New Group'));
     await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(CheckboxListTile, 'Amazing Grace'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(CheckboxListTile, 'Ada L.'), findsOneWidget);
     await tester.enterText(find.bySemanticsLabel('Group name'), 'Launch Crew');
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Grace Hopper'));
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Ada Lovelace'));
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Amazing Grace'));
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Ada L.'));
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
@@ -344,6 +463,8 @@ class FakeContactsRepository implements ContactsRepository {
   final sentRequests = <String>[];
   final acceptedRequests = <String>[];
   final rejectedRequests = <String>[];
+  final aliasUpdates = <AliasUpdate>[];
+  Object? aliasError;
 
   @override
   Future<List<Profile>> searchProfiles(String query) async {
@@ -385,6 +506,39 @@ class FakeContactsRepository implements ContactsRepository {
         .where((request) => request.request.id != requestId)
         .toList();
   }
+
+  @override
+  Future<void> setContactAlias({
+    required String friendId,
+    required String? alias,
+  }) async {
+    final error = aliasError;
+    if (error != null) {
+      throw error;
+    }
+    aliasUpdates.add(AliasUpdate(friendId: friendId, alias: alias));
+    friends = [
+      for (final friend in friends)
+        friend.id == friendId ? friend.copyWith(alias: alias) : friend,
+    ];
+  }
+}
+
+class AliasUpdate {
+  const AliasUpdate({required this.friendId, required this.alias});
+
+  final String friendId;
+  final String? alias;
+
+  @override
+  bool operator ==(Object other) {
+    return other is AliasUpdate &&
+        other.friendId == friendId &&
+        other.alias == alias;
+  }
+
+  @override
+  int get hashCode => Object.hash(friendId, alias);
 }
 
 class FakeChatsRepository implements ChatsRepository {
@@ -437,6 +591,7 @@ class FakeChatsRepository implements ChatsRepository {
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) async {}
 
   @override
@@ -446,7 +601,26 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) async {}
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) async {}
+
+  @override
   Future<String> createImageUrl(ImageAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
+  }
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) async {
     return 'https://example.com/${attachment.path}';
   }
 
@@ -485,6 +659,49 @@ class FakeChatsRepository implements ChatsRepository {
   Future<void> markConversationRead(String conversationId) async {}
 
   @override
+  Future<void> markConversationUnread(String conversationId) async {}
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) async {}
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) async {}
+
+  @override
+  Future<void> hideConversation(String conversationId) async {}
+
+  @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) async {
+    return 'group-avatars/$conversationId/avatar.png';
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) async {}
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) async {}
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) async {}
+
+  @override
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
@@ -493,7 +710,15 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  Future<List<MessageSearchResult>> searchMessages(String query) async {
+    return const [];
+  }
+
+  @override
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     return _searchMessages(messages, query);
   }
 
@@ -561,6 +786,7 @@ Profile _profile({
   required String id,
   required String username,
   String? displayName,
+  String? alias,
   String? avatarUrl,
 }) {
   return Profile(
@@ -569,6 +795,7 @@ Profile _profile({
     displayName:
         displayName ??
         '${username[0].toUpperCase()}${username.substring(1)} Lovelace',
+    alias: alias,
     avatarUrl: avatarUrl,
     bio: '',
     createdAt: DateTime.utc(2026, 5, 18),

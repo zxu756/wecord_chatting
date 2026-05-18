@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,13 @@ void main() {
             'last_message_body': 'See you soon',
             'last_message_sender_id': 'user-2',
             'last_message_at': '2026-05-18T04:30:00.000Z',
+            'last_message_type': 'text',
             'unread_count': 3,
+            'pinned_at': '2026-05-18T04:29:00.000Z',
+            'muted_until': '2026-05-19T04:30:00.000Z',
+            'is_muted': true,
+            'is_marked_unread': false,
+            'member_count': 2,
           },
         ];
       final repository = SupabaseChatsRepository.withDataSource(
@@ -39,14 +46,51 @@ void main() {
       expect(conversations.single.title, 'Ada Lovelace');
       expect(conversations.single.lastMessageBody, 'See you soon');
       expect(conversations.single.lastMessageSenderId, 'user-2');
+      expect(conversations.single.lastMessageType, MessageType.text);
       expect(
         conversations.single.lastMessageAt,
         DateTime.utc(2026, 5, 18, 4, 30),
       );
       expect(conversations.single.unreadCount, 3);
+      expect(conversations.single.pinnedAt, DateTime.utc(2026, 5, 18, 4, 29));
+      expect(conversations.single.mutedUntil, DateTime.utc(2026, 5, 19, 4, 30));
+      expect(conversations.single.isMuted, isTrue);
+      expect(conversations.single.isMarkedUnread, isFalse);
+      expect(conversations.single.memberCount, 2);
       expect(dataSource.listCalls, 1);
     },
   );
+
+  test('listConversations maps image previews from summary rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..conversationRows = [
+        {
+          'id': 'conversation-1',
+          'type': 'direct',
+          'title': 'Ada Lovelace',
+          'avatar_url': null,
+          'last_message_body': '[Image]',
+          'last_message_sender_id': 'user-2',
+          'last_message_at': '2026-05-18T04:30:00.000Z',
+          'last_message_type': 'image',
+          'unread_count': 0,
+          'pinned_at': null,
+          'muted_until': null,
+          'is_muted': false,
+          'is_marked_unread': false,
+          'member_count': 2,
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final conversations = await repository.listConversations();
+
+    expect(conversations.single.lastMessageBody, '[Image]');
+    expect(conversations.single.lastMessageType, MessageType.image);
+  });
 
   test(
     'getOrCreateDirectConversation calls the direct conversation RPC',
@@ -70,6 +114,53 @@ void main() {
       ]);
     },
   );
+
+  test('forwardMessage calls the forwarding RPC', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.forwardMessage(
+      sourceMessageId: 'message-1',
+      targetConversationId: 'conversation-2',
+    );
+
+    expect(dataSource.rpcCalls.single.functionName, 'forward_message');
+  });
+
+  test('searchMessages maps global search rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..searchRows = [
+        {
+          'message_id': 'message-1',
+          'conversation_id': 'conversation-1',
+          'conversation_title': 'Launch Crew',
+          'sender_id': 'user-2',
+          'sender_name': 'Ada',
+          'body': 'ship it',
+          'type': 'text',
+          'created_at': '2026-05-18T00:00:00Z',
+          'rank': 0.9,
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final results = await repository.searchMessages(' ship ');
+
+    expect(results.single.body, 'ship it');
+    expect(results.single.conversationTitle, 'Launch Crew');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'search_messages',
+        params: {'search_query': 'ship'},
+      ),
+    ]);
+  });
 
   test('createGroupConversation calls the group creation RPC', () async {
     final dataSource = FakeChatsDataSource()..rpcResult = 'conversation-3';
@@ -106,7 +197,14 @@ void main() {
           'last_message_body': null,
           'last_message_sender_id': null,
           'last_message_at': null,
+          'last_message_type': null,
           'unread_count': 0,
+          'pinned_at': null,
+          'muted_until': null,
+          'is_muted': false,
+          'is_marked_unread': false,
+          'member_count': 2,
+          'announcement': 'Ship it carefully',
         },
       ]
       ..groupMemberRows = [
@@ -144,6 +242,9 @@ void main() {
 
     expect(detail.conversationId, 'conversation-1');
     expect(detail.title, 'Launch Crew');
+    expect(detail.announcement, 'Ship it carefully');
+    expect(detail.avatarUrl, isNull);
+    expect(detail.currentUserRole, 'owner');
     expect(detail.members, hasLength(2));
     expect(detail.members.first, isA<GroupMember>());
     expect(detail.members.first.role, 'owner');
@@ -152,6 +253,52 @@ void main() {
     expect(detail.members.last.profile.username, 'ada');
     expect(dataSource.listCalls, 1);
     expect(dataSource.listGroupMemberCalls, ['conversation-1']);
+  });
+
+  test(
+    'group member query requests contact aliases for profile display labels',
+    () {
+      final source = File(
+        'lib/features/chats/chats_repository.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains(
+          'contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias)',
+        ),
+      );
+    },
+  );
+
+  test('getGroupDetail maps embedded member contact aliases', () async {
+    final dataSource = FakeChatsDataSource()
+      ..groupMemberRows = [
+        {
+          'role': 'member',
+          'profile': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada Lovelace',
+            'contact_alias': [
+              {'alias': 'Ada L.'},
+            ],
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T04:32:00.000Z',
+            'updated_at': '2026-05-18T04:33:00.000Z',
+          },
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final detail = await repository.getGroupDetail('conversation-1');
+
+    expect(detail.members.single.profile.alias, 'Ada L.');
+    expect(detail.members.single.profile.displayLabel, 'Ada L.');
   });
 
   test('conversationChanges emits when the data source invalidates', () async {
@@ -338,6 +485,69 @@ void main() {
     },
   );
 
+  test('sendVoiceMessage uploads audio and inserts a voice message', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+      storagePathSeed: () => 'seed-1',
+    );
+
+    await repository.sendVoiceMessage(
+      conversationId: 'conversation-1',
+      bytes: Uint8List.fromList([1, 2, 3]),
+      mimeType: 'audio/mp4',
+      durationMs: 4200,
+    );
+
+    expect(dataSource.uploadedImages, [
+      UploadedImage(
+        bucket: 'voice-messages',
+        path: 'conversation-1/seed-1.m4a',
+        bytes: Uint8List.fromList([1, 2, 3]),
+        mimeType: 'audio/mp4',
+      ),
+    ]);
+    expect(dataSource.insertedMessages, [
+      {
+        'conversation_id': 'conversation-1',
+        'sender_id': 'user-1',
+        'type': 'voice',
+        'body': '',
+        'attachment': {
+          'kind': 'voice',
+          'bucket': 'voice-messages',
+          'path': 'conversation-1/seed-1.m4a',
+          'mime_type': 'audio/mp4',
+          'size': 3,
+          'duration_ms': 4200,
+        },
+      },
+    ]);
+  });
+
+  test('sendVoiceMessage chooses storage extension from mime type', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+      storagePathSeed: () => 'seed-1',
+    );
+
+    await repository.sendVoiceMessage(
+      conversationId: 'conversation-1',
+      bytes: Uint8List.fromList([1, 2, 3]),
+      mimeType: 'audio/wav',
+      durationMs: 4200,
+    );
+
+    expect(dataSource.uploadedImages.single.path, 'conversation-1/seed-1.wav');
+    expect(
+      dataSource.insertedMessages.single['attachment'],
+      containsPair('path', 'conversation-1/seed-1.wav'),
+    );
+  });
+
   test('sendImageMessage times out stalled image uploads', () async {
     final dataSource = FakeChatsDataSource()
       ..uploadCompleter = Completer<void>();
@@ -413,6 +623,135 @@ void main() {
       ]);
     },
   );
+
+  test('conversation management methods call scoped RPCs', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.setConversationPinned(
+      conversationId: 'conversation-1',
+      pinned: true,
+    );
+    await repository.setConversationMuted(
+      conversationId: 'conversation-1',
+      muted: true,
+    );
+    await repository.markConversationUnread('conversation-1');
+    await repository.hideConversation('conversation-1');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'set_conversation_pinned',
+        params: {'target_conversation_id': 'conversation-1', 'pinned': true},
+      ),
+      const RpcCall(
+        functionName: 'set_conversation_muted',
+        params: {'target_conversation_id': 'conversation-1', 'muted': true},
+      ),
+      const RpcCall(
+        functionName: 'mark_conversation_unread',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+      const RpcCall(
+        functionName: 'hide_conversation',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+    ]);
+  });
+
+  test('group management methods call scoped RPCs and storage', () async {
+    final dataSource = FakeChatsDataSource()..signedUrlResult = 'signed-avatar';
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+      storagePathSeed: () => 'seed-1',
+    );
+
+    final avatarPath = await repository.uploadGroupAvatar(
+      conversationId: 'conversation-1',
+      image: ChatImageUpload(
+        bytes: Uint8List.fromList([9, 8]),
+        fileName: 'Group.PNG',
+        mimeType: 'image/png',
+      ),
+    );
+    await repository.updateGroupProfile(
+      conversationId: 'conversation-1',
+      title: '  Launch Crew  ',
+      avatarUrl: avatarPath,
+      announcement: '  Bring snacks  ',
+    );
+    await repository.removeGroupMember(
+      conversationId: 'conversation-1',
+      memberId: 'user-2',
+    );
+    await repository.leaveGroupConversation('conversation-1');
+
+    expect(avatarPath, 'group-avatars/conversation-1/seed-1-group.png');
+    expect(dataSource.uploadedImages.single.bucket, 'group-avatars');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'update_group_profile',
+        params: {
+          'target_conversation_id': 'conversation-1',
+          'group_title': 'Launch Crew',
+          'avatar_url': 'group-avatars/conversation-1/seed-1-group.png',
+          'announcement': 'Bring snacks',
+        },
+      ),
+      const RpcCall(
+        functionName: 'remove_group_member',
+        params: {
+          'target_conversation_id': 'conversation-1',
+          'target_user_id': 'user-2',
+        },
+      ),
+      const RpcCall(
+        functionName: 'leave_group_conversation',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+    ]);
+  });
+
+  test('sendTextMessage can include mention metadata', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.sendTextMessage(
+      conversationId: 'conversation-1',
+      body: 'Hi @ada',
+      mentions: const [
+        MessageMention(userId: 'user-2', displayName: 'Ada', start: 3, end: 7),
+      ],
+    );
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'send_text_message',
+        params: {
+          'target_conversation_id': 'conversation-1',
+          'body': 'Hi @ada',
+          'reply_to_message_id': null,
+          'reply_preview': null,
+          'mentions': [
+            {
+              'user_id': 'user-2',
+              'display_name': 'Ada',
+              'start': 3,
+              'end': 7,
+              'kind': 'user',
+            },
+          ],
+        },
+      ),
+    ]);
+  });
 
   test(
     'recallMessage calls the recall RPC with the target message id',
@@ -548,11 +887,13 @@ void main() {
       ),
     ];
 
-    expect(repository.searchMessages(messages, 'visible'), [messages.first]);
-    expect(repository.searchMessages(messages, 'grace'), [messages[1]]);
-    expect(repository.searchMessages(messages, 'secret'), isEmpty);
-    expect(repository.searchMessages(messages, 'earlier'), [messages[1]]);
-    expect(repository.searchMessages(messages, ''), messages);
+    expect(repository.searchThreadMessages(messages, 'visible'), [
+      messages.first,
+    ]);
+    expect(repository.searchThreadMessages(messages, 'grace'), [messages[1]]);
+    expect(repository.searchThreadMessages(messages, 'secret'), isEmpty);
+    expect(repository.searchThreadMessages(messages, 'earlier'), [messages[1]]);
+    expect(repository.searchThreadMessages(messages, ''), messages);
   });
 
   test('searchMessages hides previews for recalled parents in the thread', () {
@@ -587,8 +928,8 @@ void main() {
       ),
     ];
 
-    expect(repository.searchMessages(messages, 'project'), isEmpty);
-    expect(repository.searchMessages(messages, 'acknowledged'), [
+    expect(repository.searchThreadMessages(messages, 'project'), isEmpty);
+    expect(repository.searchThreadMessages(messages, 'acknowledged'), [
       messages.last,
     ]);
   });
@@ -682,6 +1023,7 @@ void main() {
 class FakeChatsDataSource implements ChatsDataSource {
   var conversationRows = <Map<String, dynamic>>[];
   var messageRows = <Map<String, dynamic>>[];
+  var searchRows = <Map<String, dynamic>>[];
   var readMarkerRows = <Map<String, dynamic>>[];
   var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
@@ -782,6 +1124,9 @@ class FakeChatsDataSource implements ChatsDataSource {
   @override
   Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
     rpcCalls.add(RpcCall(functionName: functionName, params: params));
+    if (functionName == 'search_messages') {
+      return searchRows;
+    }
     return rpcResult;
   }
 
@@ -973,6 +1318,13 @@ bool _mapsEqual(Map<String, dynamic> left, Map<String, dynamic> right) {
       }
       continue;
     }
+    if (leftValue is Map<String, dynamic> &&
+        rightValue is Map<String, dynamic>) {
+      if (!_mapsEqual(leftValue, rightValue)) {
+        return false;
+      }
+      continue;
+    }
     if (rightValue != leftValue) {
       return false;
     }
@@ -985,7 +1337,16 @@ bool _listsEqual<T>(List<T> left, List<T> right) {
     return false;
   }
   for (var index = 0; index < left.length; index += 1) {
-    if (left[index] != right[index]) {
+    final leftValue = left[index];
+    final rightValue = right[index];
+    if (leftValue is Map<String, dynamic> &&
+        rightValue is Map<String, dynamic>) {
+      if (!_mapsEqual(leftValue, rightValue)) {
+        return false;
+      }
+      continue;
+    }
+    if (leftValue != rightValue) {
       return false;
     }
   }

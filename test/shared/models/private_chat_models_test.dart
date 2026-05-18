@@ -41,6 +41,22 @@ void main() {
     expect(profile.copyWith(avatarUrl: null).avatarUrl, isNull);
   });
 
+  test('Profile prefers alias when present', () {
+    final profile = Profile.fromJson({
+      'id': 'user-2',
+      'username': 'ada',
+      'display_name': 'Ada Lovelace',
+      'alias': 'Ada L.',
+      'avatar_url': null,
+      'bio': '',
+      'created_at': '2026-05-18T00:00:00Z',
+      'updated_at': '2026-05-18T00:00:00Z',
+    });
+
+    expect(profile.alias, 'Ada L.');
+    expect(profile.displayLabel, 'Ada L.');
+  });
+
   test('Profile toJson includes writable Supabase keys', () {
     final profile = Profile.fromJson({
       'id': 'user-1',
@@ -376,6 +392,82 @@ void main() {
     expect(message.imageAttachment?.path, 'conversation-1/message-1/photo.jpg');
     expect(message.imageAttachment?.mimeType, 'image/jpeg');
     expect(message.imageAttachment?.size, 2048);
+  });
+
+  test('ChatMessage parses voice attachment and forward preview', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'voice',
+      'body': '',
+      'attachment': {
+        'kind': 'voice',
+        'bucket': 'voice-messages',
+        'path': 'conversation-1/message-1.m4a',
+        'mime_type': 'audio/mp4',
+        'size': 1024,
+        'duration_ms': 4200,
+      },
+      'forwarded_from': {
+        'message_id': 'message-0',
+        'sender_name': 'Ada',
+        'type': 'text',
+        'body': 'Original',
+      },
+      'created_at': '2026-05-18T00:00:00Z',
+    });
+
+    expect(message.voiceAttachment?.durationMs, 4200);
+    expect(message.forwardPreview?.senderName, 'Ada');
+  });
+
+  test('VoiceAttachment serializes and validates voice metadata', () {
+    const attachment = VoiceAttachment(
+      bucket: 'voice-messages',
+      path: 'conversation-1/message-1.m4a',
+      mimeType: 'audio/mp4',
+      size: 1024,
+      durationMs: 4200,
+    );
+
+    expect(attachment.toJson(), {
+      'kind': 'voice',
+      'bucket': 'voice-messages',
+      'path': 'conversation-1/message-1.m4a',
+      'mime_type': 'audio/mp4',
+      'size': 1024,
+      'duration_ms': 4200,
+    });
+    expect(VoiceAttachment.fromJson(attachment.toJson()).path, attachment.path);
+    expect(
+      () => VoiceAttachment.fromJson({...attachment.toJson(), 'kind': 'image'}),
+      throwsArgumentError,
+    );
+  });
+
+  test('ChatMessage ignores malformed mention metadata', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-1',
+      'conversation_id': 'conversation-1',
+      'sender_id': 'user-1',
+      'type': 'text',
+      'body': 'Hello @ada',
+      'attachment': null,
+      'reply_to_message_id': null,
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'edited_at': null,
+      'recalled_at': null,
+      'mentions': [
+        {'user_id': 'user-2', 'display_name': 'Ada', 'start': 6, 'end': 10},
+        {'display_name': 'Missing id', 'start': 0, 'end': 1},
+        {'user_id': 42, 'display_name': 'Bad id', 'start': 0, 'end': 1},
+      ],
+    });
+
+    expect(message.mentions, hasLength(1));
+    expect(message.mentions.single.userId, 'user-2');
+    expect(message.mentions.single.displayName, 'Ada');
   });
 
   test('Message toJson includes writable Supabase keys', () {

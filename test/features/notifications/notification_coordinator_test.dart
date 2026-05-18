@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -336,6 +337,51 @@ void main() {
     expect(harness.notifications.single.body, 'poll fallback');
   });
 
+  test('does not notify muted conversations for normal messages', () async {
+    final harness = NotificationCoordinatorHarness();
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(id: 'c1', unreadCount: 1, body: 'quiet', isMuted: true),
+    ]);
+
+    expect(harness.notifications, isEmpty);
+  });
+
+  test('mention notifications bypass muted conversations', () async {
+    final harness = NotificationCoordinatorHarness(currentUserId: 'me');
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 1,
+        body: '@me please check',
+        isMuted: true,
+        mentionedUserIds: const {'me'},
+      ),
+    ]);
+
+    expect(harness.notifications.single.body, '@me please check');
+  });
+
+  test(
+    'notifies when hidden conversation reappears with a new message',
+    () async {
+      final harness = NotificationCoordinatorHarness();
+      harness.seed([]);
+      await harness.start();
+
+      await harness.emit([
+        harness.summary(id: 'c1', unreadCount: 1, body: 'new after delete'),
+      ]);
+
+      expect(harness.notifications.single.body, 'new after delete');
+    },
+  );
+
   test('stops listening after dispose', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);
@@ -397,6 +443,8 @@ class NotificationCoordinatorHarness {
     String? lastMessageSenderId = 'sender-1',
     DateTime? lastMessageAt,
     bool hasLastMessageAt = true,
+    bool isMuted = false,
+    Set<String> mentionedUserIds = const {},
   }) {
     return ConversationSummary(
       id: id,
@@ -408,6 +456,8 @@ class NotificationCoordinatorHarness {
           ? lastMessageAt ?? DateTime.utc(2026, 5, 18, 12, unreadCount + 1)
           : null,
       unreadCount: unreadCount,
+      isMuted: isMuted,
+      mentionedUserIds: mentionedUserIds,
     );
   }
 
@@ -565,6 +615,19 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> forwardMessage({
+    required String sourceMessageId,
+    required String targetConversationId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> editMessage({required String messageId, required String body}) {
     throw UnimplementedError();
   }
@@ -605,6 +668,63 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> markConversationUnread(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> setConversationPinned({
+    required String conversationId,
+    required bool pinned,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> setConversationMuted({
+    required String conversationId,
+    required bool muted,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> hideConversation(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> uploadGroupAvatar({
+    required String conversationId,
+    required ChatImageUpload image,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> updateGroupProfile({
+    required String conversationId,
+    required String title,
+    required String? avatarUrl,
+    required String announcement,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> leaveGroupConversation(String conversationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> removeGroupMember({
+    required String conversationId,
+    required String memberId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Stream<void> messageChanges(String conversationId) {
     throw UnimplementedError();
   }
@@ -631,7 +751,15 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  List<ChatMessage> searchMessages(List<ChatMessage> messages, String query) {
+  Future<List<MessageSearchResult>> searchMessages(String query) {
+    throw UnimplementedError();
+  }
+
+  @override
+  List<ChatMessage> searchThreadMessages(
+    List<ChatMessage> messages,
+    String query,
+  ) {
     throw UnimplementedError();
   }
 
@@ -644,11 +772,22 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String mimeType,
+    required int durationMs,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> sendTextMessage({
     required String conversationId,
     required String body,
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
   }) {
     throw UnimplementedError();
   }

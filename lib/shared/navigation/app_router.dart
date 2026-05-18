@@ -6,6 +6,7 @@ import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
@@ -78,6 +79,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: ChatsScreen.path,
             builder: (context, state) => const ChatsScreen(),
+          ),
+          GoRoute(
+            path: GlobalMessageSearchScreen.path,
+            builder: (context, state) => const GlobalMessageSearchScreen(),
           ),
           GoRoute(
             path: '/chats/:conversationId',

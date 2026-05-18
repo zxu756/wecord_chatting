@@ -20,6 +20,11 @@ abstract interface class ContactsRepository {
   Future<void> acceptFriendRequest(String requestId);
 
   Future<void> rejectFriendRequest(String requestId);
+
+  Future<void> setContactAlias({
+    required String friendId,
+    required String? alias,
+  });
 }
 
 class IncomingFriendRequest {
@@ -128,6 +133,18 @@ class SupabaseContactsRepository implements ContactsRepository {
     await _dataSource.rpc('reject_friend_request', {'request_id': requestId});
   }
 
+  @override
+  Future<void> setContactAlias({
+    required String friendId,
+    required String? alias,
+  }) {
+    _requireCurrentUserId();
+    return _dataSource.rpc('set_contact_alias', {
+      'target_friend_id': friendId,
+      'new_alias': alias,
+    });
+  }
+
   String _requireCurrentUserId() {
     final userId = _currentUserId();
     if (userId == null) {
@@ -159,30 +176,8 @@ class SupabaseContactsDataSource implements ContactsDataSource {
 
   @override
   Future<List<Map<String, dynamic>>> listFriends(String currentUserId) async {
-    final friendshipRows = await _client
-        .from('friendships')
-        .select('user_low_id,user_high_id')
-        .or('user_low_id.eq.$currentUserId,user_high_id.eq.$currentUserId');
-    final friendIds = friendshipRows
-        .cast<Map<String, dynamic>>()
-        .map((row) {
-          final lowId = row['user_low_id'] as String;
-          final highId = row['user_high_id'] as String;
-          return lowId == currentUserId ? highId : lowId;
-        })
-        .toSet()
-        .toList(growable: false);
-
-    if (friendIds.isEmpty) {
-      return const [];
-    }
-
-    final rows = await _client
-        .from('profiles')
-        .select()
-        .inFilter('id', friendIds)
-        .order('username');
-    return rows.cast<Map<String, dynamic>>();
+    final rows = await _client.rpc('list_friends_with_aliases');
+    return (rows as List).cast<Map<String, dynamic>>();
   }
 
   @override

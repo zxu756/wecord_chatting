@@ -41,7 +41,7 @@ void main() {
 
   String functionBody(String sql, String functionName) {
     final matches = RegExp(
-      'create or replace function public\\.$functionName[\\s\\S]*?\\n\\\$\\\$;',
+      'create or replace function public\\.$functionName\\s*\\([\\s\\S]*?\\n\\\$\\\$;',
     ).allMatches(sql);
     expect(matches, isNotEmpty, reason: 'Missing function $functionName');
     return matches.last.group(0)!;
@@ -419,6 +419,103 @@ void main() {
       contains('coalesce(ca.alias, p.display_name) as display_name'),
     );
     expect(summariesBody, contains('coalesce(c.title, dp.display_name)'));
+  });
+
+  test('community discovery v1 declares circle tables and policies', () {
+    final sql = effectiveMigrationSql();
+    for (final table in [
+      'circles',
+      'circle_members',
+      'circle_channels',
+      'circle_posts',
+      'circle_post_likes',
+      'circle_post_comments',
+    ]) {
+      expect(sql, contains('create table if not exists public.$table'));
+      expect(
+        sql,
+        contains('alter table public.$table enable row level security'),
+      );
+    }
+    expect(sql, contains('circle_members_role_check'));
+    expect(sql, contains("role in ('owner', 'admin', 'member')"));
+    expect(sql, contains('circle_channels_conversation_unique'));
+  });
+
+  test('community discovery v1 exposes narrow circle RPCs', () {
+    final sql = effectiveMigrationSql();
+    for (final functionName in [
+      'create_circle',
+      'list_circle_summaries',
+      'get_circle_detail',
+      'create_circle_channel',
+      'invite_circle_members',
+      'create_circle_post',
+      'toggle_circle_post_like',
+      'create_circle_post_comment',
+      'delete_circle_post',
+      'report_circle_post',
+    ]) {
+      expect(
+        sql,
+        contains('create or replace function public.$functionName'),
+        reason: 'Missing $functionName',
+      );
+    }
+    expect(functionBody(sql, 'create_circle'), contains("values ('channel'"));
+    expect(functionBody(sql, 'create_circle'), contains("'general'"));
+    expect(functionBody(sql, 'invite_circle_members'), contains('friendships'));
+    expect(
+      functionBody(sql, 'invite_circle_members'),
+      contains('are_users_blocked'),
+    );
+  });
+
+  test('community discovery v1 extends group announcements and discovery', () {
+    final sql = effectiveMigrationSql();
+    expect(sql, contains('add column if not exists announcement_updated_at'));
+    expect(sql, contains('add column if not exists announcement_updated_by'));
+    expect(
+      functionBody(sql, 'update_group_profile'),
+      contains('announcement_updated_at'),
+    );
+    expect(functionBody(sql, 'search_discovery'), contains('circle_channels'));
+    expect(
+      functionBody(sql, 'list_conversation_media'),
+      contains("m.type in ('image', 'voice', 'file')"),
+    );
+  });
+
+  test('community discovery v1 preserves reports and validates invites', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final createCircleBody = functionBody(sql, 'create_circle');
+    final inviteBody = functionBody(sql, 'invite_circle_members');
+    final postSelectPolicy = policyBody(rawSql, 'circle_posts_select_member');
+    final commentSelectPolicy = policyBody(
+      rawSql,
+      'circle_post_comments_select_member',
+    );
+
+    expect(sql, contains('target_post_id uuid references public.circle_posts(id) on delete set null'));
+    expect(createCircleBody, contains('Invalid circle invite members'));
+    expect(inviteBody, contains('Invalid circle invite members'));
+    expect(inviteBody, contains('already a circle member'));
+    expect(postSelectPolicy, contains('deleted_at is null'));
+    expect(commentSelectPolicy, contains('circle_post_comments.deleted_at is null'));
+  });
+
+  test('community discovery v1 returns rich circle detail payloads', () {
+    final sql = effectiveMigrationSql();
+    final detailBody = functionBody(sql, 'get_circle_detail');
+
+    expect(detailBody, contains("'profile',"));
+    expect(detailBody, contains("'username', p.username"));
+    expect(detailBody, contains("'author',"));
+    expect(detailBody, contains("'comments',"));
+    expect(detailBody, contains("'is_own_post'"));
+    expect(detailBody, contains("'can_manage_post'"));
+    expect(detailBody, contains('cp.deleted_at is null'));
   });
 
   test('forwarded media stays readable through trusted provenance', () {

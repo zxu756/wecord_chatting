@@ -311,6 +311,7 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
         extra: ChatThreadRouteExtra(
           title: widget.profile.displayName,
           type: ConversationType.direct,
+          avatarUrl: widget.profile.avatarUrl,
         ),
       );
     } catch (error) {
@@ -370,11 +371,52 @@ class _ProfileTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      leading: _ProfileAvatar(profile: profile),
       title: Text(profile.displayName),
       subtitle: Text('@${profile.username}'),
       trailing: trailing,
     );
   }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _publicAvatarImage(profile.avatarUrl);
+    return CircleAvatar(
+      backgroundImage: image,
+      child: image == null ? Text(_initials(profile.displayName)) : null,
+    );
+  }
+}
+
+ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
+  final uri = Uri.tryParse(avatarUrl ?? '');
+  if (uri == null || !uri.hasScheme) {
+    return null;
+  }
+  if (uri.scheme != 'http' && uri.scheme != 'https') {
+    return null;
+  }
+  return NetworkImage(uri.toString());
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '?';
+  }
+  final first = parts.first.characters.first;
+  final second = parts.length > 1 ? parts.last.characters.first : '';
+  return '$first$second'.toUpperCase();
 }
 
 class _LoadingRow extends StatelessWidget {

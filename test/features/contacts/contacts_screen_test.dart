@@ -93,6 +93,7 @@ void main() {
           id: 'friend-1',
           username: 'grace',
           displayName: 'Grace Hopper',
+          avatarUrl: 'profile-avatars/friend-1/grace.png',
         ),
       ];
 
@@ -102,6 +103,7 @@ void main() {
     expect(find.text('Friends'), findsOneWidget);
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('@grace'), findsOneWidget);
+    expect(find.text('GH'), findsOneWidget);
   });
 
   testWidgets('starts a direct conversation from a friend row', (tester) async {
@@ -476,6 +478,7 @@ Profile _profile({
   required String id,
   required String username,
   String? displayName,
+  String? avatarUrl,
 }) {
   return Profile(
     id: id,
@@ -483,7 +486,7 @@ Profile _profile({
     displayName:
         displayName ??
         '${username[0].toUpperCase()}${username.substring(1)} Lovelace',
-    avatarUrl: null,
+    avatarUrl: avatarUrl,
     bio: '',
     createdAt: DateTime.utc(2026, 5, 18),
     updatedAt: DateTime.utc(2026, 5, 18),

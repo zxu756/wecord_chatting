@@ -34,6 +34,7 @@ void main() {
           id: 'conversation-1',
           type: ConversationType.direct,
           title: 'Ada Lovelace',
+          avatarUrl: 'profile-avatars/user-2/ada.png',
           lastMessageBody: 'See you soon',
           lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
           unreadCount: 2,
@@ -54,6 +55,7 @@ void main() {
     expect(find.text('See you soon'), findsOneWidget);
     expect(find.text('04:30'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
+    expect(find.text('AL'), findsOneWidget);
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('No messages yet'), findsOneWidget);
   });

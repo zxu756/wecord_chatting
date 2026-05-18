@@ -5,10 +5,15 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 class ChatThreadRouteExtra {
-  const ChatThreadRouteExtra({required this.title, required this.type});
+  const ChatThreadRouteExtra({
+    required this.title,
+    required this.type,
+    this.avatarUrl,
+  });
 
   final String title;
   final ConversationType type;
+  final String? avatarUrl;
 }
 
 final conversationsProvider =
@@ -73,6 +78,10 @@ class _ConversationTile extends StatelessWidget {
         : 'No messages yet';
 
     return ListTile(
+      leading: _ConversationAvatar(
+        title: title,
+        avatarUrl: conversation.avatarUrl,
+      ),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Row(
@@ -89,11 +98,56 @@ class _ConversationTile extends StatelessWidget {
       onTap: () {
         context.go(
           '${ChatsScreen.path}/${conversation.id}',
-          extra: ChatThreadRouteExtra(title: title, type: conversation.type),
+          extra: ChatThreadRouteExtra(
+            title: title,
+            type: conversation.type,
+            avatarUrl: conversation.avatarUrl,
+          ),
         );
       },
     );
   }
+}
+
+class _ConversationAvatar extends StatelessWidget {
+  const _ConversationAvatar({required this.title, required this.avatarUrl});
+
+  final String title;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _publicAvatarImage(avatarUrl);
+    return CircleAvatar(
+      backgroundImage: image,
+      child: image == null ? Text(_initials(title)) : null,
+    );
+  }
+}
+
+ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
+  final uri = Uri.tryParse(avatarUrl ?? '');
+  if (uri == null || !uri.hasScheme) {
+    return null;
+  }
+  if (uri.scheme != 'http' && uri.scheme != 'https') {
+    return null;
+  }
+  return NetworkImage(uri.toString());
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '?';
+  }
+  final first = parts.first.characters.first;
+  final second = parts.length > 1 ? parts.last.characters.first : '';
+  return '$first$second'.toUpperCase();
 }
 
 String _formatTime(DateTime value) {

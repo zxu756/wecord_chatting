@@ -40,6 +40,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(find.text('AL'), findsOneWidget);
     expect(find.text('Older message'), findsOneWidget);
     expect(find.text('Newer message'), findsOneWidget);
     expect(

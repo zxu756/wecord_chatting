@@ -46,12 +46,14 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({
     required this.conversationId,
     this.title,
+    this.avatarUrl,
     this.conversationType,
     super.key,
   });
 
   final String conversationId;
   final String? title;
+  final String? avatarUrl;
   final ConversationType? conversationType;
 
   @override
@@ -102,6 +104,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8),
+          child: _ThreadAvatar(title: title, avatarUrl: widget.avatarUrl),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -362,6 +368,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         });
       }
     }
+  }
+}
+
+class _ThreadAvatar extends StatelessWidget {
+  const _ThreadAvatar({required this.title, required this.avatarUrl});
+
+  final String title;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _publicAvatarImage(avatarUrl);
+    return CircleAvatar(
+      backgroundImage: image,
+      child: image == null ? Text(_initials(title)) : null,
+    );
   }
 }
 
@@ -723,6 +745,31 @@ String _imageSendErrorText(Object error) {
     return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
   }
   return 'Could not send image. Try again. $error';
+}
+
+ImageProvider<Object>? _publicAvatarImage(String? avatarUrl) {
+  final uri = Uri.tryParse(avatarUrl ?? '');
+  if (uri == null || !uri.hasScheme) {
+    return null;
+  }
+  if (uri.scheme != 'http' && uri.scheme != 'https') {
+    return null;
+  }
+  return NetworkImage(uri.toString());
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '?';
+  }
+  final first = parts.first.characters.first;
+  final second = parts.length > 1 ? parts.last.characters.first : '';
+  return '$first$second'.toUpperCase();
 }
 
 _LatestOutgoingReadState _latestOutgoingReadState({

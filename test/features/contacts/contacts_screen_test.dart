@@ -14,6 +14,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -725,6 +726,13 @@ class FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<DiscoveryResult>> searchDiscovery(String query) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ConversationMediaItem>> listConversationMedia(
+    String conversationId,
+  ) async {
     return const [];
   }
 

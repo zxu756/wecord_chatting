@@ -5,6 +5,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
@@ -108,6 +109,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 title: title,
                 avatarUrl: avatarUrl,
                 conversationType: conversationType,
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/media',
+            builder: (context, state) {
+              return ChatMediaScreen(
+                conversationId: state.pathParameters['conversationId']!,
               );
             },
           ),

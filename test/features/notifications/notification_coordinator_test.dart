@@ -11,6 +11,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
@@ -758,6 +759,13 @@ class _FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<DiscoveryResult>> searchDiscovery(String query) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<ConversationMediaItem>> listConversationMedia(
+    String conversationId,
+  ) {
     throw UnimplementedError();
   }
 

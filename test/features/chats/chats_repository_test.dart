@@ -8,6 +8,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
@@ -190,6 +191,43 @@ void main() {
       const RpcCall(
         functionName: 'search_discovery',
         params: {'search_query': 'photos'},
+      ),
+    ]);
+  });
+
+  test('listConversationMedia maps scoped media rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..mediaRows = [
+        {
+          'message_id': 'message-1',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-2',
+          'sender_name': 'Ada',
+          'type': 'image',
+          'body': '',
+          'attachment': {
+            'kind': 'image',
+            'bucket': 'chat-media',
+            'path': 'conversation-1/image.png',
+            'mime_type': 'image/png',
+            'size': 32,
+          },
+          'created_at': '2026-05-19T10:00:00.000Z',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final results = await repository.listConversationMedia('conversation-1');
+
+    expect(results.single, isA<ConversationMediaItem>());
+    expect(results.single.imageAttachment?.path, 'conversation-1/image.png');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'list_conversation_media',
+        params: {'target_conversation_id': 'conversation-1'},
       ),
     ]);
   });
@@ -1061,6 +1099,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   var messageRows = <Map<String, dynamic>>[];
   var searchRows = <Map<String, dynamic>>[];
   var discoveryRows = <Map<String, dynamic>>[];
+  var mediaRows = <Map<String, dynamic>>[];
   var readMarkerRows = <Map<String, dynamic>>[];
   var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
@@ -1166,6 +1205,9 @@ class FakeChatsDataSource implements ChatsDataSource {
     }
     if (functionName == 'search_discovery') {
       return discoveryRows;
+    }
+    if (functionName == 'list_conversation_media') {
+      return mediaRows;
     }
     return rpcResult;
   }

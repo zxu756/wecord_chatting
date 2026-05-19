@@ -1,12 +1,10 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
-import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
@@ -15,138 +13,87 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
-  testWidgets('global search opens a matching conversation', (tester) async {
-    final repository = FakeChatsRepository()
-      ..discoveryResults = const [
-        DiscoveryResult(
-          type: DiscoveryResultType.message,
-          id: 'message-1',
-          conversationId: 'conversation-1',
-          title: 'Launch Crew',
-          subtitle: 'Ada · ship it',
-          rank: 0.9,
-        ),
-      ];
-    final router = GoRouter(
-      initialLocation: GlobalMessageSearchScreen.path,
-      routes: [
-        GoRoute(
-          path: GlobalMessageSearchScreen.path,
-          builder: (context, state) => const GlobalMessageSearchScreen(),
-        ),
-        GoRoute(
-          path: '/chats/:conversationId',
-          builder: (context, state) =>
-              Text('Thread ${state.pathParameters['conversationId']}'),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
-
-    await tester.enterText(find.byType(TextField), 'ship');
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump();
-
-    await tester.tap(find.textContaining('ship it'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Thread conversation-1'), findsOneWidget);
-  });
-
-  testWidgets('global discovery groups and opens circles and channels', (
+  testWidgets('chat media screen groups images voice and files', (
     tester,
   ) async {
     final repository = FakeChatsRepository()
-      ..discoveryResults = const [
-        DiscoveryResult(
-          type: DiscoveryResultType.circle,
-          id: 'circle-1',
-          title: 'Close Friends',
-          subtitle: '2 members',
-          circleId: 'circle-1',
-          rank: 0.9,
-        ),
-        DiscoveryResult(
-          type: DiscoveryResultType.circleChannel,
-          id: 'channel-1',
-          title: 'photos',
-          subtitle: 'Close Friends',
-          conversationId: 'conversation-2',
-          circleId: 'circle-1',
-          channelId: 'channel-1',
-          rank: 0.8,
-        ),
+      ..media = [
+        _media(type: MessageType.image, body: ''),
+        _media(type: MessageType.voice, body: ''),
+        _media(type: MessageType.file, body: 'report.pdf'),
       ];
-    final router = GoRouter(
-      initialLocation: GlobalMessageSearchScreen.path,
-      routes: [
-        GoRoute(
-          path: GlobalMessageSearchScreen.path,
-          builder: (context, state) => const GlobalMessageSearchScreen(),
-        ),
-        GoRoute(
-          path: '/circles/:circleId',
-          builder: (context, state) =>
-              Text('Circle ${state.pathParameters['circleId']}'),
-        ),
-        GoRoute(
-          path: '/chats/:conversationId',
-          builder: (context, state) =>
-              Text('Thread ${state.pathParameters['conversationId']}'),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
-        child: MaterialApp.router(routerConfig: router),
+        child: const MaterialApp(
+          home: ChatMediaScreen(conversationId: 'conversation-1'),
+        ),
       ),
     );
-
-    await tester.enterText(find.byType(TextField), 'photo');
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump();
-
-    expect(find.text('Circles'), findsOneWidget);
-    expect(find.text('Channels'), findsOneWidget);
-
-    await tester.tap(find.text('photos'));
     await tester.pumpAndSettle();
-    expect(find.text('Thread conversation-2'), findsOneWidget);
+
+    expect(find.text('Media'), findsOneWidget);
+    expect(find.text('Images'), findsOneWidget);
+    expect(find.textContaining('Ada'), findsOneWidget);
+
+    await tester.tap(find.text('Voice'));
+    await tester.pumpAndSettle();
+    expect(find.text('[Voice]'), findsOneWidget);
+
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+    expect(find.text('report.pdf'), findsOneWidget);
   });
 }
 
+ConversationMediaItem _media({
+  required MessageType type,
+  required String body,
+}) {
+  return ConversationMediaItem(
+    messageId: 'message-${type.toJson()}',
+    conversationId: 'conversation-1',
+    senderId: 'user-2',
+    senderName: 'Ada',
+    type: type,
+    body: body,
+    attachment: switch (type) {
+      MessageType.image => const {
+        'kind': 'image',
+        'bucket': 'chat-media',
+        'path': 'conversation-1/image.png',
+        'mime_type': 'image/png',
+        'size': 12,
+      },
+      MessageType.voice => const {
+        'kind': 'voice',
+        'bucket': 'chat-media',
+        'path': 'conversation-1/voice.m4a',
+        'mime_type': 'audio/mp4',
+        'size': 12,
+        'duration_ms': 1500,
+      },
+      MessageType.file => null,
+      MessageType.text => null,
+    },
+    createdAt: DateTime.utc(2026, 5, 19, 10),
+  );
+}
+
 class FakeChatsRepository implements ChatsRepository {
-  var searchResults = <MessageSearchResult>[];
-  var discoveryResults = <DiscoveryResult>[];
-  final searchQueries = <String>[];
-
-  @override
-  Future<List<MessageSearchResult>> searchMessages(String query) async {
-    searchQueries.add(query);
-    return searchResults;
-  }
-
-  @override
-  Future<List<DiscoveryResult>> searchDiscovery(String query) async {
-    searchQueries.add(query);
-    return discoveryResults;
-  }
+  var media = <ConversationMediaItem>[];
 
   @override
   Future<List<ConversationMediaItem>> listConversationMedia(
     String conversationId,
   ) async {
-    return const [];
+    return media;
+  }
+
+  @override
+  Future<String> createImageUrl(ImageAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
   }
 
   @override
@@ -155,26 +102,20 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<ConversationSummary?> getConversationSummary(
     String conversationId,
-  ) async {
-    return null;
-  }
+  ) async => null;
 
   @override
-  Future<List<ChatMessage>> listMessages(String conversationId) async {
-    return const [];
-  }
+  Future<List<ChatMessage>> listMessages(String conversationId) async =>
+      const [];
 
   @override
   Future<List<ConversationReadMarker>> listReadMarkers(
     String conversationId,
-  ) async {
-    return const [];
-  }
+  ) async => const [];
 
   @override
-  Future<String> getOrCreateDirectConversation(String otherUserId) async {
-    return 'conversation-for-$otherUserId';
-  }
+  Future<String> getOrCreateDirectConversation(String otherUserId) async =>
+      'conversation';
 
   @override
   Future<GroupDetail> getGroupDetail(String conversationId) async {
@@ -215,22 +156,17 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
-  Future<String> createImageUrl(ImageAttachment attachment) async {
-    return 'https://example.com/${attachment.path}';
-  }
+  Future<List<MessageSearchResult>> searchMessages(String query) async =>
+      const [];
 
   @override
-  Future<String> createVoiceUrl(VoiceAttachment attachment) async {
-    return 'https://example.com/${attachment.path}';
-  }
+  Future<List<DiscoveryResult>> searchDiscovery(String query) async => const [];
 
   @override
   Future<String> createGroupConversation({
     required String title,
     required List<String> memberIds,
-  }) async {
-    return 'group-conversation';
-  }
+  }) async => 'group';
 
   @override
   Future<void> renameGroupConversation({
@@ -248,9 +184,7 @@ class FakeChatsRepository implements ChatsRepository {
   Future<String> uploadGroupAvatar({
     required String conversationId,
     required ChatImageUpload image,
-  }) async {
-    return 'group-avatars/$conversationId/avatar.png';
-  }
+  }) async => 'avatar';
 
   @override
   Future<void> updateGroupProfile({
@@ -268,6 +202,11 @@ class FakeChatsRepository implements ChatsRepository {
     required String conversationId,
     required String memberId,
   }) async {}
+
+  @override
+  Future<String> createVoiceUrl(VoiceAttachment attachment) async {
+    return 'https://example.com/${attachment.path}';
+  }
 
   @override
   Future<void> recallMessage({required String messageId}) async {}
@@ -303,17 +242,13 @@ class FakeChatsRepository implements ChatsRepository {
   List<ConversationSummary> searchConversations(
     List<ConversationSummary> conversations,
     String query,
-  ) {
-    return conversations;
-  }
+  ) => conversations;
 
   @override
   List<ChatMessage> searchThreadMessages(
     List<ChatMessage> messages,
     String query,
-  ) {
-    return messages;
-  }
+  ) => messages;
 
   @override
   Stream<void> conversationChanges() => const Stream.empty();

@@ -8,6 +8,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
@@ -59,6 +60,10 @@ abstract interface class ChatsRepository {
   Future<List<MessageSearchResult>> searchMessages(String query);
 
   Future<List<DiscoveryResult>> searchDiscovery(String query);
+
+  Future<List<ConversationMediaItem>> listConversationMedia(
+    String conversationId,
+  );
 
   Future<String> createGroupConversation({
     required String title,
@@ -431,6 +436,19 @@ class SupabaseChatsRepository implements ChatsRepository {
     return (rows as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .map(DiscoveryResult.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<ConversationMediaItem>> listConversationMedia(
+    String conversationId,
+  ) async {
+    final rows = await _dataSource.rpc('list_conversation_media', {
+      'target_conversation_id': conversationId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(ConversationMediaItem.fromJson)
         .toList(growable: false);
   }
 
@@ -1182,6 +1200,13 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<List<DiscoveryResult>> searchDiscovery(String query) {
     throw StateError('Supabase must be initialized before searching.');
+  }
+
+  @override
+  Future<List<ConversationMediaItem>> listConversationMedia(
+    String conversationId,
+  ) {
+    throw StateError('Supabase must be initialized before browsing media.');
   }
 
   @override

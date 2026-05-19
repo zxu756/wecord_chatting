@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
@@ -260,6 +262,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   _messageSearchQuery = '';
                 }
               });
+            },
+          ),
+          IconButton(
+            tooltip: 'Media',
+            icon: const Icon(Icons.photo_library_outlined),
+            onPressed: () {
+              context.go(ChatMediaScreen.pathFor(widget.conversationId));
             },
           ),
           if (conversationType == ConversationType.group)

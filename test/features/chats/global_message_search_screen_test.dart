@@ -9,22 +9,20 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
   testWidgets('global search opens a matching conversation', (tester) async {
     final repository = FakeChatsRepository()
-      ..searchResults = [
-        MessageSearchResult(
-          messageId: 'message-1',
+      ..discoveryResults = const [
+        DiscoveryResult(
+          type: DiscoveryResultType.message,
+          id: 'message-1',
           conversationId: 'conversation-1',
-          conversationTitle: 'Launch Crew',
-          senderId: 'user-2',
-          senderName: 'Ada',
-          body: 'ship it',
-          type: MessageType.text,
-          createdAt: DateTime.utc(2026, 5, 18),
+          title: 'Launch Crew',
+          subtitle: 'Ada · ship it',
           rank: 0.9,
         ),
       ];
@@ -60,16 +58,87 @@ void main() {
 
     expect(find.text('Thread conversation-1'), findsOneWidget);
   });
+
+  testWidgets('global discovery groups and opens circles and channels', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..discoveryResults = const [
+        DiscoveryResult(
+          type: DiscoveryResultType.circle,
+          id: 'circle-1',
+          title: 'Close Friends',
+          subtitle: '2 members',
+          circleId: 'circle-1',
+          rank: 0.9,
+        ),
+        DiscoveryResult(
+          type: DiscoveryResultType.circleChannel,
+          id: 'channel-1',
+          title: 'photos',
+          subtitle: 'Close Friends',
+          conversationId: 'conversation-2',
+          circleId: 'circle-1',
+          channelId: 'channel-1',
+          rank: 0.8,
+        ),
+      ];
+    final router = GoRouter(
+      initialLocation: GlobalMessageSearchScreen.path,
+      routes: [
+        GoRoute(
+          path: GlobalMessageSearchScreen.path,
+          builder: (context, state) => const GlobalMessageSearchScreen(),
+        ),
+        GoRoute(
+          path: '/circles/:circleId',
+          builder: (context, state) =>
+              Text('Circle ${state.pathParameters['circleId']}'),
+        ),
+        GoRoute(
+          path: '/chats/:conversationId',
+          builder: (context, state) =>
+              Text('Thread ${state.pathParameters['conversationId']}'),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'photo');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.text('Circles'), findsOneWidget);
+    expect(find.text('Channels'), findsOneWidget);
+
+    await tester.tap(find.text('photos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Thread conversation-2'), findsOneWidget);
+  });
 }
 
 class FakeChatsRepository implements ChatsRepository {
   var searchResults = <MessageSearchResult>[];
+  var discoveryResults = <DiscoveryResult>[];
   final searchQueries = <String>[];
 
   @override
   Future<List<MessageSearchResult>> searchMessages(String query) async {
     searchQueries.add(query);
     return searchResults;
+  }
+
+  @override
+  Future<List<DiscoveryResult>> searchDiscovery(String query) async {
+    searchQueries.add(query);
+    return discoveryResults;
   }
 
   @override

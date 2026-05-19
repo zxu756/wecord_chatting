@@ -12,6 +12,7 @@ import 'package:wecord/features/notifications/notification_preferences_repositor
 import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -248,6 +249,11 @@ class _FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<MessageSearchResult>> searchMessages(String query) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<DiscoveryResult>> searchDiscovery(String query) {
     throw UnimplementedError();
   }
 

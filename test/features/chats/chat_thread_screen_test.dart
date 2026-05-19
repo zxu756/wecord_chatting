@@ -15,6 +15,7 @@ import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -1776,6 +1777,11 @@ class FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<MessageSearchResult>> searchMessages(String query) async {
+    return const [];
+  }
+
+  @override
+  Future<List<DiscoveryResult>> searchDiscovery(String query) async {
     return const [];
   }
 

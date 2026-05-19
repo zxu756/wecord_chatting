@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -158,6 +159,37 @@ void main() {
       const RpcCall(
         functionName: 'search_messages',
         params: {'search_query': 'ship'},
+      ),
+    ]);
+  });
+
+  test('searchDiscovery maps grouped discovery rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..discoveryRows = [
+        {
+          'result_type': 'circle_channel',
+          'id': 'channel-1',
+          'title': 'photos',
+          'subtitle': 'Close Friends',
+          'conversation_id': 'conversation-2',
+          'circle_id': 'circle-1',
+          'channel_id': 'channel-1',
+          'rank': 0.8,
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final results = await repository.searchDiscovery(' photos ');
+
+    expect(results.single.type, DiscoveryResultType.circleChannel);
+    expect(results.single.conversationId, 'conversation-2');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'search_discovery',
+        params: {'search_query': 'photos'},
       ),
     ]);
   });
@@ -1028,6 +1060,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   var conversationRows = <Map<String, dynamic>>[];
   var messageRows = <Map<String, dynamic>>[];
   var searchRows = <Map<String, dynamic>>[];
+  var discoveryRows = <Map<String, dynamic>>[];
   var readMarkerRows = <Map<String, dynamic>>[];
   var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
@@ -1130,6 +1163,9 @@ class FakeChatsDataSource implements ChatsDataSource {
     rpcCalls.add(RpcCall(functionName: functionName, params: params));
     if (functionName == 'search_messages') {
       return searchRows;
+    }
+    if (functionName == 'search_discovery') {
+      return discoveryRows;
     }
     return rpcResult;
   }

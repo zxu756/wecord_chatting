@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
-import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/shared/models/discovery.dart';
 
 class GlobalMessageSearchScreen extends ConsumerStatefulWidget {
   const GlobalMessageSearchScreen({super.key});
@@ -25,7 +26,7 @@ class _GlobalMessageSearchScreenState
   var _generation = 0;
   var _isLoading = false;
   Object? _error;
-  List<MessageSearchResult>? _results;
+  List<DiscoveryResult>? _results;
 
   @override
   void dispose() {
@@ -37,7 +38,7 @@ class _GlobalMessageSearchScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Search messages')),
+      appBar: AppBar(title: const Text('Search')),
       body: Column(
         children: [
           Padding(
@@ -47,7 +48,7 @@ class _GlobalMessageSearchScreenState
               autofocus: true,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                labelText: 'Search messages',
+                labelText: 'Search WeCord',
                 prefixIcon: Icon(Icons.search),
               ),
               textInputAction: TextInputAction.search,
@@ -63,7 +64,7 @@ class _GlobalMessageSearchScreenState
   Widget _buildBody(BuildContext context) {
     final normalizedQuery = _query.trim();
     if (normalizedQuery.isEmpty) {
-      return const Center(child: Text('Search across all conversations'));
+      return const Center(child: Text('Search messages, groups, and Circles'));
     }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -80,16 +81,25 @@ class _GlobalMessageSearchScreenState
         ),
       );
     }
-    final results = _results ?? const <MessageSearchResult>[];
+    final results = _results ?? const <DiscoveryResult>[];
     if (results.isEmpty) {
-      return const Center(child: Text('No matching messages'));
+      return const Center(child: Text('No matching results'));
     }
-    return ListView.separated(
-      itemCount: results.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        return _MessageSearchResultTile(result: results[index]);
-      },
+    final grouped = _groupResults(results);
+    return ListView(
+      children: [
+        for (final entry in grouped.entries) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Text(
+              entry.key,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          for (final result in entry.value)
+            _DiscoveryResultTile(result: result),
+        ],
+      ],
     );
   }
 
@@ -119,7 +129,7 @@ class _GlobalMessageSearchScreenState
     try {
       final results = await ref
           .read(chatsRepositoryProvider)
-          .searchMessages(query);
+          .searchDiscovery(query);
       if (!mounted || generation != _generation) {
         return;
       }
@@ -140,51 +150,73 @@ class _GlobalMessageSearchScreenState
   }
 }
 
-class _MessageSearchResultTile extends StatelessWidget {
-  const _MessageSearchResultTile({required this.result});
+class _DiscoveryResultTile extends StatelessWidget {
+  const _DiscoveryResultTile({required this.result});
 
-  final MessageSearchResult result;
+  final DiscoveryResult result;
 
   @override
   Widget build(BuildContext context) {
-    final body = result.body.trim().isEmpty ? _typeLabel(result) : result.body;
     return ListTile(
-      title: Text(
-        result.conversationTitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${result.senderName} · $body',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(_formatSearchTime(result.createdAt)),
-        ],
-      ),
-      onTap: () {
-        context.go('${ChatsScreen.path}/${result.conversationId}');
-      },
+      leading: Icon(_iconFor(result.type)),
+      title: Text(result.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: result.subtitle == null
+          ? null
+          : Text(
+              result.subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+      onTap: () => _openResult(context, result),
     );
-  }
-
-  String _typeLabel(MessageSearchResult result) {
-    return switch (result.type) {
-      MessageType.image => '[Image]',
-      MessageType.voice => '[Voice]',
-      MessageType.file => '[File]',
-      MessageType.text => '',
-    };
   }
 }
 
-String _formatSearchTime(DateTime value) {
-  final local = value.toLocal();
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
+Map<String, List<DiscoveryResult>> _groupResults(
+  List<DiscoveryResult> results,
+) {
+  final grouped = <String, List<DiscoveryResult>>{};
+  for (final result in results) {
+    final title = _sectionTitle(result.type);
+    grouped.putIfAbsent(title, () => <DiscoveryResult>[]).add(result);
+  }
+  return grouped;
+}
+
+String _sectionTitle(DiscoveryResultType type) {
+  return switch (type) {
+    DiscoveryResultType.contact => 'Contacts',
+    DiscoveryResultType.group => 'Groups',
+    DiscoveryResultType.circle => 'Circles',
+    DiscoveryResultType.circleChannel => 'Channels',
+    DiscoveryResultType.message => 'Messages',
+  };
+}
+
+IconData _iconFor(DiscoveryResultType type) {
+  return switch (type) {
+    DiscoveryResultType.contact => Icons.person_outline,
+    DiscoveryResultType.group => Icons.group_outlined,
+    DiscoveryResultType.circle => Icons.bubble_chart_outlined,
+    DiscoveryResultType.circleChannel => Icons.tag,
+    DiscoveryResultType.message => Icons.chat_bubble_outline,
+  };
+}
+
+void _openResult(BuildContext context, DiscoveryResult result) {
+  switch (result.type) {
+    case DiscoveryResultType.circle:
+      final circleId = result.circleId ?? result.id;
+      context.go('${CirclesScreen.path}/$circleId');
+    case DiscoveryResultType.circleChannel:
+    case DiscoveryResultType.group:
+    case DiscoveryResultType.contact:
+    case DiscoveryResultType.message:
+      final conversationId = result.conversationId;
+      if (conversationId != null) {
+        context.go('${ChatsScreen.path}/$conversationId');
+      } else if (result.circleId != null) {
+        context.go('${CirclesScreen.path}/${result.circleId}');
+      }
+  }
 }

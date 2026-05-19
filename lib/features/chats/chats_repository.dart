@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -56,6 +57,8 @@ abstract interface class ChatsRepository {
   });
 
   Future<List<MessageSearchResult>> searchMessages(String query);
+
+  Future<List<DiscoveryResult>> searchDiscovery(String query);
 
   Future<String> createGroupConversation({
     required String title,
@@ -413,6 +416,21 @@ class SupabaseChatsRepository implements ChatsRepository {
     return (rows as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .map(MessageSearchResult.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<DiscoveryResult>> searchDiscovery(String query) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
+      return const [];
+    }
+    final rows = await _dataSource.rpc('search_discovery', {
+      'search_query': trimmedQuery,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(DiscoveryResult.fromJson)
         .toList(growable: false);
   }
 
@@ -1159,6 +1177,11 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<List<MessageSearchResult>> searchMessages(String query) {
     throw StateError('Supabase must be initialized before searching messages.');
+  }
+
+  @override
+  Future<List<DiscoveryResult>> searchDiscovery(String query) {
+    throw StateError('Supabase must be initialized before searching.');
   }
 
   @override

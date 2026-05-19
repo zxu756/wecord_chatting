@@ -150,11 +150,27 @@ begin
   end if;
 end $$;
 
+create or replace function public.is_current_user_circle_member(target_circle_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.circle_members cm
+    where cm.circle_id = target_circle_id
+      and cm.user_id = auth.uid()
+  );
+$$;
+
 insert into storage.buckets (id, name, public)
 values ('chat-media', 'chat-media', false)
 on conflict (id) do update
 set public = false;
 
+drop policy if exists chat_media_select_authenticated on storage.objects;
 create policy chat_media_select_authenticated
   on storage.objects for select
   to authenticated
@@ -165,6 +181,7 @@ create policy chat_media_select_authenticated
     )
   );
 
+drop policy if exists chat_media_insert_authenticated on storage.objects;
 create policy chat_media_insert_authenticated
   on storage.objects for insert
   to authenticated

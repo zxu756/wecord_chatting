@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
@@ -22,6 +23,7 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -49,6 +51,12 @@ final chatActivityProvider = StreamProvider.autoDispose
           .watch(chatsRepositoryProvider)
           .conversationActivity(conversationId);
     });
+
+final canManageThreadProvider = FutureProvider.autoDispose.family<bool, String>(
+  (ref, threadId) {
+    return ref.watch(chatsRepositoryProvider).canManageThread(threadId);
+  },
+);
 
 final chatConversationSummaryProvider = FutureProvider.autoDispose
     .family<ConversationSummary?, String>((ref, conversationId) {
@@ -124,6 +132,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.avatarUrl,
     this.conversationType,
     this.extraActions = const [],
+    this.onOpenThread,
     super.key,
   });
 
@@ -132,6 +141,9 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   final String? avatarUrl;
   final ConversationType? conversationType;
   final List<Widget> extraActions;
+
+  /// Opens a thread started here. Defaults to pushing it full screen.
+  final ValueChanged<ThreadTarget>? onOpenThread;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -255,12 +267,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
-    // Group and channel members feed sender names and @mention candidates.
-    final groupDetail =
+    final isThread = conversationType == ConversationType.thread;
+    final canStartThreads =
         conversationType == ConversationType.group ||
-            conversationType == ConversationType.channel
+        conversationType == ConversationType.channel;
+    // Group, channel and thread members feed sender names and @mention
+    // candidates.
+    final groupDetail = canStartThreads || isThread
         ? ref.watch(groupDetailProvider(widget.conversationId)).valueOrNull
         : null;
+    final threadId = isThread ? conversationSummary?.threadId : null;
+    final canManageThread =
+        threadId != null &&
+        (ref.watch(canManageThreadProvider(threadId)).valueOrNull ?? false);
+    final threadArchived = conversationSummary?.threadArchivedAt != null;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
     // A direct peer is online when they have the app open anywhere; in
@@ -287,21 +307,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8),
-          child: _ThreadAvatar(title: title, avatarUrl: avatarUrl),
+          child: isThread
+              ? const CircleAvatar(child: Icon(Icons.forum_outlined))
+              : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             Text(
-              [
-                peerIsOnline ? 'Online' : 'Offline',
-                if (conversationType == ConversationType.direct)
-                  ?activeCustomStatus(
-                    conversationSummary?.directCustomStatus,
-                  )?.label,
-              ].join(' · '),
+              isThread
+                  ? _threadSubtitle(conversationSummary)
+                  : [
+                      peerIsOnline ? 'Online' : 'Offline',
+                      if (conversationType == ConversationType.direct)
+                        ?activeCustomStatus(
+                          conversationSummary?.directCustomStatus,
+                        )?.label,
+                    ].join(' · '),
               key: const ValueKey('chat-thread-subtitle'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -351,6 +375,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   },
                 );
               },
+            ),
+          if (canManageThread)
+            IconButton(
+              tooltip: threadArchived ? 'Unarchive thread' : 'Archive thread',
+              icon: Icon(
+                threadArchived
+                    ? Icons.unarchive_outlined
+                    : Icons.archive_outlined,
+              ),
+              onPressed: () => _setThreadArchived(threadId, !threadArchived),
             ),
           ...widget.extraActions,
         ],
@@ -453,9 +487,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         newMessageDividerId: _newMessageDividerId,
                       )
                     : const <String>{};
-                final showSenders =
-                    conversationType == ConversationType.group ||
-                    conversationType == ConversationType.channel;
+                final showSenders = canStartThreads || isThread;
                 final membersById = {
                   for (final member
                       in groupDetail?.members ?? const <GroupMember>[])
@@ -506,6 +538,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         canPin: canPinMessages,
                         onTogglePin: _togglePin,
                         onRemoveEmbed: _removeEmbed,
+                        canStartThread: canStartThreads,
+                        onOpenThread: _openOrCreateThread,
                       );
                     }
                     final highlighted = AnimatedContainer(
@@ -1139,6 +1173,84 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  void _openThread(ThreadTarget target) {
+    final onOpenThread = widget.onOpenThread;
+    if (onOpenThread != null) {
+      onOpenThread(target);
+      return;
+    }
+    context.push(
+      '${ChatsScreen.path}/${target.conversationId}',
+      extra: ChatThreadRouteExtra(
+        title: target.title,
+        type: ConversationType.thread,
+      ),
+    );
+  }
+
+  /// Opens [message]'s thread, or asks for a title and starts one.
+  Future<void> _openOrCreateThread(ChatMessage message) async {
+    final existing = message.threadSummary;
+    if (existing != null) {
+      _openThread(
+        ThreadTarget(
+          conversationId: existing.conversationId,
+          title: existing.title,
+          threadId: existing.threadId,
+        ),
+      );
+      return;
+    }
+    final title = await showDialog<String>(
+      context: context,
+      builder: (context) =>
+          _ThreadTitleDialog(initialTitle: _suggestedTitleFor(message)),
+    );
+    if (title == null || !mounted) {
+      return;
+    }
+    try {
+      final thread = await ref
+          .read(chatsRepositoryProvider)
+          .createThread(
+            parentConversationId: widget.conversationId,
+            rootMessageId: message.id,
+            title: title,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+      ref.invalidate(conversationsProvider);
+      if (!mounted) {
+        return;
+      }
+      _openThread(
+        ThreadTarget(
+          conversationId: thread.conversationId,
+          title: thread.title,
+          threadId: thread.id,
+        ),
+      );
+    } catch (_) {
+      _showSnackBar('Could not create thread. Try again.');
+    }
+  }
+
+  Future<void> _setThreadArchived(String threadId, bool archived) async {
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .setThreadArchived(threadId: threadId, archived: archived);
+      ref.invalidate(chatConversationSummaryProvider(widget.conversationId));
+      ref.invalidate(conversationsProvider);
+      _showSnackBar(archived ? 'Thread archived.' : 'Thread unarchived.');
+    } catch (_) {
+      _showSnackBar(
+        archived
+            ? 'Could not archive thread. Try again.'
+            : 'Could not unarchive thread. Try again.',
+      );
+    }
+  }
+
   Future<void> _unpinFromList(String messageId) async {
     try {
       await ref
@@ -1333,6 +1445,187 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 }
 
+/// "in #channel" (or "in Group") under a thread's title.
+String _threadSubtitle(ConversationSummary? summary) {
+  final parentTitle = summary?.parentTitle?.trim();
+  if (parentTitle == null || parentTitle.isEmpty) {
+    return 'Thread';
+  }
+  final archived = summary?.threadArchivedAt != null ? ' · Archived' : '';
+  return summary?.circleId != null
+      ? 'in #$parentTitle$archived'
+      : 'in $parentTitle$archived';
+}
+
+String _suggestedTitleFor(ChatMessage message) {
+  return switch (message.type) {
+    MessageType.text => suggestedThreadTitle(
+      plainTextFromMarkdown(message.body),
+    ),
+    MessageType.image => 'Image',
+    MessageType.voice => 'Voice message',
+    MessageType.file => 'File',
+    MessageType.system => 'Thread',
+  };
+}
+
+/// Asks for a thread title. Returns the trimmed title, or null when
+/// cancelled.
+class _ThreadTitleDialog extends StatefulWidget {
+  const _ThreadTitleDialog({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_ThreadTitleDialog> createState() => _ThreadTitleDialogState();
+}
+
+class _ThreadTitleDialogState extends State<_ThreadTitleDialog> {
+  late final _controller = TextEditingController(text: widget.initialTitle);
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _create() {
+    final title = _controller.text.trim();
+    if (title.isEmpty) {
+      setState(() => _errorText = 'Thread title is required.');
+      return;
+    }
+    Navigator.of(context).pop(title);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create thread'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: ConversationThread.maxTitleLength,
+        decoration: InputDecoration(
+          border: const OutlineInputBorder(),
+          labelText: 'Thread title',
+          errorText: _errorText,
+        ),
+        onSubmitted: (_) => _create(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _create, child: const Text('Create')),
+      ],
+    );
+  }
+}
+
+/// "n replies · time" under a thread's root message; opens the thread.
+class _ThreadChip extends StatelessWidget {
+  const _ThreadChip({
+    required this.messageId,
+    required this.summary,
+    required this.onTap,
+  });
+
+  final String messageId;
+  final MessageThreadSummary summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final unread = summary.unreadCount > 0;
+    final replies = switch (summary.replyCount) {
+      0 => 'No replies yet',
+      1 => '1 reply',
+      final count => '$count replies',
+    };
+    final lastReplyAt = summary.lastReplyAt;
+    final detail = summary.replyCount > 0 && lastReplyAt != null
+        ? '$replies · ${formatThreadActivity(lastReplyAt)}'
+        : replies;
+    return Material(
+      key: ValueKey('thread-chip-$messageId'),
+      color: colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.forum_outlined, size: 16, color: colorScheme.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  summary.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                detail,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: unread
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: unread ? FontWeight.w700 : null,
+                ),
+              ),
+              if (unread) ...[
+                const SizedBox(width: 6),
+                Container(
+                  key: const ValueKey('thread-chip-unread'),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How long ago a thread was last active: "just now", "5m ago", "3h ago",
+/// then the date.
+String formatThreadActivity(DateTime value, {DateTime? now}) {
+  final current = (now ?? DateTime.now()).toUtc();
+  final difference = current.difference(value.toUtc());
+  if (difference.inMinutes < 1) {
+    return 'just now';
+  }
+  if (difference.inHours < 1) {
+    return '${difference.inMinutes}m ago';
+  }
+  if (difference.inDays < 1) {
+    return '${difference.inHours}h ago';
+  }
+  final local = value.toLocal();
+  return '${local.month}/${local.day}';
+}
+
 /// The other member of a direct conversation, from its read markers (one
 /// per member).
 String? _directPeerId(
@@ -1489,6 +1782,8 @@ class _MessageBubble extends StatelessWidget {
     required this.canPin,
     required this.onTogglePin,
     required this.onRemoveEmbed,
+    this.canStartThread = false,
+    this.onOpenThread,
   });
 
   final ChatMessage message;
@@ -1518,6 +1813,12 @@ class _MessageBubble extends StatelessWidget {
   final bool canPin;
   final Future<void> Function(ChatMessage message) onTogglePin;
   final Future<void> Function(ChatMessage message) onRemoveEmbed;
+
+  /// Threads can start from messages in this conversation.
+  final bool canStartThread;
+
+  /// Opens this message's thread, starting one first if needed.
+  final Future<void> Function(ChatMessage message)? onOpenThread;
 
   /// The link whose preview card shows under this message, if any.
   String? get _previewUrl {
@@ -1608,6 +1909,20 @@ class _MessageBubble extends StatelessWidget {
           MessageLinkPreviewCard(
             url: previewUrl,
             bottomGap: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
+          ),
+        if (message.threadSummary case final thread? when onOpenThread != null)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: _ThreadChip(
+                messageId: message.id,
+                summary: thread,
+                onTap: () => unawaited(onOpenThread!(message)),
+              ),
+            ),
           ),
         if (reactions.isNotEmpty)
           Padding(
@@ -1705,6 +2020,21 @@ class _MessageBubble extends StatelessWidget {
                     onReply(message);
                   },
                 ),
+                if (onOpenThread != null &&
+                    (message.threadSummary != null ||
+                        (canStartThread && message.type != MessageType.system)))
+                  ListTile(
+                    leading: const Icon(Icons.forum_outlined),
+                    title: Text(
+                      message.threadSummary == null
+                          ? 'Create thread'
+                          : 'Open thread',
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onOpenThread!(message));
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.forward_outlined),
                   title: const Text('Forward'),

@@ -18,6 +18,7 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -838,6 +839,184 @@ void main() {
     await tester.pump();
 
     expect(find.text('Online · 🎧 Listening'), findsOneWidget);
+  });
+
+  group('threads', () {
+    testWidgets('long-pressing a channel message creates a thread', (
+      tester,
+    ) async {
+      const body =
+          'Who is up for a long walk on Saturday morning around the lake?';
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: body,
+            createdAt: DateTime.utc(2026, 10, 13, 8),
+          ),
+        ];
+      final opened = <ThreadTarget>[];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          title: '# general',
+          conversationType: ConversationType.channel,
+          onOpenThread: opened.add,
+        ),
+      );
+      await tester.pump();
+
+      await tester.longPress(find.text(body));
+      await tester.pumpAndSettle();
+      expect(find.text('Open thread'), findsNothing);
+      await tester.tap(find.text('Create thread'));
+      await tester.pumpAndSettle();
+
+      final titleField = find.widgetWithText(TextField, 'Thread title');
+      expect(
+        tester.widget<TextField>(titleField).controller!.text,
+        suggestedThreadTitle(body),
+      );
+      expect(suggestedThreadTitle(body), endsWith('…'));
+      await tester.enterText(titleField, 'Saturday walk');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(repository.createdThreads, [
+        (
+          parentConversationId: 'conversation-1',
+          rootMessageId: 'message-1',
+          title: 'Saturday walk',
+        ),
+      ]);
+      expect(opened.single.conversationId, 'thread-conversation-1');
+      expect(opened.single.title, 'Saturday walk');
+    });
+
+    testWidgets('root messages show a reply chip that opens the thread', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'Root message',
+            createdAt: DateTime.utc(2026, 10, 13, 8),
+          ).copyWith(
+            threadSummary: MessageThreadSummary(
+              threadId: 'thread-1',
+              conversationId: 'thread-conversation-1',
+              title: 'Plans',
+              replyCount: 2,
+              lastReplyAt: DateTime.now().toUtc().subtract(
+                const Duration(minutes: 5),
+              ),
+              unreadCount: 1,
+            ),
+          ),
+        ];
+      final opened = <ThreadTarget>[];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.group,
+          onOpenThread: opened.add,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('thread-chip-message-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Plans'), findsOneWidget);
+      expect(find.text('2 replies · 5m ago'), findsOneWidget);
+      expect(find.byKey(const ValueKey('thread-chip-unread')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('thread-chip-message-1')));
+      await tester.pump();
+      expect(opened.single.conversationId, 'thread-conversation-1');
+      expect(opened.single.threadId, 'thread-1');
+
+      await tester.longPress(find.text('Root message'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create thread'), findsNothing);
+      await tester.tap(find.text('Open thread'));
+      await tester.pumpAndSettle();
+      expect(opened, hasLength(2));
+      expect(repository.createdThreads, isEmpty);
+    });
+
+    testWidgets('direct chats and threads cannot start threads', (
+      tester,
+    ) async {
+      for (final type in [ConversationType.direct, ConversationType.thread]) {
+        final repository = FakeChatsRepository()
+          ..messages = [
+            _message(
+              id: 'message-1',
+              senderId: 'user-2',
+              body: 'Hello there',
+              createdAt: DateTime.utc(2026, 10, 13, 8),
+            ),
+          ];
+        await tester.pumpWidget(
+          _app(repository, conversationType: type, onOpenThread: (_) {}),
+        );
+        await tester.pump();
+
+        await tester.longPress(find.text('Hello there'));
+        await tester.pumpAndSettle();
+        expect(find.text('Create thread'), findsNothing, reason: '$type');
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+    });
+
+    testWidgets('thread headers name the channel and archive the thread', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..canManageThreads = true
+        ..conversations = [
+          const ConversationSummary(
+            id: 'conversation-1',
+            type: ConversationType.thread,
+            unreadCount: 0,
+            title: 'Plans',
+            parentConversationId: 'channel-conversation-1',
+            parentTitle: 'general',
+            circleId: 'circle-1',
+            threadId: 'thread-1',
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          title: null,
+          conversationType: ConversationType.thread,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Plans'), findsOneWidget);
+      expect(find.text('in #general'), findsOneWidget);
+      expect(find.text('Online'), findsNothing);
+
+      await tester.tap(find.byTooltip('Archive thread'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.archiveCalls, [('thread-1', true)]);
+      expect(find.text('in #general · Archived'), findsOneWidget);
+      expect(find.byTooltip('Unarchive thread'), findsOneWidget);
+    });
   });
 
   testWidgets('sends typing activity while composing and clears it on send', (
@@ -2812,6 +2991,7 @@ Widget _app(
   ConversationType? conversationType,
   LinkLauncher? linkLauncher,
   Stream<Set<String>>? onlineUserIds,
+  ValueChanged<ThreadTarget>? onOpenThread,
 }) {
   return ProviderScope(
     overrides: [
@@ -2836,6 +3016,7 @@ Widget _app(
         conversationId: 'conversation-1',
         title: title,
         conversationType: conversationType,
+        onOpenThread: onOpenThread,
       ),
     ),
   );
@@ -2949,6 +3130,10 @@ class FakeChatsRepository implements ChatsRepository {
   final suppressEmbedCalls = <(String, bool)>[];
   final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
+  final createdThreads =
+      <({String parentConversationId, String? rootMessageId, String? title})>[];
+  final archiveCalls = <(String, bool)>[];
+  var canManageThreads = false;
   String? sentReplyToMessageId;
   ReplyPreview? sentReplyPreview;
   String? editedMessageId;
@@ -3167,6 +3352,67 @@ class FakeChatsRepository implements ChatsRepository {
             : message,
     ];
   }
+
+  @override
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  }) async {
+    createdThreads.add((
+      parentConversationId: parentConversationId,
+      rootMessageId: rootMessageId,
+      title: title,
+    ));
+    return ConversationThread(
+      id: 'thread-1',
+      conversationId: 'thread-conversation-1',
+      parentConversationId: parentConversationId,
+      rootMessageId: rootMessageId,
+      title: title ?? 'Thread',
+      createdAt: DateTime.utc(2026, 10, 13),
+    );
+  }
+
+  @override
+  Future<List<ConversationThread>> listThreads(
+    String parentConversationId,
+  ) async => const [];
+
+  @override
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  }) async {
+    archiveCalls.add((threadId, archived));
+    conversations = [
+      for (final conversation in conversations)
+        conversation.threadId == threadId
+            ? ConversationSummary(
+                id: conversation.id,
+                type: conversation.type,
+                unreadCount: conversation.unreadCount,
+                title: conversation.title,
+                parentConversationId: conversation.parentConversationId,
+                parentTitle: conversation.parentTitle,
+                circleId: conversation.circleId,
+                threadId: conversation.threadId,
+                threadArchivedAt: archived ? DateTime.utc(2026, 10, 13) : null,
+              )
+            : conversation,
+    ];
+    return ConversationThread(
+      id: threadId,
+      conversationId: 'thread-conversation-1',
+      parentConversationId: 'conversation-1',
+      title: 'Thread',
+      createdAt: DateTime.utc(2026, 10, 13),
+      archivedAt: archived ? DateTime.utc(2026, 10, 13) : null,
+    );
+  }
+
+  @override
+  Future<bool> canManageThread(String threadId) async => canManageThreads;
 
   @override
   Future<void> markConversationRead(String conversationId) async {

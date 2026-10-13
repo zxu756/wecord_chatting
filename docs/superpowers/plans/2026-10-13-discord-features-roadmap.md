@@ -76,7 +76,7 @@
 - [x] **14. 自定义状态**（S）
   - `profiles.status_emoji text null`、`status_text text null`（≤ 64 字）、`status_expires_at null`。RPC `set_custom_status`。
   - 显示在成员列表、私聊顶栏、个人资料页；设置入口在「我」页面，可以选择 30 分钟 / 4 小时 / 今天 / 不清除。
-- [ ] **15. 子话题（Threads）**（M）
+- [x] **15. 子话题（Threads）**（M）
   - 表 `conversation_threads (id, parent_conversation_id, root_message_id null, conversation_id unique, title, created_by, created_at, archived_at null, last_message_at)`。每个子话题是一个新的 `type = 'thread'` 会话，成员 = 父会话成员（加入父会话的人自动可见）。
   - RPC：`create_thread(parent_conversation_id, root_message_id, title)`、`list_threads(parent_conversation_id)`、`archive_thread`。根消息下方显示「n 条回复 · 最后回复时间」。
   - 宽屏：子话题在聊天区右侧以侧栏打开；频道侧栏在频道下方缩进显示活跃的子话题。

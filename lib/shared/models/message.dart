@@ -1,3 +1,4 @@
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 const _sentinel = Object();
@@ -51,6 +52,7 @@ class ChatMessage {
     this.suppressEmbeds = false,
     this.sender,
     this.senderNickname,
+    this.threadSummary,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -83,6 +85,7 @@ class ChatMessage {
           ? Profile.fromJson(json['sender'] as Map<String, dynamic>)
           : null,
       senderNickname: json['sender_nickname'] as String?,
+      threadSummary: MessageThreadSummary.maybeFromJson(json['thread_summary']),
     );
   }
 
@@ -110,6 +113,9 @@ class ChatMessage {
 
   /// The sender's circle nickname in circle channel threads.
   final String? senderNickname;
+
+  /// The thread started from this message, if any.
+  final MessageThreadSummary? threadSummary;
 
   /// For a "X pinned a message" system notice, the id of the pinned message.
   String? get pinnedMessageId {
@@ -173,6 +179,7 @@ class ChatMessage {
     bool? suppressEmbeds,
     Object? sender = _sentinel,
     Object? senderNickname = _sentinel,
+    Object? threadSummary = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -207,6 +214,9 @@ class ChatMessage {
       senderNickname: identical(senderNickname, _sentinel)
           ? this.senderNickname
           : senderNickname as String?,
+      threadSummary: identical(threadSummary, _sentinel)
+          ? this.threadSummary
+          : threadSummary as MessageThreadSummary?,
     );
   }
 }

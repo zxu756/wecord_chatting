@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/link_preview.dart';
@@ -257,6 +258,31 @@ class FakeChatsRepository implements ChatsRepository {
     required String messageId,
     required bool suppress,
   }) async {}
+
+  @override
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<ConversationThread>> listThreads(
+    String parentConversationId,
+  ) async => const [];
+
+  @override
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<bool> canManageThread(String threadId) async => false;
 
   @override
   Future<void> markConversationRead(String conversationId) async {}

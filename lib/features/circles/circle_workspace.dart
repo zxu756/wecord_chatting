@@ -15,6 +15,7 @@ import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 
 typedef CircleChannelViewBuilder =
@@ -24,22 +25,37 @@ typedef CircleChannelViewBuilder =
       List<Widget> actions,
     );
 
+typedef CircleThreadViewBuilder =
+    Widget Function(
+      BuildContext context,
+      ThreadTarget thread,
+      List<Widget> actions,
+    );
+
 /// Wide-screen circle layout: circle rail, channel sidebar, the selected
-/// channel or feed, and a toggleable member list.
+/// channel or feed, and a toggleable member list. An open thread takes the
+/// member list's place until closed.
 class CircleWorkspace extends ConsumerStatefulWidget {
   const CircleWorkspace({
     required this.detail,
     required this.onChanged,
     this.channelViewBuilder,
+    this.threadViewBuilder,
     super.key,
   });
 
   /// Below this width the member list starts hidden.
   static const memberListBreakpoint = 1280.0;
 
+  /// Width of the thread panel.
+  static const threadPanelWidth = 400.0;
+
   final CircleDetail detail;
   final VoidCallback onChanged;
   final CircleChannelViewBuilder? channelViewBuilder;
+
+  /// Replaces the thread panel's chat, for tests.
+  final CircleThreadViewBuilder? threadViewBuilder;
 
   @override
   ConsumerState<CircleWorkspace> createState() => _CircleWorkspaceState();
@@ -49,6 +65,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   /// Selected channel id, or null for the feed.
   String? _selectedChannelId;
   bool? _showMembers;
+
+  /// The thread open in the right-hand panel.
+  ThreadTarget? _openThread;
 
   @override
   void initState() {
@@ -99,10 +118,18 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
             onChanged: widget.onChanged,
             selectedChannelId: selectedChannel?.id,
             feedSelected: selectedChannel == null,
+            selectedThreadConversationId: _openThread?.conversationId,
             onSelectChannel: (channel) {
-              setState(() => _selectedChannelId = channel.id);
+              setState(() {
+                _selectedChannelId = channel.id;
+                _openThread = null;
+              });
             },
-            onSelectFeed: () => setState(() => _selectedChannelId = null),
+            onSelectFeed: () => setState(() {
+              _selectedChannelId = null;
+              _openThread = null;
+            }),
+            onSelectThread: _selectThread,
           ),
           const VerticalDivider(width: 1),
           Expanded(
@@ -124,7 +151,24 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                     [memberToggle],
                   ),
           ),
-          if (showMembers) ...[
+          if (_openThread case final thread?) ...[
+            const VerticalDivider(width: 1),
+            SizedBox(
+              key: const ValueKey('circle-thread-panel'),
+              width: CircleWorkspace.threadPanelWidth,
+              child: (widget.threadViewBuilder ?? _defaultThreadView)(
+                context,
+                thread,
+                [
+                  IconButton(
+                    tooltip: 'Close thread',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _openThread = null),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (showMembers) ...[
             const VerticalDivider(width: 1),
             CircleMemberList(
               detail: detail,
@@ -135,6 +179,22 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         ],
       ),
     );
+  }
+
+  /// Opens a thread from the sidebar next to its channel.
+  void _selectThread(ConversationSummary thread) {
+    setState(() {
+      for (final channel in widget.detail.channels) {
+        if (channel.conversationId == thread.parentConversationId) {
+          _selectedChannelId = channel.id;
+        }
+      }
+      _openThread = ThreadTarget(
+        conversationId: thread.id,
+        title: thread.title ?? 'Thread',
+        threadId: thread.threadId,
+      );
+    });
   }
 
   Future<void> _changeNickname(CircleMember member) {
@@ -157,6 +217,21 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       conversationId: channel.conversationId,
       title: '# ${channel.name}',
       conversationType: ConversationType.channel,
+      extraActions: actions,
+      onOpenThread: (thread) => setState(() => _openThread = thread),
+    );
+  }
+
+  Widget _defaultThreadView(
+    BuildContext context,
+    ThreadTarget thread,
+    List<Widget> actions,
+  ) {
+    return ChatThreadScreen(
+      key: ValueKey(thread.conversationId),
+      conversationId: thread.conversationId,
+      title: thread.title,
+      conversationType: ConversationType.thread,
       extraActions: actions,
     );
   }

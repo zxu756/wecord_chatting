@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/link_preview.dart';
@@ -73,6 +74,33 @@ void main() {
     expect(find.text('AL'), findsNothing);
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('No messages yet'), findsOneWidget);
+  });
+
+  testWidgets('keeps threads out of the chat list', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'channel-conversation',
+          type: ConversationType.channel,
+          title: 'general',
+          unreadCount: 0,
+        ),
+        const ConversationSummary(
+          id: 'thread-conversation',
+          type: ConversationType.thread,
+          title: 'Weekend plans',
+          unreadCount: 3,
+          parentConversationId: 'channel-conversation',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('general'), findsOneWidget);
+    expect(find.text('Weekend plans'), findsNothing);
+    expect(find.text('3'), findsNothing);
   });
 
   testWidgets('previews text messages without markdown markers', (
@@ -512,6 +540,31 @@ class FakeChatsRepository implements ChatsRepository {
     required String messageId,
     required bool suppress,
   }) async {}
+
+  @override
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<ConversationThread>> listThreads(
+    String parentConversationId,
+  ) async => const [];
+
+  @override
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<bool> canManageThread(String threadId) async => false;
 
   @override
   Future<void> markConversationRead(String conversationId) async {

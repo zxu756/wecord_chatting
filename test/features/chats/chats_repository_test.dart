@@ -1209,6 +1209,196 @@ void main() {
     ]);
   });
 
+  group('threads', () {
+    Map<String, dynamic> threadRow({String? archivedAt}) => {
+      'id': 'thread-1',
+      'conversation_id': 'thread-conversation-1',
+      'parent_conversation_id': 'conversation-1',
+      'root_message_id': 'message-1',
+      'title': 'Plans',
+      'created_by': 'user-1',
+      'created_at': '2026-10-13T08:00:00Z',
+      'archived_at': archivedAt,
+      'last_message_at': '2026-10-13T09:00:00Z',
+      'reply_count': 3,
+      'unread_count': 1,
+      'can_manage': true,
+    };
+
+    test('createThread sends the root and trimmed title', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['create_thread'] = threadRow();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final thread = await repository.createThread(
+        parentConversationId: 'conversation-1',
+        rootMessageId: 'message-1',
+        title: '  Plans ',
+      );
+      await repository.createThread(
+        parentConversationId: 'conversation-1',
+        title: '   ',
+      );
+
+      expect(dataSource.rpcCalls, [
+        const RpcCall(
+          functionName: 'create_thread',
+          params: {
+            'parent_conversation_id': 'conversation-1',
+            'root_message_id': 'message-1',
+            'title': 'Plans',
+          },
+        ),
+        const RpcCall(
+          functionName: 'create_thread',
+          params: {
+            'parent_conversation_id': 'conversation-1',
+            'root_message_id': null,
+            'title': null,
+          },
+        ),
+      ]);
+      expect(thread.id, 'thread-1');
+      expect(thread.conversationId, 'thread-conversation-1');
+      expect(thread.rootMessageId, 'message-1');
+      expect(thread.replyCount, 3);
+      expect(thread.unreadCount, 1);
+      expect(thread.canManage, isTrue);
+      expect(thread.lastMessageAt, DateTime.utc(2026, 10, 13, 9));
+    });
+
+    test('listThreads parses every thread of the parent', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['list_threads'] = [
+          threadRow(),
+          {...threadRow(archivedAt: '2026-10-13T10:00:00Z'), 'id': 'thread-2'},
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final threads = await repository.listThreads('conversation-1');
+
+      expect(dataSource.rpcCalls.single.functionName, 'list_threads');
+      expect(dataSource.rpcCalls.single.params, {
+        'parent_conversation_id': 'conversation-1',
+      });
+      expect(threads.map((thread) => thread.id), ['thread-1', 'thread-2']);
+      expect(threads.map((thread) => thread.isArchived), [false, true]);
+    });
+
+    test('setThreadArchived calls archive and unarchive RPCs', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['archive_thread'] = threadRow(
+          archivedAt: '2026-10-13T10:00:00Z',
+        )
+        ..rpcResults['unarchive_thread'] = threadRow()
+        ..rpcResults['can_current_user_manage_thread'] = null;
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final archived = await repository.setThreadArchived(
+        threadId: 'thread-1',
+        archived: true,
+      );
+      final restored = await repository.setThreadArchived(
+        threadId: 'thread-1',
+        archived: false,
+      );
+
+      expect(archived.isArchived, isTrue);
+      expect(restored.isArchived, isFalse);
+      expect(await repository.canManageThread('thread-1'), isFalse);
+      expect(dataSource.rpcCalls, [
+        const RpcCall(
+          functionName: 'archive_thread',
+          params: {'target_thread_id': 'thread-1'},
+        ),
+        const RpcCall(
+          functionName: 'unarchive_thread',
+          params: {'target_thread_id': 'thread-1'},
+        ),
+        const RpcCall(
+          functionName: 'can_current_user_manage_thread',
+          params: {'target_thread_id': 'thread-1'},
+        ),
+      ]);
+    });
+
+    test('listMessages parses thread summaries on root messages', () async {
+      final dataSource = FakeChatsDataSource()
+        ..messageRows = [
+          {
+            'id': 'message-1',
+            'conversation_id': 'conversation-1',
+            'sender_id': 'user-2',
+            'type': 'text',
+            'body': 'Root',
+            'created_at': '2026-10-13T08:00:00Z',
+            'thread_summary': {
+              'thread_id': 'thread-1',
+              'conversation_id': 'thread-conversation-1',
+              'title': 'Plans',
+              'reply_count': 2,
+              'last_reply_at': '2026-10-13T09:00:00Z',
+              'unread_count': 1,
+              'archived_at': null,
+            },
+          },
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final messages = await repository.listMessages('conversation-1');
+      final summary = messages.single.threadSummary!;
+
+      expect(summary.threadId, 'thread-1');
+      expect(summary.conversationId, 'thread-conversation-1');
+      expect(summary.replyCount, 2);
+      expect(summary.unreadCount, 1);
+      expect(summary.lastReplyAt, DateTime.utc(2026, 10, 13, 9));
+    });
+
+    test('thread conversations parse with their parent', () async {
+      final dataSource = FakeChatsDataSource()
+        ..conversationRows = [
+          {
+            'id': 'thread-conversation-1',
+            'type': 'thread',
+            'title': 'Plans',
+            'unread_count': 2,
+            'parent_conversation_id': 'conversation-1',
+            'parent_title': 'general',
+            'thread_id': 'thread-1',
+            'thread_archived_at': null,
+            'thread_last_activity_at': '2026-10-13T09:00:00Z',
+            'circle_id': 'circle-1',
+          },
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final thread = (await repository.listConversations()).single;
+
+      expect(thread.type, ConversationType.thread);
+      expect(thread.isThread, isTrue);
+      expect(thread.parentConversationId, 'conversation-1');
+      expect(thread.parentTitle, 'general');
+      expect(thread.threadId, 'thread-1');
+      expect(thread.threadLastActivityAt, DateTime.utc(2026, 10, 13, 9));
+    });
+  });
+
   test('canPinMessages treats a null RPC result as not allowed', () async {
     final dataSource = FakeChatsDataSource()
       ..rpcResults['can_current_user_pin_messages'] = null;

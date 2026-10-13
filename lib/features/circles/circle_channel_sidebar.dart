@@ -25,6 +25,8 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
     required this.onChanged,
     this.selectedChannelId,
     this.feedSelected = false,
+    this.onSelectThread,
+    this.selectedThreadConversationId,
     this.width = defaultWidth,
     super.key,
   });
@@ -37,6 +39,13 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
   final ValueChanged<CircleChannel> onSelectChannel;
   final VoidCallback onSelectFeed;
   final ValueChanged<CircleMember> onChangeNickname;
+
+  /// Opens a thread listed under its channel. Without it, threads are not
+  /// listed.
+  final ValueChanged<ConversationSummary>? onSelectThread;
+
+  /// The thread conversation open next to the channel, if any.
+  final String? selectedThreadConversationId;
 
   /// Reloads the circle after a change made here.
   final VoidCallback onChanged;
@@ -121,20 +130,37 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
   List<_SidebarEntry> _entries(
     CircleChannelLayout layout,
     Map<String, int> unreadCounts,
+    Map<String, List<ConversationSummary>> threadsByParent,
   ) {
     bool unread(CircleChannel channel) =>
         (unreadCounts[channel.conversationId] ?? 0) > 0;
+    bool threadStandsOut(ConversationSummary thread) =>
+        thread.unreadCount > 0 ||
+        thread.id == widget.selectedThreadConversationId;
+    List<ConversationSummary> threads(CircleChannel channel, bool collapsed) {
+      final all = threadsByParent[channel.conversationId] ?? const [];
+      return collapsed ? all.where(threadStandsOut).toList() : all;
+    }
 
     return [
       for (final channel in layout.uncategorized)
-        _ChannelEntry(channel, unread: unread(channel)),
+        _ChannelEntry(
+          channel,
+          unread: unread(channel),
+          threads: threads(channel, false),
+        ),
       for (final category in layout.categories) ...[
         _CategoryEntry(category),
         for (final channel in layout.channelsIn(category.id))
           if (!_collapsed.contains(category.id) ||
               channel.id == widget.selectedChannelId ||
-              unread(channel))
-            _ChannelEntry(channel, unread: unread(channel)),
+              unread(channel) ||
+              threads(channel, true).isNotEmpty)
+            _ChannelEntry(
+              channel,
+              unread: unread(channel),
+              threads: threads(channel, _collapsed.contains(category.id)),
+            ),
       ],
     ];
   }
@@ -319,14 +345,18 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final theme = Theme.of(context);
     final detail = widget.detail;
     final canManage = detail.canManageCircle;
+    final conversations =
+        ref.watch(conversationsProvider).valueOrNull ??
+        const <ConversationSummary>[];
     final unreadCounts = {
-      for (final conversation
-          in ref.watch(conversationsProvider).valueOrNull ??
-              const <ConversationSummary>[])
+      for (final conversation in conversations)
         conversation.id: conversation.unreadCount,
     };
+    final threadsByParent = widget.onSelectThread == null
+        ? const <String, List<ConversationSummary>>{}
+        : activeThreadsByParent(conversations, now: DateTime.now());
     final layout = _layout;
-    final entries = _entries(layout, unreadCounts);
+    final entries = _entries(layout, unreadCounts, threadsByParent);
     final dragOnLongPress = switch (theme.platform) {
       TargetPlatform.android || TargetPlatform.iOS => true,
       _ => false,
@@ -389,18 +419,41 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                 ),
               ),
             );
-          case _ChannelEntry(:final channel, :final unread):
+          case _ChannelEntry(:final channel, :final unread, :final threads):
+            final channelRow = CircleChannelRow(
+              icon: Icons.tag,
+              label: channel.name,
+              selected:
+                  channel.id == widget.selectedChannelId &&
+                  widget.selectedThreadConversationId == null,
+              unread: unread,
+              onTap: () => widget.onSelectChannel(channel),
+            );
             return KeyedSubtree(
               key: ValueKey('circle-channel-${channel.id}'),
               child: draggable(
                 index,
-                CircleChannelRow(
-                  icon: Icons.tag,
-                  label: channel.name,
-                  selected: channel.id == widget.selectedChannelId,
-                  unread: unread,
-                  onTap: () => widget.onSelectChannel(channel),
-                ),
+                threads.isEmpty
+                    ? channelRow
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          channelRow,
+                          for (final thread in threads)
+                            CircleChannelRow(
+                              key: ValueKey('circle-thread-${thread.id}'),
+                              icon: Icons.forum_outlined,
+                              label: thread.title ?? 'Thread',
+                              indent: 20,
+                              selected:
+                                  thread.id ==
+                                  widget.selectedThreadConversationId,
+                              unread: thread.unreadCount > 0,
+                              onTap: () => widget.onSelectThread!(thread),
+                            ),
+                        ],
+                      ),
               ),
             );
         }
@@ -456,10 +509,51 @@ class _CategoryEntry extends _SidebarEntry {
 }
 
 class _ChannelEntry extends _SidebarEntry {
-  const _ChannelEntry(this.channel, {required this.unread});
+  const _ChannelEntry(
+    this.channel, {
+    required this.unread,
+    this.threads = const [],
+  });
 
   final CircleChannel channel;
   final bool unread;
+
+  /// Active threads listed under the channel.
+  final List<ConversationSummary> threads;
+}
+
+/// How long a thread stays in the sidebar after its last activity.
+const sidebarThreadActivityWindow = Duration(days: 7);
+
+/// Unarchived threads active within [sidebarThreadActivityWindow] of [now],
+/// keyed by parent conversation id, most recently active first.
+Map<String, List<ConversationSummary>> activeThreadsByParent(
+  List<ConversationSummary> conversations, {
+  required DateTime now,
+}) {
+  final cutoff = now.toUtc().subtract(sidebarThreadActivityWindow);
+  final byParent = <String, List<ConversationSummary>>{};
+  for (final conversation in conversations) {
+    final parentId = conversation.parentConversationId;
+    final activity =
+        conversation.threadLastActivityAt ?? conversation.lastMessageAt;
+    if (!conversation.isThread ||
+        parentId == null ||
+        conversation.threadArchivedAt != null ||
+        activity == null ||
+        activity.isBefore(cutoff)) {
+      continue;
+    }
+    byParent.putIfAbsent(parentId, () => []).add(conversation);
+  }
+  for (final threads in byParent.values) {
+    threads.sort((left, right) {
+      final leftActivity = left.threadLastActivityAt ?? left.lastMessageAt!;
+      final rightActivity = right.threadLastActivityAt ?? right.lastMessageAt!;
+      return rightActivity.compareTo(leftActivity);
+    });
+  }
+  return byParent;
 }
 
 /// Asks for a category name. Returns the trimmed name, or null when
@@ -795,6 +889,7 @@ class CircleChannelRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.unread = false,
+    this.indent = 0,
     super.key,
   });
 
@@ -803,6 +898,9 @@ class CircleChannelRow extends StatelessWidget {
   final bool selected;
   final bool unread;
   final VoidCallback onTap;
+
+  /// Extra left inset, for threads under their channel.
+  final double indent;
 
   @override
   Widget build(BuildContext context) {
@@ -817,7 +915,7 @@ class CircleChannelRow extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
+          padding: EdgeInsets.only(left: indent, top: 1, bottom: 1),
           child: Material(
             color: selected
                 ? colorScheme.secondaryContainer
@@ -831,7 +929,7 @@ class CircleChannelRow extends StatelessWidget {
                 child: Row(
                   children: [
                     const SizedBox(width: 8),
-                    Icon(icon, size: 18, color: foreground),
+                    Icon(icon, size: indent > 0 ? 16 : 18, color: foreground),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(

@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -50,6 +51,169 @@ void main() {
     expect(find.text('Thread conversation-1'), findsNothing);
     expect(find.byType(CircleChannelSidebar), findsOneWidget);
     expect(find.text('general'), findsOneWidget);
+  });
+
+  group('threads', () {
+    final now = DateTime.now().toUtc();
+    ConversationSummary thread(
+      String id,
+      String title, {
+      DateTime? lastActivityAt,
+      DateTime? archivedAt,
+      int unreadCount = 0,
+      String parent = 'conversation-1',
+    }) {
+      return ConversationSummary(
+        id: id,
+        type: ConversationType.thread,
+        unreadCount: unreadCount,
+        title: title,
+        parentConversationId: parent,
+        parentTitle: 'general',
+        circleId: 'circle-1',
+        threadId: 'id-$id',
+        threadArchivedAt: archivedAt,
+        threadLastActivityAt: lastActivityAt ?? now,
+      );
+    }
+
+    final conversations = [
+      thread('thread-a', 'Weekend plans', unreadCount: 1),
+      thread(
+        'thread-b',
+        'Older active',
+        lastActivityAt: now.subtract(const Duration(days: 2)),
+      ),
+      thread(
+        'thread-archived',
+        'Archived talk',
+        archivedAt: now.subtract(const Duration(hours: 1)),
+      ),
+      thread(
+        'thread-stale',
+        'Stale talk',
+        lastActivityAt: now.subtract(const Duration(days: 8)),
+      ),
+    ];
+
+    test('activeThreadsByParent keeps recent unarchived threads', () {
+      final byParent = activeThreadsByParent(conversations, now: now);
+      expect(byParent.keys, ['conversation-1']);
+      expect(byParent['conversation-1']!.map((thread) => thread.id), [
+        'thread-a',
+        'thread-b',
+      ]);
+    });
+
+    testWidgets('wide sidebar lists threads and opens them in a panel', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = FakeCirclesRepository()
+        ..detail = _detail()
+        ..circles = [_detail().circle];
+      final router = GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) => CircleDetailScreen(
+              circleId: state.pathParameters['circleId']!,
+              channelViewBuilder: (context, channel, actions) => Scaffold(
+                appBar: AppBar(title: Text(channel.name), actions: actions),
+              ),
+              threadViewBuilder: (context, thread, actions) => Scaffold(
+                appBar: AppBar(
+                  title: Text('Panel ${thread.title}'),
+                  actions: actions,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          FakeContactsRepository(),
+          router,
+          conversations: conversations,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final weekend = find.byKey(const ValueKey('circle-thread-thread-a'));
+      expect(weekend, findsOneWidget);
+      expect(find.text('Older active'), findsOneWidget);
+      expect(find.text('Archived talk'), findsNothing);
+      expect(find.text('Stale talk'), findsNothing);
+      // Indented under their channel.
+      expect(
+        tester.getTopLeft(find.text('general').first).dy,
+        lessThan(tester.getTopLeft(find.text('Weekend plans')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text('Weekend plans')).dx,
+        greaterThan(tester.getTopLeft(find.text('general').first).dx),
+      );
+      expect(
+        find.descendant(
+          of: weekend,
+          matching: find.byKey(const ValueKey('channel-unread-pill')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(CircleMemberList), findsOneWidget);
+
+      await tester.tap(find.text('Weekend plans'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('circle-thread-panel')), findsOneWidget);
+      expect(find.text('Panel Weekend plans'), findsOneWidget);
+      // The panel replaces the member list.
+      expect(find.byType(CircleMemberList), findsNothing);
+
+      await tester.tap(find.byTooltip('Close thread'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('circle-thread-panel')), findsNothing);
+      expect(find.byType(CircleMemberList), findsOneWidget);
+    });
+
+    testWidgets('narrow sidebar pushes threads full screen', (tester) async {
+      final repository = FakeCirclesRepository()
+        ..detail = _detail()
+        ..circles = [_detail().circle];
+      final router = _narrowRouter();
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          FakeContactsRepository(),
+          router,
+          conversations: conversations,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Weekend plans'));
+      await tester.pumpAndSettle();
+
+      // Pushed on the nested circle route, as a thread.
+      expect(find.text('Thread thread-a'), findsOneWidget);
+      expect(
+        tester
+            .widget<CircleChannelThreadScreen>(
+              find.byType(CircleChannelThreadScreen),
+            )
+            .conversationId,
+        'thread-a',
+      );
+    });
   });
 
   testWidgets('narrow channel threads open the member list as a drawer', (
@@ -1196,7 +1360,10 @@ GoRouter _narrowRouter() {
               final extra = state.extra! as ChatThreadRouteExtra;
               expect(state.pathParameters['circleId'], 'circle-1');
               expect(extra.circleId, 'circle-1');
-              expect(extra.type, ConversationType.channel);
+              expect(
+                extra.type,
+                anyOf(ConversationType.channel, ConversationType.thread),
+              );
               return CircleChannelThreadScreen(
                 circleId: state.pathParameters['circleId']!,
                 conversationId: conversationId,

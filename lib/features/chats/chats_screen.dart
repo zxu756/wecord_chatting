@@ -74,7 +74,12 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
-        data: (conversations) {
+        data: (allConversations) {
+          // Threads live under their channel or group, not in this list.
+          final conversations = [
+            for (final conversation in allConversations)
+              if (!conversation.isThread) conversation,
+          ];
           final visibleConversations = ref
               .read(chatsRepositoryProvider)
               .searchConversations(conversations, _query);

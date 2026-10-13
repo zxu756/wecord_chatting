@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -44,6 +45,16 @@ void main() {
     });
     expect(summary.directUserId, 'user-2');
     expect(summary.directCustomStatus?.label, '🎧');
+  });
+
+  test('thread conversations and titles', () {
+    expect(ConversationType.fromJson('thread'), ConversationType.thread);
+    expect(ConversationType.thread.toJson(), 'thread');
+    expect(suggestedThreadTitle('  Short   note \n here '), 'Short note here');
+    final long = suggestedThreadTitle('a' * 60);
+    expect(long, '${'a' * ConversationThread.suggestedTitleLength}…');
+    expect(MessageThreadSummary.maybeFromJson(null), isNull);
+    expect(MessageThreadSummary.maybeFromJson({'thread_id': 'x'}), isNull);
   });
 
   test('CustomStatusDuration computes expiries', () {

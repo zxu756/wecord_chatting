@@ -7,13 +7,17 @@ const _sentinel = Object();
 enum ConversationType {
   direct,
   group,
-  channel;
+  channel,
+
+  /// A thread of a channel or group; see `conversation_threads`.
+  thread;
 
   factory ConversationType.fromJson(String value) {
     return switch (value) {
       'direct' => ConversationType.direct,
       'group' => ConversationType.group,
       'channel' => ConversationType.channel,
+      'thread' => ConversationType.thread,
       _ => throw ArgumentError.value(
         value,
         'value',
@@ -27,6 +31,7 @@ enum ConversationType {
       ConversationType.direct => 'direct',
       ConversationType.group => 'group',
       ConversationType.channel => 'channel',
+      ConversationType.thread => 'thread',
     };
   }
 }
@@ -56,6 +61,11 @@ class ConversationSummary {
     this.circleMutedUntil,
     this.directUserId,
     this.directCustomStatus,
+    this.parentConversationId,
+    this.parentTitle,
+    this.threadId,
+    this.threadArchivedAt,
+    this.threadLastActivityAt,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -97,6 +107,13 @@ class ConversationSummary {
       directCustomStatus: CustomStatus.maybeFromJson(
         json['direct_custom_status'],
       ),
+      parentConversationId: json['parent_conversation_id'] as String?,
+      parentTitle: json['parent_title'] as String?,
+      threadId: json['thread_id'] as String?,
+      threadArchivedAt: _parseOptionalTimestamp(json['thread_archived_at']),
+      threadLastActivityAt: _parseOptionalTimestamp(
+        json['thread_last_activity_at'],
+      ),
     );
   }
 
@@ -133,6 +150,19 @@ class ConversationSummary {
 
   /// [directUserId]'s custom status, if they have one.
   final CustomStatus? directCustomStatus;
+
+  /// For a thread: the channel or group it belongs to, and that
+  /// conversation's title.
+  final String? parentConversationId;
+  final String? parentTitle;
+
+  /// For a thread: its `conversation_threads` id, when it was archived and
+  /// its latest message (or creation) time.
+  final String? threadId;
+  final DateTime? threadArchivedAt;
+  final DateTime? threadLastActivityAt;
+
+  bool get isThread => type == ConversationType.thread;
 
   Map<String, dynamic> toJson() {
     return {'type': type.toJson(), 'title': title, 'avatar_url': avatarUrl};
@@ -215,6 +245,11 @@ class ConversationSummary {
       directCustomStatus: identical(directCustomStatus, _sentinel)
           ? this.directCustomStatus
           : directCustomStatus as CustomStatus?,
+      parentConversationId: parentConversationId,
+      parentTitle: parentTitle,
+      threadId: threadId,
+      threadArchivedAt: threadArchivedAt,
+      threadLastActivityAt: threadLastActivityAt,
     );
   }
 }

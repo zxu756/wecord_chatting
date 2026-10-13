@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/link_preview.dart';
@@ -136,6 +137,23 @@ abstract interface class ChatsRepository {
     required String messageId,
     required bool suppress,
   });
+
+  /// Starts a thread in a channel or group, from [rootMessageId] when
+  /// given. Returns the existing thread when the root already has one.
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  });
+
+  Future<List<ConversationThread>> listThreads(String parentConversationId);
+
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  });
+
+  Future<bool> canManageThread(String threadId);
 
   Future<void> markConversationRead(String conversationId);
 
@@ -673,6 +691,56 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  }) async {
+    final trimmedTitle = title?.trim();
+    final payload = await _dataSource.rpc('create_thread', {
+      'parent_conversation_id': parentConversationId,
+      'root_message_id': rootMessageId,
+      'title': trimmedTitle == null || trimmedTitle.isEmpty
+          ? null
+          : trimmedTitle,
+    });
+    return ConversationThread.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<ConversationThread>> listThreads(
+    String parentConversationId,
+  ) async {
+    final rows = await _dataSource.rpc('list_threads', {
+      'parent_conversation_id': parentConversationId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(ConversationThread.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  }) async {
+    final payload = await _dataSource.rpc(
+      archived ? 'archive_thread' : 'unarchive_thread',
+      {'target_thread_id': threadId},
+    );
+    return ConversationThread.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<bool> canManageThread(String threadId) async {
+    final allowed = await _dataSource.rpc('can_current_user_manage_thread', {
+      'target_thread_id': threadId,
+    });
+    return allowed == true;
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     await _dataSource.rpc('mark_conversation_read', {
       'target_conversation_id': conversationId,
@@ -924,7 +992,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('messages')
         .select(
-          '*,reactions,is_pinned,sender_nickname,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+          '*,reactions,is_pinned,sender_nickname,thread_summary,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
@@ -1048,6 +1116,12 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               table: 'conversation_members',
               callback: emit,
             )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'conversation_threads',
+              callback: emit,
+            )
             .subscribe();
       },
       onCancel: () async {
@@ -1141,6 +1215,19 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'conversation_id',
+                value: conversationId,
+              ),
+              callback: emit,
+            )
+            // Threads started here, and their activity (reply counts on
+            // root messages).
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'conversation_threads',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'parent_conversation_id',
                 value: conversationId,
               ),
               callback: emit,
@@ -1484,6 +1571,33 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }) {
     throw StateError('Supabase must be initialized before changing embeds.');
   }
+
+  @override
+  Future<ConversationThread> createThread({
+    required String parentConversationId,
+    String? rootMessageId,
+    String? title,
+  }) {
+    throw StateError('Supabase must be initialized before creating threads.');
+  }
+
+  @override
+  Future<List<ConversationThread>> listThreads(
+    String parentConversationId,
+  ) async {
+    return const [];
+  }
+
+  @override
+  Future<ConversationThread> setThreadArchived({
+    required String threadId,
+    required bool archived,
+  }) {
+    throw StateError('Supabase must be initialized before archiving threads.');
+  }
+
+  @override
+  Future<bool> canManageThread(String threadId) async => false;
 
   @override
   Future<void> markConversationRead(String conversationId) async {}

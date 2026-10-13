@@ -25,6 +25,7 @@ class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({
     required this.circleId,
     this.channelViewBuilder,
+    this.threadViewBuilder,
     super.key,
   });
 
@@ -33,6 +34,7 @@ class CircleDetailScreen extends ConsumerWidget {
 
   final String circleId;
   final CircleChannelViewBuilder? channelViewBuilder;
+  final CircleThreadViewBuilder? threadViewBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,6 +57,7 @@ class CircleDetailScreen extends ConsumerWidget {
             detail: detail,
             onChanged: refresh,
             channelViewBuilder: channelViewBuilder,
+            threadViewBuilder: threadViewBuilder,
           );
         }
         return CircleMobileHome(
@@ -123,6 +126,14 @@ class CircleMobileHome extends ConsumerWidget {
                   extra: ChatThreadRouteExtra(
                     title: '# ${channel.name}',
                     type: ConversationType.channel,
+                    circleId: circleId,
+                  ),
+                ),
+                onSelectThread: (thread) => context.push(
+                  CircleChannelThreadScreen.pathFor(circleId, thread.id),
+                  extra: ChatThreadRouteExtra(
+                    title: thread.title ?? 'Thread',
+                    type: ConversationType.thread,
                     circleId: circleId,
                   ),
                 ),

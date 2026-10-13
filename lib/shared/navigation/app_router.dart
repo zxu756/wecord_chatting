@@ -16,6 +16,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/shared/models/conversation.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRouter = AuthRouterNotifier(ref.read(authStateProvider));
@@ -116,6 +117,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   circleId: circleId,
                   conversationId: state.pathParameters['conversationId']!,
                   title: title,
+                  conversationType: conversationType == ConversationType.thread
+                      ? ConversationType.thread
+                      : ConversationType.channel,
                 );
               }
               return ChatThreadScreen(
@@ -169,6 +173,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       ChatThreadRouteExtra(:final title) => title,
                       String() => extra,
                       _ => null,
+                    },
+                    conversationType: switch (extra) {
+                      ChatThreadRouteExtra(type: ConversationType.thread) =>
+                        ConversationType.thread,
+                      _ => ConversationType.channel,
                     },
                   );
                 },

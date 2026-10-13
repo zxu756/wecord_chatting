@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
@@ -17,6 +19,7 @@ class CircleChannelThreadScreen extends ConsumerStatefulWidget {
     required this.circleId,
     required this.conversationId,
     this.title,
+    this.conversationType = ConversationType.channel,
     this.threadBuilder,
     super.key,
   });
@@ -29,6 +32,10 @@ class CircleChannelThreadScreen extends ConsumerStatefulWidget {
   final String circleId;
   final String conversationId;
   final String? title;
+
+  /// [ConversationType.channel], or [ConversationType.thread] for a thread
+  /// of one of the circle's channels.
+  final ConversationType conversationType;
 
   /// Replaces the chat thread, for tests.
   final CircleChannelThreadBuilder? threadBuilder;
@@ -94,8 +101,19 @@ class _CircleChannelThreadScreenState
           ChatThreadScreen(
             conversationId: widget.conversationId,
             title: title,
-            conversationType: ConversationType.channel,
+            conversationType: widget.conversationType,
             extraActions: actions,
+            onOpenThread: (thread) => context.push(
+              CircleChannelThreadScreen.pathFor(
+                circleId,
+                thread.conversationId,
+              ),
+              extra: ChatThreadRouteExtra(
+                title: thread.title,
+                type: ConversationType.thread,
+                circleId: circleId,
+              ),
+            ),
           ),
     );
   }

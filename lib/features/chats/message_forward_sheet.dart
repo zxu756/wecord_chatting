@@ -96,7 +96,8 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
     final normalizedQuery = _query.trim().toLowerCase();
     final visibleConversations = conversations
         .where((conversation) {
-          if (conversation.id == widget.message.conversationId) {
+          if (conversation.id == widget.message.conversationId ||
+              conversation.isThread) {
             return false;
           }
           if (normalizedQuery.isEmpty) {

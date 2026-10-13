@@ -1263,8 +1263,9 @@ void main() {
     }
     expect(
       summariesBody,
+      // Threads use their parent channel's circle.
       contains(
-        'left join public.circle_channels cc on cc.conversation_id = c.id',
+        'on cc.conversation_id = coalesce(ct.parent_conversation_id, c.id)',
       ),
     );
     expect(summariesBody, contains("else coalesce(cns.level, 'all')"));
@@ -1577,5 +1578,145 @@ void main() {
     ]) {
       expect(sql, contains('grant execute on function $grant'));
     }
+  });
+
+  test('threads are member scoped, synced with the parent and RPC backed', () {
+    final sql = allMigrationSql();
+
+    expect(
+      sql,
+      contains("check (type in ('direct', 'group', 'channel', 'thread'))"),
+    );
+    expect(
+      sql,
+      contains('create table if not exists public.conversation_threads'),
+    );
+    for (final column in [
+      'parent_conversation_id uuid not null',
+      'root_message_id uuid references public.messages(id) on delete set null',
+      'conversation_id uuid not null unique',
+      'archived_at timestamptz',
+      'last_message_at timestamptz',
+    ]) {
+      expect(sql, contains(column));
+    }
+    expect(sql, contains('conversation_threads_root_message_idx'));
+    expect(sql, contains('where root_message_id is not null'));
+    expect(
+      sql,
+      contains(
+        'alter table public.conversation_threads enable row level security',
+      ),
+    );
+    final selectPolicy = policyBody(sql, 'conversation_threads_select_member');
+    expect(
+      selectPolicy,
+      contains(
+        'public.is_current_user_conversation_member(parent_conversation_id)',
+      ),
+    );
+    expect(
+      policyBodiesFor(sql, 'conversation_threads').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(sql, contains("tablename = 'conversation_threads'"));
+    expect(
+      sql,
+      contains(
+        'alter publication supabase_realtime add table public.conversation_threads',
+      ),
+    );
+
+    // Parent membership changes reach every thread.
+    expect(
+      functionBody(sql, 'sync_thread_members_on_join'),
+      contains('ct.parent_conversation_id = new.conversation_id'),
+    );
+    expect(
+      functionBody(sql, 'sync_thread_members_on_leave'),
+      contains('ct.parent_conversation_id = old.conversation_id'),
+    );
+    expect(sql, contains('after insert on public.conversation_members'));
+    expect(sql, contains('after delete on public.conversation_members'));
+
+    final createBody = functionBody(sql, 'create_thread');
+    expect(createBody, contains('security definer'));
+    expect(createBody, contains('set search_path = public'));
+    expect(createBody, contains('current_user_id is null'));
+    expect(createBody, contains('public.is_current_user_conversation_member('));
+    expect(createBody, contains("parent_type not in ('channel', 'group')"));
+    expect(createBody, contains('for update'));
+    expect(
+      createBody,
+      contains('return public.thread_payload(existing_thread)'),
+    );
+    expect(createBody, contains("values ('thread', normalized_title)"));
+
+    expect(
+      functionBody(sql, 'list_threads'),
+      contains('public.is_current_user_conversation_member('),
+    );
+    final manageBody = functionBody(sql, 'can_current_user_manage_thread');
+    expect(manageBody, contains('ct.created_by = auth.uid()'));
+    expect(
+      manageBody,
+      contains("coalesce(public.current_user_circle_role(cc.circle_id), '')"),
+    );
+    expect(manageBody, contains("cm.role in ('owner', 'admin')"));
+    expect(
+      functionBody(sql, 'set_thread_archived'),
+      contains('not public.can_current_user_manage_thread(target_thread_id)'),
+    );
+    expect(
+      functionBody(sql, 'thread_summary'),
+      contains(
+        'public.is_current_user_conversation_member(ct.conversation_id)',
+      ),
+    );
+    expect(
+      functionBody(sql, 'circle_channel_nickname'),
+      contains('select ct.parent_conversation_id'),
+    );
+    expect(
+      functionBody(sql, 'can_current_user_pin_messages'),
+      contains("when 'thread' then"),
+    );
+    expect(
+      functionBody(sql, 'list_circle_summaries'),
+      contains('join public.conversation_threads ct'),
+    );
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+    for (final column in [
+      'parent_conversation_id uuid',
+      'parent_title text',
+      'thread_id uuid',
+      'thread_archived_at timestamptz',
+      'thread_last_activity_at timestamptz',
+    ]) {
+      expect(summariesBody, contains(column));
+    }
+
+    for (final grant in [
+      'public.create_thread(uuid, uuid, text) to authenticated',
+      'public.list_threads(uuid) to authenticated',
+      'public.archive_thread(uuid) to authenticated',
+      'public.unarchive_thread(uuid) to authenticated',
+      'public.can_current_user_manage_thread(uuid) to authenticated',
+      'public.thread_summary(public.messages) to authenticated',
+    ]) {
+      expect(sql, contains('grant execute on function $grant'));
+    }
+    expect(
+      sql,
+      contains(
+        'revoke execute on function '
+        'public.set_thread_archived(uuid, boolean) from authenticated',
+      ),
+    );
   });
 }

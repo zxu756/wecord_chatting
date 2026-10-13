@@ -304,6 +304,27 @@ void main() {
       '# general',
     );
     expect(selectedIndex(), 2);
+
+    // Threads of a circle channel open on the same route, as threads.
+    router.push(
+      CircleChannelThreadScreen.pathFor('circle-1', 'thread-conversation-1'),
+      extra: const ChatThreadRouteExtra(
+        title: 'Plans',
+        type: ConversationType.thread,
+        circleId: 'circle-1',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      tester
+          .widget<CircleChannelThreadScreen>(
+            find.byType(CircleChannelThreadScreen).last,
+          )
+          .conversationType,
+      ConversationType.thread,
+    );
+    expect(selectedIndex(), 2);
   });
 
   testWidgets('routes signed-in users to profile pages', (tester) async {

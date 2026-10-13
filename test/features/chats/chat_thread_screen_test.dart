@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -1213,6 +1214,50 @@ void main() {
 
     expect(find.byType(ChatThreadScreen), findsOneWidget);
     expect(find.text('Conversation'), findsOneWidget);
+  });
+
+  testWidgets('media opens above the thread and pops back to it', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    final authRepository = FakeAuthRepository()
+      ..user = const AuthUser(id: 'user-1', email: 'me@example.com');
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          authRepositoryProvider.overrideWithValue(authRepository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go('/chats/conversation-1');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Media'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatMediaScreen), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatMediaScreen), findsNothing);
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
   });
 
   testWidgets('app router passes route extra as the thread title', (

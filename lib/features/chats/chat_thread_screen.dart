@@ -116,6 +116,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.title,
     this.avatarUrl,
     this.conversationType,
+    this.extraActions = const [],
     super.key,
   });
 
@@ -123,6 +124,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   final String? title;
   final String? avatarUrl;
   final ConversationType? conversationType;
+  final List<Widget> extraActions;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -268,7 +270,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             tooltip: 'Media',
             icon: const Icon(Icons.photo_library_outlined),
             onPressed: () {
-              context.go(ChatMediaScreen.pathFor(widget.conversationId));
+              context.push(ChatMediaScreen.pathFor(widget.conversationId));
             },
           ),
           if (conversationType == ConversationType.group)
@@ -288,6 +290,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 );
               },
             ),
+          ...widget.extraActions,
         ],
       ),
       body: Column(

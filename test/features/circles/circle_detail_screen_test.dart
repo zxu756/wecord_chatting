@@ -77,6 +77,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.invitedMemberIds, ['friend-2']);
   });
+
+  testWidgets('wide circle detail opens a channel workspace', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final detail = _detail();
+    final repository = FakeCirclesRepository()
+      ..circles = [detail.circle]
+      ..detail = CircleDetail(
+        circle: detail.circle,
+        members: detail.members,
+        channels: [
+          ...detail.channels,
+          const CircleChannel(
+            id: 'channel-2',
+            circleId: 'circle-1',
+            conversationId: 'conversation-2',
+            name: 'photos',
+            position: 1,
+          ),
+        ],
+        posts: const [],
+      );
+    final router = GoRouter(
+      initialLocation: '/circles/circle-1',
+      routes: [
+        GoRoute(
+          path: '/circles/:circleId',
+          builder: (context, state) => CircleDetailScreen(
+            circleId: state.pathParameters['circleId']!,
+            channelViewBuilder: (context, channel, actions) => Scaffold(
+              appBar: AppBar(
+                title: Text('Channel ${channel.name}'),
+                actions: actions,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('circle-rail-circle-1')), findsOneWidget);
+    expect(find.text('Channel general'), findsOneWidget);
+    expect(find.text('OWNER — 1'), findsOneWidget);
+
+    await tester.tap(find.text('photos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Channel photos'), findsOneWidget);
+
+    await tester.tap(find.text('TEXT CHANNELS'));
+    await tester.pumpAndSettle();
+    expect(find.text('general'), findsNothing);
+    expect(find.text('photos'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide member list'));
+    await tester.pumpAndSettle();
+    expect(find.text('OWNER — 1'), findsNothing);
+
+    await tester.tap(find.text('Feed'));
+    await tester.pumpAndSettle();
+    expect(find.text('No posts yet'), findsOneWidget);
+  });
 }
 
 Widget _app(
@@ -147,6 +214,7 @@ class FakeContactsRepository implements ContactsRepository {
 
 class FakeCirclesRepository implements CirclesRepository {
   late CircleDetail detail;
+  var circles = <CircleSummary>[];
   var createdChannelName = '';
   var invitedMemberIds = <String>[];
 
@@ -174,7 +242,7 @@ class FakeCirclesRepository implements CirclesRepository {
   }
 
   @override
-  Future<List<CircleSummary>> listCircles() async => const [];
+  Future<List<CircleSummary>> listCircles() async => circles;
 
   @override
   Future<String> createCircle({

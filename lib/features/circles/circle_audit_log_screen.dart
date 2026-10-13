@@ -349,6 +349,9 @@ IconData circleAuditIcon(String action) {
     'forum_tag_reorder' => Icons.swap_vert,
     'forum_post_pin' => Icons.push_pin_outlined,
     'forum_post_unpin' => Icons.push_pin,
+    'event_create' => Icons.event_outlined,
+    'event_update' => Icons.edit_calendar_outlined,
+    'event_cancel' => Icons.event_busy_outlined,
     _ => Icons.history,
   };
 }
@@ -455,6 +458,19 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       name(target),
       ..._inChannel(changes, name, text),
     ],
+    'event_create' => [text(' scheduled event '), name(target)],
+    'event_update' => [
+      if (changes['title'] case {'old': final String oldTitle}) ...[
+        text(' renamed event '),
+        name(oldTitle),
+        text(' to '),
+        name(target),
+      ] else ...[
+        text(' updated event '),
+        name(target),
+      ],
+    ],
+    'event_cancel' => [text(' cancelled event '), name(target)],
     _ => [text(' did ${entry.action.replaceAll('_', ' ')} to '), name(target)],
   };
   return TextSpan(style: style, children: [name(actor), ...rest]);
@@ -520,6 +536,8 @@ String _labelFor(String key) {
     'member_count' => 'Members',
     'max_uses' => 'Max uses',
     'expires_at' => 'Expires',
+    'starts_at' => 'Starts',
+    'ends_at' => 'Ends',
     'previous_owner_name' => 'Previous owner',
     'allow' => 'Allowed',
     'deny' => 'Denied',
@@ -568,7 +586,8 @@ String _formatValue(String key, Object? value) {
     ];
     return names.isEmpty ? 'none' : names.join(', ');
   }
-  if (key == 'expires_at' && value is String) {
+  if ((key == 'expires_at' || key == 'starts_at' || key == 'ends_at') &&
+      value is String) {
     final time = DateTime.tryParse(value)?.toLocal();
     if (time != null) {
       return '${time.year}-${_two(time.month)}-${_two(time.day)} '

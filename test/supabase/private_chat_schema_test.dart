@@ -2611,4 +2611,125 @@ void main() {
       ),
     );
   });
+
+  test('circle events are member scoped, RPC written, audited and realtime', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    for (final table in ['circle_events', 'circle_event_rsvps']) {
+      expect(sql, contains('create table if not exists public.$table'));
+      expect(
+        sql,
+        contains('alter table public.$table enable row level security'),
+      );
+      expect(sql, contains('alter table public.$table replica identity full'));
+      expect(
+        rawSql,
+        contains('alter publication supabase_realtime add table public.$table'),
+      );
+      expect(
+        rawSql,
+        contains(
+          'revoke insert, update, delete, truncate on public.$table '
+          'from authenticated',
+        ),
+      );
+      expect(
+        policyBodiesFor(rawSql, table).where(
+          (policy) => RegExp(
+            r'for (insert|update|delete|all)',
+            caseSensitive: false,
+          ).hasMatch(policy),
+        ),
+        isEmpty,
+      );
+    }
+    expect(sql, contains('char_length(title) between 1 and 100'));
+    expect(sql, contains('char_length(description) between 1 and 2000'));
+    expect(sql, contains("location_type in ('voice', 'text', 'external')"));
+    expect(sql, contains('ends_at is null or ends_at > starts_at'));
+    expect(sql, contains('on delete set null (channel_id)'));
+    expect(
+      sql,
+      contains('references public.circle_members(circle_id, user_id)'),
+    );
+    expect(
+      policyBody(rawSql, 'circle_events_select_viewer'),
+      contains(
+        "current_user_has_channel_permission(channel_id, 'view_channel')",
+      ),
+    );
+    expect(
+      policyBody(rawSql, 'circle_event_rsvps_select_viewer'),
+      contains('is_current_user_circle_member(circle_id)'),
+    );
+
+    expect(
+      functionBody(sql, 'create_circle_event'),
+      contains("'manage_events'"),
+    );
+    expect(
+      functionBody(sql, 'circle_event_for_management'),
+      contains('created_by is not distinct from auth.uid()'),
+    );
+    final normalizeBody = functionBody(sql, 'normalize_circle_event');
+    expect(normalizeBody, contains('Event must end after it starts'));
+    expect(normalizeBody, contains("'view_channel'"));
+    const audited = {
+      'create_circle_event': 'event_create',
+      'update_circle_event': 'event_update',
+      'cancel_circle_event': 'event_cancel',
+    };
+    for (final MapEntry(key: name, value: action) in audited.entries) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('set search_path = public'), reason: name);
+      expect(body, contains('public.write_circle_audit('), reason: name);
+      expect(body, contains("'$action'"), reason: name);
+    }
+    for (final name in [
+      'toggle_event_interest',
+      'list_circle_events',
+      'list_event_interested',
+      'list_my_upcoming_event_reminders',
+    ]) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('auth.uid()'), reason: name);
+    }
+    expect(
+      functionBody(sql, 'list_circle_events'),
+      contains('order by e.starts_at, e.id'),
+    );
+    expect(
+      functionBody(sql, 'list_my_upcoming_event_reminders'),
+      contains("interval '24 hours'"),
+    );
+
+    for (final signature in [
+      'public.current_user_can_see_circle_event(public.circle_events)',
+      'public.circle_event_payload(public.circle_events)',
+      'public.circle_event_for_management(uuid)',
+      'public.normalize_circle_event(uuid, text, text, text, uuid, text, timestamptz, timestamptz)',
+    ]) {
+      expect(
+        rawSql,
+        contains('revoke execute on function $signature from authenticated'),
+      );
+    }
+    for (final signature in [
+      'public.create_circle_event(uuid, text, text, text, uuid, text, timestamptz, timestamptz)',
+      'public.update_circle_event(uuid, text, text, text, uuid, text, timestamptz, timestamptz)',
+      'public.cancel_circle_event(uuid)',
+      'public.toggle_event_interest(uuid)',
+      'public.list_circle_events(uuid, boolean)',
+      'public.list_event_interested(uuid)',
+      'public.list_my_upcoming_event_reminders()',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

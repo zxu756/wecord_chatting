@@ -13,6 +13,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -295,6 +296,50 @@ class FakeCirclesRepository implements CirclesRepository {
 
   @override
   Future<void> deleteChannel(String channelId) async {}
+
+  @override
+  Future<List<CircleEvent>> listEvents({
+    required String circleId,
+    bool includePast = false,
+  }) async => const [];
+
+  @override
+  Future<CircleEvent> createEvent({
+    required String circleId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<CircleEvent> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<CircleEvent> cancelEvent(String eventId) => throw UnimplementedError();
+
+  @override
+  Future<bool> toggleEventInterest(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<CircleEventPerson>> listEventInterested(String eventId) async =>
+      const [];
+
+  @override
+  Future<List<CircleEventReminder>> listMyEventReminders() async => const [];
 
   @override
   Future<String> createRole({

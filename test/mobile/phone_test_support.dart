@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
+import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
@@ -20,6 +21,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -747,6 +749,73 @@ List<ChatMessage> forumPostMessages() {
   ];
 }
 
+CircleEventPerson _eventPerson(Profile profile, {String? nickname}) {
+  return CircleEventPerson(profile: profile, nickname: nickname);
+}
+
+/// Events of the circle: one live, two upcoming and a cancelled one.
+List<CircleEvent> circleEvents() {
+  return [
+    CircleEvent(
+      id: 'event-live',
+      circleId: 'circle-1',
+      title: 'Golden hour photo walk along the Embarcadero',
+      description:
+          'Bring **any camera**, phones welcome. We meet by the Ferry '
+          'Building clock and walk north.\n\n> Tripods are optional.',
+      locationType: CircleEventLocationType.text,
+      channelId: 'ch-general',
+      channelName: 'general',
+      startsAt: _now.subtract(const Duration(minutes: 20)),
+      endsAt: _now.add(const Duration(minutes: 70)),
+      createdBy: bart.id,
+      creator: _eventPerson(bart, nickname: 'Bart the Bold'),
+      interestedCount: 8,
+      interestedByMe: true,
+      canManage: true,
+    ),
+    CircleEvent(
+      id: 'event-hike',
+      circleId: 'circle-1',
+      title: 'Mission Peak sunrise hike',
+      description: 'Headlamps required. Coffee at the top.',
+      locationType: CircleEventLocationType.external,
+      locationText: 'Stanford Avenue Staging Area, Fremont, California',
+      startsAt: _now.add(const Duration(hours: 26)),
+      endsAt: _now.add(const Duration(hours: 30)),
+      createdBy: grace.id,
+      creator: _eventPerson(grace),
+      interestedCount: 14,
+      canManage: true,
+    ),
+    CircleEvent(
+      id: 'event-call',
+      circleId: 'circle-1',
+      title: 'Yosemite trip planning call: permits, campsites and carpools',
+      locationType: CircleEventLocationType.text,
+      channelId: 'ch-yosemite',
+      channelName: 'yosemite-2026-planning-and-logistics',
+      startsAt: _now.add(const Duration(days: 3, hours: 2)),
+      createdBy: me.id,
+      creator: _eventPerson(me),
+      interestedCount: 0,
+      canManage: true,
+    ),
+    CircleEvent(
+      id: 'event-cancelled',
+      circleId: 'circle-1',
+      title: 'Bay Bridge night shoot',
+      locationType: CircleEventLocationType.external,
+      locationText: 'Treasure Island',
+      startsAt: _now.add(const Duration(days: 2)),
+      cancelledAt: _now.subtract(const Duration(hours: 1)),
+      createdBy: linus.id,
+      creator: _eventPerson(linus, nickname: 'Linus'),
+      canManage: true,
+    ),
+  ];
+}
+
 CircleChannel _channel(
   String id,
   String conversationId,
@@ -1237,6 +1306,13 @@ class PhoneWorld {
         ),
       ];
     circles
+      ..events = circleEvents()
+      ..eventInterested = [
+        _eventPerson(bart, nickname: 'Bart the Bold'),
+        _eventPerson(me),
+        _eventPerson(grace),
+        for (final profile in extraMembers.take(5)) _eventPerson(profile),
+      ]
       ..forumPosts = forumPosts()
       ..detail = circleDetail()
       ..circles = circleSummaries
@@ -1304,6 +1380,7 @@ class PhoneWorld {
         (ref) => Stream.value(circles.onlineUserIds),
       ),
       circleCategoryCollapseStoreProvider.overrideWithValue(collapseStore),
+      circleEventsFollowClockProvider.overrideWithValue(false),
       notificationCoordinatorProvider.overrideWithValue(
         _NoopNotificationCoordinator(
           authRepository: auth,

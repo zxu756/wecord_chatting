@@ -7,6 +7,8 @@ abstract interface class LocalNotificationService {
 
   Future<NotificationPermissionStatus> requestPermission();
 
+  /// Shows a notification whose tap payload is [conversationId]: a
+  /// conversation, or an event reminder's `circleEventNotificationPayload`.
   Future<void> showMessageNotification({
     required String conversationId,
     required String title,

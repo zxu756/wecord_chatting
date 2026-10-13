@@ -21,6 +21,7 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -2794,6 +2795,220 @@ class FakeContactsRepository implements ContactsRepository {
 
 class FakeCirclesRepository implements CirclesRepository {
   late CircleDetail detail;
+
+  /// Every event; [listEvents] filters them like the server.
+  var events = <CircleEvent>[];
+  var eventInterested = <CircleEventPerson>[];
+  var eventReminders = <CircleEventReminder>[];
+  final eventCalls = <String>[];
+  final eventDrafts =
+      <
+        ({
+          String? eventId,
+          String title,
+          String? description,
+          CircleEventLocationType locationType,
+          String? channelId,
+          String? locationText,
+          DateTime startsAt,
+          DateTime? endsAt,
+        })
+      >[];
+  Object? eventError;
+
+  @override
+  Future<List<CircleEvent>> listEvents({
+    required String circleId,
+    bool includePast = false,
+  }) async {
+    final now = DateTime.now();
+    return [
+      for (final event in events)
+        if (event.circleId == circleId &&
+            (includePast || event.isActiveAt(now)))
+          event,
+    ]..sort((left, right) => left.startsAt.compareTo(right.startsAt));
+  }
+
+  CircleEvent _savedEvent({
+    required String id,
+    required String circleId,
+    required String title,
+    required String? description,
+    required CircleEventLocationType locationType,
+    required String? channelId,
+    required String? locationText,
+    required DateTime startsAt,
+    required DateTime? endsAt,
+    CircleEvent? previous,
+  }) {
+    final channel = detail.channels
+        .where((channel) => channel.id == channelId)
+        .firstOrNull;
+    return CircleEvent(
+      id: id,
+      circleId: circleId,
+      title: title.trim(),
+      description: description,
+      locationType: locationType,
+      channelId: locationType == CircleEventLocationType.external
+          ? null
+          : channelId,
+      channelName: locationType == CircleEventLocationType.external
+          ? null
+          : channel?.name,
+      locationText: locationType == CircleEventLocationType.external
+          ? locationText
+          : null,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      createdBy: previous?.createdBy ?? 'user-1',
+      creator: previous?.creator,
+      interestedCount: previous?.interestedCount ?? 0,
+      interestedByMe: previous?.interestedByMe ?? false,
+      canManage: true,
+    );
+  }
+
+  @override
+  Future<CircleEvent> createEvent({
+    required String circleId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) async {
+    eventDrafts.add((
+      eventId: null,
+      title: title,
+      description: description,
+      locationType: locationType,
+      channelId: channelId,
+      locationText: locationText,
+      startsAt: startsAt,
+      endsAt: endsAt,
+    ));
+    final error = eventError;
+    if (error != null) {
+      throw error;
+    }
+    final event = _savedEvent(
+      id: 'event-new-${eventDrafts.length}',
+      circleId: circleId,
+      title: title,
+      description: description,
+      locationType: locationType,
+      channelId: channelId,
+      locationText: locationText,
+      startsAt: startsAt,
+      endsAt: endsAt,
+    );
+    events = [...events, event];
+    return event;
+  }
+
+  @override
+  Future<CircleEvent> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) async {
+    eventDrafts.add((
+      eventId: eventId,
+      title: title,
+      description: description,
+      locationType: locationType,
+      channelId: channelId,
+      locationText: locationText,
+      startsAt: startsAt,
+      endsAt: endsAt,
+    ));
+    final error = eventError;
+    if (error != null) {
+      throw error;
+    }
+    final previous = events.firstWhere((event) => event.id == eventId);
+    final event = _savedEvent(
+      id: eventId,
+      circleId: previous.circleId,
+      title: title,
+      description: description,
+      locationType: locationType,
+      channelId: channelId,
+      locationText: locationText,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      previous: previous,
+    );
+    events = [for (final other in events) other.id == eventId ? event : other];
+    return event;
+  }
+
+  @override
+  Future<CircleEvent> cancelEvent(String eventId) async {
+    eventCalls.add('cancel $eventId');
+    final previous = events.firstWhere((event) => event.id == eventId);
+    final cancelled = CircleEvent(
+      id: previous.id,
+      circleId: previous.circleId,
+      title: previous.title,
+      locationType: previous.locationType,
+      locationText: previous.locationText,
+      channelId: previous.channelId,
+      channelName: previous.channelName,
+      startsAt: previous.startsAt,
+      endsAt: previous.endsAt,
+      cancelledAt: DateTime.now(),
+      canManage: previous.canManage,
+    );
+    events = [
+      for (final other in events) other.id == eventId ? cancelled : other,
+    ];
+    return cancelled;
+  }
+
+  @override
+  Future<bool> toggleEventInterest(String eventId) async {
+    eventCalls.add('interest $eventId');
+    final error = eventError;
+    if (error != null) {
+      throw error;
+    }
+    late bool interested;
+    events = [
+      for (final event in events)
+        if (event.id == eventId)
+          () {
+            interested = !event.interestedByMe;
+            return event.copyWith(
+              interestedByMe: interested,
+              interestedCount: event.interestedCount + (interested ? 1 : -1),
+            );
+          }()
+        else
+          event,
+    ];
+    return interested;
+  }
+
+  @override
+  Future<List<CircleEventPerson>> listEventInterested(String eventId) async {
+    return eventInterested;
+  }
+
+  @override
+  Future<List<CircleEventReminder>> listMyEventReminders() async {
+    return eventReminders;
+  }
+
   var circles = <CircleSummary>[];
   var createdChannelName = '';
   String? createdChannelCategoryId;

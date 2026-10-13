@@ -39,7 +39,7 @@ class CircleAuditEntry {
   final String action;
 
   /// `channel`, `category`, `role`, `member`, `invite`, `message`,
-  /// `thread`, `post`, `tag` or `circle`.
+  /// `thread`, `post`, `tag`, `event` or `circle`.
   final String targetType;
   final String? targetId;
 
@@ -106,6 +106,7 @@ enum CircleAuditActionGroup {
   thread('thread', 'Threads'),
   post('post', 'Posts'),
   forum('forum', 'Forums'),
+  event('event', 'Events'),
   other('', 'Other');
 
   const CircleAuditActionGroup(this.filter, this.label);
@@ -136,5 +137,6 @@ enum CircleAuditActionGroup {
     thread,
     post,
     forum,
+    event,
   ];
 }

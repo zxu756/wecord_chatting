@@ -8,6 +8,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -1469,6 +1470,195 @@ void main() {
     expect(circleId, 'circle-1');
     expect(dataSource.calls.single.functionName, 'accept_circle_invite');
     expect(dataSource.calls.single.params, {'invite_code': 'abcdefgh23'});
+  });
+  group('events', () {
+    Map<String, dynamic> eventJson({String id = 'event-1'}) => {
+      'id': id,
+      'circle_id': 'circle-1',
+      'title': 'Hike',
+      'description': 'Bring water',
+      'location_type': 'external',
+      'location_text': 'Mission Peak',
+      'starts_at': '2026-10-20T15:00:00+00:00',
+      'ends_at': null,
+      'created_by': 'user-2',
+      'creator': {
+        'id': 'user-2',
+        'username': 'bart',
+        'display_name': 'Bart',
+        'bio': '',
+        'created_at': '2026-01-01T00:00:00+00:00',
+        'updated_at': '2026-01-01T00:00:00+00:00',
+        'nickname': 'Bart the Bold',
+      },
+      'interested_count': 3,
+      'interested_by_me': true,
+      'can_manage': false,
+    };
+
+    test('listEvents maps list_circle_events rows', () async {
+      final dataSource = FakeCirclesDataSource()
+        ..rpcRows['list_circle_events'] = [eventJson()];
+      final repository = SupabaseCirclesRepository(dataSource);
+
+      final events = await repository.listEvents(
+        circleId: 'circle-1',
+        includePast: true,
+      );
+
+      expect(dataSource.calls.single.params, {
+        'target_circle_id': 'circle-1',
+        'include_past': true,
+      });
+      final event = events.single;
+      expect(event.title, 'Hike');
+      expect(event.locationType, CircleEventLocationType.external);
+      expect(event.locationLabel, 'Mission Peak');
+      expect(event.creator!.name, 'Bart the Bold');
+      expect(event.interestedCount, 3);
+      expect(event.interestedByMe, isTrue);
+      expect(
+        event.effectiveEndsAt,
+        DateTime.parse('2026-10-20T17:00:00+00:00'),
+      );
+    });
+
+    test('create and update send trimmed fields in UTC', () async {
+      final dataSource = FakeCirclesDataSource()..rpcValue = eventJson();
+      final repository = SupabaseCirclesRepository(dataSource);
+      final start = DateTime.utc(2026, 10, 20, 15);
+
+      await repository.createEvent(
+        circleId: 'circle-1',
+        title: ' Hike ',
+        description: '  ',
+        locationType: CircleEventLocationType.external,
+        channelId: 'ignored',
+        locationText: ' Mission Peak ',
+        startsAt: start,
+        endsAt: start.add(const Duration(hours: 2)),
+      );
+      expect(dataSource.calls.last.functionName, 'create_circle_event');
+      expect(dataSource.calls.last.params, {
+        'target_circle_id': 'circle-1',
+        'event_title': 'Hike',
+        'event_description': null,
+        'event_location_type': 'external',
+        'event_channel_id': null,
+        'event_location_text': 'Mission Peak',
+        'event_starts_at': '2026-10-20T15:00:00.000Z',
+        'event_ends_at': '2026-10-20T17:00:00.000Z',
+      });
+
+      await repository.updateEvent(
+        eventId: 'event-1',
+        title: 'Call',
+        description: ' Agenda ',
+        locationType: CircleEventLocationType.text,
+        channelId: 'channel-1',
+        locationText: 'ignored',
+        startsAt: start,
+      );
+      expect(dataSource.calls.last.functionName, 'update_circle_event');
+      expect(dataSource.calls.last.params, {
+        'target_event_id': 'event-1',
+        'event_title': 'Call',
+        'event_description': 'Agenda',
+        'event_location_type': 'text',
+        'event_channel_id': 'channel-1',
+        'event_location_text': null,
+        'event_starts_at': '2026-10-20T15:00:00.000Z',
+        'event_ends_at': null,
+      });
+    });
+
+    test(
+      'cancel, interest, interested and reminders call their RPCs',
+      () async {
+        final dataSource = FakeCirclesDataSource()
+          ..rpcRows['cancel_circle_event'] = []
+          ..rpcRows['list_event_interested'] = [
+            {
+              'id': 'user-3',
+              'username': 'grace',
+              'display_name': 'Grace',
+              'bio': '',
+              'created_at': '2026-01-01T00:00:00+00:00',
+              'updated_at': '2026-01-01T00:00:00+00:00',
+            },
+          ]
+          ..rpcRows['list_my_upcoming_event_reminders'] = [
+            {
+              'event_id': 'event-1',
+              'circle_id': 'circle-1',
+              'circle_name': 'Hikers',
+              'title': 'Hike',
+              'starts_at': '2026-10-20T15:00:00+00:00',
+              'location': 'Mission Peak',
+              'notification_level': 'none',
+              'muted_until': null,
+            },
+          ];
+        final repository = SupabaseCirclesRepository(dataSource);
+
+        dataSource.rpcRows.remove('cancel_circle_event');
+        dataSource.rpcValue = {
+          ...eventJson(),
+          'cancelled_at': '2026-10-14T12:00:00+00:00',
+        };
+        final cancelled = await repository.cancelEvent('event-1');
+        expect(cancelled.isCancelled, isTrue);
+        expect(dataSource.calls.last.params, {'target_event_id': 'event-1'});
+
+        dataSource.rpcValue = true;
+        expect(await repository.toggleEventInterest('event-1'), isTrue);
+        expect(dataSource.calls.last.functionName, 'toggle_event_interest');
+
+        final people = await repository.listEventInterested('event-1');
+        expect(people.single.name, 'Grace');
+
+        final reminders = await repository.listMyEventReminders();
+        expect(
+          dataSource.calls.last.functionName,
+          'list_my_upcoming_event_reminders',
+        );
+        expect(reminders.single.circleName, 'Hikers');
+        expect(
+          reminders.single.notificationLevel,
+          CircleNotificationLevel.none,
+        );
+      },
+    );
+  });
+
+  test('event status, payloads and calendar files', () {
+    final start = DateTime.utc(2026, 10, 20, 15);
+    final event = CircleEvent(
+      id: 'event-1',
+      circleId: 'circle-1',
+      title: 'Hike, then lunch',
+      description: 'Bring **water**',
+      locationType: CircleEventLocationType.text,
+      channelName: 'general',
+      startsAt: start,
+    );
+    expect(
+      event.statusAt(start.subtract(const Duration(minutes: 1))),
+      CircleEventStatus.scheduled,
+    );
+    expect(event.statusAt(start), CircleEventStatus.ongoing);
+    expect(
+      event.statusAt(start.add(const Duration(hours: 2))),
+      CircleEventStatus.over,
+    );
+    expect(event.locationLabel, '#general');
+    expect(
+      parseCircleEventNotificationPayload(
+        circleEventNotificationPayload('circle-1', 'event-1'),
+      ),
+      (circleId: 'circle-1', eventId: 'event-1'),
+    );
+    expect(parseCircleEventNotificationPayload('conversation-1'), isNull);
   });
 }
 

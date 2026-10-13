@@ -8,6 +8,7 @@ import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/forum.dart';
@@ -185,6 +186,51 @@ abstract interface class CirclesRepository {
 
   /// Deletes a channel with its messages and threads.
   Future<void> deleteChannel(String channelId);
+
+  /// The circle's upcoming and ongoing events by start time; with
+  /// [includePast] also ended and cancelled ones. Events in channels the
+  /// current user cannot see are left out.
+  Future<List<CircleEvent>> listEvents({
+    required String circleId,
+    bool includePast = false,
+  });
+
+  /// Schedules an event (needs manage events). Voice and text events take
+  /// [channelId], external ones [locationText].
+  Future<CircleEvent> createEvent({
+    required String circleId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  });
+
+  /// Changes an event (its creator or members who manage events).
+  Future<CircleEvent> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  });
+
+  Future<CircleEvent> cancelEvent(String eventId);
+
+  /// Marks the current user interested in an event, or not any more, and
+  /// returns the new state.
+  Future<bool> toggleEventInterest(String eventId);
+
+  /// The members interested in an event, first first.
+  Future<List<CircleEventPerson>> listEventInterested(String eventId);
+
+  /// Events the current user is interested in that start within a day.
+  Future<List<CircleEventReminder>> listMyEventReminders();
 
   /// A page of a forum's posts: pinned posts first (on the first page,
   /// when [before] is null), then up to [limit] others by [sort], newest
@@ -677,6 +723,137 @@ class SupabaseCirclesRepository implements CirclesRepository {
   }
 
   @override
+  Future<List<CircleEvent>> listEvents({
+    required String circleId,
+    bool includePast = false,
+  }) async {
+    final rows = await _dataSource.rpc('list_circle_events', {
+      'target_circle_id': circleId,
+      'include_past': includePast,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleEvent.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<CircleEvent> createEvent({
+    required String circleId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) async {
+    final payload = await _dataSource.rpc('create_circle_event', {
+      'target_circle_id': circleId,
+      ..._eventFields(
+        title: title,
+        description: description,
+        locationType: locationType,
+        channelId: channelId,
+        locationText: locationText,
+        startsAt: startsAt,
+        endsAt: endsAt,
+      ),
+    });
+    return CircleEvent.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<CircleEvent> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) async {
+    final payload = await _dataSource.rpc('update_circle_event', {
+      'target_event_id': eventId,
+      ..._eventFields(
+        title: title,
+        description: description,
+        locationType: locationType,
+        channelId: channelId,
+        locationText: locationText,
+        startsAt: startsAt,
+        endsAt: endsAt,
+      ),
+    });
+    return CircleEvent.fromJson(payload as Map<String, dynamic>);
+  }
+
+  Map<String, dynamic> _eventFields({
+    required String title,
+    required String? description,
+    required CircleEventLocationType locationType,
+    required String? channelId,
+    required String? locationText,
+    required DateTime startsAt,
+    required DateTime? endsAt,
+  }) {
+    final external = locationType == CircleEventLocationType.external;
+    final trimmedDescription = description?.trim();
+    return {
+      'event_title': title.trim(),
+      'event_description':
+          trimmedDescription == null || trimmedDescription.isEmpty
+          ? null
+          : trimmedDescription,
+      'event_location_type': locationType.value,
+      'event_channel_id': external ? null : channelId,
+      'event_location_text': external ? locationText?.trim() : null,
+      'event_starts_at': startsAt.toUtc().toIso8601String(),
+      'event_ends_at': endsAt?.toUtc().toIso8601String(),
+    };
+  }
+
+  @override
+  Future<CircleEvent> cancelEvent(String eventId) async {
+    final payload = await _dataSource.rpc('cancel_circle_event', {
+      'target_event_id': eventId,
+    });
+    return CircleEvent.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<bool> toggleEventInterest(String eventId) async {
+    final interested = await _dataSource.rpc('toggle_event_interest', {
+      'target_event_id': eventId,
+    });
+    return interested == true;
+  }
+
+  @override
+  Future<List<CircleEventPerson>> listEventInterested(String eventId) async {
+    final rows = await _dataSource.rpc('list_event_interested', {
+      'target_event_id': eventId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleEventPerson.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<CircleEventReminder>> listMyEventReminders() async {
+    final rows = await _dataSource.rpc(
+      'list_my_upcoming_event_reminders',
+      const {},
+    );
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleEventReminder.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
   Future<List<ForumPost>> listForumPosts({
     required String channelId,
     ForumPostSort sort = ForumPostSort.activity,
@@ -1131,6 +1308,28 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
+              table: 'circle_events',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'circle_event_rsvps',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
               table: 'circle_posts',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
@@ -1446,6 +1645,62 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<void> deleteChannel(String channelId) {
     throw StateError('Supabase must be initialized before deleting channels.');
+  }
+
+  @override
+  Future<List<CircleEvent>> listEvents({
+    required String circleId,
+    bool includePast = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<CircleEvent> createEvent({
+    required String circleId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) {
+    throw StateError('Supabase must be initialized before creating events.');
+  }
+
+  @override
+  Future<CircleEvent> updateEvent({
+    required String eventId,
+    required String title,
+    String? description,
+    required CircleEventLocationType locationType,
+    String? channelId,
+    String? locationText,
+    required DateTime startsAt,
+    DateTime? endsAt,
+  }) {
+    throw StateError('Supabase must be initialized before editing events.');
+  }
+
+  @override
+  Future<CircleEvent> cancelEvent(String eventId) {
+    throw StateError('Supabase must be initialized before cancelling events.');
+  }
+
+  @override
+  Future<bool> toggleEventInterest(String eventId) {
+    throw StateError('Supabase must be initialized before marking interest.');
+  }
+
+  @override
+  Future<List<CircleEventPerson>> listEventInterested(String eventId) async {
+    return const [];
+  }
+
+  @override
+  Future<List<CircleEventReminder>> listMyEventReminders() async {
+    return const [];
   }
 
   @override

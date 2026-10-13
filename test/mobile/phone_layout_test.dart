@@ -945,6 +945,124 @@ void main() {
       );
     });
 
+    Future<PhoneWorld> openCircleEvents(WidgetTester tester) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      await tester.tap(find.byKey(const ValueKey('circle-events-entry')));
+      await settle(tester);
+      return world;
+    }
+
+    phoneTestWidgets('events entry in the circle sidebar', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      final entry = find.byKey(const ValueKey('circle-events-entry'));
+      expectFullyVisible(tester, entry);
+      expectTouchTargets(tester, entry);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('circle-events-live')),
+      );
+      expect(
+        find.descendant(of: entry, matching: find.text('Events (3)')),
+        findsOneWidget,
+      );
+    });
+
+    phoneTestWidgets('events list cards', (tester, viewport) async {
+      await openCircleEvents(tester);
+      expect(find.byKey(const ValueKey('circle-events-list')), findsOneWidget);
+      final live = find.byKey(const ValueKey('circle-event-event-live'));
+      expect(tester.getRect(live).width, greaterThan(viewport.size.width - 40));
+      final interest = find.byKey(
+        const ValueKey('circle-event-interest-event-live'),
+      );
+      expectFullyVisible(tester, interest);
+      expectTouchTargets(tester, interest);
+      expectFullyVisible(tester, iconButtonWithTooltip('Create event'));
+      expectTouchTargets(tester, iconButtonWithTooltip('Create event'));
+      await scrollIntoView(
+        tester,
+        find.byKey(const ValueKey('circle-events-show-past')),
+      );
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('circle-events-show-past')),
+      );
+    });
+
+    phoneTestWidgets('event detail', (tester, viewport) async {
+      await openCircleEvents(tester);
+      await tester.tap(
+        find.text('Golden hour photo walk along the Embarcadero'),
+      );
+      await settle(tester);
+      expect(find.byKey(const ValueKey('circle-event-detail')), findsOneWidget);
+      for (final key in [
+        'circle-event-detail-interest',
+        'circle-event-add-to-calendar',
+      ]) {
+        final button = find.byKey(ValueKey(key));
+        await tester.ensureVisible(button);
+        await settle(tester);
+        expectFullyVisible(tester, button);
+        expectTouchTargets(tester, button);
+      }
+      expectTouchTargets(tester, iconButtonWithTooltip('Event options'));
+      await scrollIntoView(
+        tester,
+        find.byKey(const ValueKey('circle-event-interested-list')),
+      );
+    });
+
+    phoneTestWidgets('create event sheet above the keyboard', (
+      tester,
+      viewport,
+    ) async {
+      await openCircleEvents(tester);
+      await tester.tap(find.byKey(const ValueKey('circle-events-create')));
+      await settle(tester);
+      final title = find.byKey(const ValueKey('event-title-field'));
+      await showKeyboard(tester, viewport);
+      expectCaretVisible(tester, title);
+
+      final start = find.byKey(const ValueKey('event-start-button'));
+      await tester.ensureVisible(start);
+      await settle(tester);
+      expectFullyVisible(tester, start);
+      expectTouchTargets(tester, start);
+
+      final location = find.byKey(const ValueKey('event-location-type'));
+      await tester.ensureVisible(location);
+      await settle(tester);
+      expectFullyVisible(tester, location);
+      await tester.tap(find.text('Elsewhere'));
+      await settle(tester);
+
+      final place = find.byKey(const ValueKey('event-location-field'));
+      await tester.ensureVisible(place);
+      await tester.tap(place);
+      await tester.enterText(place, 'Dolores Park, by the tennis courts');
+      await settle(tester);
+      expectCaretVisible(tester, place);
+
+      final description = find.byKey(const ValueKey('event-description-field'));
+      await tester.ensureVisible(description);
+      await tester.tap(description);
+      await tester.enterText(description, 'Line one\nLine two\nLine three');
+      await settle(tester);
+      expectCaretVisible(tester, description);
+
+      final save = find.byKey(const ValueKey('event-save'));
+      await tester.ensureVisible(save);
+      await settle(tester);
+      expectFullyVisible(tester, save);
+      expectTouchTargets(tester, save);
+    });
+
     phoneTestWidgets('read-only channel replaces the composer', (
       tester,
       viewport,

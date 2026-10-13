@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
+import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
@@ -16,7 +17,7 @@ import 'package:wecord/shared/models/conversation.dart';
 
 const maxCircleCategoryNameLength = 32;
 
-/// The circle's channel list: header menu, Feed entry, uncategorized
+/// The circle's channel list: header menu, Feed and Events entries, uncategorized
 /// channels, then each category. Categories collapse independently (kept per
 /// device); a collapsed category still lists the selected channel and
 /// channels with unread messages. Members who can manage channels can drag
@@ -430,11 +431,33 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       buildDefaultDragHandles: false,
       header: Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: CircleChannelRow(
-          icon: Icons.dynamic_feed_outlined,
-          label: 'Feed',
-          selected: widget.feedSelected,
-          onTap: widget.onSelectFeed,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CircleChannelRow(
+              icon: Icons.dynamic_feed_outlined,
+              label: 'Feed',
+              selected: widget.feedSelected,
+              onTap: widget.onSelectFeed,
+            ),
+            CircleEventsEntry(
+              circleId: _circleId,
+              builder: (context, label, live) => CircleChannelRow(
+                key: const ValueKey('circle-events-entry'),
+                icon: Icons.event_outlined,
+                label: label,
+                selected: false,
+                unread: live,
+                trailing: live ? const _LiveNowPill() : null,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) =>
+                        CircleEventsScreen(circleId: _circleId),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       footer: detail.channels.isEmpty
@@ -1004,12 +1027,39 @@ class CircleCategoryHeader extends StatelessWidget {
   }
 }
 
+/// "Live now" next to the Events entry while an event is on.
+class _LiveNowPill extends StatelessWidget {
+  const _LiveNowPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('circle-events-live'),
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Live now',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class CircleChannelRow extends StatelessWidget {
   const CircleChannelRow({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.trailing,
     this.unread = false,
     this.indent = 0,
     this.locked = false,
@@ -1023,6 +1073,9 @@ class CircleChannelRow extends StatelessWidget {
   final bool selected;
   final bool unread;
   final VoidCallback onTap;
+
+  /// Shown at the end of the row, such as a badge.
+  final Widget? trailing;
 
   /// Extra left inset, for threads under their channel.
   final double indent;
@@ -1089,6 +1142,7 @@ class CircleChannelRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    ?trailing,
                     if (locked)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),

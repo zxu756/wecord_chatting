@@ -310,6 +310,48 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Forum'));
   });
+
+  Future<void> openEvents(WidgetTester tester, PhoneWorld world) async {
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byKey(const ValueKey('circle-events-entry')));
+    await settle(tester);
+  }
+
+  screen('26-circle-events', (tester, world) async {
+    await openEvents(tester, world);
+  });
+
+  screen('26b-circle-events-small', (tester, world) async {
+    await openEvents(tester, world);
+  }, viewport: smallPhone);
+
+  screen('27-circle-event-detail', (tester, world) async {
+    await openEvents(tester, world);
+    await tester.tap(find.text('Golden hour photo walk along the Embarcadero'));
+  });
+
+  screen('28-create-event-keyboard', (tester, world) async {
+    await openEvents(tester, world);
+    await tester.tap(find.byKey(const ValueKey('circle-events-create')));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('event-title-field')),
+      'Picnic in Dolores Park',
+    );
+    await showKeyboard(tester, notchedPhone);
+  });
+
+  screen('28b-create-event-elsewhere', (tester, world) async {
+    await openEvents(tester, world);
+    await tester.tap(find.byKey(const ValueKey('circle-events-create')));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('event-title-field')),
+      'Picnic in Dolores Park',
+    );
+    await tester.tap(find.text('Elsewhere'));
+    await tester.tap(find.byKey(const ValueKey('event-end-switch')));
+  });
 }
 
 /// Loads Roboto and the Material icons from the Flutter SDK, so text is not

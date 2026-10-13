@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
@@ -160,6 +161,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               );
             },
             routes: [
+              // The circle's events; ?event= opens one (from a reminder).
+              GoRoute(
+                path: 'events',
+                builder: (context, state) {
+                  return CircleEventsScreen(
+                    circleId: state.pathParameters['circleId']!,
+                    initialEventId: state.uri.queryParameters['event'],
+                  );
+                },
+              ),
               // Circle channels opened full screen on narrow layouts. Living
               // under /circles keeps the Circles destination highlighted.
               GoRoute(

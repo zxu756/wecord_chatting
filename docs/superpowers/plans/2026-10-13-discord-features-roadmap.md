@@ -112,10 +112,11 @@
   - UI：论坛频道显示帖子卡片列表（标题、作者、标签、回复数、最后活动、首图缩略图），按最新活动或创建时间排序、按标签筛选；「发帖」表单填标题、正文、标签。
   - 已实现：`create_forum_post`（需要 `send_messages`，一次建好子话题、首条消息和标签）、`list_forum_posts`（置顶在前，游标分页）、`set_forum_post_tags`、`pin_forum_post`（`manage_messages`）、标签增删改排（`manage_channels`，每个论坛最多 20 个、每帖最多 5 个）；论坛自身的会话拒收消息、不能用 `create_thread`；标签和置顶写操作日志（`forum_*`）。帖子不进侧栏子话题列表，未读汇总到论坛频道；频道设置里管理标签，建频道时可选「论坛」。发帖支持 @提及（与聊天相同，看不到该论坛的人被丢弃）；打开帖子停在开头，有未读回复时显示「跳到新回复」。
   - 频道管理（同批）：`update_circle_channel` / `delete_circle_channel`，频道设置里改名、话题、删除；话题显示在频道顶栏。
-- [ ] **22. 活动日程（Events）**（M–L）
+- [x] **22. 活动日程（Events）**（M–L）
   - 表 `circle_events (id, circle_id, title, description, location_type text check in ('voice','text','external'), channel_id null, location_text null, starts_at, ends_at null, created_by, cancelled_at null)`、`circle_event_rsvps (event_id, user_id, created_at)`。
   - RPC：创建 / 编辑 / 取消（`manage_events`）、`toggle_event_interest`、`list_circle_events(circle_id)`（未来的和进行中的）。
   - UI：频道侧栏顶部「活动（n）」入口；活动列表与详情（感兴趣人数、按钮、加入日历文本）；活动开始前 15 分钟给感兴趣的人本地通知（复用通知协调器，App 打开期间生效）。
+  - 已实现：`create_circle_event`（`manage_events`）、`update_circle_event` / `cancel_circle_event`（`manage_events` 或创建者，取消后不可再改）、`toggle_event_interest`、`list_circle_events(circle_id, include_past)`、`list_event_interested`、`list_my_upcoming_event_reminders`（感兴趣且 24 小时内开始）；写操作日志 `event_create` / `event_update` / `event_cancel`。所在频道看不到的活动对该成员隐藏；频道被删后活动保留但没有频道。没有结束时间的活动按 2 小时计，进行中 / 已结束在读取时计算，不自动发消息。`circle_event_rsvps` 带 `circle_id`（退出 / 被踢时级联删除，realtime 按圈子过滤）。提醒每 5 秒检查一次（复用轮询），5 分钟或回到前台时重新拉取，同一活动同一开始时间只提醒一次，圈子通知为「不通知」或静音时跳过；点击提醒打开 `/circles/:id/events?event=`。「加入日历」复制文字摘要，网页端同时下载 .ics。
 - [ ] **23. 斜杠命令、投票与 Webhook**（L）
   - **斜杠命令**：输入框以 `/` 开头时弹出命令列表，支持 `/shrug`、`/tableflip`、`/unflip`、`/me`、`/spoiler`、`/roll [面数]`、`/poll`、`/nick`（改圈子昵称）、`/status`（改自定义状态）。前三个是纯文本替换；其余调用对应功能。
   - **投票**：`messages.type = 'poll'`，attachment 存 `{question, options[], multi, ends_at}`；表 `message_poll_votes (message_id, user_id, option_index)`；RPC `vote_poll`；消息里显示进度条和票数，结束后锁定。

@@ -4,10 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
@@ -18,6 +20,8 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
+
+import '../circles/circle_detail_screen_test.dart' as circle_fakes;
 
 void main() {
   test('does not notify on initial snapshot', () async {
@@ -543,6 +547,116 @@ void main() {
     },
   );
 
+  group('event reminders', () {
+    final start = DateTime.utc(2026, 10, 20, 15);
+
+    CircleEventReminder reminder({
+      String id = 'event-1',
+      CircleNotificationLevel level = CircleNotificationLevel.all,
+      DateTime? mutedUntil,
+    }) {
+      return CircleEventReminder(
+        eventId: id,
+        circleId: 'circle-1',
+        circleName: 'Hikers',
+        title: 'Sunrise hike',
+        startsAt: start,
+        location: 'Mission Peak',
+        notificationLevel: level,
+        mutedUntil: mutedUntil,
+      );
+    }
+
+    ({
+      NotificationCoordinatorHarness harness,
+      circle_fakes.FakeCirclesRepository circles,
+      void Function(DateTime) setNow,
+    })
+    setUpReminders(List<CircleEventReminder> reminders, {bool enabled = true}) {
+      var now = start.subtract(const Duration(minutes: 40));
+      final circles = circle_fakes.FakeCirclesRepository()
+        ..eventReminders = reminders;
+      final harness = NotificationCoordinatorHarness(
+        notificationsEnabled: enabled,
+        circlesRepository: circles,
+        now: () => now,
+      );
+      return (
+        harness: harness,
+        circles: circles,
+        setNow: (value) => now = value,
+      );
+    }
+
+    test('remind once 15 minutes before the start', () async {
+      final setup = setUpReminders([reminder()]);
+      final harness = setup.harness;
+      harness.seed([]);
+      await harness.start();
+      expect(harness.notifications, isEmpty);
+
+      setup.setNow(start.subtract(const Duration(minutes: 20)));
+      await harness.poll([]);
+      expect(harness.notifications, isEmpty);
+
+      setup.setNow(start.subtract(const Duration(minutes: 15)));
+      await harness.poll([]);
+      final shown = harness.notifications.single;
+      expect(shown.title, 'Sunrise hike');
+      expect(shown.body, 'Starts in 15 minutes · Hikers · Mission Peak');
+      expect(shown.payload, 'circle-event:circle-1:event-1');
+
+      setup.setNow(start.subtract(const Duration(minutes: 14)));
+      await harness.poll([]);
+      await harness.coordinator.refreshEventReminders();
+      expect(harness.notifications, hasLength(1));
+
+      // Started events are not reminded of.
+      setup.setNow(start.add(const Duration(minutes: 1)));
+      setup.circles.eventReminders = [reminder(id: 'event-2')];
+      await harness.coordinator.refreshEventReminders();
+      expect(harness.notifications, hasLength(1));
+    });
+
+    test('silent circles and disabled notifications get no reminder', () async {
+      final setup = setUpReminders([
+        reminder(id: 'quiet', level: CircleNotificationLevel.none),
+        reminder(id: 'muted', mutedUntil: start.add(const Duration(days: 1))),
+        reminder(id: 'mentions', level: CircleNotificationLevel.mentions),
+      ]);
+      setup.harness.seed([]);
+      await setup.harness.start();
+      setup.setNow(start.subtract(const Duration(minutes: 10)));
+      await setup.harness.poll([]);
+
+      expect(setup.harness.notifications.map((shown) => shown.payload), [
+        'circle-event:circle-1:mentions',
+      ]);
+
+      final disabled = setUpReminders([reminder()], enabled: false);
+      disabled.harness.seed([]);
+      await disabled.harness.start();
+      disabled.setNow(start.subtract(const Duration(minutes: 10)));
+      await disabled.harness.poll([]);
+      expect(disabled.harness.notifications, isEmpty);
+    });
+
+    test('reminders are fetched again after a while', () async {
+      final setup = setUpReminders([]);
+      setup.harness.seed([]);
+      await setup.harness.start();
+      setup.circles.eventReminders = [reminder()];
+
+      setup.setNow(start.subtract(const Duration(minutes: 38)));
+      await setup.harness.poll([]);
+      setup.setNow(start.subtract(const Duration(minutes: 12)));
+      await setup.harness.poll([]);
+      await setup.harness.poll([]);
+
+      expect(setup.harness.notifications, hasLength(1));
+    });
+  });
+
   test('stops listening after dispose', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);
@@ -561,6 +675,8 @@ class NotificationCoordinatorHarness {
     bool notificationsEnabled = true,
     bool previewsEnabled = true,
     String? currentUserId = 'current-user',
+    CirclesRepository? circlesRepository,
+    DateTime Function()? now,
   }) : _activeConversationId = activeConversationId,
        _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
@@ -577,10 +693,11 @@ class NotificationCoordinatorHarness {
     coordinator = NotificationCoordinator(
       authRepository: _authRepository,
       chatsRepository: _chatsRepository,
+      circlesRepository: circlesRepository,
       preferencesRepository: _preferencesRepository,
       notificationService: _notificationService,
       activeConversationId: () => _activeConversationId,
-      now: () => DateTime.utc(2026, 5, 18, 12, 30),
+      now: now ?? () => DateTime.utc(2026, 5, 18, 12, 30),
       pollTicks: _pollTicks.stream,
     );
   }

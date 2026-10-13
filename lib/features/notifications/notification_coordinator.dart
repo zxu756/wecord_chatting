@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -18,6 +20,7 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
   final coordinator = NotificationCoordinator(
     authRepository: ref.watch(authRepositoryProvider),
     chatsRepository: ref.watch(chatsRepositoryProvider),
+    circlesRepository: ref.watch(circlesRepositoryProvider),
     preferencesRepository: ref.watch(notificationPreferencesRepositoryProvider),
     notificationService: ref.watch(localNotificationServiceProvider),
     activeConversationId: () => ref.read(activeConversationIdProvider),
@@ -26,10 +29,14 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
   return coordinator;
 });
 
+/// Notifies about new messages while the app runs (polling the
+/// conversation list), and reminds the current user of events they are
+/// interested in [CircleEvent.reminderLead] before they start.
 class NotificationCoordinator {
   NotificationCoordinator({
     required AuthRepository authRepository,
     required ChatsRepository chatsRepository,
+    CirclesRepository? circlesRepository,
     required NotificationPreferencesRepository preferencesRepository,
     required LocalNotificationService notificationService,
     required String? Function() activeConversationId,
@@ -37,6 +44,7 @@ class NotificationCoordinator {
     Stream<void>? pollTicks,
   }) : _authRepository = authRepository,
        _chatsRepository = chatsRepository,
+       _circlesRepository = circlesRepository,
        _preferencesRepository = preferencesRepository,
        _notificationService = notificationService,
        _activeConversationId = activeConversationId,
@@ -46,6 +54,7 @@ class NotificationCoordinator {
 
   final AuthRepository _authRepository;
   final ChatsRepository _chatsRepository;
+  final CirclesRepository? _circlesRepository;
   final NotificationPreferencesRepository _preferencesRepository;
   final LocalNotificationService _notificationService;
   final String? Function() _activeConversationId;
@@ -65,6 +74,19 @@ class NotificationCoordinator {
   var _reloadQueued = false;
   late DateTime _startedAt;
 
+  /// How often the upcoming event reminders are fetched again, besides
+  /// [refreshEventReminders].
+  static const eventReminderRefreshInterval = Duration(minutes: 5);
+
+  var _eventReminders = const <CircleEventReminder>[];
+  DateTime? _eventRemindersFetchedAt;
+  var _fetchingEventReminders = false;
+  var _checkingEventReminders = false;
+
+  /// Reminders already shown, by event and start time (a moved event
+  /// reminds again).
+  final _remindedEventKeys = <String>{};
+
   Future<void> start() async {
     if (_started || _disposed) {
       return;
@@ -77,9 +99,113 @@ class NotificationCoordinator {
     });
     _pollSubscription = _pollTicks.listen((_) {
       _queueReload();
+      unawaited(_checkEventReminders());
     });
 
     await _ensureBaselineLoaded();
+    await refreshEventReminders();
+  }
+
+  /// Fetches the events to remind about again: after the current user
+  /// changes their interest or an event, and when the app comes back.
+  Future<void> refreshEventReminders() async {
+    final circlesRepository = _circlesRepository;
+    if (circlesRepository == null || _disposed || _fetchingEventReminders) {
+      return;
+    }
+    if (_authRepository.currentUser == null) {
+      _eventReminders = const [];
+      _remindedEventKeys.clear();
+      return;
+    }
+    _fetchingEventReminders = true;
+    try {
+      _eventReminders = await circlesRepository.listMyEventReminders();
+    } catch (_) {
+      // Keep the last ones; the next refresh tries again.
+    } finally {
+      // Also after a failure, so a failing fetch is not retried every tick.
+      _eventRemindersFetchedAt = _now();
+      _fetchingEventReminders = false;
+    }
+    await _checkEventReminders();
+  }
+
+  Future<void> _checkEventReminders() async {
+    if (_disposed ||
+        _circlesRepository == null ||
+        _checkingEventReminders ||
+        _fetchingEventReminders ||
+        _authRepository.currentUser == null) {
+      return;
+    }
+    final now = _now();
+    final fetchedAt = _eventRemindersFetchedAt;
+    if (fetchedAt == null ||
+        now.difference(fetchedAt) >= eventReminderRefreshInterval) {
+      await refreshEventReminders();
+      return;
+    }
+    final due = [
+      for (final reminder in _eventReminders)
+        if (!_remindedEventKeys.contains(_reminderKey(reminder)) &&
+            !now.isBefore(
+              reminder.startsAt.subtract(CircleEvent.reminderLead),
+            ) &&
+            now.isBefore(reminder.startsAt))
+          reminder,
+    ];
+    if (due.isEmpty) {
+      return;
+    }
+    _checkingEventReminders = true;
+    try {
+      final NotificationPreferences preferences;
+      try {
+        preferences = await _preferencesRepository.load();
+      } catch (_) {
+        return;
+      }
+      if (_disposed || !preferences.enabled) {
+        return;
+      }
+      for (final reminder in due) {
+        _remindedEventKeys.add(_reminderKey(reminder));
+        if (reminder.notificationLevel == CircleNotificationLevel.none ||
+            isCircleMutedAt(reminder.mutedUntil, now.toUtc())) {
+          continue;
+        }
+        try {
+          await _notificationService.showMessageNotification(
+            conversationId: circleEventNotificationPayload(
+              reminder.circleId,
+              reminder.eventId,
+            ),
+            title: reminder.title,
+            body: _eventReminderBody(reminder, now),
+          );
+        } catch (_) {
+          continue;
+        }
+      }
+    } finally {
+      _checkingEventReminders = false;
+    }
+  }
+
+  String _reminderKey(CircleEventReminder reminder) {
+    return '${reminder.eventId}@${reminder.startsAt.toUtc().toIso8601String()}';
+  }
+
+  String _eventReminderBody(CircleEventReminder reminder, DateTime now) {
+    final seconds = reminder.startsAt.difference(now).inSeconds;
+    final minutes = (seconds / 60).ceil().clamp(1, 24 * 60);
+    return [
+      minutes == 1 ? 'Starts in 1 minute' : 'Starts in $minutes minutes',
+      if (reminder.circleName.trim().isNotEmpty) reminder.circleName.trim(),
+      if (reminder.location case final location? when location.isNotEmpty)
+        location,
+    ].join(' · ');
   }
 
   Future<void> dispose() async {

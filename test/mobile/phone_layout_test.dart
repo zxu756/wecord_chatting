@@ -10,6 +10,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
+import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
 import 'phone_test_support.dart';
 
 /// Lays out every screen, sheet and dialog with realistic data on phone
@@ -957,6 +958,135 @@ void main() {
         tester,
         find.textContaining('production finished', findRichText: true),
       );
+    });
+
+    Future<PhoneWorld> openEmojiChannel(WidgetTester tester) async {
+      final world = PhoneWorld();
+      world.chats.messages = emojiMessages();
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+      return world;
+    }
+
+    phoneTestWidgets('custom emoji, reactions and stickers', (
+      tester,
+      viewport,
+    ) async {
+      await openEmojiChannel(tester);
+
+      final ownSticker = find.byKey(
+        ValueKey('sticker-image-${emoji_fakes.shipItStickerId}'),
+      );
+      expectFullyVisible(tester, ownSticker);
+      // Own stickers sit on the right, without a bubble.
+      expect(
+        tester.getTopRight(ownSticker).dx,
+        greaterThan(tester.getSize(find.byType(Scaffold).first).width - 40),
+      );
+      final placeholder = find.byKey(const ValueKey('sticker-placeholder'));
+      await tester.ensureVisible(placeholder);
+      await settle(tester);
+      expectFullyVisible(tester, placeholder);
+      expectFullyVisible(tester, find.text('[Sticker] secret_handshake'));
+
+      final jumbo = find.byKey(
+        ValueKey('custom-emoji-${emoji_fakes.catThumbsId}'),
+      );
+      await tester.ensureVisible(jumbo);
+      await settle(tester);
+      expect(tester.getSize(jumbo), const Size.square(48));
+
+      final chip = find.byKey(
+        ValueKey('reaction-chip-custom:${emoji_fakes.partyParrotId}'),
+      );
+      await tester.ensureVisible(chip);
+      await settle(tester);
+      expectFullyVisible(tester, chip);
+      expectTouchTargets(tester, chip);
+      final far = find.text(':far_away_mountain_goat:');
+      expectFullyVisible(tester, far);
+      expect(tester.getSize(far).width, lessThanOrEqualTo(120));
+    });
+
+    phoneTestWidgets('sticker picker and emoji suggestions', (
+      tester,
+      viewport,
+    ) async {
+      await openEmojiChannel(tester);
+
+      await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
+      await settle(tester);
+      await tester.tap(find.text('Send sticker'));
+      await settle(tester);
+      final option = find.byKey(
+        ValueKey('sticker-option-${emoji_fakes.shipItStickerId}'),
+      );
+      await tester.ensureVisible(option);
+      await settle(tester);
+      expectFullyVisible(tester, option);
+      expectTouchTargets(tester, option);
+      await popTopRoute(tester);
+
+      final field = find.byKey(const ValueKey('chat-composer-field'));
+      await tester.enterText(field, 'Trip :b');
+      await tester.enterText(field, 'Trip :bl');
+      await showKeyboard(tester, viewport);
+      final candidate = find.byKey(
+        ValueKey('custom-emoji-candidate-${emoji_fakes.blobWaveId}'),
+      );
+      expectFullyVisible(tester, candidate);
+      expectTouchTargets(tester, candidate);
+      expectCaretVisible(tester, field);
+    });
+
+    phoneTestWidgets('emoji and stickers page', (tester, viewport) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      await tester.tap(find.byTooltip('Circle menu'));
+      await settle(tester);
+      await tester.ensureVisible(find.text('Emoji & stickers'));
+      await settle(tester);
+      await tester.tap(find.text('Emoji & stickers'));
+      await settle(tester);
+
+      final upload = find.byKey(const ValueKey('circle-emojis-upload-emoji'));
+      expectFullyVisible(tester, upload);
+      expectTouchTargets(tester, upload);
+      expectFullyVisible(tester, find.text('2 of 50 emoji'));
+      final menu = find.byKey(
+        ValueKey('circle-emoji-menu-${emoji_fakes.partyParrotId}'),
+      );
+      expectTouchTargets(tester, menu);
+
+      await tester.tap(menu);
+      await settle(tester);
+      await tester.tap(find.text('Rename'));
+      await settle(tester);
+      await showKeyboard(tester, viewport);
+      final name = find.byKey(const ValueKey('circle-emoji-name-field'));
+      expectCaretVisible(tester, name);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('circle-emoji-name-submit')),
+      );
+      await popTopRoute(tester);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await settle(tester);
+
+      await tester.tap(find.text('Stickers'));
+      await settle(tester);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('circle-emojis-upload-sticker')),
+      );
+      expectFullyVisible(tester, find.text('1 of 20 stickers'));
     });
 
     phoneTestWidgets('channel integrations and webhook URL', (

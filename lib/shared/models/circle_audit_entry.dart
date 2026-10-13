@@ -39,7 +39,8 @@ class CircleAuditEntry {
   final String action;
 
   /// `channel`, `category`, `role`, `member`, `invite`, `message`,
-  /// `thread`, `post`, `tag`, `event` or `circle`.
+  /// `thread`, `post`, `tag`, `event`, `webhook`, `emoji`, `sticker` or
+  /// `circle`.
   final String targetType;
   final String? targetId;
 
@@ -108,6 +109,8 @@ enum CircleAuditActionGroup {
   forum('forum', 'Forums'),
   event('event', 'Events'),
   webhook('webhook', 'Webhooks'),
+  emoji('emoji', 'Emoji'),
+  sticker('sticker', 'Stickers'),
   other('', 'Other');
 
   const CircleAuditActionGroup(this.filter, this.label);
@@ -140,5 +143,7 @@ enum CircleAuditActionGroup {
     forum,
     event,
     webhook,
+    emoji,
+    sticker,
   ];
 }

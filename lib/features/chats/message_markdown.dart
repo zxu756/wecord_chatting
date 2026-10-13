@@ -4,7 +4,8 @@ import 'package:wecord/shared/models/message.dart';
 ///
 /// Supported: `**bold**`, `*italic*` / `_italic_`, `__underline__`,
 /// `~~strike~~`, `` `inline code` ``, fenced ```` ``` ```` code blocks,
-/// `> quote` lines, `||spoiler||`, bare http(s) links and `\` escapes.
+/// `> quote` lines, `||spoiler||`, bare http(s) links, `\` escapes and
+/// custom emoji tokens `<:name:uuid>`.
 /// Anything that does not close stays literal text. There is no HTML.
 
 enum MarkdownStyle { bold, italic, underline, strikethrough, spoiler }
@@ -36,6 +37,14 @@ final class MarkdownLink extends MarkdownInline {
   const MarkdownLink(this.url);
 
   final String url;
+}
+
+/// A circle's custom emoji, written `<:name:uuid>`.
+final class MarkdownCustomEmoji extends MarkdownInline {
+  const MarkdownCustomEmoji(this.name, this.id);
+
+  final String name;
+  final String id;
 }
 
 final class MarkdownMention extends MarkdownInline {
@@ -113,7 +122,10 @@ String? firstLinkInMarkdown(
           if (url != null) {
             return url;
           }
-        case MarkdownText() || MarkdownInlineCode() || MarkdownMention():
+        case MarkdownText() ||
+            MarkdownInlineCode() ||
+            MarkdownMention() ||
+            MarkdownCustomEmoji():
           break;
       }
     }
@@ -157,6 +169,8 @@ void _writePlain(
         buffer.write(url);
       case MarkdownMention(:final text):
         buffer.write(text);
+      case MarkdownCustomEmoji(:final name):
+        buffer.write(':$name:');
       case MarkdownStyled(style: MarkdownStyle.spoiler) when hideSpoilers:
         buffer.write(spoilerPlaceholder);
       case MarkdownStyled(:final children):
@@ -173,6 +187,9 @@ const _maxDepth = 16;
 const _escapable = r'''!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~''';
 
 final _urlPattern = RegExp(r'https?://[^\s<]+', caseSensitive: false);
+final _customEmojiPattern = RegExp(
+  r'<:([a-z0-9_]{2,32}):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>',
+);
 final _languagePattern = RegExp(r'^[A-Za-z0-9_+.#-]+$');
 
 class _MarkdownParser {
@@ -350,6 +367,16 @@ class _MarkdownParser {
         continue;
       }
 
+      if (char == '<') {
+        final emoji = _customEmojiAt(index, end);
+        if (emoji != null) {
+          flushText();
+          nodes.add(MarkdownCustomEmoji(emoji.group(1)!, emoji.group(2)!));
+          index = emoji.end;
+          continue;
+        }
+      }
+
       if (char == '`') {
         final code = _codeSpanAt(index, end);
         if (code != null) {
@@ -402,6 +429,18 @@ class _MarkdownParser {
       return null;
     }
     return mention;
+  }
+
+  /// A custom emoji token starting at [index] and ending by [end].
+  Match? _customEmojiAt(int index, int end) {
+    if (source[index] != '<') {
+      return null;
+    }
+    final match = _customEmojiPattern.matchAsPrefix(source, index);
+    if (match == null || match.end > end) {
+      return null;
+    }
+    return match;
   }
 
   bool _isDelimiterChar(String char) {
@@ -565,7 +604,7 @@ class _MarkdownParser {
   }
 
   /// The closing delimiter after [start], skipping escapes, code spans,
-  /// mentions and links, which are opaque to emphasis.
+  /// mentions, custom emoji and links, which are opaque to emphasis.
   int? _findCloser(int start, int end, String delimiter) {
     final char = delimiter[0];
     final length = delimiter.length;
@@ -578,6 +617,11 @@ class _MarkdownParser {
       final mention = _mentionAt(cursor, end);
       if (mention != null) {
         cursor = mention.end;
+        continue;
+      }
+      final emoji = _customEmojiAt(cursor, end);
+      if (emoji != null) {
+        cursor = emoji.end;
         continue;
       }
       final current = source[cursor];

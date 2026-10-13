@@ -82,6 +82,7 @@ ConversationMediaItem _media({
       MessageType.text => null,
       MessageType.system => null,
       MessageType.poll => null,
+      MessageType.sticker => null,
     },
     createdAt: DateTime.utc(2026, 5, 19, 10),
   );
@@ -240,6 +241,12 @@ class FakeChatsRepository implements ChatsRepository {
   Future<String> createVoiceUrl(VoiceAttachment attachment) async {
     return 'https://example.com/${attachment.path}';
   }
+
+  @override
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  }) async {}
 
   @override
   Future<bool> canModerateMessages(String conversationId) async => false;

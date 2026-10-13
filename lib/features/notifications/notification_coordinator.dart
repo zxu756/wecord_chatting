@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -445,6 +446,7 @@ class NotificationCoordinator {
           : switch (conversation.lastMessageType ?? MessageType.text) {
               MessageType.text => plainTextFromMarkdown(body).trim(),
               MessageType.poll => pollPreviewText(body),
+              MessageType.sticker => stickerPreviewText(body),
               _ => body,
             };
       if (preview != null && preview.isNotEmpty) {

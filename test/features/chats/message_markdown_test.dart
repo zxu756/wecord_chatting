@@ -12,6 +12,7 @@ String describeInline(MarkdownInline node) {
     MarkdownInlineCode(:final code) => 'code($code)',
     MarkdownLink(:final url) => 'link($url)',
     MarkdownMention(:final text) => 'mention($text)',
+    MarkdownCustomEmoji(:final name, :final id) => 'emoji($name,$id)',
     MarkdownStyled(:final style, :final children) =>
       '${_styleName(style)}(${describeInlines(children)})',
   };

@@ -9,6 +9,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -24,6 +25,7 @@ import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
@@ -32,6 +34,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -244,6 +247,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _isMentioning = false;
   var _mentionQuery = '';
   final _mentionDraft = MentionDraft();
+
+  /// The custom emoji name typed after a `:`, while suggestions show.
+  String? _emojiQuery;
+  final _emojiDraft = CustomEmojiDraft();
 
   /// The command name typed after a leading `/`, while the command list
   /// shows, and the command Enter or Tab picks from it.
@@ -818,6 +825,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onForward: _showForwardSheet,
                           onDelete: _deleteMessage,
                           canModerate: canDeleteAsModerator(message),
+                          circleId: _circleId,
                           onPreviewImage: _previewImage,
                           onToggleReaction: _toggleReaction,
                           onShowReactors: _showReactors,
@@ -857,6 +865,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onForward: _showForwardSheet,
                           onDelete: _deleteMessage,
                           canModerate: canDeleteAsModerator(message),
+                          circleId: _circleId,
                           onPreviewImage: _previewImage,
                           onToggleReaction: _toggleReaction,
                           onShowReactors: _showReactors,
@@ -980,6 +989,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   errorText: _sendError,
                   mentionCandidates: _mentionCandidates(groupDetail),
                   onSelectMention: _insertMention,
+                  emojiCandidates: _emojiCandidates(),
+                  onSelectEmoji: _insertCustomEmoji,
                   slashCommands: _slashCandidates(),
                   highlightedSlashIndex: _slashIndex,
                   onSelectSlashCommand: _selectSlashCommand,
@@ -992,6 +1003,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onSend: _sendMessage,
                   onPickImage: _pickAndSendImage,
                   onCreatePoll: _openPollComposer,
+                  onPickSticker: _pickAndSendSticker,
                   isRecordingVoice: _isRecordingVoice,
                   isSendingVoice: _isSendingVoice,
                   onStartVoiceRecording: _startVoiceRecording,
@@ -1258,18 +1270,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       final replyPreview = replyingTo == null
           ? null
           : _replyPreviewForMessage(replyingTo);
+      // Mentions point into the body as sent, after emoji become tokens.
+      final encodedBody = _encodeCustomEmoji(messageBody);
       await ref
           .read(chatsRepositoryProvider)
           .sendTextMessage(
             conversationId: widget.conversationId,
-            body: messageBody,
+            body: encodedBody,
             replyToMessageId: replyingTo?.id,
             replyPreview: replyPreview,
-            mentions: _mentionsForBody(messageBody),
+            mentions: _mentionsForBody(encodedBody),
           );
       await _setTyping(false);
       _composerController.clear();
       _mentionDraft.clear();
+      _emojiDraft.clear();
+      _emojiQuery = null;
       _isMentioning = false;
       _mentionQuery = '';
       _slashQuery = null;
@@ -1301,9 +1317,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     try {
       await ref
           .read(chatsRepositoryProvider)
-          .editMessage(messageId: message.id, body: body);
+          .editMessage(messageId: message.id, body: _encodeCustomEmoji(body));
       await _setTyping(false);
       _composerController.clear();
+      _emojiDraft.clear();
+      _emojiQuery = null;
       _editingMessage = null;
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
@@ -1548,6 +1566,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   void _handleComposerChanged(String value) {
     _updateMentionQuery();
+    _updateEmojiQuery();
     _updateSlashQuery();
     _typingTimer?.cancel();
     if (value.trim().isEmpty) {
@@ -1572,6 +1591,76 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _isMentioning = isMentioning;
       _mentionQuery = nextQuery;
     });
+  }
+
+  void _updateEmojiQuery() {
+    final query = emojiQueryAt(_composerController.value);
+    if (query == _emojiQuery) {
+      return;
+    }
+    setState(() => _emojiQuery = query);
+  }
+
+  /// The current user's custom emoji matching the `:name` being typed.
+  List<CircleEmoji> _emojiCandidates() {
+    final query = _emojiQuery;
+    if (query == null) {
+      return const [];
+    }
+    return customEmojiCandidates(
+      ref.watch(usableEmojisProvider).valueOrNull ?? const [],
+      query,
+      circleId: _circleId,
+    );
+  }
+
+  void _insertCustomEmoji(CircleEmoji emoji) {
+    if (!_emojiDraft.insert(_composerController, emoji)) {
+      return;
+    }
+    setState(() => _emojiQuery = null);
+  }
+
+  /// [text] with picked (and typed) `:name:` of usable emoji as tokens.
+  String _encodeCustomEmoji(String text) {
+    return _emojiDraft.encode(
+      text,
+      usable: ref.read(usableEmojisProvider).valueOrNull ?? const [],
+      circleId: _circleId,
+    );
+  }
+
+  Future<void> _pickAndSendSticker() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    final sticker = await showStickerPicker(context, circleId: _circleId);
+    if (sticker == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSending = true;
+      _sendError = null;
+    });
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendSticker(
+            conversationId: widget.conversationId,
+            stickerId: sticker.id,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _sendError = 'Could not send sticker. Try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
   }
 
   void _updateSlashQuery() {
@@ -1641,7 +1730,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   void _clearComposerAfterCommand() {
     _composerController.clear();
     _mentionDraft.clear();
+    _emojiDraft.clear();
     setState(() {
+      _emojiQuery = null;
       _isMentioning = false;
       _mentionQuery = '';
       _slashQuery = null;
@@ -2056,6 +2147,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         return MessageReactorsSheet(
           messageId: message.id,
           emoji: reaction.emoji,
+          label: reactionLabel(reaction, ref.read(usableEmojisByIdProvider)),
         );
       },
     );
@@ -2080,7 +2172,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = message;
       _replyingTo = null;
       _sendError = null;
-      _composerController.text = message.body;
+      _composerController.text = _emojiDraft.decode(
+        message.body,
+        ref.read(usableEmojisByIdProvider),
+      );
       _composerController.selection = TextSelection.collapsed(
         offset: _composerController.text.length,
       );
@@ -2153,6 +2248,7 @@ String _suggestedTitleFor(ChatMessage message) {
     MessageType.file => 'File',
     MessageType.system => 'Thread',
     MessageType.poll => suggestedThreadTitle(message.body),
+    MessageType.sticker => 'Sticker',
   };
 }
 
@@ -2481,7 +2577,12 @@ class _MessageBubble extends StatelessWidget {
     this.replyCount = 0,
     this.pollActions,
     this.canModerate = false,
+    this.circleId,
   });
+
+  /// The circle of a channel or its thread, whose custom emoji the reaction
+  /// picker lists first.
+  final String? circleId;
 
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
@@ -2655,6 +2756,7 @@ class _MessageBubble extends StatelessWidget {
                         body: message.body,
                         mentions: message.mentions,
                         color: colorScheme.onSurface,
+                        enlargeEmojiOnly: true,
                       ),
                     ),
                   if (image != null) ...[
@@ -2729,6 +2831,7 @@ class _MessageBubble extends StatelessWidget {
     final isRecalled = message.recalledAt != null;
     final imageAttachment = isRecalled ? null : message.imageAttachment;
     final voiceAttachment = isRecalled ? null : message.voiceAttachment;
+    final stickerAttachment = isRecalled ? null : message.stickerAttachment;
     final canShowActions = !isRecalled;
     final reactions = isRecalled
         ? const <MessageReaction>[]
@@ -2781,28 +2884,44 @@ class _MessageBubble extends StatelessWidget {
               onSecondaryTapDown: canShowActions
                   ? (_) => _showActions(context, imageAttachment)
                   : null,
-              child: Container(
-                margin: EdgeInsets.only(
-                  bottom: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: _MessageContent(
-                  message: message,
-                  messagesById: messagesById,
-                  imageAttachment: imageAttachment,
-                  voiceAttachment: voiceAttachment,
-                  textColor: textColor,
-                  isRecalled: isRecalled,
-                  pollActions: pollActions,
-                ),
-              ),
+              // Stickers show on their own, without a bubble.
+              child: stickerAttachment != null
+                  ? Padding(
+                      key: ValueKey('sticker-message-${message.id}'),
+                      padding: EdgeInsets.only(
+                        bottom: showReadReceipt || reactions.isNotEmpty
+                            ? 4
+                            : gap,
+                      ),
+                      child: StickerMessageContent(
+                        attachment: stickerAttachment,
+                        textColor: colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Container(
+                      margin: EdgeInsets.only(
+                        bottom: showReadReceipt || reactions.isNotEmpty
+                            ? 4
+                            : gap,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: bubbleColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: _MessageContent(
+                        message: message,
+                        messagesById: messagesById,
+                        imageAttachment: imageAttachment,
+                        voiceAttachment: voiceAttachment,
+                        textColor: textColor,
+                        isRecalled: isRecalled,
+                        pollActions: pollActions,
+                      ),
+                    ),
             ),
           ),
         ),
@@ -2907,7 +3026,11 @@ class _MessageBubble extends StatelessWidget {
                   },
                   onMore: () async {
                     Navigator.of(sheetContext).pop();
-                    final emoji = await showEmojiReactionPicker(context);
+                    final emoji = await showEmojiReactionPicker(
+                      context,
+                      includeCustom: true,
+                      circleId: circleId,
+                    );
                     if (emoji != null) {
                       await onToggleReaction(message, emoji);
                     }
@@ -2939,8 +3062,10 @@ class _MessageBubble extends StatelessWidget {
                     },
                   ),
                 // A poll's votes belong to the original, so polls are not
-                // forwarded.
-                if (message.type != MessageType.poll)
+                // forwarded; stickers belong to circles the recipients may
+                // not be in.
+                if (message.type != MessageType.poll &&
+                    message.type != MessageType.sticker)
                   ListTile(
                     leading: const Icon(Icons.forward_outlined),
                     title: const Text('Forward'),
@@ -3151,6 +3276,7 @@ class _MessageContent extends StatelessWidget {
           body: message.body,
           mentions: message.mentions,
           color: textColor,
+          enlargeEmojiOnly: true,
         ),
       );
     }
@@ -3287,6 +3413,7 @@ String _displayBodyForForwardPreview(ForwardPreview preview) {
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
     MessageType.poll => pollPreviewText(body),
+    MessageType.sticker => stickerPreviewText(body),
   };
 }
 
@@ -3398,6 +3525,8 @@ class _Composer extends StatelessWidget {
     required this.errorText,
     required this.mentionCandidates,
     required this.onSelectMention,
+    required this.emojiCandidates,
+    required this.onSelectEmoji,
     required this.slashCommands,
     required this.highlightedSlashIndex,
     required this.onSelectSlashCommand,
@@ -3408,6 +3537,7 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onPickImage,
     required this.onCreatePoll,
+    required this.onPickSticker,
     required this.isRecordingVoice,
     required this.isSendingVoice,
     required this.onStartVoiceRecording,
@@ -3426,6 +3556,10 @@ class _Composer extends StatelessWidget {
   final List<GroupMember> mentionCandidates;
   final ValueChanged<GroupMember> onSelectMention;
 
+  /// Custom emoji offered while `:name` is typed.
+  final List<CircleEmoji> emojiCandidates;
+  final ValueChanged<CircleEmoji> onSelectEmoji;
+
   /// The commands offered while one is typed after a leading `/`.
   final List<SlashCommand> slashCommands;
   final int highlightedSlashIndex;
@@ -3440,6 +3574,7 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onSend;
   final Future<void> Function() onPickImage;
   final Future<void> Function() onCreatePoll;
+  final Future<void> Function() onPickSticker;
   final bool isRecordingVoice;
   final bool isSendingVoice;
   final Future<void> Function() onStartVoiceRecording;
@@ -3519,6 +3654,14 @@ class _Composer extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
+                  if (emojiCandidates.isNotEmpty) ...[
+                    CustomEmojiCandidateList(
+                      candidates: emojiCandidates,
+                      onSelect: onSelectEmoji,
+                      maxHeight: math.min(220, availableHeight * 0.3),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (mentionCandidates.isNotEmpty) ...[
                     MentionCandidateList(
                       candidates: mentionCandidates,
@@ -3551,6 +3694,7 @@ class _Composer extends StatelessWidget {
                           onSelected: (choice) => unawaited(switch (choice) {
                             _ComposerAttachment.image => onPickImage(),
                             _ComposerAttachment.poll => onCreatePoll(),
+                            _ComposerAttachment.sticker => onPickSticker(),
                           }),
                           itemBuilder: (context) => const [
                             PopupMenuItem(
@@ -3567,6 +3711,14 @@ class _Composer extends StatelessWidget {
                                 contentPadding: EdgeInsets.zero,
                                 leading: Icon(Icons.poll_outlined),
                                 title: Text('Create poll'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _ComposerAttachment.sticker,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.sticky_note_2_outlined),
+                                title: Text('Send sticker'),
                               ),
                             ),
                           ],
@@ -3668,7 +3820,7 @@ class _Composer extends StatelessWidget {
   }
 }
 
-enum _ComposerAttachment { image, poll }
+enum _ComposerAttachment { image, poll, sticker }
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).
@@ -3921,6 +4073,7 @@ String _replyPreviewBody(ChatMessage message) {
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
     MessageType.poll => pollPreviewText(message.body),
+    MessageType.sticker => stickerPreviewText(message.body),
   };
 }
 

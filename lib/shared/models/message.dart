@@ -1,3 +1,4 @@
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -10,7 +11,8 @@ enum MessageType {
   file,
   voice,
   system,
-  poll;
+  poll,
+  sticker;
 
   factory MessageType.fromJson(String value) {
     return switch (value) {
@@ -20,6 +22,7 @@ enum MessageType {
       'voice' => MessageType.voice,
       'system' => MessageType.system,
       'poll' => MessageType.poll,
+      'sticker' => MessageType.sticker,
       _ => throw ArgumentError.value(value, 'value', 'Unknown message type'),
     };
   }
@@ -32,6 +35,7 @@ enum MessageType {
       MessageType.voice => 'voice',
       MessageType.system => 'system',
       MessageType.poll => 'poll',
+      MessageType.sticker => 'sticker',
     };
   }
 }
@@ -206,6 +210,13 @@ class ChatMessage {
     return PollAttachment.maybeFromJson(attachment);
   }
 
+  StickerAttachment? get stickerAttachment {
+    if (type != MessageType.sticker) {
+      return null;
+    }
+    return StickerAttachment.maybeFromJson(attachment);
+  }
+
   VoiceAttachment? get voiceAttachment {
     final value = attachment;
     if (type != MessageType.voice || value == null) {
@@ -355,6 +366,7 @@ class MessageReaction {
     required this.emoji,
     required this.count,
     this.reactedByMe = false,
+    this.customName,
   });
 
   factory MessageReaction.fromJson(Map<String, dynamic> json) {
@@ -362,12 +374,20 @@ class MessageReaction {
       emoji: json['emoji'] as String,
       count: (json['count'] as num?)?.toInt() ?? 0,
       reactedByMe: json['reacted_by_me'] == true,
+      customName: json['custom_name'] as String?,
     );
   }
 
+  /// A unicode emoji, or `custom:<uuid>` for a circle's custom emoji.
   final String emoji;
   final int count;
   final bool reactedByMe;
+
+  /// A custom emoji's name, while it exists.
+  final String? customName;
+
+  /// The custom emoji's id, for `custom:<uuid>` reactions.
+  String? get customEmojiId => customReactionEmojiId(emoji);
 }
 
 class ReplyPreview {

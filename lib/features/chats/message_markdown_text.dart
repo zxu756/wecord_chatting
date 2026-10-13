@@ -2,7 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 
 typedef LinkLauncher = Future<void> Function(Uri uri);
@@ -18,17 +21,23 @@ const _monospaceFamily = 'monospace';
 const _monospaceFallback = ['Menlo', 'Consolas', 'Courier New'];
 
 /// Renders a message body's markdown, keeping @mention highlighting.
+/// Custom emoji show as images to members of their circle, `:name:` to
+/// everyone else.
 class MessageMarkdownText extends ConsumerStatefulWidget {
   const MessageMarkdownText({
     required this.body,
     required this.color,
     this.mentions = const <MessageMention>[],
+    this.enlargeEmojiOnly = false,
     super.key,
   });
 
   final String body;
   final List<MessageMention> mentions;
   final Color color;
+
+  /// Shows a message of nothing but emoji (at most [maxJumboEmoji]) large.
+  final bool enlargeEmojiOnly;
 
   @override
   ConsumerState<MessageMarkdownText> createState() =>
@@ -40,6 +49,8 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
   final _revealedSpoilers = <int>{};
   final _recognizers = <GestureRecognizer>[];
   var _spoilerIndex = 0;
+  var _jumbo = false;
+  var _usableEmojis = const <String, CircleEmoji>{};
 
   @override
   void initState() {
@@ -78,7 +89,12 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
   Widget build(BuildContext context) {
     _disposeRecognizers();
     _spoilerIndex = 0;
-    final baseStyle = TextStyle(color: widget.color);
+    _usableEmojis = ref.watch(usableEmojisByIdProvider);
+    _jumbo = widget.enlargeEmojiOnly && isEmojiOnlyMarkdown(_blocks);
+    final baseStyle = TextStyle(
+      color: widget.color,
+      fontSize: _jumbo ? _jumboFontSize : null,
+    );
     if (_blocks.isEmpty) {
       return Text(widget.body, style: baseStyle);
     }
@@ -168,6 +184,26 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
     switch (node) {
       case MarkdownText(:final text):
         return TextSpan(text: text);
+      case MarkdownCustomEmoji(:final name, :final id):
+        final emoji = _usableEmojis[id];
+        if (emoji == null) {
+          return TextSpan(text: ':$name:');
+        }
+        final size = _jumbo ? customEmojiJumboSize : customEmojiInlineSize;
+        return WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          // No tooltip: long presses open the message's actions.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1),
+            child: CustomEmojiImage(
+              key: ValueKey('custom-emoji-$id'),
+              storagePath: emoji.storagePath,
+              size: size,
+              semanticLabel: ':${emoji.name}:',
+              fallback: Text(':$name:'),
+            ),
+          ),
+        );
       case MarkdownMention(:final text):
         return TextSpan(
           text: text,
@@ -245,6 +281,58 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
     }
     ref.read(linkLauncherProvider)(uri).catchError((Object _) {});
   }
+}
+
+/// A message of nothing but emoji shows them this large, up to this many.
+const maxJumboEmoji = 27;
+const _jumboFontSize = 40.0;
+
+// Emoji, flag letters and the keycap mark. The analyzer does not know
+// Extended_Pictographic, which the Dart and JavaScript engines support.
+final _emojiGlyph = RegExp(
+  // ignore: valid_regexps
+  r'[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{20E3}]',
+  unicode: true,
+);
+final _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+/// Whether [blocks] are one paragraph of only custom and unicode emoji (and
+/// spaces), 1 to [maxJumboEmoji] of them.
+bool isEmojiOnlyMarkdown(List<MarkdownBlock> blocks) {
+  if (blocks.length != 1) {
+    return false;
+  }
+  final block = blocks.single;
+  if (block is! MarkdownParagraph) {
+    return false;
+  }
+  var count = 0;
+  for (final node in block.children) {
+    switch (node) {
+      case MarkdownCustomEmoji():
+        count++;
+      case MarkdownText(:final text):
+        for (final glyph in text.characters) {
+          if (glyph.trim().isEmpty) {
+            continue;
+          }
+          // Keycaps (1️⃣) are digits with U+20E3.
+          final isEmoji =
+              _emojiGlyph.hasMatch(glyph) &&
+              (!_letterOrDigit.hasMatch(glyph) || glyph.contains('\u20E3'));
+          if (!isEmoji) {
+            return false;
+          }
+          count++;
+        }
+      default:
+        return false;
+    }
+    if (count > maxJumboEmoji) {
+      return false;
+    }
+  }
+  return count > 0;
 }
 
 bool _sameMentions(List<MessageMention> left, List<MessageMention> right) {

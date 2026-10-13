@@ -375,6 +375,12 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  }) async {}
+
+  @override
   Future<bool> canModerateMessages(String conversationId) async => false;
 
   @override

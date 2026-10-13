@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -138,6 +139,7 @@ class _MediaLeading extends ConsumerWidget {
       MessageType.file => Icons.insert_drive_file_outlined,
       MessageType.image => Icons.image_outlined,
       MessageType.poll => Icons.poll_outlined,
+      MessageType.sticker => Icons.sticky_note_2_outlined,
       MessageType.text || MessageType.system => Icons.chat_bubble_outline,
     });
   }
@@ -160,6 +162,7 @@ String _titleFor(ConversationMediaItem item) {
     MessageType.voice => '[Voice]',
     MessageType.file => '[File]',
     MessageType.poll => pollPreviewText(item.body),
+    MessageType.sticker => stickerPreviewText(item.body),
     MessageType.text || MessageType.system => item.body,
   };
 }

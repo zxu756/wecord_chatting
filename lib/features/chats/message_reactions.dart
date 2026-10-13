@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/custom_emoji.dart';
+import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -53,26 +56,66 @@ const _pickerEmojiGroups = <(String, String)>[
   ),
 ];
 
+/// Picks an emoji: a unicode one, or with [includeCustom] the current
+/// user's custom emoji as `custom:<uuid>` ([circleId]'s under "This
+/// circle", the rest under "Your emoji").
 Future<String?> showEmojiReactionPicker(
   BuildContext context, {
   String title = 'Add reaction',
+  bool includeCustom = false,
+  String? circleId,
 }) {
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (sheetContext) => EmojiReactionPicker(title: title),
+    builder: (sheetContext) => EmojiReactionPicker(
+      title: title,
+      includeCustom: includeCustom,
+      circleId: circleId,
+    ),
   );
 }
 
-class EmojiReactionPicker extends StatelessWidget {
-  const EmojiReactionPicker({this.title = 'Add reaction', super.key});
+class EmojiReactionPicker extends ConsumerWidget {
+  const EmojiReactionPicker({
+    this.title = 'Add reaction',
+    this.includeCustom = false,
+    this.circleId,
+    super.key,
+  });
 
   final String title;
+  final bool includeCustom;
+  final String? circleId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final custom = includeCustom
+        ? [
+            for (final emoji
+                in ref.watch(usableEmojisProvider).valueOrNull ??
+                    const <CircleEmoji>[])
+              if (!emoji.isSticker) emoji,
+          ]
+        : const <CircleEmoji>[];
+    final customGroups = [
+      (
+        label: 'This circle',
+        emojis: [
+          for (final emoji in custom)
+            if (emoji.circleId == circleId) emoji,
+        ],
+      ),
+      (
+        label: 'Your emoji',
+        emojis: [
+          for (final emoji in custom)
+            if (emoji.circleId != circleId) emoji,
+        ],
+      ),
+    ];
     return SafeArea(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 480),
@@ -89,6 +132,29 @@ class EmojiReactionPicker extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                 children: [
+                  for (final group in customGroups)
+                    if (group.emojis.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+                        child: Text(
+                          group.label,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      Wrap(
+                        children: [
+                          for (final emoji in group.emojis)
+                            _CustomEmojiButton(
+                              emoji: emoji,
+                              onTap: () => Navigator.of(
+                                context,
+                              ).pop(emoji.reactionValue),
+                            ),
+                        ],
+                      ),
+                    ],
                   for (final (label, emojis) in _pickerEmojiGroups) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
@@ -186,6 +252,45 @@ class _EmojiButton extends StatelessWidget {
   }
 }
 
+class _CustomEmojiButton extends StatelessWidget {
+  const _CustomEmojiButton({required this.emoji, required this.onTap});
+
+  final CircleEmoji emoji;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: ':${emoji.name}:',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          key: ValueKey('custom-emoji-option-${emoji.id}'),
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 44,
+            child: Center(
+              child: CustomEmojiImage(
+                storagePath: emoji.storagePath,
+                size: 28,
+                semanticLabel: ':${emoji.name}:',
+                fallback: Text(
+                  ':${emoji.name}:',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MessageReactionChips extends StatelessWidget {
   const MessageReactionChips({
     required this.reactions,
@@ -217,7 +322,7 @@ class MessageReactionChips extends StatelessWidget {
   }
 }
 
-class _ReactionChip extends StatelessWidget {
+class _ReactionChip extends ConsumerWidget {
   const _ReactionChip({
     required this.reaction,
     required this.onTap,
@@ -230,8 +335,38 @@ class _ReactionChip extends StatelessWidget {
   final VoidCallback onLongPress;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final usable = ref.watch(usableEmojisByIdProvider);
+    final label = reactionLabel(reaction, usable);
+    final customEmoji = switch (reaction.customEmojiId) {
+      final id? => usable[id],
+      null => null,
+    };
+    final Widget glyph = customEmoji != null
+        ? CustomEmojiImage(
+            storagePath: customEmoji.storagePath,
+            size: 18,
+            semanticLabel: label,
+            fallback: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          )
+        : reaction.customEmojiId != null
+        // Names can be long; the chip stays a chip.
+        ? ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          )
+        : Text(reaction.emoji, style: const TextStyle(fontSize: 15));
     final isMine = reaction.reactedByMe;
     final foreground = isMine
         ? colorScheme.onPrimaryContainer
@@ -254,7 +389,7 @@ class _ReactionChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(reaction.emoji, style: const TextStyle(fontSize: 15)),
+              glyph,
               const SizedBox(width: 4),
               Text(
                 '${reaction.count}',
@@ -271,7 +406,7 @@ class _ReactionChip extends StatelessWidget {
     return Semantics(
       button: true,
       selected: isMine,
-      label: '${reaction.emoji} ${reaction.count}',
+      label: '$label ${reaction.count}',
       child: usesTouchInput(context)
           // The chip stays compact, but taps just above or below it still
           // count, so the target is finger-sized.
@@ -296,11 +431,16 @@ class MessageReactorsSheet extends ConsumerStatefulWidget {
   const MessageReactorsSheet({
     required this.messageId,
     required this.emoji,
+    this.label,
     super.key,
   });
 
   final String messageId;
   final String emoji;
+
+  /// How the reaction reads (`:name:` for custom emoji); defaults to
+  /// [emoji].
+  final String? label;
 
   @override
   ConsumerState<MessageReactorsSheet> createState() =>
@@ -324,7 +464,7 @@ class _MessageReactorsSheetState extends ConsumerState<MessageReactorsSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Reacted with ${widget.emoji}',
+                'Reacted with ${widget.label ?? widget.emoji}',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),

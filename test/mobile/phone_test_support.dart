@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
+import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -45,6 +46,7 @@ import 'package:wecord/shared/theme/wecord_theme.dart';
 
 import '../features/chats/chat_thread_screen_test.dart' as chat_fakes;
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
+import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
 import '../features/contacts/contacts_screen_test.dart' as contact_fakes;
 import '../features/profile/user_profile_screen_test.dart' as profile_fakes;
 import '../features/settings/settings_screen_test.dart' as settings_fakes;
@@ -754,6 +756,84 @@ List<ChatMessage> webhookMessages() {
       'Yes, just shipped it.',
       minutesAgo: 5,
       conversationId: 'conv-general',
+    ),
+  ];
+}
+
+/// #general with custom emoji inline, an emoji-only message, custom
+/// reactions and stickers (one from a circle the reader is not in).
+List<ChatMessage> emojiMessages() {
+  const parrot = '<:party_parrot:${emoji_fakes.partyParrotId}>';
+  const blob = '<:blob_wave:${emoji_fakes.blobWaveId}>';
+  const cat = '<:cat_thumbs:${emoji_fakes.catThumbsId}>';
+  Map<String, dynamic> sticker(String id, String name) {
+    return {
+      'kind': 'sticker',
+      'emoji_id': id,
+      'name': name,
+      'circle_id': 'circle-1',
+    };
+  }
+
+  return [
+    phoneMessage(
+      'em-1',
+      bart,
+      'Trip plan is up $parrot Bring snacks and a very long sense of '
+          'adventure $blob and tell <:gone_emoji:00000000-0000-4000-8000-0000000000ff> '
+          'hello.',
+      minutesAgo: 30,
+      conversationId: 'conv-general',
+      reactions: const [
+        MessageReaction(
+          emoji: 'custom:${emoji_fakes.partyParrotId}',
+          count: 4,
+          reactedByMe: true,
+        ),
+        MessageReaction(emoji: '👍', count: 2),
+        MessageReaction(
+          emoji: 'custom:00000000-0000-4000-8000-0000000000fe',
+          count: 1,
+          customName: 'far_away_mountain_goat',
+        ),
+      ],
+    ),
+    phoneMessage(
+      'em-2',
+      grace,
+      '$parrot$cat 🎉',
+      minutesAgo: 25,
+      conversationId: 'conv-general',
+    ),
+    phoneMessage(
+      'em-3',
+      linus,
+      'wave',
+      minutesAgo: 20,
+      conversationId: 'conv-general',
+      type: MessageType.sticker,
+      attachment: sticker(emoji_fakes.waveStickerId, 'wave'),
+    ),
+    phoneMessage(
+      'em-4',
+      bart,
+      'secret_handshake',
+      minutesAgo: 15,
+      conversationId: 'conv-general',
+      type: MessageType.sticker,
+      attachment: sticker(
+        '00000000-0000-4000-8000-0000000000fd',
+        'secret_handshake',
+      ),
+    ),
+    phoneMessage(
+      'em-5',
+      me,
+      'ship_it',
+      minutesAgo: 5,
+      conversationId: 'conv-general',
+      type: MessageType.sticker,
+      attachment: sticker(emoji_fakes.shipItStickerId, 'ship_it'),
     ),
   ];
 }
@@ -1490,6 +1570,7 @@ class PhoneWorld {
   final auth = chat_fakes.FakeAuthRepository();
   final chats = PhoneChatsRepository();
   final circles = PhoneCirclesRepository();
+  final emojis = emoji_fakes.FakeCircleEmojiRepository();
   final contacts = contact_fakes.FakeContactsRepository();
   final settings = settings_fakes.FakeSettingsRepository();
   final profileData = profile_fakes.FakeProfileDataSource();
@@ -1508,6 +1589,8 @@ class PhoneWorld {
       authStateProvider.overrideWith((ref) => Stream.value(auth.user)),
       chatsRepositoryProvider.overrideWithValue(chats),
       circlesRepositoryProvider.overrideWithValue(circles),
+      circleEmojiRepositoryProvider.overrideWithValue(emojis),
+      emoji_fakes.testEmojiImageOverride(),
       appConfigProvider.overrideWithValue(
         AppConfig(
           supabaseUrl: Uri.parse('https://wecordproject.supabase.co'),

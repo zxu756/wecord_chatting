@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
@@ -184,5 +185,6 @@ String pinnedMessagePreview(ChatMessage message) {
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
     MessageType.poll => pollPreviewText(body),
+    MessageType.sticker => stickerPreviewText(body),
   };
 }

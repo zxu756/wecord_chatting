@@ -357,6 +357,9 @@ IconData circleAuditIcon(String action) {
     'webhook_update' => Icons.drive_file_rename_outline,
     'webhook_regenerate' => Icons.key_outlined,
     'webhook_delete' => Icons.delete_outline,
+    'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
+    'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
+    'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
     _ => Icons.history,
   };
 }
@@ -506,6 +509,22 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       name(target),
       ..._inChannel(changes, name, text),
     ],
+    'emoji_create' => [text(' added emoji '), name(':$target:')],
+    'emoji_update' => [
+      text(' renamed emoji '),
+      name(':${_formatValue('name', _oldValue(changes['name']))}:'),
+      text(' to '),
+      name(':$target:'),
+    ],
+    'emoji_delete' => [text(' deleted emoji '), name(':$target:')],
+    'sticker_create' => [text(' added sticker '), name(target)],
+    'sticker_update' => [
+      text(' renamed sticker '),
+      name(_formatValue('name', _oldValue(changes['name']))),
+      text(' to '),
+      name(target),
+    ],
+    'sticker_delete' => [text(' deleted sticker '), name(target)],
     _ => [text(' did ${entry.action.replaceAll('_', ' ')} to '), name(target)],
   };
   return TextSpan(style: style, children: [name(actor), ...rest]);

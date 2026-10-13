@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -142,6 +143,8 @@ class _ConversationTile extends ConsumerWidget {
         ? '[Voice]'
         : conversation.lastMessageType == MessageType.poll
         ? pollPreviewText(conversation.lastMessageBody ?? '')
+        : conversation.lastMessageType == MessageType.sticker
+        ? stickerPreviewText(conversation.lastMessageBody ?? '')
         : conversation.lastMessageBody?.trim().isNotEmpty == true
         ? (conversation.lastMessageType ?? MessageType.text) == MessageType.text
               ? plainTextFromMarkdown(conversation.lastMessageBody!)

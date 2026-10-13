@@ -3436,6 +3436,7 @@ class FakeChatsRepository implements ChatsRepository {
   final endedPolls = <String>[];
   var canModeratePollsValue = false;
   var canModerateMessagesValue = false;
+  final sentStickers = <(String, String)>[];
   var pollVoters = <String, List<Profile>>{};
 
   @override
@@ -3652,6 +3653,17 @@ class FakeChatsRepository implements ChatsRepository {
     required String conversationId,
     required List<String> memberIds,
   }) async {}
+
+  @override
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  }) async {
+    if (sendError case final error?) {
+      throw error;
+    }
+    sentStickers.add((conversationId, stickerId));
+  }
 
   @override
   Future<bool> canModerateMessages(String conversationId) async =>

@@ -3008,4 +3008,112 @@ void main() {
       ),
     );
   });
+
+  test('circle emoji and stickers: storage, limits, reactions, stickers', () {
+    final sql = effectiveMigrationSql();
+    expect(sql, contains('create table if not exists public.circle_emojis'));
+    expect(sql, contains("check (name ~ '^[a-z0-9_]{2,32}\$')"));
+    expect(sql, contains("check (kind in ('emoji', 'sticker'))"));
+    expect(sql, contains('unique (circle_id, kind, name)'));
+    expect(
+      sql,
+      contains('alter table public.circle_emojis enable row level security;'),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke insert, update, delete, truncate on public.circle_emojis '
+        'from authenticated;',
+      ),
+    );
+    expect(
+      policyBody(allMigrationSql(), 'circle_emojis_select_member'),
+      contains('public.is_current_user_circle_member(circle_id)'),
+    );
+
+    expect(sql, contains("'circle-emojis',\n  false,\n  262144,"));
+    expect(sql, contains("array['image/png', 'image/gif', 'image/webp']"));
+    expect(
+      policyBody(sql, 'circle_emojis_storage_select_member'),
+      contains('public.is_current_user_circle_member('),
+    );
+    for (final policy in [
+      'circle_emojis_storage_insert_manager',
+      'circle_emojis_storage_delete_manager',
+    ]) {
+      final body = policyBody(sql, policy);
+      expect(body, contains("bucket_id = 'circle-emojis'"));
+      expect(body, contains("'manage_emojis'"));
+      expect(body, contains('public.circle_emoji_object_circle_id(name)'));
+    }
+
+    final create = functionBody(sql, 'create_circle_emoji');
+    expect(create, contains("'manage_emojis'"));
+    expect(create, contains('from storage.objects o'));
+    expect(create, contains('for update'));
+    expect(create, contains('then 50 else 20 end'));
+    expect(create, contains("emoji_kind || '_create'"));
+    expect(
+      functionBody(sql, 'rename_circle_emoji'),
+      contains("emoji.kind || '_update'"),
+    );
+    final delete = functionBody(sql, 'delete_circle_emoji');
+    expect(delete, contains("emoji.kind || '_delete'"));
+    expect(delete, contains('return emoji.storage_path;'));
+    expect(
+      functionBody(sql, 'circle_emoji_for_management'),
+      contains("'manage_emojis'"),
+    );
+    expect(
+      functionBody(sql, 'list_my_usable_emojis'),
+      contains('cm.user_id = auth.uid()'),
+    );
+
+    final toggle = functionBody(sql, 'toggle_message_reaction');
+    expect(toggle, contains("normalized_emoji like 'custom:%'"));
+    expect(toggle, contains("e.kind = 'emoji'"));
+    expect(toggle, contains('cm.user_id = current_user_id'));
+    expect(functionBody(sql, 'reactions'), contains("'custom_name'"));
+
+    expect(
+      sql,
+      contains(
+        "check (type in ('text', 'image', 'file', 'voice', 'system', 'poll', "
+        "'sticker'))",
+      ),
+    );
+    expect(
+      policyBody(allMigrationSql(), 'messages_insert_member'),
+      contains("type <> 'sticker'"),
+    );
+    final sticker = functionBody(sql, 'send_sticker');
+    expect(sticker, contains("e.kind = 'sticker'"));
+    expect(sticker, contains('public.is_current_user_circle_member'));
+    expect(sticker, contains('public.is_current_user_conversation_member'));
+    expect(
+      functionBody(sql, 'forward_message'),
+      contains("and type <> 'sticker'"),
+    );
+
+    for (final grant in [
+      'create_circle_emoji(uuid, text, text, text, text)',
+      'rename_circle_emoji(uuid, text)',
+      'delete_circle_emoji(uuid)',
+      'list_circle_emojis(uuid)',
+      'list_my_usable_emojis()',
+      'send_sticker(uuid, uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function public.$grant to authenticated;'),
+      );
+    }
+    expect(
+      sql,
+      contains(
+        'revoke execute on function '
+        'public.circle_emoji_for_management(uuid) from authenticated;',
+      ),
+    );
+  });
 }

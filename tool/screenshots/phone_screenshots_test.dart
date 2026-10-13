@@ -431,6 +431,99 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('webhook-name-submit')));
   });
 
+  // Decodes the emoji and sticker images on screen; decoding needs real
+  // async work, which pumping alone does not do.
+  Future<void> loadImages(WidgetTester tester) async {
+    await tester.runAsync(() async {
+      for (final element in find.byType(Image).evaluate()) {
+        final image = element.widget as Image;
+        await precacheImage(image.image, element);
+      }
+    });
+    await settle(tester);
+  }
+
+  Future<void> openEmojiChannel(WidgetTester tester, PhoneWorld world) async {
+    world.chats.messages = emojiMessages();
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/conv-general',
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+    await loadImages(tester);
+  }
+
+  screen('34-custom-emoji-and-stickers', (tester, world) async {
+    await openEmojiChannel(tester, world);
+  });
+
+  screen('34b-custom-emoji-older', (tester, world) async {
+    await openEmojiChannel(tester, world);
+    await scrollThreadUp(tester, 360);
+    await loadImages(tester);
+  });
+
+  screen('34c-sticker-picker', (tester, world) async {
+    await openEmojiChannel(tester, world);
+    await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
+    await settle(tester);
+    await tester.tap(find.text('Send sticker'));
+    await settle(tester);
+    await loadImages(tester);
+  });
+
+  screen('34d-emoji-suggestions', (tester, world) async {
+    await openEmojiChannel(tester, world);
+    final composer = find.byKey(const ValueKey('chat-composer-field'));
+    await tester.tap(composer);
+    await tester.enterText(composer, 'Trip :pa');
+    await showKeyboard(tester, notchedPhone);
+    await loadImages(tester);
+  });
+
+  screen('34e-reaction-picker-custom', (tester, world) async {
+    await openEmojiChannel(tester, world);
+    await tester.longPress(
+      find.byKey(
+        const ValueKey('sticker-image-00000000-0000-4000-8000-000000000005'),
+      ),
+    );
+    await settle(tester);
+    await tester.tap(find.byTooltip('More reactions'));
+    await settle(tester);
+    await loadImages(tester);
+  });
+
+  Future<void> openEmojiPage(WidgetTester tester, PhoneWorld world) async {
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byTooltip('Circle menu'));
+    await settle(tester);
+    await tester.ensureVisible(find.text('Emoji & stickers'));
+    await settle(tester);
+    await tester.tap(find.text('Emoji & stickers'));
+    await settle(tester);
+    await loadImages(tester);
+  }
+
+  screen('35-emoji-management', (tester, world) async {
+    await openEmojiPage(tester, world);
+  });
+
+  screen('35b-sticker-management', (tester, world) async {
+    await openEmojiPage(tester, world);
+    await tester.tap(find.text('Stickers'));
+    await settle(tester);
+    await loadImages(tester);
+  });
+
+  screen('35c-emoji-management-small', (tester, world) async {
+    await openEmojiPage(tester, world);
+  }, viewport: smallPhone);
+
   screen('31-slash-commands', (tester, world) async {
     await openChannel(tester, world);
     final composer = find.widgetWithText(TextField, 'Message');

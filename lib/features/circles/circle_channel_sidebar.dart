@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
+import 'package:wecord/features/circles/circle_emojis_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
@@ -761,6 +762,8 @@ class _SidebarHeader extends StatelessWidget {
               openCircleRolesScreen(context, detail.circle.id);
             case _CircleMenuAction.auditLog:
               openCircleAuditLogScreen(context, detail.circle.id);
+            case _CircleMenuAction.emojis:
+              openCircleEmojisScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
               onChangeNickname(currentMember!);
             case _CircleMenuAction.notificationSettings:
@@ -814,6 +817,14 @@ class _SidebarHeader extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.history),
                 title: Text('Audit log'),
+              ),
+            ),
+          if (currentMember != null)
+            const PopupMenuItem(
+              value: _CircleMenuAction.emojis,
+              child: ListTile(
+                leading: Icon(Icons.emoji_emotions_outlined),
+                title: Text('Emoji & stickers'),
               ),
             ),
           const PopupMenuItem(
@@ -874,6 +885,7 @@ enum _CircleMenuAction {
   createCategory,
   roles,
   auditLog,
+  emojis,
   notificationSettings,
   changeNickname,
   transferOwnership,

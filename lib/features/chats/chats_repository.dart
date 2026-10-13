@@ -76,6 +76,12 @@ abstract interface class ChatsRepository {
     required List<String> optionIds,
   });
 
+  /// Sends a sticker of a circle the current user is in.
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  });
+
   Future<void> endPoll({required String messageId});
 
   /// Whether the current user may end others' polls in a conversation.
@@ -531,6 +537,19 @@ class SupabaseChatsRepository implements ChatsRepository {
         'options': [for (final option in options) option.trim()],
         'multi': multi,
         'duration_hours': durationHours,
+      }),
+    );
+  }
+
+  @override
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  }) async {
+    await _send(
+      () => _dataSource.rpc('send_sticker', {
+        'target_conversation_id': conversationId,
+        'target_emoji_id': stickerId,
       }),
     );
   }
@@ -1632,6 +1651,14 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<void> endPoll({required String messageId}) {
     throw StateError('Supabase must be initialized before ending polls.');
+  }
+
+  @override
+  Future<void> sendSticker({
+    required String conversationId,
+    required String stickerId,
+  }) {
+    throw StateError('Supabase must be initialized before sending stickers.');
   }
 
   @override

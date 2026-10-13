@@ -94,6 +94,41 @@ void main() {
     expect(find.text('Lunch later'), findsNothing);
   });
 
+  testWidgets('renders markdown bodies while search matches raw text', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: '**Big** news, see `code`',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'plain reply',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Big news, see code'), findsOneWidget);
+    expect(find.textContaining('**'), findsNothing);
+
+    await tester.tap(find.byTooltip('Search messages'));
+    await tester.pump();
+    await tester.enterText(find.bySemanticsLabel('Search messages'), '**big');
+    await tester.pump();
+
+    expect(find.text('1 result'), findsOneWidget);
+    expect(find.text('Big news, see code'), findsOneWidget);
+    expect(find.text('plain reply'), findsNothing);
+  });
+
   testWidgets('keeps the newest message closest to the composer', (
     tester,
   ) async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -308,7 +309,13 @@ class NotificationCoordinator {
     NotificationPreferences preferences,
   ) {
     if (preferences.showPreviews) {
-      final preview = conversation.lastMessageBody?.trim();
+      final body = conversation.lastMessageBody?.trim();
+      final preview =
+          body != null &&
+              (conversation.lastMessageType ?? MessageType.text) ==
+                  MessageType.text
+          ? plainTextFromMarkdown(body).trim()
+          : body;
       if (preview != null && preview.isNotEmpty) {
         return preview;
       }

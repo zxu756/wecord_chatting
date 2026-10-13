@@ -9,6 +9,8 @@ import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
@@ -1798,7 +1800,7 @@ class _MessageContent extends StatelessWidget {
       content.add(VoiceMessagePlayer(attachment: voiceAttachment!));
     } else {
       content.add(
-        _MentionText(
+        MessageMarkdownText(
           body: message.body,
           mentions: message.mentions,
           color: textColor,
@@ -1831,7 +1833,9 @@ class _MessageContent extends StatelessWidget {
     if (referencedMessage?.recalledAt != null) {
       return 'Message deleted';
     }
-    return preview.body;
+    return preview.type == MessageType.text
+        ? plainTextFromMarkdown(preview.body)
+        : preview.body;
   }
 }
 
@@ -1930,68 +1934,12 @@ class _QuotedReplyPreview extends StatelessWidget {
 String _displayBodyForForwardPreview(ForwardPreview preview) {
   final body = preview.body.trim();
   return switch (preview.type) {
-    MessageType.text || MessageType.system => body.isEmpty ? 'Message' : body,
+    MessageType.text => body.isEmpty ? 'Message' : plainTextFromMarkdown(body),
+    MessageType.system => body.isEmpty ? 'Message' : body,
     MessageType.image => 'Image',
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
   };
-}
-
-class _MentionText extends StatelessWidget {
-  const _MentionText({
-    required this.body,
-    required this.mentions,
-    required this.color,
-  });
-
-  final String body;
-  final List<MessageMention> mentions;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    if (mentions.isEmpty) {
-      return Text(body, style: TextStyle(color: color));
-    }
-
-    final spans = <TextSpan>[];
-    var cursor = 0;
-    final sortedMentions = [...mentions]
-      ..sort((a, b) => a.start.compareTo(b.start));
-
-    for (final mention in sortedMentions) {
-      if (mention.start < cursor ||
-          mention.start < 0 ||
-          mention.end > body.length ||
-          mention.end <= mention.start) {
-        continue;
-      }
-      if (mention.start > cursor) {
-        spans.add(TextSpan(text: body.substring(cursor, mention.start)));
-      }
-      spans.add(
-        TextSpan(
-          text: body.substring(mention.start, mention.end),
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-      cursor = mention.end;
-    }
-
-    if (cursor < body.length) {
-      spans.add(TextSpan(text: body.substring(cursor)));
-    }
-
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(color: color),
-        children: spans,
-      ),
-    );
-  }
 }
 
 class _ImageMessageContent extends ConsumerStatefulWidget {
@@ -2348,7 +2296,11 @@ String _replyPreviewBody(ChatMessage message) {
     return 'Message';
   }
   return switch (message.type) {
-    MessageType.text || MessageType.system =>
+    MessageType.text =>
+      message.body.trim().isEmpty
+          ? 'Message'
+          : plainTextFromMarkdown(message.body.trim()),
+    MessageType.system =>
       message.body.trim().isEmpty ? 'Message' : message.body.trim(),
     MessageType.image => 'Image',
     MessageType.file => 'File',

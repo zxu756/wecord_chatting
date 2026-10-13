@@ -74,6 +74,28 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
+  testWidgets('previews text messages without markdown markers', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: '**Ship** it ~~today~~ ||now||',
+          lastMessageType: MessageType.text,
+          lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
+          unreadCount: 0,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Ship it today [spoiler]'), findsOneWidget);
+  });
+
   testWidgets('previews latest voice messages as voice', (tester) async {
     final repository = FakeChatsRepository()
       ..conversations = [

@@ -1,0 +1,298 @@
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/shared/models/message.dart';
+
+typedef LinkLauncher = Future<void> Function(Uri uri);
+
+/// Opens links tapped in messages; tests override it.
+final linkLauncherProvider = Provider<LinkLauncher>((ref) {
+  return (uri) async {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  };
+});
+
+const _monospaceFamily = 'monospace';
+const _monospaceFallback = ['Menlo', 'Consolas', 'Courier New'];
+
+/// Renders a message body's markdown, keeping @mention highlighting.
+class MessageMarkdownText extends ConsumerStatefulWidget {
+  const MessageMarkdownText({
+    required this.body,
+    required this.color,
+    this.mentions = const <MessageMention>[],
+    super.key,
+  });
+
+  final String body;
+  final List<MessageMention> mentions;
+  final Color color;
+
+  @override
+  ConsumerState<MessageMarkdownText> createState() =>
+      _MessageMarkdownTextState();
+}
+
+class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
+  late List<MarkdownBlock> _blocks;
+  final _revealedSpoilers = <int>{};
+  final _recognizers = <GestureRecognizer>[];
+  var _spoilerIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _blocks = _parse();
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageMarkdownText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.body != widget.body ||
+        !_sameMentions(oldWidget.mentions, widget.mentions)) {
+      _blocks = _parse();
+      _revealedSpoilers.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeRecognizers();
+    super.dispose();
+  }
+
+  List<MarkdownBlock> _parse() {
+    return parseMessageMarkdown(widget.body, mentions: widget.mentions);
+  }
+
+  void _disposeRecognizers() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _disposeRecognizers();
+    _spoilerIndex = 0;
+    final baseStyle = TextStyle(color: widget.color);
+    if (_blocks.isEmpty) {
+      return Text(widget.body, style: baseStyle);
+    }
+    final children = <Widget>[];
+    for (final block in _blocks) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 4));
+      }
+      children.add(_buildBlock(context, block, baseStyle));
+    }
+    if (children.length == 1) {
+      return children.single;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  Widget _buildBlock(
+    BuildContext context,
+    MarkdownBlock block,
+    TextStyle baseStyle,
+  ) {
+    switch (block) {
+      case MarkdownParagraph(:final children):
+        return Text.rich(
+          TextSpan(
+            style: baseStyle,
+            children: _spans(context, children, const _SpanState()),
+          ),
+        );
+      case MarkdownQuote(:final children):
+        return Container(
+          key: const ValueKey('markdown-quote'),
+          padding: const EdgeInsets.only(left: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: widget.color.withValues(alpha: 0.5),
+                width: 3,
+              ),
+            ),
+          ),
+          child: Text.rich(
+            TextSpan(
+              style: baseStyle,
+              children: _spans(context, children, const _SpanState()),
+            ),
+          ),
+        );
+      case MarkdownCodeBlock(:final code):
+        return Container(
+          key: const ValueKey('markdown-code-block'),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            code,
+            style: baseStyle.copyWith(
+              fontFamily: _monospaceFamily,
+              fontFamilyFallback: _monospaceFallback,
+            ),
+          ),
+        );
+    }
+  }
+
+  List<InlineSpan> _spans(
+    BuildContext context,
+    List<MarkdownInline> nodes,
+    _SpanState state,
+  ) {
+    return [for (final node in nodes) _span(context, node, state)];
+  }
+
+  InlineSpan _span(
+    BuildContext context,
+    MarkdownInline node,
+    _SpanState state,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    switch (node) {
+      case MarkdownText(:final text):
+        return TextSpan(text: text);
+      case MarkdownMention(:final text):
+        return TextSpan(
+          text: text,
+          style: TextStyle(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      case MarkdownInlineCode(:final code):
+        return TextSpan(
+          text: code,
+          style: TextStyle(
+            fontFamily: _monospaceFamily,
+            fontFamilyFallback: _monospaceFallback,
+            backgroundColor: widget.color.withValues(alpha: 0.12),
+          ),
+        );
+      case MarkdownLink(:final url):
+        final recognizer = TapGestureRecognizer()..onTap = () => _openLink(url);
+        _recognizers.add(recognizer);
+        return TextSpan(
+          text: url,
+          recognizer: recognizer,
+          mouseCursor: SystemMouseCursors.click,
+          style: TextStyle(
+            color: colorScheme.primary,
+            decoration: state.decorationWith(TextDecoration.underline),
+          ),
+        );
+      case MarkdownStyled(style: MarkdownStyle.spoiler, :final children):
+        final index = _spoilerIndex++;
+        if (_revealedSpoilers.contains(index)) {
+          return TextSpan(
+            style: TextStyle(
+              backgroundColor: widget.color.withValues(alpha: 0.12),
+            ),
+            children: _spans(context, children, state),
+          );
+        }
+        // Hidden spoilers are one flat span so every character takes the tap.
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () {
+            setState(() {
+              _revealedSpoilers.add(index);
+            });
+          };
+        _recognizers.add(recognizer);
+        return TextSpan(
+          text: plainTextOfInlines(children),
+          recognizer: recognizer,
+          mouseCursor: SystemMouseCursors.click,
+          style: TextStyle(
+            color: widget.color,
+            backgroundColor: widget.color,
+            decoration: TextDecoration.none,
+          ),
+        );
+      case MarkdownStyled(:final style, :final children):
+        final next = state.withStyle(style);
+        return TextSpan(
+          style: TextStyle(
+            fontWeight: next.bold ? FontWeight.w700 : null,
+            fontStyle: next.italic ? FontStyle.italic : null,
+            decoration: next.decoration,
+          ),
+          children: _spans(context, children, next),
+        );
+    }
+  }
+
+  void _openLink(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+    ref.read(linkLauncherProvider)(uri).catchError((Object _) {});
+  }
+}
+
+bool _sameMentions(List<MessageMention> left, List<MessageMention> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index].start != right[index].start ||
+        left[index].end != right[index].end) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Inherited emphasis, so nested decorations combine instead of replacing
+/// each other.
+class _SpanState {
+  const _SpanState({
+    this.bold = false,
+    this.italic = false,
+    this.underline = false,
+    this.strikethrough = false,
+  });
+
+  final bool bold;
+  final bool italic;
+  final bool underline;
+  final bool strikethrough;
+
+  _SpanState withStyle(MarkdownStyle style) {
+    return _SpanState(
+      bold: bold || style == MarkdownStyle.bold,
+      italic: italic || style == MarkdownStyle.italic,
+      underline: underline || style == MarkdownStyle.underline,
+      strikethrough: strikethrough || style == MarkdownStyle.strikethrough,
+    );
+  }
+
+  TextDecoration? get decoration {
+    final decorations = [
+      if (underline) TextDecoration.underline,
+      if (strikethrough) TextDecoration.lineThrough,
+    ];
+    return decorations.isEmpty ? null : TextDecoration.combine(decorations);
+  }
+
+  TextDecoration decorationWith(TextDecoration extra) {
+    return TextDecoration.combine([?decoration, extra]);
+  }
+}

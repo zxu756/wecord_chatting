@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -133,7 +134,9 @@ class _ConversationTile extends ConsumerWidget {
     final lastMessage = conversation.lastMessageType == MessageType.voice
         ? '[Voice]'
         : conversation.lastMessageBody?.trim().isNotEmpty == true
-        ? conversation.lastMessageBody!
+        ? (conversation.lastMessageType ?? MessageType.text) == MessageType.text
+              ? plainTextFromMarkdown(conversation.lastMessageBody!)
+              : conversation.lastMessageBody!
         : 'No messages yet';
 
     final hasUnread = conversation.unreadCount > 0;

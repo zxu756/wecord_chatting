@@ -44,6 +44,23 @@ void main() {
     },
   );
 
+  test('notification previews strip markdown and hide spoilers', () async {
+    final harness = NotificationCoordinatorHarness();
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 1,
+        body: '**big** news: ||they win||',
+        lastMessageType: MessageType.text,
+      ),
+    ]);
+
+    expect(harness.notifications.single.body, 'big news: [spoiler]');
+  });
+
   test('does not notify for the active conversation', () async {
     final harness = NotificationCoordinatorHarness(activeConversationId: 'c1');
     harness.seed([harness.summary(id: 'c1')]);

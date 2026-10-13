@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 
@@ -157,7 +158,8 @@ class _PinnedMessageTile extends StatelessWidget {
 String pinnedMessagePreview(ChatMessage message) {
   final body = message.body.trim();
   return switch (message.type) {
-    MessageType.text || MessageType.system => body.isEmpty ? 'Message' : body,
+    MessageType.text => body.isEmpty ? 'Message' : plainTextFromMarkdown(body),
+    MessageType.system => body.isEmpty ? 'Message' : body,
     MessageType.image => 'Image',
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',

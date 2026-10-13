@@ -446,6 +446,20 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) async {}
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) async {
+    return const [];
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     markReadCalls.add(conversationId);
   }

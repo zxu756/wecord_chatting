@@ -10,6 +10,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
   try {
@@ -106,6 +107,16 @@ abstract interface class ChatsRepository {
   Future<void> recallMessage({required String messageId});
 
   Future<void> editMessage({required String messageId, required String body});
+
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  });
+
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  });
 
   Future<void> markConversationRead(String conversationId);
 
@@ -555,6 +566,32 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) async {
+    await _dataSource.rpc('toggle_message_reaction', {
+      'target_message_id': messageId,
+      'target_emoji': emoji.trim(),
+    });
+  }
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) async {
+    final rows = await _dataSource.rpc('list_message_reactors', {
+      'target_message_id': messageId,
+      'target_emoji': emoji.trim(),
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(Profile.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     await _dataSource.rpc('mark_conversation_read', {
       'target_conversation_id': conversationId,
@@ -790,7 +827,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   Future<List<Map<String, dynamic>>> listMessages(String conversationId) async {
     final rows = await _client
         .from('messages')
-        .select()
+        .select('*,reactions')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
         .order('id', ascending: true);
@@ -961,6 +998,17 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               event: PostgresChangeEvent.all,
               schema: 'public',
               table: 'messages',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'conversation_id',
+                value: conversationId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'message_reactions',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'conversation_id',
@@ -1272,6 +1320,22 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<void> editMessage({required String messageId, required String body}) {
     throw StateError('Supabase must be initialized before editing messages.');
+  }
+
+  @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) {
+    throw StateError('Supabase must be initialized before reacting.');
+  }
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) {
+    throw StateError('Supabase must be initialized before loading reactions.');
   }
 
   @override

@@ -23,7 +23,7 @@
 
 ## 第一批：消息基础
 
-- [ ] **1. 消息表情回应（Reactions）**（S）
+- [x] **1. 消息表情回应（Reactions）**（S）
   - 表 `message_reactions (message_id, user_id, emoji text, created_at)`，主键 `(message_id, user_id, emoji)`；emoji 长度 1–64（为第 23 项自定义表情的 `custom:<uuid>` 预留）。
   - RPC `toggle_message_reaction(target_message_id, target_emoji)`：校验是会话成员、消息未撤回；存在则删，不存在则插。
   - `list_messages` 返回的每条消息附带 `reactions: [{emoji, count, reacted_by_me}]`；表加入 realtime，线程刷新时一起更新。

@@ -824,4 +824,92 @@ void main() {
     expect(sql, contains("bucket_id = 'profile-avatars'"));
     expect(sql, contains("(storage.foldername(name))[1] = auth.uid()::text"));
   });
+
+  test('message reactions table is member scoped and realtime enabled', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final selectPolicy = policyBody(rawSql, 'message_reactions_select_member');
+
+    expect(
+      sql,
+      contains('create table if not exists public.message_reactions'),
+    );
+    expect(sql, contains('primary key (message_id, user_id, emoji)'));
+    expect(sql, contains('check (char_length(emoji) between 1 and 64)'));
+    expect(
+      sql,
+      contains(
+        'alter table public.message_reactions enable row level security',
+      ),
+    );
+    expect(
+      sql,
+      contains('alter table public.message_reactions replica identity full'),
+    );
+    expect(selectPolicy, contains('for select'));
+    expect(
+      selectPolicy,
+      contains('public.is_current_user_conversation_member(conversation_id)'),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'message_reactions').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(
+      rawSql,
+      contains(
+        'alter publication supabase_realtime add table public.message_reactions',
+      ),
+    );
+  });
+
+  test('message reactions are toggled and listed through narrow RPCs', () {
+    final sql = effectiveMigrationSql();
+    final toggleBody = functionBody(sql, 'toggle_message_reaction');
+    final reactorsBody = functionBody(sql, 'list_message_reactors');
+    final summaryBody = functionBody(sql, 'reactions');
+
+    expect(toggleBody, contains('target_message_id uuid'));
+    expect(toggleBody, contains('target_emoji text'));
+    expect(toggleBody, contains('security definer'));
+    expect(toggleBody, contains('set search_path = public'));
+    expect(toggleBody, contains('auth.uid()'));
+    expect(toggleBody, contains('recalled_at is null'));
+    expect(toggleBody, contains('public.is_current_user_conversation_member'));
+    expect(
+      toggleBody,
+      contains('public.is_current_user_blocked_in_conversation'),
+    );
+    expect(toggleBody, contains('delete from public.message_reactions'));
+    expect(toggleBody, contains('insert into public.message_reactions'));
+
+    expect(reactorsBody, contains('security definer'));
+    expect(
+      reactorsBody,
+      contains('public.is_current_user_conversation_member'),
+    );
+    expect(reactorsBody, contains('p.display_name'));
+    expect(reactorsBody, contains('contact_aliases'));
+
+    expect(summaryBody, contains('message_row public.messages'));
+    expect(summaryBody, contains("'reacted_by_me'"));
+    expect(summaryBody, contains("'count'"));
+    expect(summaryBody, contains('public.is_current_user_conversation_member'));
+
+    for (final signature in [
+      'public.reactions(public.messages)',
+      'public.toggle_message_reaction(uuid, text)',
+      'public.list_message_reactors(uuid, text)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

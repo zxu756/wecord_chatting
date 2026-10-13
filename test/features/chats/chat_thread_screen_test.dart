@@ -593,6 +593,193 @@ void main() {
     expect(copiedText, 'Copy this');
   });
 
+  testWidgets('renders reaction chips and highlights my reactions', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'React to me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          reactions: const [
+            MessageReaction(emoji: '👍', count: 2, reactedByMe: true),
+            MessageReaction(emoji: '🎉', count: 1),
+          ],
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('reaction-chip-👍')), findsOneWidget);
+    expect(find.byKey(const ValueKey('reaction-chip-🎉')), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+
+    final colorScheme = Theme.of(
+      tester.element(find.text('React to me')),
+    ).colorScheme;
+    Material chipMaterial(String emoji) {
+      return tester.widget<Material>(
+        find.descendant(
+          of: find.byKey(ValueKey('reaction-chip-$emoji')),
+          matching: find.byType(Material),
+        ),
+      );
+    }
+
+    expect(chipMaterial('👍').color, colorScheme.primaryContainer);
+    expect(chipMaterial('🎉').color, colorScheme.surfaceContainerHighest);
+  });
+
+  testWidgets('tapping a reaction chip toggles it and refreshes the thread', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'React to me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          reactions: const [MessageReaction(emoji: '🎉', count: 1)],
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    repository.messages = [
+      _message(
+        id: 'message-1',
+        senderId: 'user-2',
+        body: 'React to me',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        reactions: const [
+          MessageReaction(emoji: '🎉', count: 2, reactedByMe: true),
+        ],
+      ),
+    ];
+    await tester.tap(find.byKey(const ValueKey('reaction-chip-🎉')));
+    await tester.pumpAndSettle();
+
+    expect(repository.toggledReactions, [('message-1', '🎉')]);
+    expect(find.text('2'), findsOneWidget);
+  });
+
+  testWidgets('long pressing a reaction chip lists who reacted', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..reactors = [
+        _profile(id: 'user-2', username: 'grace', displayName: 'Grace Hopper'),
+      ]
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'React to me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          reactions: const [MessageReaction(emoji: '😂', count: 1)],
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const ValueKey('reaction-chip-😂')));
+    await tester.pumpAndSettle();
+
+    expect(repository.reactorRequests, [('message-1', '😂')]);
+    expect(find.text('Reacted with 😂'), findsOneWidget);
+    expect(find.text('Grace Hopper'), findsOneWidget);
+    expect(find.text('@grace'), findsOneWidget);
+    expect(repository.toggledReactions, isEmpty);
+  });
+
+  testWidgets('action menu quick reactions toggle the chosen emoji', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'React to me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('React to me'));
+    await tester.pumpAndSettle();
+
+    for (final emoji in ['👍', '❤️', '😂', '😮', '😢', '🎉']) {
+      expect(find.text(emoji), findsOneWidget);
+    }
+    expect(find.byTooltip('More reactions'), findsOneWidget);
+
+    await tester.tap(find.text('❤️'));
+    await tester.pumpAndSettle();
+
+    expect(repository.toggledReactions, [('message-1', '❤️')]);
+    expect(find.text('Reply'), findsNothing);
+  });
+
+  testWidgets('more reactions opens the picker and toggles the pick', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'React to me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('React to me'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('More reactions'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add reaction'), findsOneWidget);
+
+    await tester.tap(find.text('🤔'));
+    await tester.pumpAndSettle();
+
+    expect(repository.toggledReactions, [('message-1', '🤔')]);
+    expect(find.text('Add reaction'), findsNothing);
+  });
+
+  testWidgets('recalled messages hide their reaction chips', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Gone',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          recalledAt: DateTime.utc(2026, 5, 18, 4, 31),
+          reactions: const [MessageReaction(emoji: '👍', count: 1)],
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Message deleted'), findsOneWidget);
+    expect(find.byKey(const ValueKey('reaction-chip-👍')), findsNothing);
+  });
+
   testWidgets('long pressing an outgoing text message can delete it', (
     tester,
   ) async {
@@ -1575,6 +1762,7 @@ ChatMessage _message({
   ForwardPreview? forwardPreview,
   DateTime? editedAt,
   DateTime? recalledAt,
+  List<MessageReaction> reactions = const [],
 }) {
   return ChatMessage(
     id: id,
@@ -1588,6 +1776,7 @@ ChatMessage _message({
     createdAt: createdAt,
     editedAt: editedAt,
     recalledAt: recalledAt,
+    reactions: reactions,
   );
 }
 
@@ -1605,6 +1794,9 @@ class FakeChatsRepository implements ChatsRepository {
   final forwardedMessages = <ForwardedMessage>[];
   final createdImageUrls = <ImageAttachment>[];
   final recalledMessageIds = <String>[];
+  final toggledReactions = <(String, String)>[];
+  final reactorRequests = <(String, String)>[];
+  var reactors = <Profile>[];
   final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
   String? sentReplyToMessageId;
@@ -1763,6 +1955,23 @@ class FakeChatsRepository implements ChatsRepository {
     }
     editedMessageId = messageId;
     editedBody = body;
+  }
+
+  @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) async {
+    toggledReactions.add((messageId, emoji));
+  }
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) async {
+    reactorRequests.add((messageId, emoji));
+    return reactors;
   }
 
   @override

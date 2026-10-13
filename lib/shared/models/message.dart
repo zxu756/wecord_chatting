@@ -41,6 +41,7 @@ class ChatMessage {
     this.editedAt,
     this.recalledAt,
     this.mentions = const <MessageMention>[],
+    this.reactions = const <MessageReaction>[],
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -66,6 +67,7 @@ class ChatMessage {
       editedAt: _parseOptionalTimestamp(json['edited_at']),
       recalledAt: _parseOptionalTimestamp(json['recalled_at']),
       mentions: _parseMentions(json['mentions']),
+      reactions: _parseReactions(json['reactions']),
     );
   }
 
@@ -82,6 +84,7 @@ class ChatMessage {
   final DateTime? editedAt;
   final DateTime? recalledAt;
   final List<MessageMention> mentions;
+  final List<MessageReaction> reactions;
 
   ImageAttachment? get imageAttachment {
     final value = attachment;
@@ -128,6 +131,7 @@ class ChatMessage {
     Object? editedAt = _sentinel,
     Object? recalledAt = _sentinel,
     List<MessageMention>? mentions,
+    List<MessageReaction>? reactions,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -155,6 +159,7 @@ class ChatMessage {
           ? this.recalledAt
           : recalledAt as DateTime?,
       mentions: mentions ?? this.mentions,
+      reactions: reactions ?? this.reactions,
     );
   }
 }
@@ -193,6 +198,26 @@ class MessageMention {
       'kind': kind,
     };
   }
+}
+
+class MessageReaction {
+  const MessageReaction({
+    required this.emoji,
+    required this.count,
+    this.reactedByMe = false,
+  });
+
+  factory MessageReaction.fromJson(Map<String, dynamic> json) {
+    return MessageReaction(
+      emoji: json['emoji'] as String,
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      reactedByMe: json['reacted_by_me'] == true,
+    );
+  }
+
+  final String emoji;
+  final int count;
+  final bool reactedByMe;
 }
 
 class ReplyPreview {
@@ -373,4 +398,24 @@ List<MessageMention> _parseMentions(Object? value) {
     mentions.add(MessageMention.fromJson(json));
   }
   return mentions;
+}
+
+List<MessageReaction> _parseReactions(Object? value) {
+  if (value is! List) {
+    return const <MessageReaction>[];
+  }
+  final reactions = <MessageReaction>[];
+  for (final item in value) {
+    if (item is! Map) {
+      continue;
+    }
+    final json = Map<String, dynamic>.from(item);
+    final emoji = json['emoji'];
+    final count = json['count'];
+    if (emoji is! String || emoji.isEmpty || count is! num || count <= 0) {
+      continue;
+    }
+    reactions.add(MessageReaction.fromJson(json));
+  }
+  return reactions;
 }

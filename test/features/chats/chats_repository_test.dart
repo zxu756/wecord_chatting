@@ -847,6 +847,100 @@ void main() {
     },
   );
 
+  test('listMessages maps reaction summaries on each message', () async {
+    final dataSource = FakeChatsDataSource()
+      ..messageRows = [
+        {
+          'id': 'message-1',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-2',
+          'type': 'text',
+          'body': 'Hello',
+          'created_at': '2026-05-18T04:30:00.000Z',
+          'reactions': [
+            {'emoji': '👍', 'count': 2, 'reacted_by_me': true},
+            {'emoji': '🎉', 'count': 1, 'reacted_by_me': false},
+            {'emoji': '', 'count': 1, 'reacted_by_me': false},
+          ],
+        },
+        {
+          'id': 'message-2',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-1',
+          'type': 'text',
+          'body': 'No reactions',
+          'created_at': '2026-05-18T04:31:00.000Z',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final messages = await repository.listMessages('conversation-1');
+    final reactions = messages.first.reactions;
+
+    expect(reactions.map((reaction) => reaction.emoji), ['👍', '🎉']);
+    expect(reactions.map((reaction) => reaction.count), [2, 1]);
+    expect(reactions.map((reaction) => reaction.reactedByMe), [true, false]);
+    expect(messages.last.reactions, isEmpty);
+  });
+
+  test('toggleMessageReaction calls the reaction RPC', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.toggleMessageReaction(
+      messageId: 'message-1',
+      emoji: ' 👍 ',
+    );
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'toggle_message_reaction',
+        params: {'target_message_id': 'message-1', 'target_emoji': '👍'},
+      ),
+    ]);
+  });
+
+  test('listMessageReactors maps reactor profile rows', () async {
+    final dataSource = FakeChatsDataSource()
+      ..reactorRows = [
+        {
+          'id': 'user-2',
+          'username': 'ada',
+          'display_name': 'Ada Lovelace',
+          'avatar_url': null,
+          'bio': '',
+          'created_at': '2026-05-18T00:00:00.000Z',
+          'updated_at': '2026-05-18T00:00:00.000Z',
+          'alias': 'Countess',
+          'reacted_at': '2026-05-18T04:32:00.000Z',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final reactors = await repository.listMessageReactors(
+      messageId: 'message-1',
+      emoji: '🎉',
+    );
+
+    expect(reactors.single.id, 'user-2');
+    expect(reactors.single.displayLabel, 'Countess');
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'list_message_reactors',
+        params: {'target_message_id': 'message-1', 'target_emoji': '🎉'},
+      ),
+    ]);
+  });
+
   test('editMessage calls the edit RPC', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -1100,6 +1194,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   var searchRows = <Map<String, dynamic>>[];
   var discoveryRows = <Map<String, dynamic>>[];
   var mediaRows = <Map<String, dynamic>>[];
+  var reactorRows = <Map<String, dynamic>>[];
   var readMarkerRows = <Map<String, dynamic>>[];
   var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
@@ -1208,6 +1303,9 @@ class FakeChatsDataSource implements ChatsDataSource {
     }
     if (functionName == 'list_conversation_media') {
       return mediaRows;
+    }
+    if (functionName == 'list_message_reactors') {
+      return reactorRows;
     }
     return rpcResult;
   }

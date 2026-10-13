@@ -15,6 +15,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 
 void main() {
   testWidgets('switches between primary tabs', (tester) async {
@@ -157,6 +158,22 @@ class _FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<void> editMessage({required String messageId, required String body}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) {
     throw UnimplementedError();
   }
 

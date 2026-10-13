@@ -13,6 +13,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 
 void main() {
   testWidgets('global search opens a matching conversation', (tester) async {
@@ -277,6 +278,20 @@ class FakeChatsRepository implements ChatsRepository {
     required String messageId,
     required String body,
   }) async {}
+
+  @override
+  Future<void> toggleMessageReaction({
+    required String messageId,
+    required String emoji,
+  }) async {}
+
+  @override
+  Future<List<Profile>> listMessageReactors({
+    required String messageId,
+    required String emoji,
+  }) async {
+    return const [];
+  }
 
   @override
   Future<void> markConversationRead(String conversationId) async {}

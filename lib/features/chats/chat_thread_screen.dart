@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
+import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
@@ -398,6 +399,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onForward: _showForwardSheet,
                       onDelete: _deleteMessage,
                       onPreviewImage: _previewImage,
+                      onToggleReaction: _toggleReaction,
+                      onShowReactors: _showReactors,
                     );
                   },
                 );
@@ -857,6 +860,36 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _toggleReaction(ChatMessage message, String emoji) async {
+    if (message.recalledAt != null) {
+      return;
+    }
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .toggleMessageReaction(messageId: message.id, emoji: emoji);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sendError = 'Could not update reaction. Try again.';
+        });
+      }
+    }
+  }
+
+  void _showReactors(ChatMessage message, MessageReaction reaction) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return MessageReactorsSheet(
+          messageId: message.id,
+          emoji: reaction.emoji,
+        );
+      },
+    );
+  }
+
   void _startReply(ChatMessage message) {
     if (message.recalledAt != null) {
       return;
@@ -957,6 +990,8 @@ class _MessageBubble extends StatelessWidget {
     required this.onForward,
     required this.onDelete,
     required this.onPreviewImage,
+    required this.onToggleReaction,
+    required this.onShowReactors,
   });
 
   final ChatMessage message;
@@ -968,6 +1003,10 @@ class _MessageBubble extends StatelessWidget {
   final ValueChanged<ChatMessage> onForward;
   final Future<void> Function(ChatMessage message) onDelete;
   final Future<void> Function(ImageAttachment attachment) onPreviewImage;
+  final Future<void> Function(ChatMessage message, String emoji)
+  onToggleReaction;
+  final void Function(ChatMessage message, MessageReaction reaction)
+  onShowReactors;
 
   @override
   Widget build(BuildContext context) {
@@ -982,6 +1021,9 @@ class _MessageBubble extends StatelessWidget {
     final imageAttachment = isRecalled ? null : message.imageAttachment;
     final voiceAttachment = isRecalled ? null : message.voiceAttachment;
     final canShowActions = !isRecalled;
+    final reactions = isRecalled
+        ? const <MessageReaction>[]
+        : message.reactions;
 
     return Column(
       crossAxisAlignment: isCurrentUser
@@ -1002,7 +1044,9 @@ class _MessageBubble extends StatelessWidget {
                   ? (_) => _showActions(context, imageAttachment)
                   : null,
               child: Container(
-                margin: EdgeInsets.only(bottom: showReadReceipt ? 4 : 8),
+                margin: EdgeInsets.only(
+                  bottom: showReadReceipt || reactions.isNotEmpty ? 4 : 8,
+                ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 10,
@@ -1023,6 +1067,19 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+        if (reactions.isNotEmpty)
+          Padding(
+            padding: EdgeInsets.only(bottom: showReadReceipt ? 4 : 8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: MessageReactionChips(
+                reactions: reactions,
+                onToggle: (emoji) =>
+                    unawaited(onToggleReaction(message, emoji)),
+                onShowReactors: (reaction) => onShowReactors(message, reaction),
+              ),
+            ),
+          ),
         if (showReadReceipt)
           Padding(
             padding: const EdgeInsets.only(right: 4, bottom: 8),
@@ -1040,69 +1097,90 @@ class _MessageBubble extends StatelessWidget {
   void _showActions(BuildContext context, ImageAttachment? imageAttachment) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.reply_outlined),
-                title: const Text('Reply'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onReply(message);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.forward_outlined),
-                title: const Text('Forward'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onForward(message);
-                },
-              ),
-              if (isCurrentUser && message.type == MessageType.text)
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Edit'),
-                  onTap: () {
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                QuickReactionBar(
+                  reactedEmojis: {
+                    for (final reaction in message.reactions)
+                      if (reaction.reactedByMe) reaction.emoji,
+                  },
+                  onSelect: (emoji) {
                     Navigator.of(sheetContext).pop();
-                    onEdit(message);
+                    unawaited(onToggleReaction(message, emoji));
+                  },
+                  onMore: () async {
+                    Navigator.of(sheetContext).pop();
+                    final emoji = await showEmojiReactionPicker(context);
+                    if (emoji != null) {
+                      await onToggleReaction(message, emoji);
+                    }
                   },
                 ),
-              if (imageAttachment != null)
+                const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.visibility_outlined),
-                  title: const Text('Preview'),
+                  leading: const Icon(Icons.reply_outlined),
+                  title: const Text('Reply'),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(onPreviewImage(imageAttachment));
+                    onReply(message);
                   },
                 ),
-              if (message.type == MessageType.text)
                 ListTile(
-                  leading: const Icon(Icons.copy_outlined),
-                  title: const Text('Copy'),
+                  leading: const Icon(Icons.forward_outlined),
+                  title: const Text('Forward'),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(
-                      Clipboard.setData(ClipboardData(text: message.body)),
-                    );
+                    onForward(message);
                   },
                 ),
-              if (isCurrentUser)
-                ListTile(
-                  iconColor: colorScheme.error,
-                  textColor: colorScheme.error,
-                  leading: const Icon(Icons.delete_outline),
-                  title: const Text('Delete'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(onDelete(message));
-                  },
-                ),
-            ],
+                if (isCurrentUser && message.type == MessageType.text)
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('Edit'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onEdit(message);
+                    },
+                  ),
+                if (imageAttachment != null)
+                  ListTile(
+                    leading: const Icon(Icons.visibility_outlined),
+                    title: const Text('Preview'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onPreviewImage(imageAttachment));
+                    },
+                  ),
+                if (message.type == MessageType.text)
+                  ListTile(
+                    leading: const Icon(Icons.copy_outlined),
+                    title: const Text('Copy'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(
+                        Clipboard.setData(ClipboardData(text: message.body)),
+                      );
+                    },
+                  ),
+                if (isCurrentUser)
+                  ListTile(
+                    iconColor: colorScheme.error,
+                    textColor: colorScheme.error,
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Delete'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onDelete(message));
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

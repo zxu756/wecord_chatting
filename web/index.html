@@ -18,19 +18,30 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <!-- Phone-width layout before Flutter starts; Flutter then installs the
+       same viewport settings itself. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="description" content="A familiar-social real-time chat app.">
+  <!-- Browser toolbar colour, matching WeCordTheme's background. -->
+  <meta name="theme-color" content="#F7F8FA">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS meta tags & icons. The default status bar style keeps the page
+       below the status bar, so the app needs no extra top inset on web. -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="wecord">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="WeCord">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>wecord</title>
+  <title>WeCord</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Avoids a white flash and rubber-band gaps around the app on phones. */
+    html, body { background-color: #F7F8FA; overscroll-behavior: none; }
+  </style>
 </head>
 <body>
   <!--

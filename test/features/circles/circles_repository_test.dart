@@ -87,6 +87,23 @@ void main() {
             'name': 'General',
             'position': 0,
           },
+          {
+            'id': 'channel-2',
+            'circle_id': 'circle-1',
+            'conversation_id': 'conversation-2',
+            'name': 'Clips',
+            'position': 1,
+            'category_id': 'category-1',
+          },
+        ],
+        'categories': [
+          {
+            'id': 'category-1',
+            'circle_id': 'circle-1',
+            'name': 'Media',
+            'position': 0,
+            'created_at': '2026-10-13T00:00:00Z',
+          },
         ],
         'posts': [
           {
@@ -123,7 +140,14 @@ void main() {
     expect(detail.members.single.nickname, 'Countess');
     expect(detail.members.single.displayName, 'Countess');
     expect(detail.members.single.isCurrentUser, isTrue);
-    expect(detail.channels.single.name, 'General');
+    expect(detail.channels.map((channel) => channel.name), [
+      'General',
+      'Clips',
+    ]);
+    expect(detail.channels.first.categoryId, isNull);
+    expect(detail.channels.last.categoryId, 'category-1');
+    expect(detail.categories.single.id, 'category-1');
+    expect(detail.categories.single.name, 'Media');
     expect(detail.posts.single.comments.single.body, 'Hi');
     expect(dataSource.calls.single.functionName, 'get_circle_detail');
     expect(dataSource.calls.single.params, {'target_circle_id': 'circle-1'});
@@ -316,6 +340,118 @@ void main() {
       });
     },
   );
+
+  test('createChannel sends the category when given', () async {
+    final dataSource = FakeCirclesDataSource()..rpcValue = 'channel-2';
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.createChannel(
+      circleId: 'circle-1',
+      name: 'clips',
+      categoryId: 'category-1',
+    );
+
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'channel_name': 'clips',
+      'target_category_id': 'category-1',
+    });
+  });
+
+  test('category RPCs trim names and pass ids', () async {
+    final dataSource = FakeCirclesDataSource()..rpcValue = 'category-1';
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final id = await repository.createChannelCategory(
+      circleId: 'circle-1',
+      name: ' Media ',
+    );
+    await repository.renameChannelCategory(
+      categoryId: 'category-1',
+      name: ' Clips ',
+    );
+    await repository.deleteChannelCategory('category-1');
+
+    expect(id, 'category-1');
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'create_channel_category',
+      'rename_channel_category',
+      'delete_channel_category',
+    ]);
+    expect(dataSource.calls[0].params, {
+      'target_circle_id': 'circle-1',
+      'category_name': 'Media',
+    });
+    expect(dataSource.calls[1].params, {
+      'target_category_id': 'category-1',
+      'category_name': 'Clips',
+    });
+    expect(dataSource.calls[2].params, {'target_category_id': 'category-1'});
+  });
+
+  test('reorderChannels sends the full layout', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+    CircleChannel channel(String id, int position, [String? categoryId]) {
+      return CircleChannel(
+        id: id,
+        circleId: 'circle-1',
+        conversationId: 'conversation-$id',
+        name: id,
+        position: position,
+        categoryId: categoryId,
+      );
+    }
+
+    final layout = CircleChannelLayout.fromChannels(
+      categories: const [
+        CircleChannelCategory(
+          id: 'a',
+          circleId: 'circle-1',
+          name: 'A',
+          position: 0,
+        ),
+        CircleChannelCategory(
+          id: 'b',
+          circleId: 'circle-1',
+          name: 'B',
+          position: 1,
+        ),
+      ],
+      channels: [
+        channel('general', 0),
+        channel('a1', 1, 'a'),
+        channel('b1', 2, 'b'),
+        channel('lost', 3, 'deleted-category'),
+      ],
+    ).moveCategory('b', 0).moveChannel('general', categoryId: 'a', index: 1);
+
+    await repository.reorderChannels(circleId: 'circle-1', layout: layout);
+
+    expect(dataSource.calls.single.functionName, 'reorder_circle_channels');
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'layout': {
+        'categories': ['b', 'a'],
+        'channels': [
+          {'id': 'lost', 'category_id': null},
+          {'id': 'b1', 'category_id': 'b'},
+          {'id': 'a1', 'category_id': 'a'},
+          {'id': 'general', 'category_id': 'a'},
+        ],
+      },
+    });
+    expect(layout.orderedChannels.map((channel) => channel.position), [
+      0,
+      1,
+      2,
+      3,
+    ]);
+    expect(layout.orderedCategories.map((category) => category.position), [
+      0,
+      1,
+    ]);
+  });
 
   test('inviteMembers calls invite_circle_members rpc', () async {
     final dataSource = FakeCirclesDataSource();

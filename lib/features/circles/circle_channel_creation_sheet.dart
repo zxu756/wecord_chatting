@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/circle.dart';
 
 class CircleChannelCreationSheet extends ConsumerStatefulWidget {
-  const CircleChannelCreationSheet({required this.circleId, super.key});
+  const CircleChannelCreationSheet({
+    required this.circleId,
+    this.categories = const [],
+    this.initialCategoryId,
+    super.key,
+  });
 
   final String circleId;
+
+  /// Offered in a category picker when not empty.
+  final List<CircleChannelCategory> categories;
+  final String? initialCategoryId;
 
   @override
   ConsumerState<CircleChannelCreationSheet> createState() =>
@@ -16,6 +26,12 @@ class CircleChannelCreationSheet extends ConsumerStatefulWidget {
 class _CircleChannelCreationSheetState
     extends ConsumerState<CircleChannelCreationSheet> {
   final _nameController = TextEditingController();
+  late String? _categoryId =
+      widget.categories.any(
+        (category) => category.id == widget.initialCategoryId,
+      )
+      ? widget.initialCategoryId
+      : null;
   var _isSaving = false;
   String? _errorText;
 
@@ -52,6 +68,27 @@ class _CircleChannelCreationSheetState
                 labelText: 'Channel name',
               ),
             ),
+            if (widget.categories.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                initialValue: _categoryId,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Category',
+                ),
+                items: [
+                  const DropdownMenuItem(child: Text('No category')),
+                  for (final category in widget.categories)
+                    DropdownMenuItem(
+                      value: category.id,
+                      child: Text(category.name),
+                    ),
+                ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) => setState(() => _categoryId = value),
+              ),
+            ],
             if (_errorText != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -86,7 +123,11 @@ class _CircleChannelCreationSheetState
     try {
       await ref
           .read(circlesRepositoryProvider)
-          .createChannel(circleId: widget.circleId, name: name);
+          .createChannel(
+            circleId: widget.circleId,
+            name: name,
+            categoryId: _categoryId,
+          );
       ref.invalidate(circleDetailProvider(widget.circleId));
       if (mounted) Navigator.of(context).pop();
     } catch (error) {

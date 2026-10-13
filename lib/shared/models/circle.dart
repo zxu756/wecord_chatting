@@ -69,6 +69,7 @@ class CircleDetail {
     required this.members,
     required this.channels,
     required this.posts,
+    this.categories = const [],
   });
 
   factory CircleDetail.fromJson(Map<String, dynamic> json) {
@@ -76,13 +77,22 @@ class CircleDetail {
       circle: CircleSummary.fromJson(json['circle'] as Map<String, dynamic>),
       members: _parseList(json['members'], CircleMember.fromJson),
       channels: _parseList(json['channels'], CircleChannel.fromJson),
+      categories: _parseList(
+        json['categories'],
+        CircleChannelCategory.fromJson,
+      ),
       posts: _parseList(json['posts'], CirclePost.fromJson),
     );
   }
 
   final CircleSummary circle;
   final List<CircleMember> members;
+
+  /// Every channel, ordered by position.
   final List<CircleChannel> channels;
+
+  /// Channel categories, ordered by position.
+  final List<CircleChannelCategory> categories;
   final List<CirclePost> posts;
 
   bool get canManageCircle =>
@@ -145,6 +155,7 @@ class CircleChannel {
     required this.conversationId,
     required this.name,
     required this.position,
+    this.categoryId,
   });
 
   factory CircleChannel.fromJson(Map<String, dynamic> json) {
@@ -154,6 +165,7 @@ class CircleChannel {
       conversationId: json['conversation_id'] as String,
       name: json['name'] as String,
       position: (json['position'] as num?)?.toInt() ?? 0,
+      categoryId: json['category_id'] as String?,
     );
   }
 
@@ -162,6 +174,184 @@ class CircleChannel {
   final String conversationId;
   final String name;
   final int position;
+
+  /// Null for channels listed above every category.
+  final String? categoryId;
+}
+
+class CircleChannelCategory {
+  const CircleChannelCategory({
+    required this.id,
+    required this.circleId,
+    required this.name,
+    required this.position,
+  });
+
+  factory CircleChannelCategory.fromJson(Map<String, dynamic> json) {
+    return CircleChannelCategory(
+      id: json['id'] as String,
+      circleId: json['circle_id'] as String,
+      name: json['name'] as String,
+      position: (json['position'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final String id;
+  final String circleId;
+  final String name;
+  final int position;
+}
+
+/// The order of a circle's categories and channels: uncategorized channels
+/// first, then each category with its channels. This is what
+/// `reorder_circle_channels` stores.
+class CircleChannelLayout {
+  const CircleChannelLayout({
+    required this.categories,
+    required this.uncategorized,
+    required this.channelsByCategory,
+  });
+
+  /// Groups [channels] (already in position order) under [categories].
+  /// Channels pointing at an unknown category count as uncategorized.
+  factory CircleChannelLayout.fromChannels({
+    required List<CircleChannelCategory> categories,
+    required List<CircleChannel> channels,
+  }) {
+    final channelsByCategory = {
+      for (final category in categories) category.id: <CircleChannel>[],
+    };
+    final uncategorized = <CircleChannel>[];
+    for (final channel in channels) {
+      (channelsByCategory[channel.categoryId] ?? uncategorized).add(channel);
+    }
+    return CircleChannelLayout(
+      categories: List.unmodifiable(categories),
+      uncategorized: List.unmodifiable(uncategorized),
+      channelsByCategory: {
+        for (final entry in channelsByCategory.entries)
+          entry.key: List.unmodifiable(entry.value),
+      },
+    );
+  }
+
+  final List<CircleChannelCategory> categories;
+  final List<CircleChannel> uncategorized;
+  final Map<String, List<CircleChannel>> channelsByCategory;
+
+  /// Channels of [categoryId], or the uncategorized ones for null.
+  List<CircleChannel> channelsIn(String? categoryId) {
+    return categoryId == null
+        ? uncategorized
+        : channelsByCategory[categoryId] ?? const [];
+  }
+
+  /// Moves [channelId] into [categoryId] (null: uncategorized) at [index]
+  /// of that category's channel list, counted without the moved channel.
+  CircleChannelLayout moveChannel(
+    String channelId, {
+    required String? categoryId,
+    required int index,
+  }) {
+    CircleChannel? moved;
+    List<CircleChannel> without(List<CircleChannel> channels) {
+      return channels.where((channel) => channel.id != channelId).toList();
+    }
+
+    for (final channel in [
+      ...uncategorized,
+      for (final channels in channelsByCategory.values) ...channels,
+    ]) {
+      if (channel.id == channelId) {
+        moved = channel;
+      }
+    }
+    if (moved == null ||
+        (categoryId != null && !channelsByCategory.containsKey(categoryId))) {
+      return this;
+    }
+    final nextUncategorized = without(uncategorized);
+    final nextByCategory = {
+      for (final entry in channelsByCategory.entries)
+        entry.key: without(entry.value),
+    };
+    final target = categoryId == null
+        ? nextUncategorized
+        : nextByCategory[categoryId]!;
+    target.insert(index.clamp(0, target.length), moved);
+    return CircleChannelLayout(
+      categories: categories,
+      uncategorized: List.unmodifiable(nextUncategorized),
+      channelsByCategory: {
+        for (final entry in nextByCategory.entries)
+          entry.key: List.unmodifiable(entry.value),
+      },
+    );
+  }
+
+  /// Moves [categoryId] to [index] among the categories, counted without
+  /// the moved category. Its channels move with it.
+  CircleChannelLayout moveCategory(String categoryId, int index) {
+    final next = [...categories];
+    final from = next.indexWhere((category) => category.id == categoryId);
+    if (from < 0) {
+      return this;
+    }
+    final moved = next.removeAt(from);
+    next.insert(index.clamp(0, next.length), moved);
+    return CircleChannelLayout(
+      categories: List.unmodifiable(next),
+      uncategorized: uncategorized,
+      channelsByCategory: channelsByCategory,
+    );
+  }
+
+  /// Categories with fresh positions.
+  List<CircleChannelCategory> get orderedCategories {
+    return [
+      for (final (index, category) in categories.indexed)
+        CircleChannelCategory(
+          id: category.id,
+          circleId: category.circleId,
+          name: category.name,
+          position: index,
+        ),
+    ];
+  }
+
+  /// Every channel in display order, with fresh positions and categories.
+  List<CircleChannel> get orderedChannels {
+    final ordered = <CircleChannel>[];
+    for (final categoryId in <String?>[
+      null,
+      for (final category in categories) category.id,
+    ]) {
+      for (final channel in channelsIn(categoryId)) {
+        ordered.add(
+          CircleChannel(
+            id: channel.id,
+            circleId: channel.circleId,
+            conversationId: channel.conversationId,
+            name: channel.name,
+            position: ordered.length,
+            categoryId: categoryId,
+          ),
+        );
+      }
+    }
+    return ordered;
+  }
+
+  /// The payload of `reorder_circle_channels`.
+  Map<String, dynamic> toJson() {
+    return {
+      'categories': [for (final category in categories) category.id],
+      'channels': [
+        for (final channel in orderedChannels)
+          {'id': channel.id, 'category_id': channel.categoryId},
+      ],
+    };
+  }
 }
 
 class CirclePost {

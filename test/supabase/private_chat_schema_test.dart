@@ -1315,4 +1315,114 @@ void main() {
       ),
     );
   });
+  test('channel categories are member scoped, RPC written and realtime', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final selectPolicy = policyBody(
+      rawSql,
+      'circle_channel_categories_select_member',
+    );
+    final createBody = functionBody(sql, 'create_channel_category');
+    final renameBody = functionBody(sql, 'rename_channel_category');
+    final deleteBody = functionBody(sql, 'delete_channel_category');
+    final reorderBody = functionBody(sql, 'reorder_circle_channels');
+    final channelBody = functionBody(sql, 'create_circle_channel');
+    final detailBody = functionBody(sql, 'get_circle_detail');
+
+    expect(
+      sql,
+      contains('create table if not exists public.circle_channel_categories'),
+    );
+    expect(sql, contains('char_length(trim(name)) between 1 and 32'));
+    expect(
+      sql,
+      contains(
+        'references public.circle_channel_categories(id) on delete set null',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'alter table public.circle_channel_categories enable row level security',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'alter table public.circle_channel_categories replica identity full',
+      ),
+    );
+    expect(selectPolicy, contains('for select'));
+    expect(
+      selectPolicy,
+      contains('public.is_current_user_circle_member(circle_id)'),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'circle_channel_categories').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(
+      rawSql,
+      contains(
+        'alter publication supabase_realtime add table public.circle_channel_categories',
+      ),
+    );
+
+    for (final body in [
+      createBody,
+      renameBody,
+      deleteBody,
+      reorderBody,
+      channelBody,
+    ]) {
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+      expect(body, contains('auth.uid()'));
+      expect(body, contains('public.current_user_circle_role'));
+      expect(
+        body,
+        contains("coalesce(caller_role, '') not in ('owner', 'admin')"),
+      );
+    }
+    expect(createBody, contains('> 32'));
+    expect(renameBody, contains('> 32'));
+    expect(deleteBody, contains('set category_id = null'));
+    expect(reorderBody, contains('Layout must list every category'));
+    expect(reorderBody, contains('Layout must list every channel'));
+    expect(reorderBody, contains('ids.category_id = any(category_ids)'));
+    expect(reorderBody, contains('for no key update'));
+    expect(channelBody, contains('target_category_id uuid default null'));
+    expect(channelBody, contains('Category does not belong to this circle'));
+    expect(
+      sql,
+      contains(
+        'drop function if exists public.create_circle_channel(uuid, text)',
+      ),
+    );
+
+    // The detail keeps nicknames and adds categories.
+    expect(detailBody, contains("'nickname', cm.nickname"));
+    expect(detailBody, contains("'category_id', cc.category_id"));
+    expect(detailBody, contains("'categories',"));
+    expect(detailBody, contains('from public.circle_channel_categories ccc'));
+
+    for (final signature in [
+      'public.create_channel_category(uuid, text)',
+      'public.rename_channel_category(uuid, text)',
+      'public.delete_channel_category(uuid)',
+      'public.reorder_circle_channels(uuid, jsonb)',
+      'public.create_circle_channel(uuid, text, uuid)',
+      'public.get_circle_detail(uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

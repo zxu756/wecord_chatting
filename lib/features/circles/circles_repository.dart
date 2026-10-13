@@ -28,9 +28,31 @@ abstract interface class CirclesRepository {
 
   Future<String> createCircle({required String name, List<String> memberIds});
 
+  /// Creates a channel, in [categoryId] when given.
   Future<String> createChannel({
     required String circleId,
     required String name,
+    String? categoryId,
+  });
+
+  /// Returns the new category id.
+  Future<String> createChannelCategory({
+    required String circleId,
+    required String name,
+  });
+
+  Future<void> renameChannelCategory({
+    required String categoryId,
+    required String name,
+  });
+
+  /// Deletes the category; its channels become uncategorized.
+  Future<void> deleteChannelCategory(String categoryId);
+
+  /// Stores the order of every category and channel of the circle at once.
+  Future<void> reorderChannels({
+    required String circleId,
+    required CircleChannelLayout layout,
   });
 
   Future<void> inviteMembers({
@@ -178,12 +200,55 @@ class SupabaseCirclesRepository implements CirclesRepository {
   Future<String> createChannel({
     required String circleId,
     required String name,
+    String? categoryId,
   }) async {
     final channelId = await _dataSource.rpc('create_circle_channel', {
       'target_circle_id': circleId,
       'channel_name': name.trim(),
+      if (categoryId != null) 'target_category_id': categoryId,
     });
     return channelId as String;
+  }
+
+  @override
+  Future<String> createChannelCategory({
+    required String circleId,
+    required String name,
+  }) async {
+    final categoryId = await _dataSource.rpc('create_channel_category', {
+      'target_circle_id': circleId,
+      'category_name': name.trim(),
+    });
+    return categoryId as String;
+  }
+
+  @override
+  Future<void> renameChannelCategory({
+    required String categoryId,
+    required String name,
+  }) async {
+    await _dataSource.rpc('rename_channel_category', {
+      'target_category_id': categoryId,
+      'category_name': name.trim(),
+    });
+  }
+
+  @override
+  Future<void> deleteChannelCategory(String categoryId) async {
+    await _dataSource.rpc('delete_channel_category', {
+      'target_category_id': categoryId,
+    });
+  }
+
+  @override
+  Future<void> reorderChannels({
+    required String circleId,
+    required CircleChannelLayout layout,
+  }) async {
+    await _dataSource.rpc('reorder_circle_channels', {
+      'target_circle_id': circleId,
+      'layout': layout.toJson(),
+    });
   }
 
   @override
@@ -495,6 +560,17 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
+              table: 'circle_channel_categories',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
               table: 'circle_posts',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
@@ -601,8 +677,44 @@ class UninitializedCirclesRepository implements CirclesRepository {
   Future<String> createChannel({
     required String circleId,
     required String name,
+    String? categoryId,
   }) {
     throw StateError('Supabase must be initialized before creating channels.');
+  }
+
+  @override
+  Future<String> createChannelCategory({
+    required String circleId,
+    required String name,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before creating categories.',
+    );
+  }
+
+  @override
+  Future<void> renameChannelCategory({
+    required String categoryId,
+    required String name,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before renaming categories.',
+    );
+  }
+
+  @override
+  Future<void> deleteChannelCategory(String categoryId) {
+    throw StateError(
+      'Supabase must be initialized before deleting categories.',
+    );
+  }
+
+  @override
+  Future<void> reorderChannels({
+    required String circleId,
+    required CircleChannelLayout layout,
+  }) {
+    throw StateError('Supabase must be initialized before reordering.');
   }
 
   @override

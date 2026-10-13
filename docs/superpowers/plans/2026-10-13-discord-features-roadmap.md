@@ -58,7 +58,7 @@
 - [x] **9. 圈子图标栏未读点**（S）
   - `list_circle_summaries` 增加 `unread_count` 与 `mention_count`（汇总该圈子所有频道）。
   - 图标栏：有未读显示左侧 8px 小竖条；有 @ 时右下角红色数字徽标。
-- [ ] **10. 频道分类 + 拖拽排序**（M）
+- [x] **10. 频道分类 + 拖拽排序**（M）
   - 表 `circle_channel_categories (id, circle_id, name, position)`；`circle_channels.category_id null`。没有分类的频道显示在最上面。
   - RPC：`create_channel_category`、`rename_channel_category`、`delete_channel_category`（频道移到无分类）、`reorder_circle_channels(circle_id, layout jsonb)`（一次提交所有分类和频道的位置）。
   - 侧栏：每个分类可以独立折叠（折叠状态存本地 `shared_preferences`）；管理员可以拖拽频道（跨分类）和分类排序。

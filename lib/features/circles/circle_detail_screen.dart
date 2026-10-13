@@ -82,8 +82,11 @@ class CircleDetailScreen extends ConsumerWidget {
                   IconButton(
                     tooltip: 'Create channel',
                     icon: const Icon(Icons.add_comment_outlined),
-                    onPressed: () =>
-                        showCircleChannelCreationSheet(context, circleId),
+                    onPressed: () => showCircleChannelCreationSheet(
+                      context,
+                      circleId,
+                      categories: detail.categories,
+                    ),
                   ),
                 ],
               ],

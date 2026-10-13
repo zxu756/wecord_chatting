@@ -594,9 +594,31 @@ class FakeCirclesRepository implements CirclesRepository {
       const Stream<Set<String>>.empty();
 
   @override
+  Future<String> createChannelCategory({
+    required String circleId,
+    required String name,
+  }) async => 'category-1';
+
+  @override
+  Future<void> renameChannelCategory({
+    required String categoryId,
+    required String name,
+  }) async {}
+
+  @override
+  Future<void> deleteChannelCategory(String categoryId) async {}
+
+  @override
+  Future<void> reorderChannels({
+    required String circleId,
+    required CircleChannelLayout layout,
+  }) async {}
+
+  @override
   Future<String> createChannel({
     required String circleId,
     required String name,
+    String? categoryId,
   }) async => 'channel-1';
 
   @override

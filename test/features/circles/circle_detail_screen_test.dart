@@ -1,8 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_category_collapse_store.dart';
+import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -101,6 +106,23 @@ void main() {
             conversationId: 'conversation-2',
             name: 'photos',
             position: 1,
+            categoryId: 'category-1',
+          ),
+          const CircleChannel(
+            id: 'channel-3',
+            circleId: 'circle-1',
+            conversationId: 'conversation-3',
+            name: 'videos',
+            position: 2,
+            categoryId: 'category-1',
+          ),
+        ],
+        categories: const [
+          CircleChannelCategory(
+            id: 'category-1',
+            circleId: 'circle-1',
+            name: 'Media',
+            position: 0,
           ),
         ],
         posts: const [],
@@ -135,10 +157,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Channel photos'), findsOneWidget);
 
-    await tester.tap(find.text('TEXT CHANNELS'));
+    await tester.tap(find.text('MEDIA'));
     await tester.pumpAndSettle();
-    expect(find.text('general'), findsNothing);
+    // Uncategorized channels never collapse; the open channel stays listed.
+    expect(find.text('general'), findsOneWidget);
     expect(find.text('photos'), findsOneWidget);
+    expect(find.text('videos'), findsNothing);
 
     await tester.tap(find.byTooltip('Hide member list'));
     await tester.pumpAndSettle();
@@ -481,6 +505,362 @@ void main() {
     expect(saved.isMutedIndefinitelyAt(DateTime.now().toUtc()), isTrue);
   });
 
+  group('channel categories', () {
+    const textCategory = CircleChannelCategory(
+      id: 'cat-a',
+      circleId: 'circle-1',
+      name: 'Text',
+      position: 0,
+    );
+    const mediaCategory = CircleChannelCategory(
+      id: 'cat-b',
+      circleId: 'circle-1',
+      name: 'Media',
+      position: 1,
+    );
+
+    CircleChannel channel(String name, int position, [String? categoryId]) {
+      return CircleChannel(
+        id: name,
+        circleId: 'circle-1',
+        conversationId: 'conversation-$name',
+        name: name,
+        position: position,
+        categoryId: categoryId,
+      );
+    }
+
+    Future<FakeCirclesRepository> pumpCategories(
+      WidgetTester tester, {
+      String role = 'owner',
+      InMemoryCircleCategoryCollapseStore? collapseStore,
+      Map<String, int> unread = const {},
+      List<CircleChannel>? channels,
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final base = _detail();
+      final repository = FakeCirclesRepository()
+        ..detail = CircleDetail(
+          circle: CircleSummary(
+            id: 'circle-1',
+            name: 'Close Friends',
+            memberCount: 1,
+            channelCount: 4,
+            currentUserRole: role,
+          ),
+          members: base.members,
+          channels:
+              channels ??
+              [
+                channel('general', 0),
+                channel('chat', 1, 'cat-a'),
+                channel('memes', 2, 'cat-a'),
+                channel('clips', 3, 'cat-b'),
+              ],
+          categories: const [textCategory, mediaCategory],
+          posts: const [],
+        );
+      repository.circles = [repository.detail.circle];
+      final router = GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) => CircleDetailScreen(
+              circleId: state.pathParameters['circleId']!,
+              channelViewBuilder: (context, channel, actions) => Scaffold(
+                appBar: AppBar(
+                  title: Text('Channel ${channel.name}'),
+                  actions: actions,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          FakeContactsRepository(),
+          router,
+          collapseStore: collapseStore,
+          conversations: [
+            for (final entry in unread.entries)
+              ConversationSummary(
+                id: 'conversation-${entry.key}',
+                type: ConversationType.channel,
+                unreadCount: entry.value,
+              ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    Finder sidebarText(String text) {
+      return find.descendant(
+        of: find.byType(CircleChannelSidebar),
+        matching: find.text(text),
+      );
+    }
+
+    double top(WidgetTester tester, String text) =>
+        tester.getTopLeft(sidebarText(text)).dy;
+
+    ReorderableListView channelList(WidgetTester tester) {
+      return tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView),
+      );
+    }
+
+    testWidgets('uncategorized channels come first, then each category', (
+      tester,
+    ) async {
+      await pumpCategories(tester);
+
+      expect(find.text('Channel general'), findsOneWidget);
+      final order = ['general', 'TEXT', 'chat', 'memes', 'MEDIA', 'clips'];
+      for (var index = 1; index < order.length; index++) {
+        expect(
+          top(tester, order[index - 1]),
+          lessThan(top(tester, order[index])),
+          reason: '${order[index - 1]} above ${order[index]}',
+        );
+      }
+    });
+
+    testWidgets('collapse state is saved and restored per circle', (
+      tester,
+    ) async {
+      final store = InMemoryCircleCategoryCollapseStore({
+        'circle-1': {'cat-a'},
+        'circle-2': {'cat-b'},
+      });
+      await pumpCategories(tester, collapseStore: store);
+
+      expect(sidebarText('chat'), findsNothing);
+      expect(sidebarText('memes'), findsNothing);
+      expect(sidebarText('clips'), findsOneWidget);
+
+      await tester.tap(sidebarText('MEDIA'));
+      await tester.pumpAndSettle();
+      expect(sidebarText('clips'), findsNothing);
+      expect(store.collapsed['circle-1'], {'cat-a', 'cat-b'});
+
+      await tester.tap(sidebarText('TEXT'));
+      await tester.pumpAndSettle();
+      expect(sidebarText('chat'), findsOneWidget);
+      expect(store.collapsed['circle-1'], {'cat-b'});
+      expect(store.collapsed['circle-2'], {'cat-b'});
+    });
+
+    testWidgets('collapsed categories keep the open and unread channels', (
+      tester,
+    ) async {
+      await pumpCategories(
+        tester,
+        unread: {'memes': 2},
+        channels: [
+          channel('general', 0),
+          channel('chat', 1, 'cat-a'),
+          channel('memes', 2, 'cat-a'),
+          channel('quiet', 3, 'cat-a'),
+          channel('clips', 4, 'cat-b'),
+        ],
+      );
+
+      await tester.tap(sidebarText('chat'));
+      await tester.pumpAndSettle();
+      await tester.tap(sidebarText('TEXT'));
+      await tester.pumpAndSettle();
+
+      expect(sidebarText('chat'), findsOneWidget);
+      expect(sidebarText('memes'), findsOneWidget);
+      expect(sidebarText('quiet'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('circle-channel-memes')),
+          matching: find.byKey(const ValueKey('channel-unread-pill')),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('dragging a channel saves the new layout', (tester) async {
+      final repository = await pumpCategories(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(sidebarText('clips')),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      for (var step = 0; step < 10; step++) {
+        await gesture.moveBy(const Offset(0, -40));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(repository.reorderedLayouts, [
+        {
+          'categories': ['cat-a', 'cat-b'],
+          'channels': [
+            {'id': 'clips', 'category_id': null},
+            {'id': 'general', 'category_id': null},
+            {'id': 'chat', 'category_id': 'cat-a'},
+            {'id': 'memes', 'category_id': 'cat-a'},
+          ],
+        },
+      ]);
+      expect(top(tester, 'clips'), lessThan(top(tester, 'general')));
+    });
+
+    testWidgets('channels move across categories and categories reorder', (
+      tester,
+    ) async {
+      final repository = await pumpCategories(tester);
+
+      // Entries: general, TEXT, chat, memes, MEDIA, clips.
+      channelList(tester).onReorderItem!(0, 5);
+      await tester.pumpAndSettle();
+      expect(repository.reorderedLayouts.last, {
+        'categories': ['cat-a', 'cat-b'],
+        'channels': [
+          {'id': 'chat', 'category_id': 'cat-a'},
+          {'id': 'memes', 'category_id': 'cat-a'},
+          {'id': 'clips', 'category_id': 'cat-b'},
+          {'id': 'general', 'category_id': 'cat-b'},
+        ],
+      });
+      expect(top(tester, 'clips'), lessThan(top(tester, 'general')));
+
+      // Entries now: TEXT, chat, memes, MEDIA, clips, general.
+      channelList(tester).onReorderItem!(3, 0);
+      await tester.pumpAndSettle();
+      expect(repository.reorderedLayouts.last, {
+        'categories': ['cat-b', 'cat-a'],
+        'channels': [
+          {'id': 'clips', 'category_id': 'cat-b'},
+          {'id': 'general', 'category_id': 'cat-b'},
+          {'id': 'chat', 'category_id': 'cat-a'},
+          {'id': 'memes', 'category_id': 'cat-a'},
+        ],
+      });
+      expect(top(tester, 'MEDIA'), lessThan(top(tester, 'TEXT')));
+      expect(top(tester, 'general'), lessThan(top(tester, 'TEXT')));
+
+      // Dropping an entry where it was is not a change.
+      channelList(tester).onReorderItem!(1, 1);
+      await tester.pumpAndSettle();
+      expect(repository.reorderedLayouts, hasLength(2));
+    });
+
+    testWidgets('a failed reorder rolls back and explains', (tester) async {
+      final repository = await pumpCategories(tester)
+        ..reorderCompleter = Completer<void>()
+        ..reorderError = Exception('offline');
+
+      channelList(tester).onReorderItem!(5, 0);
+      await tester.pump();
+      // Shown right away while saving.
+      expect(top(tester, 'clips'), lessThan(top(tester, 'general')));
+
+      repository.reorderCompleter!.complete();
+      await tester.pumpAndSettle();
+      expect(top(tester, 'general'), lessThan(top(tester, 'clips')));
+      expect(top(tester, 'MEDIA'), lessThan(top(tester, 'clips')));
+      expect(
+        find.text('Could not reorder channels. Try again.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('members cannot reorder or manage categories', (tester) async {
+      await pumpCategories(tester, role: 'member');
+
+      expect(find.byType(ReorderableDelayedDragStartListener), findsNothing);
+      expect(find.byType(ReorderableDragStartListener), findsNothing);
+      expect(find.byTooltip('Category options'), findsNothing);
+      expect(find.byTooltip('Create channel'), findsNothing);
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create category'), findsNothing);
+    });
+
+    testWidgets('managers create, rename and delete categories', (
+      tester,
+    ) async {
+      final repository = await pumpCategories(tester);
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create category'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '  Voice  ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Category options').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rename category'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'Media'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Clips');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Category options').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(repository.categoryCalls, [
+        'create Voice',
+        'rename cat-b Clips',
+        'delete cat-a',
+      ]);
+    });
+
+    testWidgets('a category creates channels inside it', (tester) async {
+      final repository = await pumpCategories(tester);
+
+      await tester.tap(find.byTooltip('Create channel').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(DropdownButtonFormField<String?>, 'Media'),
+        findsOneWidget,
+      );
+      await tester.enterText(find.bySemanticsLabel('Channel name'), 'reels');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+
+      expect(repository.createdChannelName, 'reels');
+      expect(repository.createdChannelCategoryId, 'cat-b');
+
+      // The circle menu starts without a category, which can be picked.
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create channel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Text').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.bySemanticsLabel('Channel name'), 'talk');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(repository.createdChannelName, 'talk');
+      expect(repository.createdChannelCategoryId, 'cat-a');
+    });
+  });
+
   group('circle rail indicators', () {
     CircleSummary circle(
       String id, {
@@ -626,15 +1006,38 @@ void main() {
 Widget _app(
   FakeCirclesRepository circlesRepository,
   FakeContactsRepository contactsRepository,
-  GoRouter router,
-) {
+  GoRouter router, {
+  InMemoryCircleCategoryCollapseStore? collapseStore,
+  List<ConversationSummary>? conversations,
+}) {
   return ProviderScope(
     overrides: [
       circlesRepositoryProvider.overrideWithValue(circlesRepository),
       contactsRepositoryProvider.overrideWithValue(contactsRepository),
+      circleCategoryCollapseStoreProvider.overrideWithValue(
+        collapseStore ?? InMemoryCircleCategoryCollapseStore(),
+      ),
+      if (conversations != null)
+        conversationsProvider.overrideWith((ref) async => conversations),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
+}
+
+class InMemoryCircleCategoryCollapseStore
+    implements CircleCategoryCollapseStore {
+  InMemoryCircleCategoryCollapseStore([Map<String, Set<String>>? initial])
+    : collapsed = {...?initial};
+
+  final Map<String, Set<String>> collapsed;
+
+  @override
+  Future<Set<String>> load(String circleId) async => {...?collapsed[circleId]};
+
+  @override
+  Future<void> save(String circleId, Set<String> collapsedCategoryIds) async {
+    collapsed[circleId] = {...collapsedCategoryIds};
+  }
 }
 
 CircleDetail _detail() {
@@ -693,6 +1096,11 @@ class FakeCirclesRepository implements CirclesRepository {
   late CircleDetail detail;
   var circles = <CircleSummary>[];
   var createdChannelName = '';
+  String? createdChannelCategoryId;
+  final categoryCalls = <String>[];
+  final reorderedLayouts = <Map<String, dynamic>>[];
+  Completer<void>? reorderCompleter;
+  Object? reorderError;
   var invitedMemberIds = <String>[];
   var onlineUserIds = <String>{'user-1'};
   final presenceRequests = <String>[];
@@ -747,9 +1155,48 @@ class FakeCirclesRepository implements CirclesRepository {
   Future<String> createChannel({
     required String circleId,
     required String name,
+    String? categoryId,
   }) async {
     createdChannelName = name;
+    createdChannelCategoryId = categoryId;
     return 'channel-2';
+  }
+
+  @override
+  Future<String> createChannelCategory({
+    required String circleId,
+    required String name,
+  }) async {
+    categoryCalls.add('create $name');
+    return 'category-new';
+  }
+
+  @override
+  Future<void> renameChannelCategory({
+    required String categoryId,
+    required String name,
+  }) async {
+    categoryCalls.add('rename $categoryId $name');
+  }
+
+  @override
+  Future<void> deleteChannelCategory(String categoryId) async {
+    categoryCalls.add('delete $categoryId');
+  }
+
+  @override
+  Future<void> reorderChannels({
+    required String circleId,
+    required CircleChannelLayout layout,
+  }) async {
+    reorderedLayouts.add(layout.toJson());
+    final completer = reorderCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
+    if (reorderError != null) {
+      throw reorderError!;
+    }
   }
 
   @override

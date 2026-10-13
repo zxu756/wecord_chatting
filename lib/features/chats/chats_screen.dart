@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -152,6 +153,19 @@ class _ConversationTile extends ConsumerWidget {
         ? '${conversation.memberCount} members'
         : null;
 
+    final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
+    final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    final actionLabels = {
+      _ConversationAction.pin: conversation.pinnedAt == null
+          ? 'Pin chat'
+          : 'Unpin chat',
+      _ConversationAction.mute: conversation.isMuted ? 'Unmute' : 'Mute',
+      _ConversationAction.markReadState: appearsUnread
+          ? 'Mark read'
+          : 'Mark unread',
+      _ConversationAction.hide: 'Delete conversation',
+    };
+
     return ListTile(
       leading: _ConversationAvatar(
         title: title,
@@ -164,79 +178,62 @@ class _ConversationTile extends ConsumerWidget {
           ),
           if (conversation.pinnedAt != null) ...[
             const SizedBox(width: 6),
-            Icon(
-              Icons.push_pin,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            Icon(Icons.push_pin, size: 16, color: mutedColor),
           ],
           if (conversation.isMuted) ...[
             const SizedBox(width: 6),
-            Icon(
-              Icons.notifications_off_outlined,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            Icon(Icons.notifications_off_outlined, size: 16, color: mutedColor),
+          ],
+          if (conversation.lastMessageAt case final lastMessageAt?) ...[
+            const SizedBox(width: 8),
+            Text(
+              _formatTime(lastMessageAt),
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
           ],
         ],
       ),
-      subtitle: groupMeta == null
-          ? Text(lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    lastMessage,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(groupMeta),
-              ],
-            ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+      // Unread badges sit under the time so long titles keep their room.
+      subtitle: Row(
         children: [
-          if (conversation.lastMessageAt case final lastMessageAt?) ...[
-            Text(_formatTime(lastMessageAt)),
-            const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              lastMessage,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (groupMeta != null) ...[
+            const SizedBox(width: 8),
+            Text(groupMeta, maxLines: 1),
           ],
-          if (appearsUnread)
+          if (appearsUnread) ...[
+            const SizedBox(width: 8),
             hasUnread
                 ? Badge(label: Text(conversation.unreadCount.toString()))
                 : const Badge(),
-          PopupMenuButton<_ConversationAction>(
-            tooltip: 'Conversation actions',
-            icon: const Icon(Icons.more_horiz),
-            onSelected: (action) {
-              _handleAction(context, ref, action);
-            },
-            itemBuilder: (context) {
-              return [
-                PopupMenuItem(
-                  value: _ConversationAction.pin,
-                  child: Text(
-                    conversation.pinnedAt == null ? 'Pin chat' : 'Unpin chat',
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _ConversationAction.mute,
-                  child: Text(conversation.isMuted ? 'Unmute' : 'Mute'),
-                ),
-                PopupMenuItem(
-                  value: _ConversationAction.markReadState,
-                  child: Text(appearsUnread ? 'Mark read' : 'Mark unread'),
-                ),
-                const PopupMenuItem(
-                  value: _ConversationAction.hide,
-                  child: Text('Delete conversation'),
-                ),
-              ];
-            },
-          ),
+          ],
         ],
       ),
+      // Phones open the actions with a long press instead.
+      trailing: compact
+          ? null
+          : PopupMenuButton<_ConversationAction>(
+              tooltip: 'Conversation actions',
+              icon: const Icon(Icons.more_horiz),
+              onSelected: (action) {
+                _handleAction(context, ref, action);
+              },
+              itemBuilder: (context) {
+                return [
+                  for (final MapEntry(key: action, value: label)
+                      in actionLabels.entries)
+                    PopupMenuItem(value: action, child: Text(label)),
+                ];
+              },
+            ),
       onTap: () {
         context.go(
           '${ChatsScreen.path}/${conversation.id}',
@@ -247,7 +244,59 @@ class _ConversationTile extends ConsumerWidget {
           ),
         );
       },
+      onLongPress: () => _showActionSheet(context, ref, title, actionLabels),
     );
+  }
+
+  Future<void> _showActionSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String title,
+    Map<_ConversationAction, String> actionLabels,
+  ) async {
+    final action = await showModalBottomSheet<_ConversationAction>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
+                  ),
+                ),
+                for (final MapEntry(key: action, value: label)
+                    in actionLabels.entries)
+                  ListTile(
+                    leading: Icon(switch (action) {
+                      _ConversationAction.pin => Icons.push_pin_outlined,
+                      _ConversationAction.mute =>
+                        Icons.notifications_off_outlined,
+                      _ConversationAction.markReadState =>
+                        Icons.mark_chat_read_outlined,
+                      _ConversationAction.hide => Icons.delete_outline,
+                    }),
+                    title: Text(label),
+                    onTap: () => Navigator.of(sheetContext).pop(action),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (action != null && context.mounted) {
+      _handleAction(context, ref, action);
+    }
   }
 
   void _handleAction(

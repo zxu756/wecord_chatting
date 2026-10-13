@@ -7,6 +7,7 @@ import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -286,6 +287,7 @@ class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
     final result = await showModalBottomSheet<GroupCreationResult>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) {
         return GroupCreationSheet(friends: widget.friends);
       },
@@ -319,14 +321,23 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
 
   @override
   Widget build(BuildContext context) {
+    final icon = _opening
+        ? const SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : const Icon(Icons.chat_bubble_outline);
+    // Phones keep the friend's name readable with an icon-only button.
+    if (isCompactWidth(MediaQuery.sizeOf(context).width)) {
+      return IconButton.filled(
+        tooltip: 'Message',
+        onPressed: _opening ? null : _openConversation,
+        icon: icon,
+      );
+    }
     return FilledButton.icon(
       onPressed: _opening ? null : _openConversation,
-      icon: _opening
-          ? const SizedBox.square(
-              dimension: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.chat_bubble_outline),
+      icon: icon,
       label: const Text('Message'),
     );
   }
@@ -387,6 +398,7 @@ class _FriendActions extends ConsumerWidget {
             final saved = await showModalBottomSheet<bool>(
               context: context,
               isScrollControlled: true,
+              useSafeArea: true,
               builder: (context) => ContactAliasSheet(profile: profile),
             );
             if (saved == true) {
@@ -442,8 +454,16 @@ class _ProfileTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _ProfileAvatar(profile: profile),
-      title: Text(profile.displayLabel),
-      subtitle: Text('@${profile.username}'),
+      title: Text(
+        profile.displayLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '@${profile.username}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: onTap,
       trailing: trailing,
     );

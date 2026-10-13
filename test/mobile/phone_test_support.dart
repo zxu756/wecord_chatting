@@ -599,6 +599,8 @@ CircleChannel _channel(
   bool isPrivate = false,
   bool isReadOnly = false,
   int? permissions,
+  String? topic,
+  CircleChannelKind kind = CircleChannelKind.text,
 }) {
   return CircleChannel(
     id: id,
@@ -610,6 +612,8 @@ CircleChannel _channel(
     isPrivate: isPrivate,
     isReadOnly: isReadOnly,
     currentUserPermissions: permissions,
+    topic: topic,
+    kind: kind,
   );
 }
 
@@ -724,6 +728,8 @@ CircleDetail circleDetailWith({
                 isReadOnly: isReadOnly,
                 slowmodeSeconds: slowmodeSeconds,
                 currentUserPermissions: permissions,
+                topic: channel.topic,
+                kind: channel.kind,
               )
             : channel,
     ],
@@ -766,7 +772,15 @@ CircleDetail circleDetail() {
       ),
     ],
     channels: [
-      _channel('ch-general', 'conv-general', 'general', 0),
+      _channel(
+        'ch-general',
+        'conv-general',
+        'general',
+        0,
+        topic:
+            'Weekend plans, carpools and anything that does not fit another '
+            'channel. Be kind, keep spoilers in || bars || and have fun.',
+      ),
       _channel(
         'ch-ann',
         'conv-ann',

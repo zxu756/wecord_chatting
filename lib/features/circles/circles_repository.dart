@@ -173,6 +173,17 @@ abstract interface class CirclesRepository {
     required int seconds,
   });
 
+  /// Renames a channel and sets its topic; a null or blank [topic] clears
+  /// it.
+  Future<void> updateChannel({
+    required String channelId,
+    required String name,
+    String? topic,
+  });
+
+  /// Deletes a channel with its messages and threads.
+  Future<void> deleteChannel(String channelId);
+
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
 
@@ -564,6 +575,29 @@ class SupabaseCirclesRepository implements CirclesRepository {
     await _dataSource.rpc('set_channel_slowmode', {
       'target_channel_id': channelId,
       'seconds': seconds,
+    });
+  }
+
+  @override
+  Future<void> updateChannel({
+    required String channelId,
+    required String name,
+    String? topic,
+  }) async {
+    final trimmedTopic = topic?.trim();
+    await _dataSource.rpc('update_circle_channel', {
+      'target_channel_id': channelId,
+      'channel_name': name.trim(),
+      'channel_topic': trimmedTopic == null || trimmedTopic.isEmpty
+          ? null
+          : trimmedTopic,
+    });
+  }
+
+  @override
+  Future<void> deleteChannel(String channelId) async {
+    await _dataSource.rpc('delete_circle_channel', {
+      'target_channel_id': channelId,
     });
   }
 
@@ -1112,6 +1146,20 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required int seconds,
   }) {
     throw StateError('Supabase must be initialized before changing slowmode.');
+  }
+
+  @override
+  Future<void> updateChannel({
+    required String channelId,
+    required String name,
+    String? topic,
+  }) {
+    throw StateError('Supabase must be initialized before editing channels.');
+  }
+
+  @override
+  Future<void> deleteChannel(String channelId) {
+    throw StateError('Supabase must be initialized before deleting channels.');
   }
 
   @override

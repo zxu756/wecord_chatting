@@ -92,6 +92,37 @@ class _CircleChannelThreadScreenState
         ),
     ];
 
+    // The channel was deleted, or the user can no longer see it.
+    if (detail != null &&
+        channel == null &&
+        widget.conversationType == ConversationType.channel) {
+      return Scaffold(
+        appBar: AppBar(title: Text(title ?? 'Channel')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'This channel was deleted or is no longer available.',
+                  key: ValueKey('circle-channel-unavailable'),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => context.canPop()
+                      ? context.pop()
+                      : context.go('${CirclesScreen.path}/$circleId'),
+                  child: const Text('Back to channels'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       key: _scaffoldKey,
       endDrawer: detail == null
@@ -129,6 +160,7 @@ class _CircleChannelThreadScreenState
             slowmodeSeconds: detail != null && channel != null
                 ? detail.slowmodeFor(channel)
                 : null,
+            topic: channel?.topic,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(
                 circleId,

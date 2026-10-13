@@ -3235,6 +3235,51 @@ void main() {
 
     expect(container.read(activeConversationIdProvider), isNull);
   });
+
+  testWidgets('channel topics show under the title and open in full', (
+    tester,
+  ) async {
+    const topic =
+        'Weekend plans, trip logistics and everything else that does not '
+        'fit anywhere else. Be kind and keep it on topic.';
+    await tester.pumpWidget(
+      _app(
+        FakeChatsRepository(),
+        title: '# general',
+        conversationType: ConversationType.channel,
+        topic: topic,
+      ),
+    );
+    await tester.pump();
+
+    final subtitle = tester.widget<Text>(
+      find.byKey(const ValueKey('chat-thread-subtitle')),
+    );
+    expect(subtitle.data, topic);
+    expect(subtitle.maxLines, 1);
+    expect(find.text('Offline'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat-thread-topic')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.widgetWithText(AlertDialog, '# general'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+  });
+
+  testWidgets('channels without a topic keep the online state', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        FakeChatsRepository(),
+        title: '# general',
+        conversationType: ConversationType.channel,
+        topic: '   ',
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat-thread-topic')), findsNothing);
+    expect(find.text('Offline'), findsOneWidget);
+  });
 }
 
 Widget _app(
@@ -3248,6 +3293,7 @@ Widget _app(
   ValueChanged<ThreadTarget>? onOpenThread,
   bool? canSendMessages,
   int? slowmodeSeconds,
+  String? topic,
 }) {
   return ProviderScope(
     overrides: [
@@ -3275,6 +3321,7 @@ Widget _app(
         onOpenThread: onOpenThread,
         canSendMessages: canSendMessages,
         slowmodeSeconds: slowmodeSeconds,
+        topic: topic,
       ),
     ),
   );

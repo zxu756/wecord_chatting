@@ -166,6 +166,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.onOpenThread,
     this.canSendMessages,
     this.slowmodeSeconds,
+    this.topic,
     super.key,
   });
 
@@ -188,6 +189,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// Seconds the current user waits between messages here (0 for none).
   /// Defaults to what the conversation list says.
   final int? slowmodeSeconds;
+
+  /// A channel's topic, shown under the title instead of the online state;
+  /// tapping it shows all of it.
+  final String? topic;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -354,6 +359,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  void _showTopic(String title, String topic) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: Text(title),
+        content: SelectableText(topic),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showGroupDetails(String title) {
     showModalBottomSheet<void>(
       context: context,
@@ -386,6 +408,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
     final isThread = conversationType == ConversationType.thread;
+    final topic = conversationType == ConversationType.channel
+        ? switch (widget.topic?.trim()) {
+            final String topic when topic.isNotEmpty => topic,
+            _ => null,
+          }
+        : null;
     final canStartThreads =
         conversationType == ConversationType.group ||
         conversationType == ConversationType.channel;
@@ -506,21 +534,34 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
-              Text(
-                isThread
-                    ? _threadSubtitle(conversationSummary)
-                    : [
-                        peerIsOnline ? 'Online' : 'Offline',
-                        if (conversationType == ConversationType.direct)
-                          ?activeCustomStatus(
-                            conversationSummary?.directCustomStatus,
-                          )?.label,
-                      ].join(' · '),
-                key: const ValueKey('chat-thread-subtitle'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
+              if (topic != null)
+                InkWell(
+                  key: const ValueKey('chat-thread-topic'),
+                  onTap: () => _showTopic(title, topic),
+                  child: Text(
+                    topic,
+                    key: const ValueKey('chat-thread-subtitle'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                )
+              else
+                Text(
+                  isThread
+                      ? _threadSubtitle(conversationSummary)
+                      : [
+                          peerIsOnline ? 'Online' : 'Offline',
+                          if (conversationType == ConversationType.direct)
+                            ?activeCustomStatus(
+                              conversationSummary?.directCustomStatus,
+                            )?.label,
+                        ].join(' · '),
+                  key: const ValueKey('chat-thread-subtitle'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
             ],
           ),
           actions: _appBarActions(

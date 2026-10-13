@@ -2374,4 +2374,62 @@ void main() {
       expect(body, contains("'$action'"), reason: name);
     }
   });
+
+  test('channel managers rename, describe and delete channels', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(sql, contains('add column if not exists topic text'));
+    expect(sql, contains('char_length(topic) between 1 and 1024'));
+    expect(
+      sql,
+      contains("add column if not exists kind text not null default 'text'"),
+    );
+    expect(sql, contains("check (kind in ('text', 'voice', 'forum'))"));
+    expect(
+      sql,
+      contains('alter table public.circle_channels replica identity full'),
+    );
+
+    final createBody = functionBody(sql, 'create_circle_channel');
+    expect(createBody, contains("target_kind text default 'text'"));
+    expect(
+      sql,
+      contains(
+        'drop function if exists public.create_circle_channel(uuid, text, uuid)',
+      ),
+    );
+
+    for (final name in ['update_circle_channel', 'delete_circle_channel']) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('set search_path = public'), reason: name);
+      expect(body, contains('auth.uid()'), reason: name);
+      expect(body, contains("'manage_channels'"), reason: name);
+      expect(body, contains("'view_channel'"), reason: name);
+      expect(body, contains('public.write_circle_audit('), reason: name);
+    }
+    final updateBody = functionBody(sql, 'update_circle_channel');
+    expect(updateBody, contains("'channel_update'"));
+    expect(updateBody, contains('> 1024'));
+    expect(updateBody, contains('update public.conversations c'));
+    final deleteBody = functionBody(sql, 'delete_circle_channel');
+    expect(deleteBody, contains("'channel_delete'"));
+    expect(deleteBody, contains('delete from public.conversations c'));
+
+    final detailBody = functionBody(sql, 'get_circle_detail');
+    expect(detailBody, contains("'topic', cc.topic"));
+    expect(detailBody, contains("'kind', cc.kind"));
+
+    for (final signature in [
+      'public.create_circle_channel(uuid, text, uuid, text)',
+      'public.update_circle_channel(uuid, text, text)',
+      'public.delete_circle_channel(uuid)',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

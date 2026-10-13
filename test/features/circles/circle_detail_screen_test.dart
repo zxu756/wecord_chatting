@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
+import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
@@ -273,6 +274,36 @@ void main() {
     expect(repository.nicknameUpdates, [
       (userId: 'user-3', nickname: 'Amelia'),
     ]);
+  });
+
+  testWidgets('a deleted channel open full screen leads back home', (
+    tester,
+  ) async {
+    final repository = FakeCirclesRepository()..detail = _detail();
+    repository.circles = [repository.detail.circle];
+    final router = _narrowRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+    expect(find.text('Thread conversation-1'), findsOneWidget);
+
+    await repository.deleteChannel('channel-1');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CircleChannelThreadScreen)),
+    );
+    container.invalidate(circleDetailProvider('circle-1'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('circle-channel-unavailable')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Back to channels'));
+    await tester.pumpAndSettle();
+    expect(find.text('No channels yet'), findsOneWidget);
   });
 
   testWidgets('narrow feed opens as a page and back returns home', (
@@ -1296,6 +1327,104 @@ void main() {
       expect(detailWith(1 | 2 | 4).slowmodeFor(channel), 0);
     });
 
+    testWidgets('channel managers rename and set the topic', (tester) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-3',
+        permissions: 1 | 2 | 64 | 8192 | 8,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Overview'), findsOneWidget);
+      final save = find.byKey(const ValueKey('channel-overview-save'));
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('channel-name-field')),
+        ' lobby ',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('channel-topic-field')),
+        'Say hi',
+      );
+      await tester.pump();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['update channel-1 lobby Say hi']);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('channel-name-field')),
+        '  ',
+      );
+      await tester.pump();
+      expect(find.text('Channel name is required.'), findsOneWidget);
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    });
+
+    testWidgets('deleting a channel asks for its name and opens the next', (
+      tester,
+    ) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-1',
+        permissions: CirclePermission.all,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('channel-delete-button')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(CircleChannelSettingsScreen),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const ValueKey('channel-delete-button')));
+      await tester.pumpAndSettle();
+
+      final delete = find.widgetWithText(FilledButton, 'Delete');
+      expect(tester.widget<FilledButton>(delete).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('channel-delete-confirm-field')),
+        'genera',
+      );
+      await tester.pump();
+      expect(tester.widget<FilledButton>(delete).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('channel-delete-confirm-field')),
+        'general',
+      );
+      await tester.pump();
+      await tester.tap(delete);
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['delete channel-1']);
+      // Back in the workspace, which opens the remaining channel.
+      expect(find.text('Channel settings'), findsNothing);
+      expect(find.widgetWithText(AppBar, 'staff'), findsOneWidget);
+    });
+
+    testWidgets('members without manage channels get no overview', (
+      tester,
+    ) async {
+      await pumpChannels(
+        tester,
+        currentUserId: 'user-2',
+        // manage_roles only.
+        permissions: 1 | 2 | 64 | 8192 | 16,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Overview'), findsNothing);
+      expect(find.byKey(const ValueKey('channel-delete-button')), findsNothing);
+    });
+
     testWidgets('failed saves show a snackbar', (tester) async {
       final repository =
           await pumpChannels(
@@ -2283,6 +2412,52 @@ void main() {
   group('audit log', () {
     final now = DateTime.utc(2026, 10, 14, 12);
 
+    test('channel edits and deletions read as sentences', () {
+      CircleAuditEntry entry(String action, Map<String, dynamic> changes) {
+        return CircleAuditEntry(
+          id: action,
+          circleId: 'circle-1',
+          action: action,
+          targetType: 'channel',
+          targetLabel: 'lobby',
+          changes: changes,
+          createdAt: now,
+          actor: const CircleAuditActor(
+            id: 'user-1',
+            username: 'xu',
+            displayName: 'Xu',
+          ),
+        );
+      }
+
+      String sentence(CircleAuditEntry entry) =>
+          circleAuditSummary(entry, null).toPlainText();
+
+      final renamed = entry('channel_update', {
+        'name': {'old': 'general', 'new': 'lobby'},
+        'topic': {'old': null, 'new': 'Say hi'},
+      });
+      expect(sentence(renamed), 'Xu renamed channel #general to #lobby');
+      expect(circleAuditDetails(renamed), [
+        (label: 'Name', value: 'general → lobby'),
+        (label: 'Topic', value: 'none → Say hi'),
+      ]);
+      expect(
+        sentence(
+          entry('channel_update', {
+            'topic': {'old': 'a', 'new': 'b'},
+          }),
+        ),
+        'Xu updated channel #lobby',
+      );
+      expect(
+        sentence(entry('channel_delete', {'name': 'lobby'})),
+        'Xu deleted channel #lobby',
+      );
+      expect(circleAuditIcon('channel_update'), Icons.edit_note);
+      expect(circleAuditIcon('channel_delete'), Icons.delete_sweep_outlined);
+    });
+
     Future<FakeCirclesRepository> openLog(
       WidgetTester tester, {
       List<CircleAuditEntry>? entries,
@@ -2477,6 +2652,7 @@ GoRouter _narrowRouter() {
                 circleId: state.pathParameters['circleId']!,
                 conversationId: conversationId,
                 title: extra.title,
+                conversationType: extra.type,
                 threadBuilder: (context, actions) => Scaffold(
                   appBar: AppBar(
                     title: Text('Thread $conversationId'),
@@ -2690,6 +2866,42 @@ class FakeCirclesRepository implements CirclesRepository {
     required int seconds,
   }) async {
     overwriteCalls.add('slowmode $channelId $seconds');
+  }
+
+  /// Fails channel edits and deletions when set.
+  Object? channelEditError;
+
+  @override
+  Future<void> updateChannel({
+    required String channelId,
+    required String name,
+    String? topic,
+  }) async {
+    overwriteCalls.add('update $channelId $name ${topic ?? '-'}');
+    final error = channelEditError;
+    if (error != null) {
+      throw error;
+    }
+  }
+
+  @override
+  Future<void> deleteChannel(String channelId) async {
+    overwriteCalls.add('delete $channelId');
+    final error = channelEditError;
+    if (error != null) {
+      throw error;
+    }
+    detail = CircleDetail(
+      circle: detail.circle,
+      members: detail.members,
+      channels: [
+        for (final channel in detail.channels)
+          if (channel.id != channelId) channel,
+      ],
+      categories: detail.categories,
+      posts: detail.posts,
+      roles: detail.roles,
+    );
   }
 
   @override

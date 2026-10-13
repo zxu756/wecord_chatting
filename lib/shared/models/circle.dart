@@ -352,6 +352,8 @@ class CircleChannel {
     this.isPrivate = false,
     this.isReadOnly = false,
     this.slowmodeSeconds = 0,
+    this.topic,
+    this.kind = CircleChannelKind.text,
   });
 
   factory CircleChannel.fromJson(Map<String, dynamic> json) {
@@ -367,8 +369,19 @@ class CircleChannel {
       isPrivate: json['is_private'] == true,
       isReadOnly: json['is_read_only'] == true,
       slowmodeSeconds: (json['slowmode_seconds'] as num?)?.toInt() ?? 0,
+      topic: switch (json['topic']) {
+        final String topic when topic.trim().isNotEmpty => topic,
+        _ => null,
+      },
+      kind: CircleChannelKind.fromJson(json['kind']),
     );
   }
+
+  /// Longest channel name the server accepts.
+  static const maxNameLength = 48;
+
+  /// Longest channel topic the server accepts.
+  static const maxTopicLength = 1024;
 
   final String id;
   final String circleId;
@@ -391,6 +404,33 @@ class CircleChannel {
 
   /// How long members wait between messages; 0 when slowmode is off.
   final int slowmodeSeconds;
+
+  /// Shown under the channel name; null when not set.
+  final String? topic;
+
+  final CircleChannelKind kind;
+}
+
+/// What a channel holds: a chat, voice (later) or forum posts.
+enum CircleChannelKind {
+  text('text'),
+  voice('voice'),
+  forum('forum');
+
+  const CircleChannelKind(this.value);
+
+  /// The `circle_channels.kind` value.
+  final String value;
+
+  /// Unknown values (newer servers) read as text.
+  static CircleChannelKind fromJson(Object? value) {
+    for (final kind in values) {
+      if (kind.value == value) {
+        return kind;
+      }
+    }
+    return text;
+  }
 }
 
 class CircleChannelCategory {

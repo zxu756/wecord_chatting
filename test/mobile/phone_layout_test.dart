@@ -791,6 +791,52 @@ void main() {
       expect(find.text('Linus'), findsOneWidget);
     });
 
+    phoneTestWidgets('channel overview and delete confirmation', (
+      tester,
+      viewport,
+    ) async {
+      await openCircleChannel(tester);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('chat-thread-subtitle')))
+            .data,
+        startsWith('Weekend plans'),
+      );
+      await tester.tap(find.byKey(const ValueKey('chat-thread-topic')));
+      await settle(tester);
+      expectFullyVisible(tester, find.text('Close'));
+      await tester.tap(find.text('Close'));
+      await settle(tester);
+
+      await openMoreMenu(tester);
+      await tester.tap(find.text('Channel settings'));
+      await settle(tester);
+      final topic = find.byKey(const ValueKey('channel-topic-field'));
+      await tester.tap(topic);
+      await showKeyboard(tester, viewport);
+      await tester.enterText(topic, 'Carpools only');
+      await settle(tester);
+      expectCaretVisible(tester, topic);
+      final save = find.byKey(const ValueKey('channel-overview-save'));
+      await tester.ensureVisible(save);
+      await settle(tester);
+      expectFullyVisible(tester, save);
+      expectTouchTargets(tester, save);
+
+      final delete = find.byKey(const ValueKey('channel-delete-button'));
+      await scrollIntoView(tester, delete);
+      expectFullyVisible(tester, delete);
+      await tester.tap(delete);
+      await settle(tester);
+      final confirm = find.byKey(
+        const ValueKey('channel-delete-confirm-field'),
+      );
+      await tester.enterText(confirm, 'general');
+      await settle(tester);
+      expectCaretVisible(tester, confirm);
+      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Delete'));
+    });
+
     phoneTestWidgets('read-only channel replaces the composer', (
       tester,
       viewport,

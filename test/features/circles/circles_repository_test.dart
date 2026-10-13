@@ -425,6 +425,36 @@ void main() {
     );
   });
 
+  test('channels are renamed and deleted through RPCs', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository(dataSource);
+
+    await repository.updateChannel(
+      channelId: 'channel-1',
+      name: ' lobby ',
+      topic: '  Say hi  ',
+    );
+    await repository.updateChannel(
+      channelId: 'channel-1',
+      name: 'lobby',
+      topic: '   ',
+    );
+    await repository.deleteChannel('channel-1');
+
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'update_circle_channel',
+      'update_circle_channel',
+      'delete_circle_channel',
+    ]);
+    expect(dataSource.calls[0].params, {
+      'target_channel_id': 'channel-1',
+      'channel_name': 'lobby',
+      'channel_topic': 'Say hi',
+    });
+    expect(dataSource.calls[1].params['channel_topic'], isNull);
+    expect(dataSource.calls[2].params, {'target_channel_id': 'channel-1'});
+  });
+
   test('CircleDetail uses channel permissions after overwrites', () {
     final detail = CircleDetail.fromJson({
       'circle': {
@@ -446,6 +476,8 @@ void main() {
           'is_private': false,
           'is_read_only': true,
           'slowmode_seconds': 300,
+          'topic': 'News only',
+          'kind': 'text',
         },
         {
           'id': 'channel-2',
@@ -465,6 +497,12 @@ void main() {
     expect(readOnly.slowmodeSeconds, 300);
     expect(detail.slowmodeFor(readOnly), 300);
     expect(legacy.slowmodeSeconds, 0);
+    expect(readOnly.topic, 'News only');
+    expect(readOnly.kind, CircleChannelKind.text);
+    expect(legacy.topic, isNull);
+    expect(legacy.kind, CircleChannelKind.text);
+    expect(CircleChannelKind.fromJson('forum'), CircleChannelKind.forum);
+    expect(CircleChannelKind.fromJson('stage'), CircleChannelKind.text);
     expect(detail.canInChannel(readOnly, CirclePermission.viewChannel), isTrue);
     expect(
       detail.canInChannel(readOnly, CirclePermission.sendMessages),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -67,9 +68,10 @@ void openCircleChannelSettings(
   );
 }
 
-/// Channel settings. Members who can manage channels set slowmode; members
-/// who can manage roles make the channel private or read-only for
-/// `@everyone` and give roles and members their own permissions in it.
+/// Channel settings. Members who can manage channels rename the channel,
+/// set its topic and slowmode, or delete it; members who can manage roles
+/// make the channel private or read-only for `@everyone` and give roles and
+/// members their own permissions in it.
 class CircleChannelSettingsScreen extends ConsumerStatefulWidget {
   const CircleChannelSettingsScreen({
     required this.circleId,
@@ -124,6 +126,54 @@ class _CircleChannelSettingsScreenState
       ),
       failure: 'Could not change channel permissions. Try again.',
     );
+  }
+
+  Future<void> _saveOverview(
+    CircleChannel channel, {
+    required String name,
+    required String? topic,
+  }) {
+    return _run(
+      (repository) => repository.updateChannel(
+        channelId: channel.id,
+        name: name,
+        topic: topic,
+      ),
+      failure: 'Could not save the channel. Try again.',
+    );
+  }
+
+  Future<void> _delete(CircleChannel channel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => _DeleteChannelDialog(channel: channel),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final navigator = Navigator.of(context);
+    setState(() => _saving = true);
+    try {
+      await ref.read(circlesRepositoryProvider).deleteChannel(channel.id);
+      ref.invalidate(circleDetailProvider(widget.circleId));
+      ref.invalidate(conversationsProvider);
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Deleted #${channel.name}.')),
+      );
+      if (mounted) {
+        navigator.pop();
+      }
+    } catch (_) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete the channel. Try again.'),
+        ),
+      );
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _setSlowmode(CircleChannel channel, int seconds) {
@@ -246,8 +296,36 @@ class _CircleChannelSettingsScreenState
 
   Widget _buildSettings(CircleDetail detail, CircleChannel channel) {
     final children = <Widget>[
-      if (detail.canManageChannels) ..._slowmodeSection(channel),
+      if (detail.canManageChannels) ...[
+        const _SectionHeader('Overview'),
+        ChannelOverviewForm(
+          key: ValueKey('channel-overview-${channel.id}'),
+          channel: channel,
+          enabled: !_saving,
+          onSave: (name, topic) =>
+              _saveOverview(channel, name: name, topic: topic),
+        ),
+        ..._slowmodeSection(channel),
+      ],
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
+      if (detail.canManageChannels) ...[
+        const Divider(height: 32),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OutlinedButton.icon(
+              key: const ValueKey('channel-delete-button'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: _saving ? null : () => _delete(channel),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete channel'),
+            ),
+          ),
+        ),
+      ],
     ];
     if (children.isEmpty) {
       children.add(
@@ -424,6 +502,195 @@ class _CircleChannelSettingsScreenState
       }
     }
     return null;
+  }
+}
+
+/// The channel's name and topic, saved together.
+class ChannelOverviewForm extends StatefulWidget {
+  const ChannelOverviewForm({
+    required this.channel,
+    required this.enabled,
+    required this.onSave,
+    super.key,
+  });
+
+  final CircleChannel channel;
+  final bool enabled;
+  final Future<void> Function(String name, String? topic) onSave;
+
+  @override
+  State<ChannelOverviewForm> createState() => _ChannelOverviewFormState();
+}
+
+class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
+  late final _nameController = TextEditingController(text: widget.channel.name);
+  late final _topicController = TextEditingController(
+    text: widget.channel.topic ?? '',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_changed);
+    _topicController.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(ChannelOverviewForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Take the server's values unless they are being edited.
+    final name = widget.channel.name;
+    if (_nameController.text == oldWidget.channel.name &&
+        _nameController.text != name) {
+      _nameController.text = name;
+    }
+    final topic = widget.channel.topic ?? '';
+    if (_topicController.text == (oldWidget.channel.topic ?? '') &&
+        _topicController.text != topic) {
+      _topicController.text = topic;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _topicController.dispose();
+    super.dispose();
+  }
+
+  void _changed() => setState(() {});
+
+  String get _name => _nameController.text.trim();
+
+  String? get _topic {
+    final topic = _topicController.text.trim();
+    return topic.isEmpty ? null : topic;
+  }
+
+  bool get _dirty =>
+      _name != widget.channel.name || _topic != widget.channel.topic;
+
+  @override
+  Widget build(BuildContext context) {
+    final nameError = _name.isEmpty ? 'Channel name is required.' : null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('channel-name-field'),
+            controller: _nameController,
+            enabled: widget.enabled,
+            maxLength: CircleChannel.maxNameLength,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Channel name',
+              errorText: nameError,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            key: const ValueKey('channel-topic-field'),
+            controller: _topicController,
+            enabled: widget.enabled,
+            minLines: 1,
+            maxLines: 4,
+            maxLength: CircleChannel.maxTopicLength,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Topic',
+              hintText: 'Let everyone know what this channel is about',
+            ),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton(
+              key: const ValueKey('channel-overview-save'),
+              onPressed: widget.enabled && _dirty && nameError == null
+                  ? () => widget.onSave(_name, _topic)
+                  : null,
+              child: const Text('Save'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Confirms deleting a channel by typing its name.
+class _DeleteChannelDialog extends StatefulWidget {
+  const _DeleteChannelDialog({required this.channel});
+
+  final CircleChannel channel;
+
+  @override
+  State<_DeleteChannelDialog> createState() => _DeleteChannelDialogState();
+}
+
+class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _matches => _controller.text.trim() == widget.channel.name;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.channel.name;
+    final colorScheme = Theme.of(context).colorScheme;
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Delete channel'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.channel.kind == CircleChannelKind.forum
+                ? 'Delete #$name with all of its posts? This cannot be undone.'
+                : 'Delete #$name with all of its messages and threads? This '
+                      'cannot be undone.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('channel-delete-confirm-field'),
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Type the channel name',
+              hintText: name,
+            ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) {
+              if (_matches) {
+                Navigator.of(context).pop(true);
+              }
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: colorScheme.error,
+            foregroundColor: colorScheme.onError,
+          ),
+          onPressed: _matches ? () => Navigator.of(context).pop(true) : null,
+          child: const Text('Delete'),
+        ),
+      ],
+    );
   }
 }
 

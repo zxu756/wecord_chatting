@@ -553,6 +553,16 @@ class FakeCirclesRepository implements CirclesRepository {
   }) async {}
 
   @override
+  Future<void> updateChannel({
+    required String channelId,
+    required String name,
+    String? topic,
+  }) async {}
+
+  @override
+  Future<void> deleteChannel(String channelId) async {}
+
+  @override
   Future<String> createRole({
     required String circleId,
     required String name,

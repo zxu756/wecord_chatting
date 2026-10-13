@@ -84,6 +84,24 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     _selectedChannelId = channels.isEmpty ? null : channels.first.id;
   }
 
+  @override
+  void didUpdateWidget(CircleWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selectedId = _selectedChannelId;
+    if (selectedId == null ||
+        widget.detail.channels.any((channel) => channel.id == selectedId)) {
+      return;
+    }
+    // The open channel was deleted (or hidden): open the first remaining
+    // channel, or the feed when none is left.
+    final channels = CircleChannelLayout.fromChannels(
+      categories: widget.detail.categories,
+      channels: widget.detail.channels,
+    ).orderedChannels;
+    _selectedChannelId = channels.isEmpty ? null : channels.first.id;
+    _openThread = null;
+  }
+
   CircleChannel? get _selectedChannel {
     for (final channel in widget.detail.channels) {
       if (channel.id == _selectedChannelId) {
@@ -240,6 +258,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         CirclePermission.sendMessages,
       ),
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
+      topic: channel.topic,
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
   }

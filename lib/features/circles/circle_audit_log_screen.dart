@@ -321,6 +321,8 @@ IconData circleAuditIcon(String action) {
     'channel_permissions_update' => Icons.lock_person_outlined,
     'channel_privacy_update' => Icons.lock_outline,
     'channel_slowmode_update' => Icons.timer_outlined,
+    'channel_update' => Icons.edit_note,
+    'channel_delete' => Icons.delete_sweep_outlined,
     'category_create' => Icons.create_new_folder_outlined,
     'category_rename' => Icons.drive_file_rename_outline,
     'category_delete' => Icons.folder_delete_outlined,
@@ -378,6 +380,18 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       text(' to '),
       name(_formatSeconds(_newValue(changes['slowmode_seconds']))),
     ],
+    'channel_update' => [
+      if (changes['name'] case {'old': final String oldName}) ...[
+        text(' renamed channel '),
+        name('#$oldName'),
+        text(' to '),
+        name('#$target'),
+      ] else ...[
+        text(' updated channel '),
+        name('#$target'),
+      ],
+    ],
+    'channel_delete' => [text(' deleted channel '), name('#$target')],
     'category_create' => [text(' created category '), name(target)],
     'category_rename' => [
       text(' renamed category '),

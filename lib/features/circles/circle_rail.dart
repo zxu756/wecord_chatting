@@ -8,12 +8,22 @@ import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
-  (ref) => ref.watch(circlesRepositoryProvider).listCircles(),
+  (ref) {
+    // Unread counts change whenever the conversation list does (new messages,
+    // reads), so follow it instead of opening another realtime channel.
+    ref.listen(conversationsProvider, (previous, next) {
+      if (previous != null && previous.hasValue && next is AsyncData) {
+        ref.invalidateSelf();
+      }
+    });
+    return ref.watch(circlesRepositoryProvider).listCircles();
+  },
 );
 
 /// Vertical strip of circle icons, modelled on a server switcher: icons morph
 /// from a circle to a rounded square and grow a left pill when hovered or
-/// selected.
+/// selected. Circles with unread messages show a short pill and a red badge
+/// for mentions; muted circles are dimmed instead.
 class CircleRail extends ConsumerWidget {
   const CircleRail({required this.selectedCircleId, super.key});
 
@@ -55,6 +65,9 @@ class CircleRail extends ConsumerWidget {
               key: ValueKey('circle-rail-${circle.id}'),
               tooltip: circle.name,
               selected: circle.id == selectedCircleId,
+              unread: circle.unreadCount > 0,
+              mentionCount: circle.mentionCount,
+              muted: circle.isMuted,
               onTap: () => context.go('${CirclesScreen.path}/${circle.id}'),
               image: circle.avatarUrl == null
                   ? null
@@ -82,6 +95,9 @@ class CircleRailItem extends StatefulWidget {
     required this.onTap,
     required this.child,
     this.selected = false,
+    this.unread = false,
+    this.mentionCount = 0,
+    this.muted = false,
     this.image,
     super.key,
   });
@@ -90,6 +106,15 @@ class CircleRailItem extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
   final bool selected;
+
+  /// Shows a short pill while neither selected nor hovered.
+  final bool unread;
+
+  /// Shown as a red count badge on the icon.
+  final int mentionCount;
+
+  /// Muted items are dimmed and never show the unread pill or badge.
+  final bool muted;
   final ImageProvider? image;
 
   @override
@@ -105,7 +130,12 @@ class _CircleRailItemState extends State<CircleRailItem> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final active = widget.selected || _hovered;
-    final pillHeight = widget.selected ? 40.0 : (_hovered ? 20.0 : 0.0);
+    final pillHeight = widget.selected
+        ? 40.0
+        : _hovered
+        ? 20.0
+        : (widget.unread && !widget.muted ? 8.0 : 0.0);
+    final dimmed = widget.muted && !active;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -117,6 +147,7 @@ class _CircleRailItemState extends State<CircleRailItem> {
             Positioned(
               left: 0,
               child: AnimatedContainer(
+                key: const ValueKey('circle-rail-pill'),
                 duration: _duration,
                 curve: Curves.easeOut,
                 width: 4,
@@ -129,57 +160,114 @@ class _CircleRailItemState extends State<CircleRailItem> {
                 ),
               ),
             ),
-            Tooltip(
-              message: widget.tooltip,
-              preferBelow: false,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) => setState(() => _hovered = true),
-                onExit: (_) => setState(() => _hovered = false),
-                child: GestureDetector(
-                  onTap: widget.onTap,
-                  child: AnimatedContainer(
-                    duration: _duration,
-                    curve: Curves.easeOut,
-                    width: 48,
-                    height: 48,
-                    clipBehavior: Clip.antiAlias,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: active
-                          ? colorScheme.primary
-                          : colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(active ? 16 : 24),
-                      image: widget.image == null
+            Opacity(
+              key: const ValueKey('circle-rail-icon'),
+              opacity: dimmed ? 0.4 : 1,
+              child: Tooltip(
+                message: widget.tooltip,
+                preferBelow: false,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  onEnter: (_) => setState(() => _hovered = true),
+                  onExit: (_) => setState(() => _hovered = false),
+                  child: GestureDetector(
+                    onTap: widget.onTap,
+                    child: AnimatedContainer(
+                      duration: _duration,
+                      curve: Curves.easeOut,
+                      width: 48,
+                      height: 48,
+                      clipBehavior: Clip.antiAlias,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? colorScheme.primary
+                            : colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(active ? 16 : 24),
+                        image: widget.image == null
+                            ? null
+                            : DecorationImage(
+                                image: widget.image!,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                      child: widget.image != null
                           ? null
-                          : DecorationImage(
-                              image: widget.image!,
-                              fit: BoxFit.cover,
-                            ),
-                    ),
-                    child: widget.image != null
-                        ? null
-                        : IconTheme.merge(
-                            data: IconThemeData(
-                              color: active
-                                  ? colorScheme.onPrimary
-                                  : colorScheme.onSurface,
-                            ),
-                            child: DefaultTextStyle.merge(
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
+                          : IconTheme.merge(
+                              data: IconThemeData(
                                 color: active
                                     ? colorScheme.onPrimary
                                     : colorScheme.onSurface,
                               ),
-                              child: widget.child,
+                              child: DefaultTextStyle.merge(
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: active
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurface,
+                                ),
+                                child: widget.child,
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
               ),
             ),
+            if (widget.mentionCount > 0 && !widget.muted)
+              Positioned(
+                right: 8,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: CircleMentionBadge(
+                    count: widget.mentionCount,
+                    borderColor: colorScheme.surfaceContainerHigh,
+                  ),
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Red count of unread mentions, capped at 99+.
+class CircleMentionBadge extends StatelessWidget {
+  const CircleMentionBadge({required this.count, this.borderColor, super.key});
+
+  final int count;
+
+  /// Outline that separates the badge from the icon underneath.
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor = this.borderColor;
+    return Container(
+      key: const ValueKey('circle-mention-badge'),
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.error,
+        borderRadius: BorderRadius.circular(11),
+        border: borderColor == null
+            ? null
+            : Border.all(color: borderColor, width: 3),
+      ),
+      // Centred inside the minimum size without growing to fill the parent.
+      child: Align(
+        widthFactor: 1,
+        heightFactor: 1,
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          style: TextStyle(
+            color: colorScheme.onError,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
         ),
       ),
     );

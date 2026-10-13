@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 
@@ -91,6 +92,7 @@ class _CircleNotificationSettingsSheetState
       setState(() => _saved = saved);
       ref.invalidate(circleNotificationSettingsProvider(widget.circleId));
       ref.invalidate(conversationsProvider);
+      ref.invalidate(circleSummariesProvider);
     } catch (_) {
       messenger?.showSnackBar(
         const SnackBar(

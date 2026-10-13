@@ -30,8 +30,35 @@ void main() {
     expect(circles.single.name, 'Close Friends');
     expect(circles.single.memberCount, 3);
     expect(circles.single.currentUserRole, 'owner');
+    expect(circles.single.unreadCount, 0);
+    expect(circles.single.mentionCount, 0);
+    expect(circles.single.isMuted, isFalse);
     expect(dataSource.calls.single.functionName, 'list_circle_summaries');
     expect(dataSource.calls.single.params, isEmpty);
+  });
+
+  test('listCircles maps unread, mention and mute state', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['list_circle_summaries'] = [
+        {
+          'id': 'circle-1',
+          'name': 'Close Friends',
+          'member_count': 3,
+          'channel_count': 2,
+          'current_user_role': 'member',
+          'unread_count': 4,
+          'mention_count': 2,
+          'is_muted': true,
+        },
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final circle = (await repository.listCircles()).single;
+
+    expect(circle.unreadCount, 4);
+    expect(circle.mentionCount, 2);
+    expect(circle.isMuted, isTrue);
+    expect(circle.toJson(), containsPair('mention_count', 2));
   });
 
   test('getCircleDetail maps get_circle_detail JSON payload', () async {

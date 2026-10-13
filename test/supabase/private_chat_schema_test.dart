@@ -1281,4 +1281,38 @@ void main() {
       );
     }
   });
+
+  test('circle summaries count unread channel messages and mentions', () {
+    final sql = allMigrationSql();
+    final body = functionBody(sql, 'list_circle_summaries');
+
+    // Earlier columns stay, the counts and mute state are added.
+    for (final column in [
+      'member_count bigint',
+      'channel_count bigint',
+      'latest_activity_at timestamptz',
+      'current_user_role text',
+      'unread_count bigint',
+      'mention_count bigint',
+      'is_muted boolean',
+    ]) {
+      expect(body, contains(column));
+    }
+    expect(body, contains('security definer'));
+    expect(body, contains('set search_path = public'));
+    expect(body, contains('conv_member.user_id = auth.uid()'));
+    expect(body, contains('unread_message.sender_id <> auth.uid()'));
+    expect(body, contains('unread_message.created_at > cr.last_read_at'));
+    expect(body, contains('cr.manual_unread_at is null'));
+    expect(body, contains('mm.user_id = auth.uid()'));
+    expect(body, contains("mentioned_message.type <> 'system'"));
+    expect(body, contains("cns.level = 'none'"));
+    expect(body, contains('cns.muted_until > now()'));
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.list_circle_summaries() to authenticated',
+      ),
+    );
+  });
 }

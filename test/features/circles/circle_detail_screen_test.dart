@@ -4,11 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -477,6 +479,137 @@ void main() {
     final saved = repository.notificationUpdates.single;
     expect(saved.level, CircleNotificationLevel.all);
     expect(saved.isMutedIndefinitelyAt(DateTime.now().toUtc()), isTrue);
+  });
+
+  group('circle rail indicators', () {
+    CircleSummary circle(
+      String id, {
+      int unread = 0,
+      int mentions = 0,
+      bool muted = false,
+    }) {
+      return CircleSummary(
+        id: id,
+        name: 'Circle $id',
+        memberCount: 2,
+        channelCount: 1,
+        unreadCount: unread,
+        mentionCount: mentions,
+        isMuted: muted,
+      );
+    }
+
+    Future<FakeCirclesRepository> pumpRail(
+      WidgetTester tester,
+      List<CircleSummary> circles,
+    ) async {
+      final repository = FakeCirclesRepository()..circles = circles;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            circlesRepositoryProvider.overrideWithValue(repository),
+            conversationsProvider.overrideWith(
+              (ref) async => const <ConversationSummary>[],
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: Row(children: [CircleRail(selectedCircleId: 'selected')]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    Finder inItem(String circleId, Key key) {
+      return find.descendant(
+        of: find.byKey(ValueKey('circle-rail-$circleId')),
+        matching: find.byKey(key),
+      );
+    }
+
+    double pillHeight(WidgetTester tester, String circleId) {
+      return tester
+          .getSize(inItem(circleId, const ValueKey('circle-rail-pill')))
+          .height;
+    }
+
+    double iconOpacity(WidgetTester tester, String circleId) {
+      return tester
+          .widget<Opacity>(inItem(circleId, const ValueKey('circle-rail-icon')))
+          .opacity;
+    }
+
+    testWidgets('unread circles show a short pill', (tester) async {
+      await pumpRail(tester, [
+        circle('read'),
+        circle('unread', unread: 3),
+        circle('selected', unread: 3),
+      ]);
+
+      expect(pillHeight(tester, 'read'), 0);
+      expect(pillHeight(tester, 'unread'), 8);
+      expect(pillHeight(tester, 'selected'), 40);
+      expect(find.byKey(const ValueKey('circle-mention-badge')), findsNothing);
+    });
+
+    testWidgets('mentions show a red count badge', (tester) async {
+      await pumpRail(tester, [
+        circle('few', unread: 2, mentions: 2),
+        circle('many', unread: 120, mentions: 120),
+      ]);
+
+      expect(
+        find.descendant(
+          of: inItem('few', const ValueKey('circle-mention-badge')),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: inItem('many', const ValueKey('circle-mention-badge')),
+          matching: find.text('99+'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('muted circles are dimmed without pill or badge', (
+      tester,
+    ) async {
+      await pumpRail(tester, [
+        circle('muted', unread: 5, mentions: 1, muted: true),
+        circle('loud', unread: 5),
+      ]);
+
+      expect(pillHeight(tester, 'muted'), 0);
+      expect(
+        inItem('muted', const ValueKey('circle-mention-badge')),
+        findsNothing,
+      );
+      expect(iconOpacity(tester, 'muted'), lessThan(1));
+      expect(iconOpacity(tester, 'loud'), 1);
+    });
+
+    testWidgets('the rail refreshes when conversations change', (tester) async {
+      final repository = await pumpRail(tester, [circle('busy')]);
+      expect(pillHeight(tester, 'busy'), 0);
+
+      repository.circles = [circle('busy', unread: 1, mentions: 1)];
+      ProviderScope.containerOf(
+        tester.element(find.byType(CircleRail)),
+      ).invalidate(conversationsProvider);
+      await tester.pumpAndSettle();
+
+      expect(pillHeight(tester, 'busy'), 8);
+      expect(
+        inItem('busy', const ValueKey('circle-mention-badge')),
+        findsOneWidget,
+      );
+    });
   });
 }
 

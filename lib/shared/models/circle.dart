@@ -10,6 +10,9 @@ class CircleSummary {
     this.avatarUrl,
     this.latestActivityAt,
     this.currentUserRole,
+    this.unreadCount = 0,
+    this.mentionCount = 0,
+    this.isMuted = false,
   });
 
   factory CircleSummary.fromJson(Map<String, dynamic> json) {
@@ -21,6 +24,9 @@ class CircleSummary {
       channelCount: (json['channel_count'] as num?)?.toInt() ?? 0,
       latestActivityAt: _parseOptionalTimestamp(json['latest_activity_at']),
       currentUserRole: json['current_user_role'] as String?,
+      unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
+      mentionCount: (json['mention_count'] as num?)?.toInt() ?? 0,
+      isMuted: json['is_muted'] as bool? ?? false,
     );
   }
 
@@ -32,6 +38,15 @@ class CircleSummary {
   final DateTime? latestActivityAt;
   final String? currentUserRole;
 
+  /// Unread messages across the circle's channels.
+  final int unreadCount;
+
+  /// Unread messages mentioning the current user across the channels.
+  final int mentionCount;
+
+  /// Muted or set to notify about nothing: shown dimmed, not highlighted.
+  final bool isMuted;
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -41,6 +56,9 @@ class CircleSummary {
       'channel_count': channelCount,
       'latest_activity_at': latestActivityAt?.toIso8601String(),
       'current_user_role': currentUserRole,
+      'unread_count': unreadCount,
+      'mention_count': mentionCount,
+      'is_muted': isMuted,
     };
   }
 }

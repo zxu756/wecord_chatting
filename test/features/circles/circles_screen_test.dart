@@ -103,6 +103,74 @@ void main() {
     expect(find.text('Circle circle-1'), findsOneWidget);
   });
 
+  testWidgets('circles list shows unread, mention and muted state', (
+    tester,
+  ) async {
+    CircleSummary circle(
+      String id, {
+      int unread = 0,
+      int mentions = 0,
+      bool muted = false,
+    }) {
+      return CircleSummary(
+        id: id,
+        name: 'Circle $id',
+        memberCount: 2,
+        channelCount: 1,
+        unreadCount: unread,
+        mentionCount: mentions,
+        isMuted: muted,
+      );
+    }
+
+    final circlesRepository = FakeCirclesRepository()
+      ..circles = [
+        circle('quiet'),
+        circle('unread', unread: 3),
+        circle('mentioned', unread: 3, mentions: 2),
+        circle('muted', unread: 3, mentions: 1, muted: true),
+      ];
+    final router = GoRouter(
+      initialLocation: CirclesScreen.path,
+      routes: [
+        GoRoute(
+          path: CirclesScreen.path,
+          builder: (context, state) => const CirclesScreen(),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      _app(
+        circlesRepository: circlesRepository,
+        contactsRepository: FakeContactsRepository(),
+        router: router,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Finder inTile(String id, Finder matching) {
+      return find.descendant(
+        of: find.widgetWithText(ListTile, 'Circle $id'),
+        matching: matching,
+      );
+    }
+
+    const dot = ValueKey('circle-unread-dot');
+    const badge = ValueKey('circle-mention-badge');
+    const mutedIcon = ValueKey('circle-muted-icon');
+
+    expect(inTile('quiet', find.byKey(dot)), findsNothing);
+    expect(inTile('quiet', find.byKey(badge)), findsNothing);
+    expect(inTile('unread', find.byKey(dot)), findsOneWidget);
+    expect(inTile('mentioned', find.byKey(badge)), findsOneWidget);
+    expect(inTile('mentioned', find.text('2')), findsOneWidget);
+    expect(inTile('muted', find.byKey(mutedIcon)), findsOneWidget);
+    expect(inTile('muted', find.byKey(badge)), findsNothing);
+    expect(inTile('muted', find.byKey(dot)), findsNothing);
+  });
+
   testWidgets('join with invite accepts a pasted link', (tester) async {
     final router = _inviteRouter(inviteBuilder: (code) => Text('Invite $code'));
     addTearDown(router.dispose);

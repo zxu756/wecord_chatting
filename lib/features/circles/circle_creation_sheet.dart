@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -140,6 +141,7 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
             memberIds: _selectedFriendIds.toList(growable: false),
           );
       if (!mounted) return;
+      ref.invalidate(circleSummariesProvider);
       context.pop();
       context.go('/circles/$circleId');
     } catch (error) {

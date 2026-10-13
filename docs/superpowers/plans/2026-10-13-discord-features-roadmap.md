@@ -55,7 +55,7 @@
   - 表 `circle_notification_settings (circle_id, user_id, level text check in ('all','mentions','none'), muted_until null)`。
   - 本地通知协调器在决定是否提醒频道消息时读取：`none` 不提醒；`mentions` 只在被 @ 时提醒；静音期间不提醒。
   - 圈子菜单加「通知设置」页。
-- [ ] **9. 圈子图标栏未读点**（S）
+- [x] **9. 圈子图标栏未读点**（S）
   - `list_circle_summaries` 增加 `unread_count` 与 `mention_count`（汇总该圈子所有频道）。
   - 图标栏：有未读显示左侧 8px 小竖条；有 @ 时右下角红色数字徽标。
 - [ ] **10. 频道分类 + 拖拽排序**（M）

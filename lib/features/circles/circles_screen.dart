@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
-import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 class CirclesScreen extends ConsumerWidget {
@@ -24,50 +24,88 @@ class CirclesScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: FutureBuilder<List<CircleSummary>>(
-        future: ref.watch(circlesRepositoryProvider).listCircles(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text(snapshot.error.toString()));
-          }
-          final circles = snapshot.data ?? const <CircleSummary>[];
-          if (circles.isEmpty) {
-            return _EmptyCircles(
-              onCreate: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                builder: (context) => const CircleCreationSheet(),
-              ),
-            );
-          }
-          return ListView.separated(
-            itemCount: circles.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final circle = circles[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: circle.avatarUrl == null
-                      ? null
-                      : NetworkImage(circle.avatarUrl!),
-                  child: circle.avatarUrl == null
-                      ? Text(_initials(circle.name))
-                      : null,
-                ),
-                title: Text(circle.name),
-                subtitle: Text(
-                  '${circle.memberCount} members · ${circle.channelCount} channels',
-                ),
-                onTap: () => context.go('${CirclesScreen.path}/${circle.id}'),
+      body: ref
+          .watch(circleSummariesProvider)
+          .when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stackTrace) => Center(child: Text(error.toString())),
+            data: (circles) {
+              if (circles.isEmpty) {
+                return _EmptyCircles(
+                  onCreate: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (context) => const CircleCreationSheet(),
+                  ),
+                );
+              }
+              return ListView.separated(
+                itemCount: circles.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final circle = circles[index];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: circle.avatarUrl == null
+                          ? null
+                          : NetworkImage(circle.avatarUrl!),
+                      child: circle.avatarUrl == null
+                          ? Text(_initials(circle.name))
+                          : null,
+                    ),
+                    title: Text(
+                      circle.name,
+                      style: circle.unreadCount > 0 && !circle.isMuted
+                          ? const TextStyle(fontWeight: FontWeight.w700)
+                          : null,
+                    ),
+                    subtitle: Text(
+                      '${circle.memberCount} members · ${circle.channelCount} channels',
+                    ),
+                    trailing: _CircleUnreadIndicator(circle: circle),
+                    onTap: () =>
+                        context.go('${CirclesScreen.path}/${circle.id}'),
+                  );
+                },
               );
             },
-          );
-        },
-      ),
+          ),
     );
+  }
+}
+
+/// Mention badge, unread dot or muted bell for a circle tile.
+class _CircleUnreadIndicator extends StatelessWidget {
+  const _CircleUnreadIndicator({required this.circle});
+
+  final CircleSummary circle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (circle.isMuted) {
+      return Icon(
+        Icons.notifications_off_outlined,
+        key: const ValueKey('circle-muted-icon'),
+        size: 18,
+        color: colorScheme.outline,
+      );
+    }
+    if (circle.mentionCount > 0) {
+      return CircleMentionBadge(count: circle.mentionCount);
+    }
+    if (circle.unreadCount > 0) {
+      return Container(
+        key: const ValueKey('circle-unread-dot'),
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: colorScheme.onSurface,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

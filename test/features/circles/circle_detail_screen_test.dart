@@ -577,20 +577,30 @@ void main() {
       );
     });
 
-    testWidgets('muted circles are dimmed without pill or badge', (
+    testWidgets('muted circles are dimmed without pill but keep mentions', (
       tester,
     ) async {
       await pumpRail(tester, [
-        circle('muted', unread: 5, mentions: 1, muted: true),
+        circle('muted', unread: 5, muted: true),
+        circle('muted-mentioned', unread: 5, mentions: 3, muted: true),
         circle('loud', unread: 5),
       ]);
 
       expect(pillHeight(tester, 'muted'), 0);
+      expect(pillHeight(tester, 'muted-mentioned'), 0);
       expect(
         inItem('muted', const ValueKey('circle-mention-badge')),
         findsNothing,
       );
+      expect(
+        find.descendant(
+          of: inItem('muted-mentioned', const ValueKey('circle-mention-badge')),
+          matching: find.text('3'),
+        ),
+        findsOneWidget,
+      );
       expect(iconOpacity(tester, 'muted'), lessThan(1));
+      expect(iconOpacity(tester, 'muted-mentioned'), lessThan(1));
       expect(iconOpacity(tester, 'loud'), 1);
     });
 

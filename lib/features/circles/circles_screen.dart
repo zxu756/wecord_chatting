@@ -45,13 +45,17 @@ class CirclesScreen extends ConsumerWidget {
                 itemBuilder: (context, index) {
                   final circle = circles[index];
                   return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: circle.avatarUrl == null
-                          ? null
-                          : NetworkImage(circle.avatarUrl!),
-                      child: circle.avatarUrl == null
-                          ? Text(_initials(circle.name))
-                          : null,
+                    leading: Opacity(
+                      key: const ValueKey('circle-tile-avatar'),
+                      opacity: circle.isMuted ? 0.4 : 1,
+                      child: CircleAvatar(
+                        backgroundImage: circle.avatarUrl == null
+                            ? null
+                            : NetworkImage(circle.avatarUrl!),
+                        child: circle.avatarUrl == null
+                            ? Text(_initials(circle.name))
+                            : null,
+                      ),
                     ),
                     title: Text(
                       circle.name,
@@ -74,7 +78,8 @@ class CirclesScreen extends ConsumerWidget {
   }
 }
 
-/// Mention badge, unread dot or muted bell for a circle tile.
+/// Mention badge, unread dot or muted bell for a circle tile. Mentions are
+/// shown even when the circle is muted.
 class _CircleUnreadIndicator extends StatelessWidget {
   const _CircleUnreadIndicator({required this.circle});
 
@@ -83,6 +88,9 @@ class _CircleUnreadIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    if (circle.mentionCount > 0) {
+      return CircleMentionBadge(count: circle.mentionCount);
+    }
     if (circle.isMuted) {
       return Icon(
         Icons.notifications_off_outlined,
@@ -90,9 +98,6 @@ class _CircleUnreadIndicator extends StatelessWidget {
         size: 18,
         color: colorScheme.outline,
       );
-    }
-    if (circle.mentionCount > 0) {
-      return CircleMentionBadge(count: circle.mentionCount);
     }
     if (circle.unreadCount > 0) {
       return Container(

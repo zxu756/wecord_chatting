@@ -128,7 +128,8 @@ void main() {
         circle('quiet'),
         circle('unread', unread: 3),
         circle('mentioned', unread: 3, mentions: 2),
-        circle('muted', unread: 3, mentions: 1, muted: true),
+        circle('muted', unread: 3, muted: true),
+        circle('muted-mentioned', unread: 3, mentions: 1, muted: true),
       ];
     final router = GoRouter(
       initialLocation: CirclesScreen.path,
@@ -169,6 +170,18 @@ void main() {
     expect(inTile('muted', find.byKey(mutedIcon)), findsOneWidget);
     expect(inTile('muted', find.byKey(badge)), findsNothing);
     expect(inTile('muted', find.byKey(dot)), findsNothing);
+    // Mentions still break through a mute, like on the rail.
+    expect(inTile('muted-mentioned', find.byKey(badge)), findsOneWidget);
+    expect(inTile('muted-mentioned', find.text('1')), findsOneWidget);
+    expect(inTile('muted-mentioned', find.byKey(dot)), findsNothing);
+    double avatarOpacity(String id) => tester
+        .widget<Opacity>(
+          inTile(id, find.byKey(const ValueKey('circle-tile-avatar'))),
+        )
+        .opacity;
+    expect(avatarOpacity('muted'), lessThan(1));
+    expect(avatarOpacity('muted-mentioned'), lessThan(1));
+    expect(avatarOpacity('unread'), 1);
   });
 
   testWidgets('join with invite accepts a pasted link', (tester) async {

@@ -23,7 +23,8 @@ final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
 /// Vertical strip of circle icons, modelled on a server switcher: icons morph
 /// from a circle to a rounded square and grow a left pill when hovered or
 /// selected. Circles with unread messages show a short pill and a red badge
-/// for mentions; muted circles are dimmed instead.
+/// for mentions; muted circles are dimmed without the pill but keep the
+/// mention badge.
 class CircleRail extends ConsumerWidget {
   const CircleRail({required this.selectedCircleId, super.key});
 
@@ -113,7 +114,8 @@ class CircleRailItem extends StatefulWidget {
   /// Shown as a red count badge on the icon.
   final int mentionCount;
 
-  /// Muted items are dimmed and never show the unread pill or badge.
+  /// Muted items are dimmed and never show the unread pill, but still show
+  /// the mention badge.
   final bool muted;
   final ImageProvider? image;
 
@@ -214,7 +216,7 @@ class _CircleRailItemState extends State<CircleRailItem> {
                 ),
               ),
             ),
-            if (widget.mentionCount > 0 && !widget.muted)
+            if (widget.mentionCount > 0)
               Positioned(
                 right: 8,
                 bottom: 0,

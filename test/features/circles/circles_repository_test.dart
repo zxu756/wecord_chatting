@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
 void main() {
@@ -42,7 +44,12 @@ void main() {
           'current_user_role': 'admin',
         },
         'members': [
-          {'role': 'owner', 'profile': _profileRow(id: 'u1', name: 'Ada')},
+          {
+            'role': 'owner',
+            'nickname': 'Countess',
+            'is_current_user': true,
+            'profile': _profileRow(id: 'u1', name: 'Ada'),
+          },
         ],
         'channels': [
           {
@@ -85,10 +92,77 @@ void main() {
 
     expect(detail.circle.name, 'Close Friends');
     expect(detail.members.single.profile.id, 'u1');
+    expect(detail.members.single.nickname, 'Countess');
+    expect(detail.members.single.displayName, 'Countess');
+    expect(detail.members.single.isCurrentUser, isTrue);
     expect(detail.channels.single.name, 'General');
     expect(detail.posts.single.comments.single.body, 'Hi');
     expect(dataSource.calls.single.functionName, 'get_circle_detail');
     expect(dataSource.calls.single.params, {'target_circle_id': 'circle-1'});
+  });
+
+  test('setNickname trims and calls set_circle_nickname', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.setNickname(
+      circleId: 'circle-1',
+      userId: 'u2',
+      nickname: '  Grace  ',
+    );
+    await repository.setNickname(
+      circleId: 'circle-1',
+      userId: 'u2',
+      nickname: '   ',
+    );
+
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'set_circle_nickname',
+      'set_circle_nickname',
+    ]);
+    expect(dataSource.calls.first.params, {
+      'target_circle_id': 'circle-1',
+      'target_user_id': 'u2',
+      'nickname': 'Grace',
+    });
+    expect(dataSource.calls.last.params['nickname'], isNull);
+  });
+
+  test('CircleDetail limits who may change nicknames', () {
+    CircleMember member(String id, String role, {bool self = false}) {
+      return CircleMember(
+        profile: Profile.fromJson(_profileRow(id: id, name: id)),
+        role: role,
+        isCurrentUser: self,
+      );
+    }
+
+    CircleDetail detail(String role) {
+      return CircleDetail(
+        circle: CircleSummary(
+          id: 'circle-1',
+          name: 'Circle',
+          memberCount: 3,
+          channelCount: 0,
+          currentUserRole: role,
+        ),
+        members: const [],
+        channels: const [],
+        posts: const [],
+      );
+    }
+
+    final owner = member('owner', 'owner');
+    final admin = member('admin', 'admin');
+    final other = member('other', 'member');
+    final me = member('me', 'member', self: true);
+
+    expect(detail('member').canChangeNickname(me), isTrue);
+    expect(detail('member').canChangeNickname(other), isFalse);
+    expect(detail('admin').canChangeNickname(other), isTrue);
+    expect(detail('admin').canChangeNickname(admin), isTrue);
+    expect(detail('admin').canChangeNickname(owner), isFalse);
+    expect(detail('owner').canChangeNickname(owner), isTrue);
   });
 
   test('createCircle trims name and calls create_circle rpc', () async {

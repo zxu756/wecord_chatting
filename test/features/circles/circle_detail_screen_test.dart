@@ -220,6 +220,175 @@ void main() {
     expect(find.byKey(const ValueKey('member-offline-user-5')), findsOneWidget);
     expect(find.byKey(const ValueKey('member-online-user-5')), findsNothing);
   });
+  group('circle nicknames', () {
+    Future<FakeCirclesRepository> pumpWorkspace(
+      WidgetTester tester, {
+      required String currentUserRole,
+      required String currentUserId,
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final base = _detail();
+      CircleMember member(String id, String name, String role, {String? nick}) {
+        return CircleMember(
+          profile: _profile(id: id, username: name.toLowerCase(), name: name),
+          role: role,
+          nickname: nick,
+          isCurrentUser: id == currentUserId,
+        );
+      }
+
+      final repository = FakeCirclesRepository()
+        ..onlineUserIds = {'user-1', 'user-2', 'user-3'}
+        ..detail = CircleDetail(
+          circle: CircleSummary(
+            id: 'circle-1',
+            name: 'Close Friends',
+            memberCount: 3,
+            channelCount: 1,
+            currentUserRole: currentUserRole,
+          ),
+          members: [
+            member('user-1', 'Xu', 'owner', nick: 'Captain'),
+            member('user-2', 'Yan', 'admin'),
+            member('user-3', 'Amy', 'member', nick: 'Ames'),
+          ],
+          channels: base.channels,
+          posts: const [],
+        );
+      repository.circles = [repository.detail.circle];
+      final router = GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) => CircleDetailScreen(
+              circleId: state.pathParameters['circleId']!,
+              channelViewBuilder: (context, channel, actions) => Scaffold(
+                appBar: AppBar(title: Text(channel.name), actions: actions),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    testWidgets('member list shows nicknames instead of display names', (
+      tester,
+    ) async {
+      await pumpWorkspace(
+        tester,
+        currentUserRole: 'admin',
+        currentUserId: 'user-2',
+      );
+
+      expect(find.text('Captain'), findsOneWidget);
+      expect(find.text('Ames'), findsOneWidget);
+      expect(find.text('Xu'), findsNothing);
+      expect(find.text('Amy'), findsNothing);
+      expect(find.text('Yan'), findsOneWidget);
+    });
+
+    testWidgets('admins change a member nickname from the member menu', (
+      tester,
+    ) async {
+      final repository = await pumpWorkspace(
+        tester,
+        currentUserRole: 'admin',
+        currentUserId: 'user-2',
+      );
+
+      await tester.longPress(find.text('Ames'));
+      await tester.pumpAndSettle();
+      expect(find.text('View profile'), findsOneWidget);
+      await tester.tap(find.text('Change nickname'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Only shown in this circle for Amy.'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '  Amelia  ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.nicknameUpdates, [
+        (userId: 'user-3', nickname: 'Amelia'),
+      ]);
+    });
+
+    testWidgets('reset clears an existing nickname', (tester) async {
+      final repository = await pumpWorkspace(
+        tester,
+        currentUserRole: 'member',
+        currentUserId: 'user-3',
+      );
+
+      await tester.longPress(find.text('Ames'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change nickname'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Reset'));
+      await tester.pumpAndSettle();
+
+      expect(repository.nicknameUpdates, [(userId: 'user-3', nickname: null)]);
+    });
+
+    testWidgets('admins cannot rename the owner', (tester) async {
+      await pumpWorkspace(
+        tester,
+        currentUserRole: 'admin',
+        currentUserId: 'user-2',
+      );
+
+      await tester.longPress(find.text('Captain'));
+      await tester.pumpAndSettle();
+      expect(find.text('View profile'), findsOneWidget);
+      expect(find.text('Change nickname'), findsNothing);
+    });
+
+    testWidgets('members cannot rename other members', (tester) async {
+      await pumpWorkspace(
+        tester,
+        currentUserRole: 'member',
+        currentUserId: 'user-3',
+      );
+
+      await tester.longPress(find.text('Yan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change nickname'), findsNothing);
+    });
+
+    testWidgets('the circle menu changes my own nickname', (tester) async {
+      final repository = await pumpWorkspace(
+        tester,
+        currentUserRole: 'member',
+        currentUserId: 'user-3',
+      );
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      // Plain members only get the nickname entry.
+      expect(find.text('Invite friends'), findsNothing);
+      await tester.tap(find.text('Change my nickname'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Only shown in this circle.'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Amy B');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.nicknameUpdates, [
+        (userId: 'user-3', nickname: 'Amy B'),
+      ]);
+    });
+  });
 }
 
 Widget _app(
@@ -295,12 +464,22 @@ class FakeCirclesRepository implements CirclesRepository {
   var invitedMemberIds = <String>[];
   var onlineUserIds = <String>{'user-1'};
   final presenceRequests = <String>[];
+  final nicknameUpdates = <({String userId, String? nickname})>[];
 
   @override
   Future<CircleDetail> getCircleDetail(String circleId) async => detail;
 
   @override
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();
+
+  @override
+  Future<void> setNickname({
+    required String circleId,
+    required String userId,
+    required String? nickname,
+  }) async {
+    nicknameUpdates.add((userId: userId, nickname: nickname));
+  }
 
   @override
   Stream<Set<String>> circlePresence(String circleId) {

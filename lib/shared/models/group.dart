@@ -1,17 +1,21 @@
 import 'package:wecord/shared/models/profile.dart';
 
 class GroupMember {
-  const GroupMember({required this.profile, required this.role});
+  const GroupMember({required this.profile, required this.role, this.nickname});
 
   factory GroupMember.fromJson(Map<String, dynamic> json) {
     return GroupMember(
       profile: Profile.fromJson(json['profile'] as Map<String, dynamic>),
       role: json['role'] as String,
+      nickname: json['circle_nickname'] as String?,
     );
   }
 
   final Profile profile;
   final String role;
+
+  /// The member's circle nickname when the conversation is a circle channel.
+  final String? nickname;
 }
 
 class GroupDetail {

@@ -54,6 +54,13 @@ abstract interface class CirclesRepository {
   /// Joins the circle behind [code] and returns its id.
   Future<String> acceptInvite(String code);
 
+  /// Sets [userId]'s nickname in the circle; null or blank clears it.
+  Future<void> setNickname({
+    required String circleId,
+    required String userId,
+    required String? nickname,
+  });
+
   Future<String> createPost({
     required String circleId,
     required String body,
@@ -206,6 +213,20 @@ class SupabaseCirclesRepository implements CirclesRepository {
   @override
   Future<void> revokeInvite(String code) async {
     await _dataSource.rpc('revoke_circle_invite', {'invite_code': code});
+  }
+
+  @override
+  Future<void> setNickname({
+    required String circleId,
+    required String userId,
+    required String? nickname,
+  }) async {
+    final trimmed = nickname?.trim();
+    await _dataSource.rpc('set_circle_nickname', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'nickname': trimmed == null || trimmed.isEmpty ? null : trimmed,
+    });
   }
 
   @override
@@ -578,6 +599,15 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<CircleInvitePreview> getInvitePreview(String code) {
     throw StateError('Supabase must be initialized before opening invites.');
+  }
+
+  @override
+  Future<void> setNickname({
+    required String circleId,
+    required String userId,
+    required String? nickname,
+  }) {
+    throw StateError('Supabase must be initialized before setting nicknames.');
   }
 
   @override

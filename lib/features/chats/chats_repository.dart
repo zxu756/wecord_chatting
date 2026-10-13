@@ -888,7 +888,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('messages')
         .select(
-          '*,reactions,is_pinned,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+          '*,reactions,is_pinned,sender_nickname,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
@@ -914,7 +914,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('conversation_members')
         .select(
-          'role,profile:profiles(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+          'role,circle_nickname,profile:profiles(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('joined_at', ascending: true);

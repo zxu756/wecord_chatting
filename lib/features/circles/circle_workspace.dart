@@ -8,6 +8,7 @@ import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -103,6 +104,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           CircleRail(selectedCircleId: detail.circle.id),
           _ChannelSidebar(
             detail: detail,
+            onChangeNickname: _changeNickname,
             selectedChannelId: selectedChannel?.id,
             unreadCounts: unreadCounts,
             collapsed: _channelsCollapsed,
@@ -135,11 +137,44 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           ),
           if (showMembers) ...[
             const VerticalDivider(width: 1),
-            _MemberList(members: detail.members, onlineUserIds: onlineUserIds),
+            _MemberList(
+              detail: detail,
+              onlineUserIds: onlineUserIds,
+              onChangeNickname: _changeNickname,
+            ),
           ],
         ],
       ),
     );
+  }
+
+  Future<void> _changeNickname(CircleMember member) async {
+    final nickname = await showCircleNicknameDialog(
+      context,
+      member: member,
+      isSelf: member.isCurrentUser,
+    );
+    if (nickname == null || !mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref
+          .read(circlesRepositoryProvider)
+          .setNickname(
+            circleId: widget.detail.circle.id,
+            userId: member.profile.id,
+            nickname: nickname.isEmpty ? null : nickname,
+          );
+      widget.onChanged();
+      // Open channel threads show nicknames on messages and mentions.
+      ref.invalidate(chatThreadProvider);
+      ref.invalidate(groupDetailProvider);
+    } catch (_) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Could not change nickname. Try again.')),
+      );
+    }
   }
 
   Widget _defaultChannelView(
@@ -156,6 +191,91 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     );
   }
 }
+
+/// Asks for a circle nickname. Returns the trimmed nickname, an empty string
+/// to clear it, or null when cancelled.
+Future<String?> showCircleNicknameDialog(
+  BuildContext context, {
+  required CircleMember member,
+  required bool isSelf,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _NicknameDialog(member: member, isSelf: isSelf),
+  );
+}
+
+class _NicknameDialog extends StatefulWidget {
+  const _NicknameDialog({required this.member, required this.isSelf});
+
+  final CircleMember member;
+  final bool isSelf;
+
+  @override
+  State<_NicknameDialog> createState() => _NicknameDialogState();
+}
+
+class _NicknameDialogState extends State<_NicknameDialog> {
+  late final _controller = TextEditingController(text: widget.member.nickname);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = widget.member.profile;
+    final fallbackName = profile.displayName.trim().isEmpty
+        ? profile.username
+        : profile.displayName;
+    return AlertDialog(
+      title: Text(widget.isSelf ? 'Change my nickname' : 'Change nickname'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.isSelf
+                ? 'Only shown in this circle.'
+                : 'Only shown in this circle for $fallbackName.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLength: maxCircleNicknameLength,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Nickname',
+              hintText: fallbackName,
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (widget.member.nickname != null)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(''),
+            child: const Text('Reset'),
+          ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
+const maxCircleNicknameLength = 32;
 
 void showCircleInviteSheet(BuildContext context, CircleDetail detail) {
   showModalBottomSheet<void>(
@@ -176,6 +296,7 @@ void showCircleChannelCreationSheet(BuildContext context, String circleId) {
 class _ChannelSidebar extends StatelessWidget {
   const _ChannelSidebar({
     required this.detail,
+    required this.onChangeNickname,
     required this.selectedChannelId,
     required this.unreadCounts,
     required this.collapsed,
@@ -186,6 +307,7 @@ class _ChannelSidebar extends StatelessWidget {
   static const width = 240.0;
 
   final CircleDetail detail;
+  final ValueChanged<CircleMember> onChangeNickname;
   final String? selectedChannelId;
   final Map<String, int> unreadCounts;
   final bool collapsed;
@@ -207,7 +329,7 @@ class _ChannelSidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SidebarHeader(detail: detail),
+            _SidebarHeader(detail: detail, onChangeNickname: onChangeNickname),
             const Divider(height: 1),
             Expanded(
               child: ListView(
@@ -258,9 +380,10 @@ class _ChannelSidebar extends StatelessWidget {
 }
 
 class _SidebarHeader extends StatelessWidget {
-  const _SidebarHeader({required this.detail});
+  const _SidebarHeader({required this.detail, required this.onChangeNickname});
 
   final CircleDetail detail;
+  final ValueChanged<CircleMember> onChangeNickname;
 
   @override
   Widget build(BuildContext context) {
@@ -272,56 +395,81 @@ class _SidebarHeader extends StatelessWidget {
         context,
       ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
     );
+    CircleMember? currentMember;
+    for (final member in detail.members) {
+      if (member.isCurrentUser) {
+        currentMember = member;
+        break;
+      }
+    }
+    final canManage = detail.canManageCircle;
+
+    if (!canManage && currentMember == null) {
+      return SizedBox(
+        height: kToolbarHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(alignment: Alignment.centerLeft, child: title),
+        ),
+      );
+    }
 
     return SizedBox(
       height: kToolbarHeight,
-      child: detail.canManageCircle
-          ? PopupMenuButton<_CircleMenuAction>(
-              tooltip: 'Circle menu',
-              position: PopupMenuPosition.under,
-              onSelected: (action) {
-                switch (action) {
-                  case _CircleMenuAction.invite:
-                    showCircleInviteSheet(context, detail);
-                  case _CircleMenuAction.createChannel:
-                    showCircleChannelCreationSheet(context, detail.circle.id);
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _CircleMenuAction.invite,
-                  child: ListTile(
-                    leading: Icon(Icons.person_add_alt_1_outlined),
-                    title: Text('Invite friends'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _CircleMenuAction.createChannel,
-                  child: ListTile(
-                    leading: Icon(Icons.add_comment_outlined),
-                    title: Text('Create channel'),
-                  ),
-                ),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(child: title),
-                    const Icon(Icons.expand_more, size: 20),
-                  ],
-                ),
+      child: PopupMenuButton<_CircleMenuAction>(
+        tooltip: 'Circle menu',
+        position: PopupMenuPosition.under,
+        onSelected: (action) {
+          switch (action) {
+            case _CircleMenuAction.invite:
+              showCircleInviteSheet(context, detail);
+            case _CircleMenuAction.createChannel:
+              showCircleChannelCreationSheet(context, detail.circle.id);
+            case _CircleMenuAction.changeNickname:
+              onChangeNickname(currentMember!);
+          }
+        },
+        itemBuilder: (context) => [
+          if (canManage) ...const [
+            PopupMenuItem(
+              value: _CircleMenuAction.invite,
+              child: ListTile(
+                leading: Icon(Icons.person_add_alt_1_outlined),
+                title: Text('Invite friends'),
               ),
-            )
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(alignment: Alignment.centerLeft, child: title),
             ),
+            PopupMenuItem(
+              value: _CircleMenuAction.createChannel,
+              child: ListTile(
+                leading: Icon(Icons.add_comment_outlined),
+                title: Text('Create channel'),
+              ),
+            ),
+          ],
+          if (currentMember != null)
+            const PopupMenuItem(
+              value: _CircleMenuAction.changeNickname,
+              child: ListTile(
+                leading: Icon(Icons.badge_outlined),
+                title: Text('Change my nickname'),
+              ),
+            ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(child: title),
+              const Icon(Icons.expand_more, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-enum _CircleMenuAction { invite, createChannel }
+enum _CircleMenuAction { invite, createChannel, changeNickname }
 
 class _CategoryHeader extends StatelessWidget {
   const _CategoryHeader({
@@ -468,18 +616,23 @@ class _ChannelRow extends StatelessWidget {
 }
 
 class _MemberList extends StatelessWidget {
-  const _MemberList({required this.members, required this.onlineUserIds});
+  const _MemberList({
+    required this.detail,
+    required this.onlineUserIds,
+    required this.onChangeNickname,
+  });
 
   static const width = 240.0;
 
-  final List<CircleMember> members;
+  final CircleDetail detail;
   final Set<String> onlineUserIds;
+  final ValueChanged<CircleMember> onChangeNickname;
 
   @override
   Widget build(BuildContext context) {
     final online = <CircleMember>[];
     final offline = <CircleMember>[];
-    for (final member in members) {
+    for (final member in detail.members) {
       (onlineUserIds.contains(member.profile.id) ? online : offline).add(
         member,
       );
@@ -515,7 +668,13 @@ class _MemberList extends StatelessWidget {
                   ),
                 ),
                 for (final member in groupMembers)
-                  _MemberRow(member: member, isOnline: isOnline),
+                  _MemberRow(
+                    member: member,
+                    isOnline: isOnline,
+                    onChangeNickname: detail.canChangeNickname(member)
+                        ? () => onChangeNickname(member)
+                        : null,
+                  ),
               ],
           ],
         ),
@@ -532,24 +691,24 @@ int _roleRank(String role) {
   };
 }
 
-String _memberName(CircleMember member) {
-  final profile = member.profile;
-  return profile.displayName.trim().isEmpty
-      ? profile.username
-      : profile.displayName;
-}
-
 int _compareNames(CircleMember left, CircleMember right) {
-  return _memberName(
-    left,
-  ).toLowerCase().compareTo(_memberName(right).toLowerCase());
+  return left.displayName.toLowerCase().compareTo(
+    right.displayName.toLowerCase(),
+  );
 }
 
 class _MemberRow extends ConsumerWidget {
-  const _MemberRow({required this.member, required this.isOnline});
+  const _MemberRow({
+    required this.member,
+    required this.isOnline,
+    this.onChangeNickname,
+  });
 
   final CircleMember member;
   final bool isOnline;
+
+  /// Null when the current user may not change this member's nickname.
+  final VoidCallback? onChangeNickname;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -558,63 +717,103 @@ class _MemberRow extends ConsumerWidget {
     final avatarUrl = ref
         .watch(avatarDisplayUrlProvider(profile.avatarUrl))
         .valueOrNull;
-    final name = _memberName(member);
+    final name = member.displayName;
     final roleIcon = switch (member.role) {
       'owner' => Icons.workspace_premium_outlined,
       'admin' => Icons.shield_outlined,
       _ => null,
     };
 
-    return Opacity(
-      opacity: isOnline ? 1 : 0.55,
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        leading: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: avatarUrl == null
-                  ? null
-                  : NetworkImage(avatarUrl),
-              child: avatarUrl == null
-                  ? Text(name.characters.first.toUpperCase())
-                  : null,
-            ),
-            Positioned(
-              right: -2,
-              bottom: -2,
-              child: Container(
-                key: ValueKey(
-                  isOnline
-                      ? 'member-online-${profile.id}'
-                      : 'member-offline-${profile.id}',
-                ),
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isOnline ? Colors.green : colorScheme.outline,
-                  border: Border.all(
-                    color: colorScheme.surfaceContainerLow,
-                    width: 2,
+    return GestureDetector(
+      onSecondaryTap: () => _showActions(context),
+      child: Opacity(
+        opacity: isOnline ? 1 : 0.55,
+        child: ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          leading: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: avatarUrl == null
+                    ? null
+                    : NetworkImage(avatarUrl),
+                child: avatarUrl == null
+                    ? Text(name.characters.first.toUpperCase())
+                    : null,
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  key: ValueKey(
+                    isOnline
+                        ? 'member-online-${profile.id}'
+                        : 'member-offline-${profile.id}',
+                  ),
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isOnline ? Colors.green : colorScheme.outline,
+                    border: Border.all(
+                      color: colorScheme.surfaceContainerLow,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: roleIcon == null
+              ? null
+              : Tooltip(
+                  message: member.role == 'owner' ? 'Owner' : 'Admin',
+                  child: Icon(roleIcon, size: 16),
+                ),
+          onTap: () => _openProfile(context),
+          onLongPress: () => _showActions(context),
         ),
-        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: roleIcon == null
-            ? null
-            : Tooltip(
-                message: member.role == 'owner' ? 'Owner' : 'Admin',
-                child: Icon(roleIcon, size: 16),
-              ),
-        onTap: () => context.push('${UserProfileScreen.path}/${profile.id}'),
       ),
+    );
+  }
+
+  void _openProfile(BuildContext context) {
+    context.push('${UserProfileScreen.path}/${member.profile.id}');
+  }
+
+  void _showActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('View profile'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openProfile(context);
+                },
+              ),
+              if (onChangeNickname != null)
+                ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: const Text('Change nickname'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onChangeNickname!();
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

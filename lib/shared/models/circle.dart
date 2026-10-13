@@ -69,20 +69,55 @@ class CircleDetail {
 
   bool get canManageCircle =>
       circle.currentUserRole == 'owner' || circle.currentUserRole == 'admin';
+
+  /// Everyone may rename themselves; owners and admins may rename others,
+  /// but only the owner may rename the owner.
+  bool canChangeNickname(CircleMember member) {
+    if (member.isCurrentUser) {
+      return true;
+    }
+    if (!canManageCircle) {
+      return false;
+    }
+    return member.role != 'owner' || circle.currentUserRole == 'owner';
+  }
 }
 
 class CircleMember {
-  const CircleMember({required this.profile, required this.role});
+  const CircleMember({
+    required this.profile,
+    required this.role,
+    this.nickname,
+    this.isCurrentUser = false,
+  });
 
   factory CircleMember.fromJson(Map<String, dynamic> json) {
     return CircleMember(
       role: json['role'] as String,
       profile: Profile.fromJson(json['profile'] as Map<String, dynamic>),
+      nickname: json['nickname'] as String?,
+      isCurrentUser: json['is_current_user'] == true,
     );
   }
 
   final Profile profile;
   final String role;
+
+  /// This circle's nickname for the member, if they have one.
+  final String? nickname;
+  final bool isCurrentUser;
+
+  /// The name shown inside the circle: nickname, then display name, then
+  /// username.
+  String get displayName {
+    final nickname = this.nickname?.trim();
+    if (nickname != null && nickname.isNotEmpty) {
+      return nickname;
+    }
+    return profile.displayName.trim().isEmpty
+        ? profile.username
+        : profile.displayName;
+  }
 }
 
 class CircleChannel {

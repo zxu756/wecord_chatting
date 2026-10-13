@@ -442,6 +442,78 @@ void main() {
       expect(find.text('Grace Hopper'), findsNWidgets(5));
     });
 
+    testWidgets('channel threads prefer circle nicknames for senders', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..groupDetail = GroupDetail(
+          conversationId: 'conversation-1',
+          title: 'general',
+          members: [
+            GroupMember(profile: alan, role: 'member', nickname: 'Prof'),
+          ],
+        )
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'From the message nickname',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ).copyWith(senderNickname: 'Admiral'),
+          _message(
+            id: 'message-2',
+            senderId: 'user-3',
+            body: 'From the member list',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 1),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.channel),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Admiral'), findsOneWidget);
+      expect(find.text('Grace Hopper'), findsNothing);
+      expect(find.text('Prof'), findsOneWidget);
+      expect(find.text('Alan Turing'), findsNothing);
+    });
+
+    testWidgets('channel mention candidates show and match nicknames', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..groupDetail = GroupDetail(
+          conversationId: 'conversation-1',
+          title: 'general',
+          members: [
+            GroupMember(profile: grace, role: 'member', nickname: 'Admiral'),
+            GroupMember(profile: alan, role: 'member'),
+          ],
+        );
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.channel),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), 'hi @admi');
+      await tester.pump();
+
+      expect(find.text('Admiral'), findsOneWidget);
+      expect(find.text('@grace'), findsOneWidget);
+      expect(find.text('Alan Turing'), findsNothing);
+
+      await tester.tap(find.text('Admiral'));
+      await tester.pump();
+
+      final composer = tester.widget<TextField>(find.byType(TextField));
+      expect(composer.controller!.text, 'hi @grace ');
+    });
+
     testWidgets('direct chats never show sender headers', (tester) async {
       final repository = FakeChatsRepository()
         ..messages = [

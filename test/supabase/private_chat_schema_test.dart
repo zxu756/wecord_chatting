@@ -1142,4 +1142,65 @@ void main() {
       );
     }
   });
+
+  test('circle nicknames are validated and permission checked', () {
+    final sql = effectiveMigrationSql();
+    final helperBody = functionBody(sql, 'circle_channel_nickname');
+    final senderBody = functionBody(sql, 'sender_nickname');
+    final memberBody = functionBody(sql, 'circle_nickname');
+    final setBody = functionBody(sql, 'set_circle_nickname');
+    final detailBody = functionBody(sql, 'get_circle_detail');
+
+    expect(
+      sql,
+      contains(
+        'alter table public.circle_members\n  add column if not exists nickname text',
+      ),
+    );
+    expect(sql, contains('constraint circle_members_nickname_length'));
+    expect(sql, contains('char_length(nickname) between 1 and 32'));
+
+    expect(helperBody, contains('from public.circle_channels cc'));
+    expect(helperBody, contains('public.is_current_user_circle_member'));
+    expect(senderBody, contains('message_row public.messages'));
+    expect(senderBody, contains('public.circle_channel_nickname('));
+    expect(memberBody, contains('member_row public.conversation_members'));
+    expect(memberBody, contains('public.circle_channel_nickname('));
+
+    for (final body in [helperBody, senderBody, memberBody, setBody]) {
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+    }
+    expect(setBody, contains('auth.uid()'));
+    expect(setBody, contains("nullif(btrim(coalesce(nickname, '')), '')"));
+    expect(setBody, contains('> 32'));
+    expect(setBody, contains('public.current_user_circle_role'));
+    expect(setBody, contains("caller_role not in ('owner', 'admin')"));
+    expect(
+      setBody,
+      contains("target_role = 'owner' and caller_role <> 'owner'"),
+    );
+    expect(setBody, contains('update public.circle_members'));
+
+    expect(detailBody, contains("'nickname', cm.nickname"));
+    expect(detailBody, contains("'is_current_user', cm.user_id = auth.uid()"));
+
+    expect(
+      sql,
+      contains(
+        'revoke execute on function public.circle_channel_nickname(uuid, uuid) from authenticated',
+      ),
+    );
+    for (final signature in [
+      'public.sender_nickname(public.messages)',
+      'public.circle_nickname(public.conversation_members)',
+      'public.set_circle_nickname(uuid, uuid, text)',
+      'public.get_circle_detail(uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

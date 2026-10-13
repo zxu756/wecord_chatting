@@ -250,7 +250,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
-    final groupDetail = conversationType == ConversationType.group
+    // Group and channel members feed sender names and @mention candidates.
+    final groupDetail =
+        conversationType == ConversationType.group ||
+            conversationType == ConversationType.channel
         ? ref.watch(groupDetailProvider(widget.conversationId)).valueOrNull
         : null;
     final currentActivity =
@@ -969,7 +972,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return detail.members
         .where((member) {
           return member.profile.username.toLowerCase().contains(query) ||
-              member.profile.displayName.toLowerCase().contains(query);
+              _mentionName(member).toLowerCase().contains(query);
         })
         .take(6)
         .toList(growable: false);
@@ -995,7 +998,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _mentionSelections[member.profile.username] = _MentionSelection(
       userId: member.profile.id,
       username: member.profile.username,
-      displayName: member.profile.displayName,
+      displayName: _mentionName(member),
     );
     setState(() {
       _isMentioning = false;
@@ -1343,8 +1346,12 @@ _MessageSender _senderFor(
   ChatMessage message,
   Map<String, GroupMember> membersById,
 ) {
-  final profile = message.sender ?? membersById[message.senderId]?.profile;
-  final label = profile?.displayLabel.trim() ?? '';
+  final member = membersById[message.senderId];
+  final profile = message.sender ?? member?.profile;
+  final nickname = (message.senderNickname ?? member?.nickname)?.trim() ?? '';
+  final label = nickname.isNotEmpty
+      ? nickname
+      : profile?.displayLabel.trim() ?? '';
   return _MessageSender(
     name: label.isNotEmpty
         ? label
@@ -2179,11 +2186,9 @@ class _Composer extends StatelessWidget {
                           ListTile(
                             dense: true,
                             leading: CircleAvatar(
-                              child: Text(
-                                _initials(member.profile.displayName),
-                              ),
+                              child: Text(_initials(_mentionName(member))),
                             ),
-                            title: Text(member.profile.displayName),
+                            title: Text(_mentionName(member)),
                             subtitle: Text('@${member.profile.username}'),
                             onTap: () => onSelectMention(member),
                           ),
@@ -2359,6 +2364,15 @@ String _imageSendErrorText(Object error) {
     return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
   }
   return 'Could not send image. Try again. $error';
+}
+
+/// A mention candidate's name: their circle nickname in channels, otherwise
+/// their display name.
+String _mentionName(GroupMember member) {
+  final nickname = member.nickname?.trim();
+  return nickname == null || nickname.isEmpty
+      ? member.profile.displayName
+      : nickname;
 }
 
 String _initials(String value) {

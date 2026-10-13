@@ -376,6 +376,33 @@ void main() {
     expect(detail.members.single.profile.displayLabel, 'Ada L.');
   });
 
+  test('getGroupDetail maps circle channel nicknames', () async {
+    final dataSource = FakeChatsDataSource()
+      ..groupMemberRows = [
+        {
+          'role': 'member',
+          'circle_nickname': 'Countess',
+          'profile': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada Lovelace',
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T04:32:00.000Z',
+            'updated_at': '2026-05-18T04:33:00.000Z',
+          },
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final detail = await repository.getGroupDetail('conversation-1');
+
+    expect(detail.members.single.nickname, 'Countess');
+  });
+
   test('conversationChanges emits when the data source invalidates', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -979,7 +1006,7 @@ void main() {
     expect(messages.last.pinnedMessageId, 'message-1');
   });
 
-  test('listMessages maps embedded sender profiles and aliases', () async {
+  test('listMessages maps embedded senders, aliases and nicknames', () async {
     final dataSource = FakeChatsDataSource()
       ..messageRows = [
         {
@@ -1001,6 +1028,7 @@ void main() {
               {'alias': 'Amazing Grace'},
             ],
           },
+          'sender_nickname': 'Admiral',
         },
         {
           'id': 'message-2',
@@ -1021,7 +1049,9 @@ void main() {
     expect(messages.first.sender?.displayName, 'Grace Hopper');
     expect(messages.first.sender?.displayLabel, 'Amazing Grace');
     expect(messages.first.sender?.avatarUrl, 'user-2/avatar.png');
+    expect(messages.first.senderNickname, 'Admiral');
     expect(messages.last.sender, isNull);
+    expect(messages.last.senderNickname, isNull);
   });
 
   test('pin RPCs are called with the target message', () async {

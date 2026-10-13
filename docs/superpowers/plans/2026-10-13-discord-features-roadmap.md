@@ -46,7 +46,7 @@
 
 - [x] **5. 连续消息合并**（S）
   - 同一发送者、间隔 ≤ 7 分钟、中间没有日期分隔线 / 新消息线 / 系统消息时合并：后续消息不显示头像和名字，行距收紧。纯前端。
-- [ ] **6. 成员列表按在线状态分组**（S）
+- [x] **6. 成员列表按在线状态分组**（S）
   - 复用现有在线状态数据（`chat_status`），宽屏成员列表分成「在线 — n」「离线 — n」，在线组内再按角色排序；头像右下角状态点。
 - [ ] **7. 圈子内昵称**（S）
   - `circle_members.nickname text null`（1–32 字）。RPC `set_circle_nickname(circle_id, nickname)` 改自己；owner / admin 可改他人（第 16 项后为 `manage_nicknames`）。

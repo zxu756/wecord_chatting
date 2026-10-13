@@ -7,10 +7,19 @@ import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
+
+/// Members who have the circle open right now (see
+/// [CirclesRepository.circlePresence]). Watching it announces the current
+/// user to the rest of the circle.
+final circlePresenceProvider = StreamProvider.autoDispose
+    .family<Set<String>, String>((ref, circleId) {
+      return ref.watch(circlesRepositoryProvider).circlePresence(circleId);
+    });
 
 typedef CircleChannelViewBuilder =
     Widget Function(
@@ -83,6 +92,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       onPressed: () => setState(() => _showMembers = !showMembers),
     );
     final selectedChannel = _selectedChannel;
+    final onlineUserIds =
+        ref.watch(circlePresenceProvider(detail.circle.id)).valueOrNull ??
+        const <String>{};
 
     return Scaffold(
       body: Row(
@@ -123,7 +135,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           ),
           if (showMembers) ...[
             const VerticalDivider(width: 1),
-            _MemberList(members: detail.members),
+            _MemberList(members: detail.members, onlineUserIds: onlineUserIds),
           ],
         ],
       ),
@@ -456,27 +468,27 @@ class _ChannelRow extends StatelessWidget {
 }
 
 class _MemberList extends StatelessWidget {
-  const _MemberList({required this.members});
+  const _MemberList({required this.members, required this.onlineUserIds});
 
   static const width = 240.0;
 
   final List<CircleMember> members;
+  final Set<String> onlineUserIds;
 
   @override
   Widget build(BuildContext context) {
-    final groups = <String, List<CircleMember>>{
-      'Owner': [],
-      'Admins': [],
-      'Members': [],
-    };
+    final online = <CircleMember>[];
+    final offline = <CircleMember>[];
     for (final member in members) {
-      final group = switch (member.role) {
-        'owner' => 'Owner',
-        'admin' => 'Admins',
-        _ => 'Members',
-      };
-      groups[group]!.add(member);
+      (onlineUserIds.contains(member.profile.id) ? online : offline).add(
+        member,
+      );
     }
+    online.sort((left, right) {
+      final byRole = _roleRank(left.role).compareTo(_roleRank(right.role));
+      return byRole != 0 ? byRole : _compareNames(left, right);
+    });
+    offline.sort(_compareNames);
     final theme = Theme.of(context);
 
     return Material(
@@ -486,8 +498,10 @@ class _MemberList extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
           children: [
-            for (final MapEntry(key: label, value: groupMembers)
-                in groups.entries)
+            for (final (label, groupMembers, isOnline) in [
+              ('Online', online, true),
+              ('Offline', offline, false),
+            ])
               if (groupMembers.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
@@ -500,7 +514,8 @@ class _MemberList extends StatelessWidget {
                     ),
                   ),
                 ),
-                for (final member in groupMembers) _MemberRow(member: member),
+                for (final member in groupMembers)
+                  _MemberRow(member: member, isOnline: isOnline),
               ],
           ],
         ),
@@ -509,34 +524,97 @@ class _MemberList extends StatelessWidget {
   }
 }
 
+int _roleRank(String role) {
+  return switch (role) {
+    'owner' => 0,
+    'admin' => 1,
+    _ => 2,
+  };
+}
+
+String _memberName(CircleMember member) {
+  final profile = member.profile;
+  return profile.displayName.trim().isEmpty
+      ? profile.username
+      : profile.displayName;
+}
+
+int _compareNames(CircleMember left, CircleMember right) {
+  return _memberName(
+    left,
+  ).toLowerCase().compareTo(_memberName(right).toLowerCase());
+}
+
 class _MemberRow extends ConsumerWidget {
-  const _MemberRow({required this.member});
+  const _MemberRow({required this.member, required this.isOnline});
 
   final CircleMember member;
+  final bool isOnline;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
     final profile = member.profile;
     final avatarUrl = ref
         .watch(avatarDisplayUrlProvider(profile.avatarUrl))
         .valueOrNull;
-    final name = profile.displayName.trim().isEmpty
-        ? profile.username
-        : profile.displayName;
+    final name = _memberName(member);
+    final roleIcon = switch (member.role) {
+      'owner' => Icons.workspace_premium_outlined,
+      'admin' => Icons.shield_outlined,
+      _ => null,
+    };
 
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      leading: CircleAvatar(
-        radius: 16,
-        backgroundImage: avatarUrl == null ? null : NetworkImage(avatarUrl),
-        child: avatarUrl == null
-            ? Text(name.characters.first.toUpperCase())
-            : null,
+    return Opacity(
+      opacity: isOnline ? 1 : 0.55,
+      child: ListTile(
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundImage: avatarUrl == null
+                  ? null
+                  : NetworkImage(avatarUrl),
+              child: avatarUrl == null
+                  ? Text(name.characters.first.toUpperCase())
+                  : null,
+            ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                key: ValueKey(
+                  isOnline
+                      ? 'member-online-${profile.id}'
+                      : 'member-offline-${profile.id}',
+                ),
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isOnline ? Colors.green : colorScheme.outline,
+                  border: Border.all(
+                    color: colorScheme.surfaceContainerLow,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: roleIcon == null
+            ? null
+            : Tooltip(
+                message: member.role == 'owner' ? 'Owner' : 'Admin',
+                child: Icon(roleIcon, size: 16),
+              ),
+        onTap: () => context.push('${UserProfileScreen.path}/${profile.id}'),
       ),
-      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () => context.push('${UserProfileScreen.path}/${profile.id}'),
     );
   }
 }

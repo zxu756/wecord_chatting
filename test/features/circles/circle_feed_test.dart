@@ -239,6 +239,10 @@ class FakeCirclesRepository implements CirclesRepository {
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();
 
   @override
+  Stream<Set<String>> circlePresence(String circleId) =>
+      const Stream<Set<String>>.empty();
+
+  @override
   Future<String> createPost({
     required String circleId,
     required String body,

@@ -406,6 +406,26 @@ void main() {
     expect(invalid.circle, isNull);
   });
 
+  test('circlePresence streams online member ids for the circle', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final updates = <Set<String>>[];
+    final subscription = repository
+        .circlePresence('circle-1')
+        .listen(updates.add);
+    dataSource.presence.add({'user-1'});
+    dataSource.presence.add({'user-1', 'user-2'});
+    await Future<void>.delayed(Duration.zero);
+    await subscription.cancel();
+
+    expect(dataSource.presenceCircleIds, ['circle-1']);
+    expect(updates, [
+      {'user-1'},
+      {'user-1', 'user-2'},
+    ]);
+  });
+
   test('acceptInvite returns the joined circle id', () async {
     final dataSource = FakeCirclesDataSource()..rpcValue = 'circle-1';
     final repository = SupabaseCirclesRepository.withDataSource(dataSource);
@@ -426,6 +446,8 @@ class FakeCirclesDataSource implements CirclesDataSource {
   final uploads = <UploadCall>[];
   final signedUrlCalls = <Map<String, Object>>[];
   final changes = StreamController<void>.broadcast();
+  final presence = StreamController<Set<String>>.broadcast();
+  final presenceCircleIds = <String>[];
 
   @override
   Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
@@ -461,6 +483,12 @@ class FakeCirclesDataSource implements CirclesDataSource {
 
   @override
   Stream<void> circleChanges(String circleId) => changes.stream;
+
+  @override
+  Stream<Set<String>> circlePresence(String circleId) {
+    presenceCircleIds.add(circleId);
+    return presence.stream;
+  }
 }
 
 class RpcCall {

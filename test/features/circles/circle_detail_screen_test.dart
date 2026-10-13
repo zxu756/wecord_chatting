@@ -126,7 +126,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('circle-rail-circle-1')), findsOneWidget);
     expect(find.text('Channel general'), findsOneWidget);
-    expect(find.text('OWNER — 1'), findsOneWidget);
+    expect(find.text('ONLINE — 1'), findsOneWidget);
 
     await tester.tap(find.text('photos'));
     await tester.pumpAndSettle();
@@ -139,11 +139,86 @@ void main() {
 
     await tester.tap(find.byTooltip('Hide member list'));
     await tester.pumpAndSettle();
-    expect(find.text('OWNER — 1'), findsNothing);
+    expect(find.text('ONLINE — 1'), findsNothing);
 
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
     expect(find.text('No posts yet'), findsOneWidget);
+  });
+  testWidgets('wide member list groups members by presence', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final detail = _detail();
+    final repository = FakeCirclesRepository()
+      ..circles = [detail.circle]
+      ..onlineUserIds = {'user-1', 'user-2', 'user-3', 'user-4'}
+      ..detail = CircleDetail(
+        circle: detail.circle,
+        members: [
+          CircleMember(
+            profile: _profile(id: 'user-4', username: 'zed', name: 'Zed'),
+            role: 'member',
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-5', username: 'bea', name: 'Bea'),
+            role: 'admin',
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-3', username: 'amy', name: 'Amy'),
+            role: 'member',
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-2', username: 'yan', name: 'Yan'),
+            role: 'admin',
+          ),
+          ...detail.members,
+          CircleMember(
+            profile: _profile(id: 'user-6', username: 'abe', name: 'Abe'),
+            role: 'member',
+          ),
+        ],
+        channels: detail.channels,
+        posts: const [],
+      );
+    final router = GoRouter(
+      initialLocation: '/circles/circle-1',
+      routes: [
+        GoRoute(
+          path: '/circles/:circleId',
+          builder: (context, state) => CircleDetailScreen(
+            circleId: state.pathParameters['circleId']!,
+            channelViewBuilder: (context, channel, actions) => Scaffold(
+              appBar: AppBar(title: Text(channel.name), actions: actions),
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+
+    expect(repository.presenceRequests, contains('circle-1'));
+    expect(find.text('ONLINE — 4'), findsOneWidget);
+    expect(find.text('OFFLINE — 2'), findsOneWidget);
+
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    // Online: owner, then admins, then members, each by name.
+    expect(top('ONLINE — 4'), lessThan(top('Xu')));
+    expect(top('Xu'), lessThan(top('Yan')));
+    expect(top('Yan'), lessThan(top('Amy')));
+    expect(top('Amy'), lessThan(top('Zed')));
+    // Offline: by name, after every online member.
+    expect(top('Zed'), lessThan(top('OFFLINE — 2')));
+    expect(top('OFFLINE — 2'), lessThan(top('Abe')));
+    expect(top('Abe'), lessThan(top('Bea')));
+
+    expect(find.byKey(const ValueKey('member-online-user-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('member-offline-user-5')), findsOneWidget);
+    expect(find.byKey(const ValueKey('member-online-user-5')), findsNothing);
   });
 }
 
@@ -218,12 +293,20 @@ class FakeCirclesRepository implements CirclesRepository {
   var circles = <CircleSummary>[];
   var createdChannelName = '';
   var invitedMemberIds = <String>[];
+  var onlineUserIds = <String>{'user-1'};
+  final presenceRequests = <String>[];
 
   @override
   Future<CircleDetail> getCircleDetail(String circleId) async => detail;
 
   @override
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();
+
+  @override
+  Stream<Set<String>> circlePresence(String circleId) {
+    presenceRequests.add(circleId);
+    return Stream<Set<String>>.value(onlineUserIds);
+  }
 
   @override
   Future<String> createChannel({

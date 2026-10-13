@@ -144,6 +144,37 @@ class CircleDetail {
 
   bool get canManageRoles => can(CirclePermission.manageRoles);
 
+  /// The current user's permission bits in [channel]: what the server
+  /// computed with its overwrites, otherwise the circle-wide permissions.
+  int channelPermissionsOf(CircleChannel channel) {
+    if (isOwner) {
+      return CirclePermission.all;
+    }
+    return channel.currentUserPermissions ?? currentUserPermissions;
+  }
+
+  /// Whether the current user has [permission] in [channel].
+  bool canInChannel(CircleChannel channel, CirclePermission permission) {
+    return permission.isGrantedBy(channelPermissionsOf(channel));
+  }
+
+  /// Whether the current user may open channel settings: permissions need
+  /// manage roles, the rest manage channels.
+  bool get canOpenChannelSettings => canManageRoles || canManageChannels;
+
+  /// Whether the current user may edit the overwrite of [role] in a
+  /// channel: like the server, only roles below their highest role.
+  bool canEditRoleOverwrite(CircleRole role) {
+    return canManageRoles && role.position < currentUserRank;
+  }
+
+  /// Whether the current user may edit [member]'s overwrite in a channel:
+  /// their own, or a member ranked below them.
+  bool canEditMemberOverwrite(CircleMember member) {
+    return canManageRoles &&
+        (member.isCurrentUser || rankOf(member) < currentUserRank);
+  }
+
   CircleMember? get currentMember {
     for (final member in members) {
       if (member.isCurrentUser) {
@@ -307,6 +338,9 @@ class CircleChannel {
     required this.name,
     required this.position,
     this.categoryId,
+    this.currentUserPermissions,
+    this.isPrivate = false,
+    this.isReadOnly = false,
   });
 
   factory CircleChannel.fromJson(Map<String, dynamic> json) {
@@ -317,6 +351,10 @@ class CircleChannel {
       name: json['name'] as String,
       position: (json['position'] as num?)?.toInt() ?? 0,
       categoryId: json['category_id'] as String?,
+      currentUserPermissions: (json['current_user_permissions'] as num?)
+          ?.toInt(),
+      isPrivate: json['is_private'] == true,
+      isReadOnly: json['is_read_only'] == true,
     );
   }
 
@@ -328,6 +366,16 @@ class CircleChannel {
 
   /// Null for channels listed above every category.
   final String? categoryId;
+
+  /// The current user's permission bits in this channel, after channel
+  /// overwrites, when the server sent them.
+  final int? currentUserPermissions;
+
+  /// `@everyone` may not see the channel.
+  final bool isPrivate;
+
+  /// `@everyone` may not send messages in the channel.
+  final bool isReadOnly;
 }
 
 class CircleChannelCategory {

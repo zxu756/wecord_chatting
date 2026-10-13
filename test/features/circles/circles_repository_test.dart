@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -253,6 +254,121 @@ void main() {
       'target_circle_id': 'circle-1',
       'target_user_id': 'u2',
     });
+  });
+
+  test('channel overwrite methods call the overwrite RPCs', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = [
+        {
+          'id': 'ow-1',
+          'channel_id': 'channel-1',
+          'role_id': 'everyone',
+          'user_id': null,
+          'allow': 0,
+          'deny': 1,
+        },
+        {
+          'id': 'ow-2',
+          'channel_id': 'channel-1',
+          'role_id': null,
+          'user_id': 'u2',
+          'allow': 1 | 2,
+          'deny': 0,
+        },
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final overwrites = await repository.listChannelOverwrites('channel-1');
+    await repository.setChannelOverwrite(
+      channelId: 'channel-1',
+      roleId: 'role-1',
+      allow: 1,
+      deny: 2,
+    );
+    await repository.setChannelPrivacy(
+      channelId: 'channel-1',
+      isPrivate: true,
+      isReadOnly: false,
+    );
+
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'list_channel_overwrites',
+      'set_channel_overwrite',
+      'set_channel_privacy',
+    ]);
+    expect(dataSource.calls[0].params, {'target_channel_id': 'channel-1'});
+    expect(dataSource.calls[1].params, {
+      'target_channel_id': 'channel-1',
+      'target_role_id': 'role-1',
+      'target_user_id': null,
+      'allow_bits': 1,
+      'deny_bits': 2,
+    });
+    expect(dataSource.calls[2].params, {
+      'target_channel_id': 'channel-1',
+      'private': true,
+      'read_only': false,
+    });
+    expect(overwrites.first.roleId, 'everyone');
+    expect(
+      overwrites.first.stateOf(CirclePermission.viewChannel),
+      OverwriteState.deny,
+    );
+    expect(overwrites.last.userId, 'u2');
+    expect(
+      overwrites.last.stateOf(CirclePermission.sendMessages),
+      OverwriteState.allow,
+    );
+    expect(
+      overwrites.last.stateOf(CirclePermission.manageMessages),
+      OverwriteState.inherit,
+    );
+  });
+
+  test('CircleDetail uses channel permissions after overwrites', () {
+    final detail = CircleDetail.fromJson({
+      'circle': {
+        'id': 'circle-1',
+        'name': 'Circle',
+        'current_user_role': 'member',
+        'current_user_permissions': 1 | 2 | 64 | 8192,
+      },
+      'roles': const [],
+      'members': const [],
+      'channels': [
+        {
+          'id': 'channel-1',
+          'circle_id': 'circle-1',
+          'conversation_id': 'conversation-1',
+          'name': 'announcements',
+          'position': 0,
+          'current_user_permissions': 1,
+          'is_private': false,
+          'is_read_only': true,
+        },
+        {
+          'id': 'channel-2',
+          'circle_id': 'circle-1',
+          'conversation_id': 'conversation-2',
+          'name': 'legacy',
+          'position': 1,
+        },
+      ],
+      'posts': const [],
+    });
+    final [readOnly, legacy] = detail.channels;
+
+    expect(readOnly.isReadOnly, isTrue);
+    expect(readOnly.isPrivate, isFalse);
+    expect(readOnly.currentUserPermissions, 1);
+    expect(detail.canInChannel(readOnly, CirclePermission.viewChannel), isTrue);
+    expect(
+      detail.canInChannel(readOnly, CirclePermission.sendMessages),
+      isFalse,
+    );
+    // Payloads without channel permissions fall back to the circle's.
+    expect(detail.canInChannel(legacy, CirclePermission.sendMessages), isTrue);
+    expect(CirclePermission.channelPermissionMask, 1 | 2 | 4 | 64 | 256 | 8192);
   });
 
   test('getCircleDetail maps roles and permissions', () async {

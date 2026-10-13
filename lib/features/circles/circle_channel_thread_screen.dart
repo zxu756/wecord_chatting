@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 typedef CircleChannelThreadBuilder =
@@ -55,15 +58,19 @@ class _CircleChannelThreadScreenState
     final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
-    // Deep links carry no title; name the channel from the circle.
-    var title = widget.title;
-    if (title == null && detail != null) {
-      for (final channel in detail.channels) {
-        if (channel.conversationId == widget.conversationId) {
-          title = '# ${channel.name}';
+    CircleChannel? channel;
+    if (widget.conversationType == ConversationType.channel) {
+      for (final candidate in detail?.channels ?? const <CircleChannel>[]) {
+        if (candidate.conversationId == widget.conversationId) {
+          channel = candidate;
           break;
         }
       }
+    }
+    // Deep links carry no title; name the channel from the circle.
+    var title = widget.title;
+    if (title == null && channel != null) {
+      title = '# ${channel.name}';
     }
     final actions = [
       ChatThreadAction(
@@ -73,6 +80,16 @@ class _CircleChannelThreadScreenState
             ? null
             : () => _scaffoldKey.currentState?.openEndDrawer(),
       ),
+      if (detail != null && channel != null && detail.canOpenChannelSettings)
+        ChatThreadAction(
+          tooltip: 'Channel settings',
+          icon: Icons.settings_outlined,
+          onPressed: () => openCircleChannelSettings(
+            context,
+            circleId: circleId,
+            channelId: channel!.id,
+          ),
+        ),
     ];
 
     return Scaffold(
@@ -105,6 +122,10 @@ class _CircleChannelThreadScreenState
             title: title,
             conversationType: widget.conversationType,
             extraActions: actions,
+            // Threads fall back to the conversation list's answer.
+            canSendMessages: detail != null && channel != null
+                ? detail.canInChannel(channel, CirclePermission.sendMessages)
+                : null,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(
                 circleId,

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -119,6 +120,27 @@ abstract interface class CirclesRepository {
 
   /// Removes [userId] from the circle and all of its channels.
   Future<void> kickMember({required String circleId, required String userId});
+
+  /// The permission overwrites of a channel, roles first.
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(String channelId);
+
+  /// Stores the overwrite of [roleId] or [userId] (exactly one) in a
+  /// channel; [allow] = [deny] = 0 removes it.
+  Future<void> setChannelOverwrite({
+    required String channelId,
+    String? roleId,
+    String? userId,
+    required int allow,
+    required int deny,
+  });
+
+  /// Denies `@everyone` view channel ([isPrivate]) and send messages
+  /// ([isReadOnly]) in a channel, or lifts those denies.
+  Future<void> setChannelPrivacy({
+    required String channelId,
+    required bool isPrivate,
+    required bool isReadOnly,
+  });
 
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
@@ -412,6 +434,49 @@ class SupabaseCirclesRepository implements CirclesRepository {
   }
 
   @override
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(
+    String channelId,
+  ) async {
+    final rows = await _dataSource.rpc('list_channel_overwrites', {
+      'target_channel_id': channelId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleChannelOverwrite.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> setChannelOverwrite({
+    required String channelId,
+    String? roleId,
+    String? userId,
+    required int allow,
+    required int deny,
+  }) async {
+    await _dataSource.rpc('set_channel_overwrite', {
+      'target_channel_id': channelId,
+      'target_role_id': roleId,
+      'target_user_id': userId,
+      'allow_bits': allow,
+      'deny_bits': deny,
+    });
+  }
+
+  @override
+  Future<void> setChannelPrivacy({
+    required String channelId,
+    required bool isPrivate,
+    required bool isReadOnly,
+  }) async {
+    await _dataSource.rpc('set_channel_privacy', {
+      'target_channel_id': channelId,
+      'private': isPrivate,
+      'read_only': isReadOnly,
+    });
+  }
+
+  @override
   Future<CircleNotificationSettings> getNotificationSettings(
     String circleId,
   ) async {
@@ -693,6 +758,17 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
+              table: 'circle_channel_overwrites',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
               table: 'circle_posts',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
@@ -881,6 +957,37 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<void> kickMember({required String circleId, required String userId}) {
     throw StateError('Supabase must be initialized before kicking members.');
+  }
+
+  @override
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(
+    String channelId,
+  ) async {
+    return const [];
+  }
+
+  @override
+  Future<void> setChannelOverwrite({
+    required String channelId,
+    String? roleId,
+    String? userId,
+    required int allow,
+    required int deny,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before changing channel permissions.',
+    );
+  }
+
+  @override
+  Future<void> setChannelPrivacy({
+    required String channelId,
+    required bool isPrivate,
+    required bool isReadOnly,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before changing channel permissions.',
+    );
   }
 
   @override

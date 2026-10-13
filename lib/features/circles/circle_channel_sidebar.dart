@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
+import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -334,6 +335,37 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     }
   }
 
+  Future<void> _showChannelMenu(
+    CircleChannel channel,
+    Offset globalPosition,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<_ChannelMenuAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & Size.zero,
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: _ChannelMenuAction.settings,
+          child: ListTile(
+            leading: Icon(Icons.settings_outlined),
+            title: Text('Channel settings'),
+          ),
+        ),
+      ],
+    );
+    if (action == _ChannelMenuAction.settings && mounted) {
+      openCircleChannelSettings(
+        context,
+        circleId: _circleId,
+        channelId: channel.id,
+      );
+    }
+  }
+
   void _createChannel({String? categoryId}) {
     showCircleChannelCreationSheet(
       context,
@@ -426,11 +458,17 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
             final channelRow = CircleChannelRow(
               icon: Icons.tag,
               label: channel.name,
+              locked: channel.isPrivate,
               selected:
                   channel.id == widget.selectedChannelId &&
                   widget.selectedThreadConversationId == null,
               unread: unread,
               onTap: () => widget.onSelectChannel(channel),
+              // Long presses drag channels for members who can sort them.
+              onContextMenu: detail.canOpenChannelSettings
+                  ? (position) => _showChannelMenu(channel, position)
+                  : null,
+              longPressOpensMenu: !(canManage && dragOnLongPress),
             );
             return KeyedSubtree(
               key: ValueKey('circle-channel-${channel.id}'),
@@ -755,6 +793,8 @@ enum _CircleMenuAction {
 
 enum _CategoryMenuAction { rename, delete }
 
+enum _ChannelMenuAction { settings }
+
 /// Collapsible category title. Managers get a create-channel button and a
 /// menu (also on right click) to rename or delete the category.
 class CircleCategoryHeader extends StatelessWidget {
@@ -906,6 +946,9 @@ class CircleChannelRow extends StatelessWidget {
     required this.onTap,
     this.unread = false,
     this.indent = 0,
+    this.locked = false,
+    this.onContextMenu,
+    this.longPressOpensMenu = true,
     super.key,
   });
 
@@ -917,6 +960,14 @@ class CircleChannelRow extends StatelessWidget {
 
   /// Extra left inset, for threads under their channel.
   final double indent;
+
+  /// A private channel, marked with a lock.
+  final bool locked;
+
+  /// Opens the row's menu at a global position, on right click (and on long
+  /// press when [longPressOpensMenu]).
+  final ValueChanged<Offset>? onContextMenu;
+  final bool longPressOpensMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -940,6 +991,17 @@ class CircleChannelRow extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(6),
               onTap: onTap,
+              onSecondaryTapUp: onContextMenu == null
+                  ? null
+                  : (details) => onContextMenu!(details.globalPosition),
+              onLongPress: onContextMenu == null || !longPressOpensMenu
+                  ? null
+                  : () {
+                      final box = context.findRenderObject()! as RenderBox;
+                      onContextMenu!(
+                        box.localToGlobal(box.size.centerLeft(Offset.zero)),
+                      );
+                    },
               child: SizedBox(
                 // Discord-dense with a mouse, finger-sized on touch screens.
                 height: usesTouchInput(context) ? minTouchTargetSize : 34,
@@ -961,6 +1023,16 @@ class CircleChannelRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (locked)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.lock_outline,
+                          key: const ValueKey('channel-lock-icon'),
+                          size: 14,
+                          color: foreground,
+                        ),
+                      ),
                   ],
                 ),
               ),

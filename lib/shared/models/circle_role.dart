@@ -127,6 +127,20 @@ enum CirclePermission {
     connectVoice,
   ]);
 
+  /// The permissions a channel can overwrite, mirrored by
+  /// `circle_channel_overwrite_permissions()` in
+  /// `supabase/migrations/202610130014_channel_permission_overwrites.sql`.
+  static const channelPermissions = [
+    viewChannel,
+    sendMessages,
+    manageMessages,
+    createInvites,
+    mentionEveryone,
+    connectVoice,
+  ];
+
+  static final channelPermissionMask = maskOf(channelPermissions);
+
   final int bit;
 
   /// The name used by the SQL helpers.

@@ -1911,4 +1911,198 @@ void main() {
       ),
     );
   });
+
+  test('channel overwrites are member scoped, RPC written and realtime', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      sql,
+      contains('create table if not exists public.circle_channel_overwrites'),
+    );
+    expect(sql, contains('(role_id is null) <> (user_id is null)'));
+    expect(sql, contains('unique (channel_id, role_id)'));
+    expect(sql, contains('unique (channel_id, user_id)'));
+    expect(sql, contains('references public.circle_channels(id, circle_id)'));
+    expect(sql, contains('references public.circle_roles(id, circle_id)'));
+    expect(
+      sql,
+      contains('references public.circle_members(circle_id, user_id)'),
+    );
+    expect(sql, contains('allow & deny = 0'));
+    expect(
+      sql,
+      contains(
+        'alter table public.circle_channel_overwrites enable row level security',
+      ),
+    );
+    expect(
+      rawSql,
+      contains(
+        'alter publication supabase_realtime add table '
+        'public.circle_channel_overwrites',
+      ),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'circle_channel_overwrites').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+
+    // Bits mirror CirclePermission.channelPermissions.
+    final maskBody = functionBody(sql, 'circle_channel_overwrite_permissions');
+    for (final name in [
+      'view_channel',
+      'send_messages',
+      'manage_messages',
+      'create_invites',
+      'mention_everyone',
+      'connect_voice',
+    ]) {
+      expect(maskBody, contains("'$name'"));
+    }
+
+    final permissionsBody = functionBody(sql, 'circle_channel_permissions');
+    expect(permissionsBody, contains('security definer'));
+    expect(permissionsBody, contains('set search_path = public'));
+    expect(permissionsBody, contains('permissions & 16384 <> 0'));
+    expect(permissionsBody, contains('filter (where r.is_default)'));
+    expect(permissionsBody, contains('filter (where mr.role_id is not null)'));
+    expect(
+      permissionsBody,
+      contains('filter (where o.user_id = target_user_id)'),
+    );
+    // Deny then allow: @everyone, then roles, then the member.
+    expect(
+      permissionsBody.indexOf('everyone_deny) | everyone_allow'),
+      lessThan(permissionsBody.indexOf('roles_deny) | roles_allow')),
+    );
+    expect(
+      permissionsBody.indexOf('roles_deny) | roles_allow'),
+      lessThan(permissionsBody.indexOf('member_deny) | member_allow')),
+    );
+
+    for (final helper in [
+      'circle_channel_permissions(uuid, uuid)',
+      'circle_channel_has_permission(uuid, uuid, text)',
+      'conversation_circle_channel_id(uuid)',
+      'user_has_conversation_channel_permission(uuid, uuid, text)',
+    ]) {
+      expect(
+        rawSql,
+        contains(
+          'revoke execute on function public.$helper from authenticated',
+        ),
+      );
+    }
+    for (final rpc in [
+      'current_user_channel_permissions(uuid)',
+      'current_user_has_channel_permission(uuid, text)',
+      'set_channel_overwrite(uuid, uuid, uuid, bigint, bigint)',
+      'list_channel_overwrites(uuid)',
+      'set_channel_privacy(uuid, boolean, boolean)',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function public.$rpc to authenticated'),
+      );
+    }
+
+    final editBody = functionBody(sql, 'check_channel_overwrite_edit');
+    expect(editBody, contains("'manage_roles'"));
+    expect(editBody, contains("'view_channel'"));
+    expect(editBody, contains('target_role.position >= caller_rank'));
+    expect(editBody, contains('target_user_id <> current_user_id'));
+    expect(editBody, contains('changed_bits & ~caller_permissions <> 0'));
+
+    final setBody = functionBody(sql, 'set_channel_overwrite');
+    expect(setBody, contains('auth.uid()'));
+    expect(setBody, contains('allow_bits & deny_bits <> 0'));
+    expect(setBody, contains('check_channel_overwrite_edit'));
+    expect(setBody, contains('allow_bits = 0 and deny_bits = 0'));
+
+    final privacyBody = functionBody(sql, 'set_channel_privacy');
+    expect(privacyBody, contains('check_channel_overwrite_edit'));
+    expect(privacyBody, contains('r.is_default'));
+    expect(privacyBody, contains('highest_role_id'));
+  });
+
+  test('channel view and send permissions gate every message path', () {
+    final sql = effectiveMigrationSql();
+
+    final memberBody = functionBody(sql, 'is_current_user_conversation_member');
+    expect(memberBody, contains('public.circle_channel_overwrites o'));
+    expect(memberBody, contains('public.conversation_threads ct'));
+    expect(
+      memberBody,
+      contains('circle_channel_permissions(cc.id, auth.uid())'),
+    );
+
+    // Every read path still asks the membership helper.
+    for (final name in [
+      'reactions',
+      'thread_summary',
+      'list_pinned_messages',
+      'list_threads',
+      'list_conversation_media',
+      'search_messages',
+    ]) {
+      expect(
+        functionBody(sql, name),
+        contains('is_current_user_conversation_member'),
+        reason: name,
+      );
+    }
+    expect(
+      policyBody(sql, 'messages_select_member'),
+      contains('is_current_user_conversation_member(conversation_id)'),
+    );
+    expect(
+      policyBody(allMigrationSql(), 'circle_channels_select_member'),
+      contains("current_user_has_channel_permission(id, 'view_channel')"),
+    );
+
+    final detailBody = functionBody(sql, 'get_circle_detail');
+    expect(detailBody, contains("'current_user_permissions', channel_access"));
+    expect(detailBody, contains("'is_private'"));
+    expect(detailBody, contains("'is_read_only'"));
+    expect(
+      functionBody(sql, 'list_conversation_summaries'),
+      contains('can_send_messages'),
+    );
+    expect(
+      functionBody(sql, 'list_conversation_summaries'),
+      contains("'view_channel'"),
+    );
+    expect(
+      functionBody(sql, 'list_circle_summaries'),
+      contains('visible_channels'),
+    );
+    expect(
+      functionBody(sql, 'search_discovery'),
+      contains(
+        "circle_channel_has_permission(cc.id, auth.uid(), 'view_channel')",
+      ),
+    );
+    expect(
+      functionBody(sql, 'reorder_circle_channels'),
+      contains('visible_channel_ids'),
+    );
+
+    final sendBody = functionBody(sql, 'check_channel_message_send');
+    expect(sendBody, contains("new.type <> 'system'"));
+    expect(sendBody, contains("'send_messages'"));
+    expect(
+      sql,
+      contains(
+        'create trigger messages_check_channel_send\n'
+        '  before insert on public.messages',
+      ),
+    );
+    expect(functionBody(sql, 'create_thread'), contains("'send_messages'"));
+  });
 }

@@ -1654,6 +1654,64 @@ void main() {
     expect(find.text('Unpin'), findsNothing);
   });
 
+  testWidgets('channels without send permission show a read-only notice', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Announcement',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        conversationType: ConversationType.channel,
+        canSendMessages: false,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat-read-only-notice')), findsOneWidget);
+    expect(
+      find.text("You don't have permission to send messages in this channel"),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Send image'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.longPress(find.text('Announcement'));
+    await tester.pumpAndSettle();
+
+    // Reactions still work; replying and threads need send permission.
+    expect(find.text('Reply'), findsNothing);
+    expect(find.text('Create thread'), findsNothing);
+    expect(find.text('Forward'), findsOneWidget);
+  });
+
+  testWidgets('read-only falls back to the conversation list', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.channel,
+          unreadCount: 0,
+          canSendMessages: false,
+        ),
+      ];
+
+    await tester.pumpWidget(
+      _app(repository, conversationType: ConversationType.channel),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat-read-only-notice')), findsOneWidget);
+  });
+
   testWidgets('pin limit shows a snackbar', (tester) async {
     final repository = FakeChatsRepository()
       ..canPin = true
@@ -3001,6 +3059,7 @@ Widget _app(
   LinkLauncher? linkLauncher,
   Stream<Set<String>>? onlineUserIds,
   ValueChanged<ThreadTarget>? onOpenThread,
+  bool? canSendMessages,
 }) {
   return ProviderScope(
     overrides: [
@@ -3026,6 +3085,7 @@ Widget _app(
         title: title,
         conversationType: conversationType,
         onOpenThread: onOpenThread,
+        canSendMessages: canSendMessages,
       ),
     ),
   );

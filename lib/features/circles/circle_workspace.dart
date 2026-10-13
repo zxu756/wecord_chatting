@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
+import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
@@ -16,6 +17,7 @@ import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -111,6 +113,18 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       onPressed: () => setState(() => _openThread = null),
     );
     final selectedChannel = _selectedChannel;
+    final channelSettings =
+        selectedChannel != null && detail.canOpenChannelSettings
+        ? ChatThreadAction(
+            tooltip: 'Channel settings',
+            icon: Icons.settings_outlined,
+            onPressed: () => openCircleChannelSettings(
+              context,
+              circleId: detail.circle.id,
+              channelId: selectedChannel.id,
+            ),
+          )
+        : null;
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
 
@@ -154,8 +168,12 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                   )
                 : widget.channelViewBuilder?.call(context, selectedChannel, [
                         memberToggle.toIconButton(),
+                        ?channelSettings?.toIconButton(),
                       ]) ??
-                      _defaultChannelView(selectedChannel, [memberToggle]),
+                      _defaultChannelView(selectedChannel, [
+                        memberToggle,
+                        ?channelSettings,
+                      ]),
           ),
           if (_openThread case final thread?) ...[
             const VerticalDivider(width: 1),
@@ -217,6 +235,10 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       title: '# ${channel.name}',
       conversationType: ConversationType.channel,
       extraActions: actions,
+      canSendMessages: widget.detail.canInChannel(
+        channel,
+        CirclePermission.sendMessages,
+      ),
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
   }
@@ -225,12 +247,17 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     ThreadTarget thread,
     List<ChatThreadAction> actions,
   ) {
+    // Threads open next to their channel and share its permissions.
+    final channel = _selectedChannel;
     return ChatThreadScreen(
       key: ValueKey(thread.conversationId),
       conversationId: thread.conversationId,
       title: thread.title,
       conversationType: ConversationType.thread,
       extraActions: actions,
+      canSendMessages: channel == null
+          ? null
+          : widget.detail.canInChannel(channel, CirclePermission.sendMessages),
     );
   }
 }

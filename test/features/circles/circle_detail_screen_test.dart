@@ -16,6 +16,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -956,6 +957,328 @@ void main() {
     });
   });
 
+  group('channel permissions', () {
+    const everyone = CircleRole(
+      id: 'role-everyone',
+      name: '@everyone',
+      position: 0,
+      permissions: 1 | 2 | 64 | 8192,
+      isDefault: true,
+    );
+    const mods = CircleRole(
+      id: 'role-mods',
+      name: 'Mods',
+      position: 2,
+      permissions: 1 | 2 | 16,
+    );
+    const helpers = CircleRole(
+      id: 'role-helpers',
+      name: 'Helpers',
+      position: 1,
+      permissions: 0,
+    );
+
+    Future<FakeCirclesRepository> pumpChannels(
+      WidgetTester tester, {
+      required String currentUserId,
+      required int permissions,
+      int channelPermissions = 1 | 2 | 64 | 8192 | 16,
+      List<CircleChannelOverwrite> overwrites = const [],
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      CircleMember member(
+        String id,
+        String name,
+        String role, [
+        List<String> roleIds = const [],
+      ]) {
+        return CircleMember(
+          profile: _profile(id: id, username: name.toLowerCase(), name: name),
+          role: role,
+          roleIds: roleIds,
+          isCurrentUser: id == currentUserId,
+        );
+      }
+
+      final repository = FakeCirclesRepository()
+        ..channelOverwrites = overwrites
+        ..detail = CircleDetail(
+          circle: CircleSummary(
+            id: 'circle-1',
+            name: 'Close Friends',
+            memberCount: 3,
+            channelCount: 2,
+            currentUserRole: currentUserId == 'user-1' ? 'owner' : 'member',
+            currentUserPermissions: permissions,
+          ),
+          roles: const [mods, helpers, everyone],
+          members: [
+            member('user-1', 'Xu', 'owner'),
+            member('user-2', 'Yan', 'admin', ['role-mods']),
+            member('user-3', 'Amy', 'member', ['role-helpers']),
+          ],
+          channels: [
+            CircleChannel(
+              id: 'channel-1',
+              circleId: 'circle-1',
+              conversationId: 'conversation-1',
+              name: 'general',
+              position: 0,
+              currentUserPermissions: channelPermissions,
+            ),
+            const CircleChannel(
+              id: 'channel-2',
+              circleId: 'circle-1',
+              conversationId: 'conversation-2',
+              name: 'staff',
+              position: 1,
+              isPrivate: true,
+            ),
+          ],
+          posts: const [],
+        );
+      repository.circles = [repository.detail.circle];
+      final router = GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) => CircleDetailScreen(
+              circleId: state.pathParameters['circleId']!,
+              channelViewBuilder: (context, channel, actions) => Scaffold(
+                appBar: AppBar(title: Text(channel.name), actions: actions),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    testWidgets('private channels show a lock in the sidebar', (tester) async {
+      await pumpChannels(
+        tester,
+        currentUserId: 'user-3',
+        permissions: 1 | 2 | 64 | 8192,
+      );
+
+      final staffRow = find.ancestor(
+        of: find.text('staff'),
+        matching: find.byType(CircleChannelRow),
+      );
+      expect(
+        find.descendant(
+          of: staffRow,
+          matching: find.byKey(const ValueKey('channel-lock-icon')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('channel-lock-icon')), findsOneWidget);
+      // Plain members get neither the settings action nor the menu.
+      expect(find.byTooltip('Channel settings'), findsNothing);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('staff')),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Channel settings'), findsNothing);
+    });
+
+    testWidgets('managers make a channel private and read-only', (
+      tester,
+    ) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-2',
+        permissions: 1 | 2 | 64 | 8192 | 16,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Channel settings'), findsOneWidget);
+      expect(find.text('# general'), findsOneWidget);
+      await tester.tap(find.text('Private channel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Read-only channel'));
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, [
+        'privacy channel-1 true false',
+        'privacy channel-1 false true',
+      ]);
+    });
+
+    testWidgets('right click on a channel opens its settings', (tester) async {
+      await pumpChannels(
+        tester,
+        currentUserId: 'user-1',
+        permissions: CirclePermission.all,
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('staff')),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Channel settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('# staff'), findsOneWidget);
+      expect(find.text('Private channel'), findsOneWidget);
+      final privateSwitch = tester.widget<SwitchListTile>(
+        find.byKey(const ValueKey('channel-private-switch')),
+      );
+      expect(privateSwitch.value, isTrue);
+    });
+
+    testWidgets('overwrites are edited with allow, inherit and deny', (
+      tester,
+    ) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-2',
+        permissions: 1 | 2 | 64 | 8192 | 16,
+        overwrites: const [
+          CircleChannelOverwrite(
+            id: 'ow-everyone',
+            channelId: 'channel-1',
+            roleId: 'role-everyone',
+            deny: 2,
+          ),
+          CircleChannelOverwrite(
+            id: 'ow-mods',
+            channelId: 'channel-1',
+            roleId: 'role-mods',
+            allow: 2,
+          ),
+          CircleChannelOverwrite(
+            id: 'ow-amy',
+            channelId: 'channel-1',
+            userId: 'user-3',
+            allow: 1,
+          ),
+        ],
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Denied: Send messages'), findsOneWidget);
+      expect(find.text('Allowed: Send messages'), findsOneWidget);
+      expect(find.text('Allowed: View channels'), findsOneWidget);
+      // Mods is the caller's own rank: shown but not editable.
+      final modsTile = tester.widget<ListTile>(
+        find.byKey(const ValueKey('channel-overwrite-ow-mods')),
+      );
+      expect(modsTile.onTap, isNull);
+
+      await tester.tap(find.text('Amy'));
+      await tester.pumpAndSettle();
+      final sendRow = find.byKey(const ValueKey('overwrite-row-send_messages'));
+      await tester.tap(
+        find.descendant(of: sendRow, matching: find.byTooltip('Deny')),
+      );
+      await tester.pumpAndSettle();
+      // Manage messages is not the caller's to give.
+      final manageRow = find.byKey(
+        const ValueKey('overwrite-row-manage_messages'),
+      );
+      final manageButton = tester.widget<SegmentedButton<OverwriteState>>(
+        find.descendant(
+          of: manageRow,
+          matching: find.byType(SegmentedButton<OverwriteState>),
+        ),
+      );
+      expect(manageButton.onSelectionChanged, isNull);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['set channel-1 user-3 1 2']);
+    });
+
+    testWidgets('roles and members get new overwrites', (tester) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-2',
+        permissions: 1 | 2 | 64 | 8192 | 16,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No role or member has its own permissions here yet.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Add role or member'));
+      await tester.pumpAndSettle();
+      // Roles below the caller and members below them (or themselves).
+      expect(find.text('Helpers'), findsOneWidget);
+      expect(find.text('@everyone'), findsOneWidget);
+      expect(find.text('Mods'), findsNothing);
+      expect(find.text('Xu'), findsNothing);
+      expect(find.text('Amy'), findsOneWidget);
+      expect(find.text('Yan'), findsOneWidget);
+
+      await tester.tap(find.text('Helpers'));
+      await tester.pumpAndSettle();
+      final viewRow = find.byKey(const ValueKey('overwrite-row-view_channel'));
+      await tester.tap(
+        find.descendant(of: viewRow, matching: find.byTooltip('Allow')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['set channel-1 role-helpers 1 0']);
+    });
+
+    testWidgets('failed saves show a snackbar', (tester) async {
+      final repository =
+          await pumpChannels(
+              tester,
+              currentUserId: 'user-1',
+              permissions: CirclePermission.all,
+              overwrites: const [
+                CircleChannelOverwrite(
+                  id: 'ow-helpers',
+                  channelId: 'channel-1',
+                  roleId: 'role-helpers',
+                  allow: 1,
+                ),
+              ],
+            )
+            ..overwriteError = StateError('nope');
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Helpers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['set channel-1 role-helpers 0 0']);
+      expect(
+        find.text('Could not save channel permissions. Try again.'),
+        findsOneWidget,
+      );
+    });
+  });
+
   group('circle nicknames', () {
     Future<FakeCirclesRepository> pumpWorkspace(
       WidgetTester tester, {
@@ -1875,6 +2198,39 @@ class FakeCirclesRepository implements CirclesRepository {
     required String userId,
   }) async {
     kickedUserIds.add(userId);
+  }
+
+  var channelOverwrites = <CircleChannelOverwrite>[];
+  final overwriteCalls = <String>[];
+  Object? overwriteError;
+
+  @override
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(
+    String channelId,
+  ) async => channelOverwrites;
+
+  @override
+  Future<void> setChannelOverwrite({
+    required String channelId,
+    String? roleId,
+    String? userId,
+    required int allow,
+    required int deny,
+  }) async {
+    overwriteCalls.add('set $channelId ${roleId ?? userId} $allow $deny');
+    final error = overwriteError;
+    if (error != null) {
+      throw error;
+    }
+  }
+
+  @override
+  Future<void> setChannelPrivacy({
+    required String channelId,
+    required bool isPrivate,
+    required bool isReadOnly,
+  }) async {
+    overwriteCalls.add('privacy $channelId $isPrivate $isReadOnly');
   }
 
   @override

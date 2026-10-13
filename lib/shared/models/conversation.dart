@@ -66,6 +66,7 @@ class ConversationSummary {
     this.threadId,
     this.threadArchivedAt,
     this.threadLastActivityAt,
+    this.canSendMessages = true,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -114,6 +115,7 @@ class ConversationSummary {
       threadLastActivityAt: _parseOptionalTimestamp(
         json['thread_last_activity_at'],
       ),
+      canSendMessages: json['can_send_messages'] as bool? ?? true,
     );
   }
 
@@ -161,6 +163,10 @@ class ConversationSummary {
   final String? threadId;
   final DateTime? threadArchivedAt;
   final DateTime? threadLastActivityAt;
+
+  /// False in circle channels (and their threads) where the current user
+  /// lacks send_messages.
+  final bool canSendMessages;
 
   bool get isThread => type == ConversationType.thread;
 
@@ -250,6 +256,7 @@ class ConversationSummary {
       threadId: threadId,
       threadArchivedAt: threadArchivedAt,
       threadLastActivityAt: threadLastActivityAt,
+      canSendMessages: canSendMessages,
     );
   }
 }

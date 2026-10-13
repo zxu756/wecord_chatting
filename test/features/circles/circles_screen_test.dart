@@ -9,6 +9,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -504,6 +505,27 @@ class FakeCirclesRepository implements CirclesRepository {
   Future<void> kickMember({
     required String circleId,
     required String userId,
+  }) async {}
+
+  @override
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(
+    String channelId,
+  ) async => const [];
+
+  @override
+  Future<void> setChannelOverwrite({
+    required String channelId,
+    String? roleId,
+    String? userId,
+    required int allow,
+    required int deny,
+  }) async {}
+
+  @override
+  Future<void> setChannelPrivacy({
+    required String channelId,
+    required bool isPrivate,
+    required bool isReadOnly,
   }) async {}
 
   @override

@@ -1383,14 +1383,16 @@ void main() {
             'thread_archived_at': null,
             'thread_last_activity_at': '2026-10-13T09:00:00Z',
             'circle_id': 'circle-1',
+            'can_send_messages': false,
           },
+          {'id': 'conversation-2', 'type': 'direct', 'unread_count': 0},
         ];
       final repository = SupabaseChatsRepository.withDataSource(
         dataSource,
         currentUserId: () => 'user-1',
       );
 
-      final thread = (await repository.listConversations()).single;
+      final [thread, direct] = await repository.listConversations();
 
       expect(thread.type, ConversationType.thread);
       expect(thread.isThread, isTrue);
@@ -1398,6 +1400,9 @@ void main() {
       expect(thread.parentTitle, 'general');
       expect(thread.threadId, 'thread-1');
       expect(thread.threadLastActivityAt, DateTime.utc(2026, 10, 13, 9));
+      expect(thread.canSendMessages, isFalse);
+      // Older servers send no permission: sending stays allowed.
+      expect(direct.canSendMessages, isTrue);
     });
   });
 

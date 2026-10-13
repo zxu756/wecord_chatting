@@ -618,6 +618,88 @@ void main() {
       expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Kick'));
     });
 
+    phoneTestWidgets('channel settings and permission overwrites', (
+      tester,
+      viewport,
+    ) async {
+      await openCircleChannel(tester);
+      await openMoreMenu(tester);
+      await tester.tap(find.text('Channel settings'));
+      await settle(tester);
+      expect(find.text('# general'), findsOneWidget);
+      expectFullyVisible(tester, find.text('Private channel'));
+      expectFullyVisible(tester, find.text('Read-only channel'));
+      expectTouchTargets(
+        tester,
+        find.byKey(const ValueKey('channel-private-switch')),
+      );
+
+      final grace = find.byKey(const ValueKey('channel-overwrite-ow-grace'));
+      await scrollIntoView(tester, grace);
+      await tester.tap(grace);
+      await settle(tester);
+      final connect = find.byKey(const ValueKey('overwrite-row-connect_voice'));
+      await tester.ensureVisible(connect);
+      await settle(tester);
+      expectFullyVisible(tester, connect);
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await tester.ensureVisible(save);
+      await settle(tester);
+      expectFullyVisible(tester, save);
+      expectFullyVisible(tester, find.text('Remove'));
+      await popTopRoute(tester);
+
+      await tester.ensureVisible(find.text('Add role or member'));
+      await settle(tester);
+      await tester.tap(find.text('Add role or member'));
+      await settle(tester);
+      expect(find.text('Trip Leaders'), findsOneWidget);
+      expect(find.text('Linus'), findsOneWidget);
+    });
+
+    phoneTestWidgets('read-only channel replaces the composer', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.circles.detail = circleDetailWith(
+        channelId: 'ch-general',
+        permissions: 1 | 64 | 8192,
+      );
+      world.chats.messages = richMessages(withThread: true);
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+      expectFullyVisible(
+        tester,
+        find.text("You don't have permission to send messages in this channel"),
+      );
+      expect(find.widgetWithText(TextField, 'Message'), findsNothing);
+    });
+
+    phoneTestWidgets('private channels show a lock', (tester, viewport) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      final photos = find.text('photo-dump');
+      await scrollIntoView(tester, photos);
+      expectFullyVisible(
+        tester,
+        find.descendant(
+          of: find.ancestor(
+            of: photos,
+            matching: find.byType(CircleChannelRow),
+          ),
+          matching: find.byKey(const ValueKey('channel-lock-icon')),
+        ),
+      );
+    });
+
     phoneTestWidgets('circle channel composer stays above the keyboard', (
       tester,
       viewport,

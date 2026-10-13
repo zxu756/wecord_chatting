@@ -164,6 +164,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.conversationType,
     this.extraActions = const [],
     this.onOpenThread,
+    this.canSendMessages,
     super.key,
   });
 
@@ -178,6 +179,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 
   /// Opens a thread started here. Defaults to pushing it full screen.
   final ValueChanged<ThreadTarget>? onOpenThread;
+
+  /// Whether the current user may send here; false replaces the composer
+  /// with a notice. Defaults to what the conversation list says.
+  final bool? canSendMessages;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -381,6 +386,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         threadId != null &&
         (ref.watch(canManageThreadProvider(threadId)).valueOrNull ?? false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
+    final canSend =
+        widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
     // A direct peer is online when they have the app open anywhere; in
@@ -640,6 +647,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               latestOutgoingReadState.latestOutgoingMessageId ==
                                   message.id &&
                               latestOutgoingReadState.isRead,
+                          canCompose: canSend,
                           onReply: _startReply,
                           onEdit: _startEdit,
                           onForward: _showForwardSheet,
@@ -650,7 +658,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           canPin: canPinMessages,
                           onTogglePin: _togglePin,
                           onRemoveEmbed: _removeEmbed,
-                          canStartThread: canStartThreads,
+                          canStartThread: canStartThreads && canSend,
                           onOpenThread: _openOrCreateThread,
                         );
                       }
@@ -717,34 +725,37 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   child: Text('typing...'),
                 ),
               ),
-            _Composer(
-              controller: _composerController,
-              isSending: _isSending,
-              isPickingImage: _isPickingImage,
-              isSendingImage: _isSendingImage,
-              errorText: _sendError,
-              mentionCandidates: _mentionCandidates(groupDetail),
-              onSelectMention: _insertMention,
-              replyPreviewText: _replyingTo == null
-                  ? null
-                  : _replyPreviewBody(_replyingTo!),
-              isEditing: _editingMessage != null,
-              onChanged: _handleComposerChanged,
-              onSend: _sendMessage,
-              onPickImage: _pickAndSendImage,
-              isRecordingVoice: _isRecordingVoice,
-              isSendingVoice: _isSendingVoice,
-              onStartVoiceRecording: _startVoiceRecording,
-              onCancelVoiceRecording: _cancelVoiceRecording,
-              onSendVoiceRecording: _sendVoiceRecording,
-              onCancelReply: _cancelReply,
-              onCancelEdit: _cancelEdit,
-              // What is left above the keyboard, so a short phone keeps
-              // some of the conversation in view while typing.
-              availableHeight:
-                  constraints.maxHeight -
-                  MediaQuery.viewInsetsOf(context).bottom,
-            ),
+            if (!canSend)
+              const _ReadOnlyComposerNotice()
+            else
+              _Composer(
+                controller: _composerController,
+                isSending: _isSending,
+                isPickingImage: _isPickingImage,
+                isSendingImage: _isSendingImage,
+                errorText: _sendError,
+                mentionCandidates: _mentionCandidates(groupDetail),
+                onSelectMention: _insertMention,
+                replyPreviewText: _replyingTo == null
+                    ? null
+                    : _replyPreviewBody(_replyingTo!),
+                isEditing: _editingMessage != null,
+                onChanged: _handleComposerChanged,
+                onSend: _sendMessage,
+                onPickImage: _pickAndSendImage,
+                isRecordingVoice: _isRecordingVoice,
+                isSendingVoice: _isSendingVoice,
+                onStartVoiceRecording: _startVoiceRecording,
+                onCancelVoiceRecording: _cancelVoiceRecording,
+                onSendVoiceRecording: _sendVoiceRecording,
+                onCancelReply: _cancelReply,
+                onCancelEdit: _cancelEdit,
+                // What is left above the keyboard, so a short phone keeps
+                // some of the conversation in view while typing.
+                availableHeight:
+                    constraints.maxHeight -
+                    MediaQuery.viewInsetsOf(context).bottom,
+              ),
           ],
         ),
       ),
@@ -1907,6 +1918,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isCurrentUser,
     required this.showReadReceipt,
     required this.onReply,
+    this.canCompose = true,
     this.sender,
     this.isFollowUp = false,
     this.hasFollowUp = false,
@@ -1938,6 +1950,9 @@ class _MessageBubble extends StatelessWidget {
 
   /// The next message continues this one's group, so the gap below shrinks.
   final bool hasFollowUp;
+
+  /// The composer is available, so replying and editing are offered.
+  final bool canCompose;
   final ValueChanged<ChatMessage> onReply;
   final ValueChanged<ChatMessage> onEdit;
   final ValueChanged<ChatMessage> onForward;
@@ -2153,14 +2168,15 @@ class _MessageBubble extends StatelessWidget {
                   },
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.reply_outlined),
-                  title: const Text('Reply'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onReply(message);
-                  },
-                ),
+                if (canCompose)
+                  ListTile(
+                    leading: const Icon(Icons.reply_outlined),
+                    title: const Text('Reply'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onReply(message);
+                    },
+                  ),
                 if (onOpenThread != null &&
                     (message.threadSummary != null ||
                         (canStartThread && message.type != MessageType.system)))
@@ -2184,7 +2200,9 @@ class _MessageBubble extends StatelessWidget {
                     onForward(message);
                   },
                 ),
-                if (isCurrentUser && message.type == MessageType.text)
+                if (canCompose &&
+                    isCurrentUser &&
+                    message.type == MessageType.text)
                   ListTile(
                     leading: const Icon(Icons.edit_outlined),
                     title: const Text('Edit'),
@@ -2817,6 +2835,48 @@ class _Composer extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Takes the composer's place where the current user may not send.
+class _ReadOnlyComposerNotice extends StatelessWidget {
+  const _ReadOnlyComposerNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        key: const ValueKey('chat-read-only-notice'),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "You don't have permission to send messages in this "
+                  'channel',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -19,6 +19,7 @@ import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -595,6 +596,9 @@ CircleChannel _channel(
   String name,
   int position, {
   String? categoryId,
+  bool isPrivate = false,
+  bool isReadOnly = false,
+  int? permissions,
 }) {
   return CircleChannel(
     id: id,
@@ -603,6 +607,9 @@ CircleChannel _channel(
     name: name,
     position: position,
     categoryId: categoryId,
+    isPrivate: isPrivate,
+    isReadOnly: isReadOnly,
+    currentUserPermissions: permissions,
   );
 }
 
@@ -685,6 +692,53 @@ final circleSummaries = [
   ),
 ];
 
+/// [circleDetail] with the current user holding [permissions] in
+/// [channelId].
+CircleDetail circleDetailWith({
+  required String channelId,
+  required int permissions,
+}) {
+  final detail = circleDetail();
+  return CircleDetail(
+    circle: CircleSummary(
+      id: detail.circle.id,
+      name: detail.circle.name,
+      memberCount: detail.circle.memberCount,
+      channelCount: detail.circle.channelCount,
+      currentUserRole: 'member',
+      currentUserPermissions: 1 | 2 | 64 | 8192,
+    ),
+    categories: detail.categories,
+    channels: [
+      for (final channel in detail.channels)
+        channel.id == channelId
+            ? CircleChannel(
+                id: channel.id,
+                circleId: channel.circleId,
+                conversationId: channel.conversationId,
+                name: channel.name,
+                position: channel.position,
+                categoryId: channel.categoryId,
+                isReadOnly: true,
+                currentUserPermissions: permissions,
+              )
+            : channel,
+    ],
+    roles: detail.roles,
+    members: [
+      for (final member in detail.members)
+        CircleMember(
+          profile: member.profile,
+          role: member.isCurrentUser ? 'member' : member.role,
+          nickname: member.nickname,
+          roleIds: member.roleIds,
+          isCurrentUser: member.isCurrentUser,
+        ),
+    ],
+    posts: detail.posts,
+  );
+}
+
 CircleDetail circleDetail() {
   return CircleDetail(
     circle: circleSummaries.first,
@@ -710,7 +764,14 @@ CircleDetail circleDetail() {
     ],
     channels: [
       _channel('ch-general', 'conv-general', 'general', 0),
-      _channel('ch-ann', 'conv-ann', 'announcements', 0, categoryId: 'cat-1'),
+      _channel(
+        'ch-ann',
+        'conv-ann',
+        'announcements',
+        0,
+        categoryId: 'cat-1',
+        isReadOnly: true,
+      ),
       _channel(
         'ch-random',
         'conv-random',
@@ -731,6 +792,7 @@ CircleDetail circleDetail() {
         'photo-dump',
         1,
         categoryId: 'cat-2',
+        isPrivate: true,
       ),
       _channel('ch-old', 'conv-old', 'old-stuff', 0, categoryId: 'cat-3'),
     ],
@@ -875,6 +937,33 @@ class PhoneChatsRepository extends chat_fakes.FakeChatsRepository {
 }
 
 class PhoneCirclesRepository extends circle_fakes.FakeCirclesRepository {
+  @override
+  Future<List<CircleChannelOverwrite>> listChannelOverwrites(
+    String channelId,
+  ) async {
+    return [
+      CircleChannelOverwrite(
+        id: 'ow-everyone',
+        channelId: channelId,
+        roleId: 'role-everyone',
+        deny: 1 | 2,
+      ),
+      CircleChannelOverwrite(
+        id: 'ow-mods',
+        channelId: channelId,
+        roleId: 'role-mods',
+        allow: 1 | 2 | 4 | 256,
+      ),
+      CircleChannelOverwrite(
+        id: 'ow-grace',
+        channelId: channelId,
+        userId: grace.id,
+        allow: 1,
+        deny: 2 | 64 | 8192,
+      ),
+    ];
+  }
+
   @override
   Future<List<CircleInvite>> listInvites(String circleId) async {
     return [

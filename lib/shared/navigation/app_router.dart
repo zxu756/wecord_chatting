@@ -155,6 +155,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 circleId: state.pathParameters['circleId']!,
               );
             },
+            routes: [
+              // Circle channels opened full screen on narrow layouts. Living
+              // under /circles keeps the Circles destination highlighted.
+              GoRoute(
+                path: 'channels/:conversationId',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  return CircleChannelThreadScreen(
+                    circleId: state.pathParameters['circleId']!,
+                    conversationId: state.pathParameters['conversationId']!,
+                    title: switch (extra) {
+                      ChatThreadRouteExtra(:final title) => title,
+                      String() => extra,
+                      _ => null,
+                    },
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: '${CircleInviteScreen.path}/:code',

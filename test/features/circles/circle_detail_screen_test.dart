@@ -1158,8 +1158,8 @@ void main() {
   });
 }
 
-/// The circle route plus the chat route the app uses for pushed channels,
-/// with a stand-in thread.
+/// The circle route plus the nested channel route the app uses for pushed
+/// channels, with a stand-in thread.
 GoRouter _narrowRouter() {
   return GoRouter(
     initialLocation: '/circles/circle-1',
@@ -1168,26 +1168,29 @@ GoRouter _narrowRouter() {
         path: '/circles/:circleId',
         builder: (context, state) =>
             CircleDetailScreen(circleId: state.pathParameters['circleId']!),
-      ),
-      GoRoute(
-        path: '${ChatsScreen.path}/:conversationId',
-        builder: (context, state) {
-          final conversationId = state.pathParameters['conversationId']!;
-          final extra = state.extra! as ChatThreadRouteExtra;
-          expect(extra.circleId, 'circle-1');
-          expect(extra.type, ConversationType.channel);
-          return CircleChannelThreadScreen(
-            circleId: extra.circleId!,
-            conversationId: conversationId,
-            title: extra.title,
-            threadBuilder: (context, actions) => Scaffold(
-              appBar: AppBar(
-                title: Text('Thread $conversationId'),
-                actions: actions,
-              ),
-            ),
-          );
-        },
+        routes: [
+          GoRoute(
+            path: 'channels/:conversationId',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              final extra = state.extra! as ChatThreadRouteExtra;
+              expect(state.pathParameters['circleId'], 'circle-1');
+              expect(extra.circleId, 'circle-1');
+              expect(extra.type, ConversationType.channel);
+              return CircleChannelThreadScreen(
+                circleId: state.pathParameters['circleId']!,
+                conversationId: conversationId,
+                title: extra.title,
+                threadBuilder: (context, actions) => Scaffold(
+                  appBar: AppBar(
+                    title: Text('Thread $conversationId'),
+                    actions: actions,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     ],
   );

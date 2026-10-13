@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
+import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 typedef CircleChannelThreadBuilder =
@@ -18,6 +19,11 @@ class CircleChannelThreadScreen extends ConsumerStatefulWidget {
     this.threadBuilder,
     super.key,
   });
+
+  /// Where a circle channel opens full screen, under its circle.
+  static String pathFor(String circleId, String conversationId) {
+    return '${CirclesScreen.path}/$circleId/channels/$conversationId';
+  }
 
   final String circleId;
   final String conversationId;
@@ -43,6 +49,16 @@ class _CircleChannelThreadScreenState
     final onlineUserIds =
         ref.watch(circlePresenceProvider(circleId)).valueOrNull ??
         const <String>{};
+    // Deep links carry no title; name the channel from the circle.
+    var title = widget.title;
+    if (title == null && detail != null) {
+      for (final channel in detail.channels) {
+        if (channel.conversationId == widget.conversationId) {
+          title = '# ${channel.name}';
+          break;
+        }
+      }
+    }
     final actions = [
       IconButton(
         tooltip: 'Show member list',
@@ -78,7 +94,7 @@ class _CircleChannelThreadScreenState
           widget.threadBuilder?.call(context, actions) ??
           ChatThreadScreen(
             conversationId: widget.conversationId,
-            title: widget.title,
+            title: title,
             conversationType: ConversationType.channel,
             extraActions: actions,
           ),

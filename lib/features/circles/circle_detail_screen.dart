@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
@@ -118,7 +119,10 @@ class CircleMobileHome extends ConsumerWidget {
                   onChanged: onChanged,
                 ),
                 onSelectChannel: (channel) => context.push(
-                  '${ChatsScreen.path}/${channel.conversationId}',
+                  CircleChannelThreadScreen.pathFor(
+                    circleId,
+                    channel.conversationId,
+                  ),
                   extra: ChatThreadRouteExtra(
                     title: '# ${channel.name}',
                     type: ConversationType.channel,

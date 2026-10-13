@@ -236,6 +236,76 @@ void main() {
     expect(find.byType(ChatThreadScreen), findsOneWidget);
   });
 
+  testWidgets('circle channel threads keep the Circles tab selected', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+    int selectedIndex() =>
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex;
+    expect(selectedIndex(), 0);
+
+    // Deep link without extras still opens the circle channel.
+    router.go('/circles/circle-1/channels/conversation-1');
+    await tester.pump();
+    await tester.pump();
+    final screen = tester.widget<CircleChannelThreadScreen>(
+      find.byType(CircleChannelThreadScreen),
+    );
+    expect(screen.circleId, 'circle-1');
+    expect(screen.conversationId, 'conversation-1');
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
+    expect(selectedIndex(), 2);
+
+    router.go('/chats');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(CircleChannelThreadScreen), findsNothing);
+    expect(selectedIndex(), 0);
+
+    router.push(
+      CircleChannelThreadScreen.pathFor('circle-1', 'conversation-1'),
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester
+          .widget<CircleChannelThreadScreen>(
+            find.byType(CircleChannelThreadScreen),
+          )
+          .title,
+      '# general',
+    );
+    expect(selectedIndex(), 2);
+  });
+
   testWidgets('routes signed-in users to profile pages', (tester) async {
     final repository = FakeAuthRepository();
     final authState = StreamController<AuthUser?>();

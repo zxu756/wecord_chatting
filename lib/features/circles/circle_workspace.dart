@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
+import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
@@ -270,6 +271,52 @@ Future<void> changeCircleNickname(
   }
 }
 
+/// Asks to confirm, then kicks [member] out of the circle.
+Future<void> kickCircleMember(
+  BuildContext context,
+  WidgetRef ref, {
+  required String circleId,
+  required CircleMember member,
+}) async {
+  final name = member.displayName;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      scrollable: true,
+      title: Text('Kick $name'),
+      content: Text(
+        'Remove $name from this circle and all of its channels? They can '
+        'rejoin with an invite.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Kick'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await ref
+        .read(circlesRepositoryProvider)
+        .kickMember(circleId: circleId, userId: member.profile.id);
+    ref.invalidate(circleDetailProvider(circleId));
+    messenger?.showSnackBar(SnackBar(content: Text('Kicked $name.')));
+  } catch (_) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text('Could not kick $name. Try again.')),
+    );
+  }
+}
+
 /// Asks for a circle nickname. Returns the trimmed nickname, an empty string
 /// to clear it, or null when cancelled.
 Future<String?> showCircleNicknameDialog(
@@ -388,8 +435,8 @@ void showCircleChannelCreationSheet(
 /// Circle members split into groups: online members under their highest
 /// hoisted role (highest role first), the remaining online members, then
 /// everyone offline. Names take their highest coloured role's colour; a
-/// menu views profiles, changes nicknames and manages roles.
-class CircleMemberList extends StatelessWidget {
+/// menu views profiles, changes nicknames, manages roles and kicks.
+class CircleMemberList extends ConsumerWidget {
   const CircleMemberList({
     required this.detail,
     required this.onlineUserIds,
@@ -408,7 +455,7 @@ class CircleMemberList extends StatelessWidget {
   final double? width;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hoisted = <String, List<CircleMember>>{};
     final online = <CircleMember>[];
     final offline = <CircleMember>[];
@@ -479,6 +526,14 @@ class CircleMemberList extends StatelessWidget {
                             member: member,
                           )
                         : null,
+                    onKick: detail.canKick(member)
+                        ? () => kickCircleMember(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            member: member,
+                          )
+                        : null,
                   ),
               ],
           ],
@@ -501,6 +556,7 @@ class _MemberRow extends ConsumerWidget {
     this.roleColor,
     this.onChangeNickname,
     this.onManageRoles,
+    this.onKick,
   });
 
   final CircleMember member;
@@ -514,6 +570,9 @@ class _MemberRow extends ConsumerWidget {
 
   /// Null when the current user may not change this member's roles.
   final VoidCallback? onManageRoles;
+
+  /// Null when the current user may not kick this member.
+  final VoidCallback? onKick;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -633,6 +692,23 @@ class _MemberRow extends ConsumerWidget {
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     onManageRoles!();
+                  },
+                ),
+              if (onKick != null)
+                ListTile(
+                  leading: Icon(
+                    Icons.person_remove_outlined,
+                    color: Theme.of(sheetContext).colorScheme.error,
+                  ),
+                  title: Text(
+                    'Kick',
+                    style: TextStyle(
+                      color: Theme.of(sheetContext).colorScheme.error,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onKick!();
                   },
                 ),
             ],

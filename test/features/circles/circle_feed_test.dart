@@ -234,6 +234,12 @@ class FakeCirclesRepository implements CirclesRepository {
   ReportReason? reportedReason;
 
   @override
+  Future<void> kickMember({
+    required String circleId,
+    required String userId,
+  }) async {}
+
+  @override
   Future<String> createRole({
     required String circleId,
     required String name,

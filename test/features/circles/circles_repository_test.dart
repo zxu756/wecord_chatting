@@ -242,6 +242,19 @@ void main() {
     });
   });
 
+  test('kickMember calls kick_circle_member', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.kickMember(circleId: 'circle-1', userId: 'u2');
+
+    expect(dataSource.calls.single.functionName, 'kick_circle_member');
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'target_user_id': 'u2',
+    });
+  });
+
   test('getCircleDetail maps roles and permissions', () async {
     final dataSource = FakeCirclesDataSource()
       ..rpcValue = {
@@ -514,6 +527,8 @@ void main() {
     expect(withMembers.canChangeNickname(helped), isTrue);
     expect(withMembers.canChangeNickname(peer), isFalse);
     expect(withMembers.canChangeNickname(owner), isFalse);
+    // Mod has no kick_members.
+    expect(withMembers.canKick(helped), isFalse);
     expect(withMembers.roleColorOf(helped), 0x2ECC71);
     expect(withMembers.hoistedRoleOf(peer)?.id, 'mod');
     expect(withMembers.hoistedRoleOf(helped), isNull);

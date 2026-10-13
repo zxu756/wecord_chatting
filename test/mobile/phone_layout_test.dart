@@ -608,6 +608,14 @@ void main() {
       await settle(tester);
       expect(find.text('Moderators of the Valley'), findsOneWidget);
       expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Save'));
+      await popTopRoute(tester);
+
+      await tester.longPress(find.text('Bart the Bold'));
+      await settle(tester);
+      await tester.tap(find.text('Kick'));
+      await settle(tester);
+      expect(find.text('Kick Bart the Bold'), findsOneWidget);
+      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Kick'));
     });
 
     phoneTestWidgets('circle channel composer stays above the keyboard', (

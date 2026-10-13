@@ -899,6 +899,42 @@ void main() {
       expect(find.text('Manage roles'), findsNothing);
     });
 
+    testWidgets('kicking is limited to members ranked below', (tester) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-3',
+        // @everyone plus manage_roles and kick_members.
+        permissions: 1 | 2 | 64 | 8192 | 16 | 32,
+      );
+
+      for (final name in ['Yan', 'Xu', 'Amy']) {
+        await tester.longPress(find.text(name).last);
+        await tester.pumpAndSettle();
+        expect(find.text('View profile'), findsOneWidget, reason: name);
+        expect(find.text('Kick'), findsNothing, reason: name);
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kick'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kick Bo'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(repository.kickedUserIds, isEmpty);
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kick'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Kick'));
+      await tester.pumpAndSettle();
+      expect(repository.kickedUserIds, ['user-4']);
+      expect(find.text('Kicked Bo.'), findsOneWidget);
+    });
+
     testWidgets('plain members get no role management', (tester) async {
       await pumpRoles(
         tester,
@@ -916,6 +952,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('View profile'), findsOneWidget);
       expect(find.text('Manage roles'), findsNothing);
+      expect(find.text('Kick'), findsNothing);
     });
   });
 
@@ -1824,12 +1861,21 @@ class FakeCirclesRepository implements CirclesRepository {
   Object? reorderError;
   var invitedMemberIds = <String>[];
   final roleCalls = <String>[];
+  final kickedUserIds = <String>[];
 
   /// Fed to [onlineUserIdsProvider] by [_app].
   var onlineUserIds = <String>{'user-1'};
   final nicknameUpdates = <({String userId, String? nickname})>[];
   CircleNotificationSettings? notificationSettings;
   final notificationUpdates = <CircleNotificationSettings>[];
+
+  @override
+  Future<void> kickMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    kickedUserIds.add(userId);
+  }
 
   @override
   Future<String> createRole({

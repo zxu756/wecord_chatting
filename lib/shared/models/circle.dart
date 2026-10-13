@@ -231,6 +231,15 @@ class CircleDetail {
     return member.role != 'owner' || isOwner;
   }
 
+  /// Whether the current user may kick [member]: never themselves or the
+  /// owner, and only members ranked below them.
+  bool canKick(CircleMember member) {
+    return can(CirclePermission.kickMembers) &&
+        !member.isCurrentUser &&
+        member.role != 'owner' &&
+        rankOf(member) < currentUserRank;
+  }
+
   /// Everyone may rename themselves; renaming others needs manage
   /// nicknames and a higher rank than theirs.
   bool canChangeNickname(CircleMember member) {

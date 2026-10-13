@@ -117,6 +117,9 @@ abstract interface class CirclesRepository {
     required List<String> roleIds,
   });
 
+  /// Removes [userId] from the circle and all of its channels.
+  Future<void> kickMember({required String circleId, required String userId});
+
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
 
@@ -394,6 +397,17 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_circle_id': circleId,
       'target_user_id': userId,
       'role_ids': roleIds,
+    });
+  }
+
+  @override
+  Future<void> kickMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    await _dataSource.rpc('kick_circle_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
     });
   }
 
@@ -862,6 +876,11 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required List<String> roleIds,
   }) {
     throw StateError('Supabase must be initialized before assigning roles.');
+  }
+
+  @override
+  Future<void> kickMember({required String circleId, required String userId}) {
+    throw StateError('Supabase must be initialized before kicking members.');
   }
 
   @override

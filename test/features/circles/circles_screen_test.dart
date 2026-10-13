@@ -501,6 +501,12 @@ class FakeCirclesRepository implements CirclesRepository {
       <({String circleId, Duration? expiresIn, int? maxUses})>[];
 
   @override
+  Future<void> kickMember({
+    required String circleId,
+    required String userId,
+  }) async {}
+
+  @override
   Future<String> createRole({
     required String circleId,
     required String name,

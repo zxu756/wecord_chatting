@@ -99,7 +99,7 @@
 - [ ] **19. 操作日志（Audit Log）**（M）
   - 表 `circle_audit_log (id, circle_id, actor_id, action text, target_type, target_id, changes jsonb, created_at)`；所有管理类 RPC 写入（建 / 删 / 改频道、角色、权限、邀请、踢人、昵称、慢速模式、固定消息、Webhook、表情、活动）。
   - RPC `list_circle_audit_log(circle_id, before, limit)`，需要 `view_audit_log`。UI：圈子设置 → 操作日志，可按操作类型筛选。
-- [ ] **20. 踢出成员**（S）
+- [x] **20. 踢出成员**（S）
   - RPC `kick_circle_member`（需要 `kick_members`，不能踢 owner，也不能踢角色比自己高的人），同时移出所有频道会话；写操作日志。
 
 ## 第五批：扩展频道类型

@@ -1882,4 +1882,33 @@ void main() {
       expect(body, isNot(contains('circle_member.role')), reason: name);
     }
   });
+
+  test('kicking circle members is permission and rank checked', () {
+    final sql = allMigrationSql();
+    final body = functionBody(sql, 'kick_circle_member');
+
+    expect(body, contains('security definer'));
+    expect(body, contains('set search_path = public'));
+    expect(body, contains('auth.uid()'));
+    expect(body, contains("'kick_members'"));
+    expect(body, contains('target_user_id = current_user_id'));
+    expect(body, contains('c.owner_id = target_user_id'));
+    expect(
+      body,
+      contains(
+        'public.circle_member_rank(target_circle_id, target_user_id)\n'
+        '    >= public.circle_member_rank(target_circle_id, current_user_id)',
+      ),
+    );
+    expect(body, contains('using public.conversation_threads ct'));
+    expect(body, contains('using public.circle_channels cc'));
+    expect(body, contains('delete from public.circle_members cm'));
+    expect(
+      sql,
+      contains(
+        'grant execute on function '
+        'public.kick_circle_member(uuid, uuid) to authenticated',
+      ),
+    );
+  });
 }

@@ -849,7 +849,9 @@ void main() {
     expect(selectPolicy, contains('for select'));
     expect(
       selectPolicy,
-      contains('public.is_current_user_conversation_member(conversation_id)'),
+      contains(
+        'conversation_id in (select public.current_user_readable_conversation_ids())',
+      ),
     );
     expect(
       policyBodiesFor(rawSql, 'message_reactions').where(
@@ -932,7 +934,9 @@ void main() {
     expect(selectPolicy, contains('for select'));
     expect(
       selectPolicy,
-      contains('public.is_current_user_conversation_member(conversation_id)'),
+      contains(
+        'conversation_id in (select public.current_user_readable_conversation_ids())',
+      ),
     );
     expect(
       policyBodiesFor(rawSql, 'pinned_messages').where(
@@ -987,7 +991,7 @@ void main() {
     expect(permissionBody, contains('public.circle_channels'));
     expect(
       permissionBody,
-      contains('public.current_user_has_circle_permission('),
+      contains('public.current_user_has_channel_permission('),
     );
     expect(permissionBody, contains("'manage_messages'"));
 
@@ -1173,7 +1177,7 @@ void main() {
     expect(sql, contains('char_length(nickname) between 1 and 32'));
 
     expect(helperBody, contains('from public.circle_channels cc'));
-    expect(helperBody, contains('public.is_current_user_circle_member'));
+    expect(helperBody, contains('viewer.user_id = auth.uid()'));
     expect(senderBody, contains('message_row public.messages'));
     expect(senderBody, contains('public.circle_channel_nickname('));
     expect(memberBody, contains('member_row public.conversation_members'));
@@ -1621,11 +1625,15 @@ void main() {
         'alter table public.conversation_threads enable row level security',
       ),
     );
-    final selectPolicy = policyBody(sql, 'conversation_threads_select_member');
+    final selectPolicy = policyBody(
+      allMigrationSql(),
+      'conversation_threads_select_member',
+    );
     expect(
       selectPolicy,
       contains(
-        'public.is_current_user_conversation_member(parent_conversation_id)',
+        'parent_conversation_id in (\n'
+        '      select public.current_user_readable_conversation_ids()',
       ),
     );
     expect(
@@ -1676,7 +1684,7 @@ void main() {
     );
     final manageBody = functionBody(sql, 'can_current_user_manage_thread');
     expect(manageBody, contains('ct.created_by = auth.uid()'));
-    expect(manageBody, contains('public.current_user_has_circle_permission('));
+    expect(manageBody, contains('public.current_user_has_channel_permission('));
     expect(manageBody, contains("'manage_messages'"));
     expect(manageBody, contains("cm.role in ('owner', 'admin')"));
     expect(
@@ -1807,7 +1815,7 @@ void main() {
     expect(detailBody, contains("'current_user_permissions'"));
     expect(detailBody, contains("'roles'"));
     expect(detailBody, contains("'role_ids'"));
-    expect(colorBody, contains('public.is_current_user_circle_member'));
+    expect(colorBody, contains('viewer.user_id = auth.uid()'));
 
     for (final name in [
       'create_circle_role',
@@ -2058,8 +2066,10 @@ void main() {
       );
     }
     expect(
-      policyBody(sql, 'messages_select_member'),
-      contains('is_current_user_conversation_member(conversation_id)'),
+      policyBody(allMigrationSql(), 'messages_select_member'),
+      contains(
+        'conversation_id in (select public.current_user_readable_conversation_ids())',
+      ),
     );
     expect(
       policyBody(allMigrationSql(), 'circle_channels_select_member'),
@@ -2155,5 +2165,85 @@ void main() {
     expect(summariesBody, contains('when ct.id is null'));
     expect(summariesBody, contains("'manage_messages'"));
     expect(summariesBody, contains('can_send_messages'));
+  });
+
+  test('channel permission leftovers: edits, uploads, mentions, reads', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    final readableBody = functionBody(
+      sql,
+      'current_user_readable_conversation_ids',
+    );
+    expect(readableBody, contains('returns setof uuid'));
+    expect(readableBody, contains('security definer'));
+    expect(readableBody, contains('cm.user_id = auth.uid()'));
+    expect(
+      readableBody,
+      contains('circle_channel_permissions(cc.id, auth.uid()) & 1 <> 0'),
+    );
+    for (final policy in [
+      'messages_select_member',
+      'message_reactions_select_member',
+      'message_mentions_select_member',
+      'pinned_messages_select_member',
+    ]) {
+      expect(
+        policyBody(rawSql, policy),
+        contains(
+          'conversation_id in (select public.current_user_readable_conversation_ids())',
+        ),
+        reason: policy,
+      );
+    }
+
+    final membersPolicy = policyBody(
+      rawSql,
+      'conversation_members_select_member',
+    );
+    expect(membersPolicy, contains('user_id = auth.uid()'));
+    expect(
+      membersPolicy,
+      contains('public.conversation_member_can_view(conversation_id, user_id)'),
+    );
+    final canViewBody = functionBody(sql, 'conversation_member_can_view');
+    expect(canViewBody, contains('cm.user_id = auth.uid()'));
+    expect(canViewBody, contains("'view_channel'"));
+
+    final canSendBody = functionBody(
+      sql,
+      'can_current_user_send_in_conversation',
+    );
+    expect(canSendBody, contains('is_current_user_conversation_member'));
+    expect(canSendBody, contains("'send_messages'"));
+    for (final policy in [
+      'chat_images_insert_member',
+      'voice_messages_insert_member',
+    ]) {
+      expect(
+        policyBody(rawSql, policy),
+        contains('public.can_current_user_send_in_conversation('),
+        reason: policy,
+      );
+    }
+
+    for (final name in ['edit_message', 'set_message_suppress_embeds']) {
+      expect(
+        functionBody(sql, name),
+        contains("'send_messages'"),
+        reason: name,
+      );
+    }
+    final sendBody = functionBody(sql, 'send_text_message');
+    expect(sendBody, contains('visible_mentions'));
+    expect(sendBody, contains("'view_channel'"));
+
+    expect(
+      rawSql,
+      contains(
+        'grant execute on function '
+        'public.current_user_readable_conversation_ids() to authenticated',
+      ),
+    );
   });
 }

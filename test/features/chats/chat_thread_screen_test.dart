@@ -1543,6 +1543,30 @@ void main() {
       expect(find.byKey(const ValueKey('link-preview-card')), findsNothing);
     });
 
+    testWidgets('remove embed is not offered without send permission', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..linkPreviews = {'https://example.com': examplePreview}
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-1',
+            body: 'mine https://example.com',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository, canSendMessages: false));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.text('mine https://example.com'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove embed'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+    });
+
     testWidgets('remove embed is not offered on other people\'s messages', (
       tester,
     ) async {

@@ -2292,7 +2292,7 @@ class _MessageBubble extends StatelessWidget {
                       unawaited(onTogglePin(message));
                     },
                   ),
-                if (isCurrentUser && _hasVisiblePreview(context))
+                if (canCompose && isCurrentUser && _hasVisiblePreview(context))
                   ListTile(
                     leading: const Icon(Icons.link_off),
                     title: const Text('Remove embed'),

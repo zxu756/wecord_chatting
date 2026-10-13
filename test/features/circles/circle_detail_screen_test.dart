@@ -8,6 +8,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -388,6 +389,94 @@ void main() {
         (userId: 'user-3', nickname: 'Amy B'),
       ]);
     });
+
+    testWidgets('the circle menu opens notification settings', (tester) async {
+      final repository = await pumpWorkspace(
+        tester,
+        currentUserRole: 'member',
+        currentUserId: 'user-3',
+      );
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Notification settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Close Friends'), findsWidgets);
+      expect(find.text('For 15 minutes'), findsOneWidget);
+      expect(find.text('Until I turn it back on'), findsOneWidget);
+
+      await tester.tap(find.text('Only @mentions'));
+      await tester.pumpAndSettle();
+      expect(
+        repository.notificationUpdates.single.level,
+        CircleNotificationLevel.mentions,
+      );
+      expect(repository.notificationUpdates.single.mutedUntil, isNull);
+
+      final before = DateTime.now().toUtc();
+      await tester.tap(find.text('For 1 hour'));
+      await tester.pumpAndSettle();
+      final muted = repository.notificationUpdates.last;
+      expect(muted.level, CircleNotificationLevel.mentions);
+      expect(
+        muted.mutedUntil!.difference(before).inMinutes,
+        inInclusiveRange(59, 60),
+      );
+      expect(find.textContaining('Muted until'), findsOneWidget);
+      expect(find.text('For 1 hour'), findsNothing);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Unmute'));
+      await tester.pumpAndSettle();
+      expect(repository.notificationUpdates.last.mutedUntil, isNull);
+      expect(
+        repository.notificationUpdates.last.level,
+        CircleNotificationLevel.mentions,
+      );
+      expect(find.text('For 1 hour'), findsOneWidget);
+    });
+  });
+
+  testWidgets('narrow circle detail opens notification settings', (
+    tester,
+  ) async {
+    final repository = FakeCirclesRepository()
+      ..detail = _detail()
+      ..notificationSettings = CircleNotificationSettings(
+        circleId: 'circle-1',
+        level: CircleNotificationLevel.none,
+        mutedUntil: DateTime.now().toUtc().add(circleMuteIndefinitely),
+      );
+    final router = GoRouter(
+      initialLocation: '/circles/circle-1',
+      routes: [
+        GoRoute(
+          path: '/circles/:circleId',
+          builder: (context, state) =>
+              CircleDetailScreen(circleId: state.pathParameters['circleId']!),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Notification settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Muted until you turn it back on'), findsOneWidget);
+    final levels = tester.widget<RadioGroup<CircleNotificationLevel>>(
+      find.byType(RadioGroup<CircleNotificationLevel>),
+    );
+    expect(levels.groupValue, CircleNotificationLevel.none);
+
+    await tester.tap(find.text('All messages'));
+    await tester.pumpAndSettle();
+    // Changing the level keeps the indefinite mute.
+    final saved = repository.notificationUpdates.single;
+    expect(saved.level, CircleNotificationLevel.all);
+    expect(saved.isMutedIndefinitelyAt(DateTime.now().toUtc()), isTrue);
   });
 }
 
@@ -465,6 +554,30 @@ class FakeCirclesRepository implements CirclesRepository {
   var onlineUserIds = <String>{'user-1'};
   final presenceRequests = <String>[];
   final nicknameUpdates = <({String userId, String? nickname})>[];
+  CircleNotificationSettings? notificationSettings;
+  final notificationUpdates = <CircleNotificationSettings>[];
+
+  @override
+  Future<CircleNotificationSettings> getNotificationSettings(
+    String circleId,
+  ) async =>
+      notificationSettings ?? CircleNotificationSettings(circleId: circleId);
+
+  @override
+  Future<CircleNotificationSettings> setNotificationSettings({
+    required String circleId,
+    required CircleNotificationLevel level,
+    DateTime? mutedUntil,
+  }) async {
+    final settings = CircleNotificationSettings(
+      circleId: circleId,
+      level: level,
+      mutedUntil: mutedUntil,
+    );
+    notificationUpdates.add(settings);
+    notificationSettings = settings;
+    return settings;
+  }
 
   @override
   Future<CircleDetail> getCircleDetail(String circleId) async => detail;

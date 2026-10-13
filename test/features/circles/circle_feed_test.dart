@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -231,6 +232,22 @@ class FakeCirclesRepository implements CirclesRepository {
   var deletedPostId = '';
   var reportedPostId = '';
   ReportReason? reportedReason;
+
+  @override
+  Future<CircleNotificationSettings> getNotificationSettings(
+    String circleId,
+  ) async => CircleNotificationSettings(circleId: circleId);
+
+  @override
+  Future<CircleNotificationSettings> setNotificationSettings({
+    required String circleId,
+    required CircleNotificationLevel level,
+    DateTime? mutedUntil,
+  }) async => CircleNotificationSettings(
+    circleId: circleId,
+    level: level,
+    mutedUntil: mutedUntil,
+  );
 
   @override
   Future<CircleDetail> getCircleDetail(String circleId) async => detail;

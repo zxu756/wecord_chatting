@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -59,6 +60,17 @@ abstract interface class CirclesRepository {
     required String circleId,
     required String userId,
     required String? nickname,
+  });
+
+  /// The current user's notification settings for the circle.
+  Future<CircleNotificationSettings> getNotificationSettings(String circleId);
+
+  /// Saves the current user's notification settings; a null or past
+  /// [mutedUntil] unmutes.
+  Future<CircleNotificationSettings> setNotificationSettings({
+    required String circleId,
+    required CircleNotificationLevel level,
+    DateTime? mutedUntil,
   });
 
   Future<String> createPost({
@@ -227,6 +239,30 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_user_id': userId,
       'nickname': trimmed == null || trimmed.isEmpty ? null : trimmed,
     });
+  }
+
+  @override
+  Future<CircleNotificationSettings> getNotificationSettings(
+    String circleId,
+  ) async {
+    final payload = await _dataSource.rpc('get_circle_notification_settings', {
+      'target_circle_id': circleId,
+    });
+    return CircleNotificationSettings.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<CircleNotificationSettings> setNotificationSettings({
+    required String circleId,
+    required CircleNotificationLevel level,
+    DateTime? mutedUntil,
+  }) async {
+    final payload = await _dataSource.rpc('set_circle_notification_settings', {
+      'target_circle_id': circleId,
+      'level': level.toJson(),
+      'muted_until': mutedUntil?.toUtc().toIso8601String(),
+    });
+    return CircleNotificationSettings.fromJson(payload as Map<String, dynamic>);
   }
 
   @override
@@ -613,6 +649,24 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<String> acceptInvite(String code) {
     throw StateError('Supabase must be initialized before joining circles.');
+  }
+
+  @override
+  Future<CircleNotificationSettings> getNotificationSettings(
+    String circleId,
+  ) async {
+    return CircleNotificationSettings(circleId: circleId);
+  }
+
+  @override
+  Future<CircleNotificationSettings> setNotificationSettings({
+    required String circleId,
+    required CircleNotificationLevel level,
+    DateTime? mutedUntil,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before changing notification settings.',
+    );
   }
 
   @override

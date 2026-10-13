@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/friendship.dart';
@@ -308,6 +309,34 @@ void main() {
       conversation.copyWith(lastMessageSenderId: null).lastMessageSenderId,
       isNull,
     );
+  });
+
+  test('Conversation parses circle notification settings', () {
+    final channel = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'channel',
+      'title': 'general',
+      'unread_count': 1,
+      'circle_id': 'circle-1',
+      'circle_notification_level': 'mentions',
+      'circle_muted_until': '2026-10-13T10:00:00+00:00',
+    });
+    final direct = ConversationSummary.fromJson({
+      'id': 'conversation-2',
+      'type': 'direct',
+      'unread_count': 0,
+      'circle_id': null,
+      'circle_notification_level': null,
+      'circle_muted_until': null,
+    });
+
+    expect(channel.circleId, 'circle-1');
+    expect(channel.circleNotificationLevel, CircleNotificationLevel.mentions);
+    expect(channel.circleMutedUntil, DateTime.utc(2026, 10, 13, 10));
+    expect(channel.copyWith(circleMutedUntil: null).circleMutedUntil, isNull);
+    expect(direct.circleId, isNull);
+    expect(direct.circleNotificationLevel, isNull);
+    expect(direct.circleMutedUntil, isNull);
   });
 
   test('Conversation toJson includes writable Supabase keys', () {

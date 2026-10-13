@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
+import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
@@ -404,16 +405,6 @@ class _SidebarHeader extends StatelessWidget {
     }
     final canManage = detail.canManageCircle;
 
-    if (!canManage && currentMember == null) {
-      return SizedBox(
-        height: kToolbarHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(alignment: Alignment.centerLeft, child: title),
-        ),
-      );
-    }
-
     return SizedBox(
       height: kToolbarHeight,
       child: PopupMenuButton<_CircleMenuAction>(
@@ -427,6 +418,12 @@ class _SidebarHeader extends StatelessWidget {
               showCircleChannelCreationSheet(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
               onChangeNickname(currentMember!);
+            case _CircleMenuAction.notificationSettings:
+              showCircleNotificationSettingsSheet(
+                context,
+                circleId: detail.circle.id,
+                circleName: detail.circle.name,
+              );
           }
         },
         itemBuilder: (context) => [
@@ -446,6 +443,13 @@ class _SidebarHeader extends StatelessWidget {
               ),
             ),
           ],
+          const PopupMenuItem(
+            value: _CircleMenuAction.notificationSettings,
+            child: ListTile(
+              leading: Icon(Icons.notifications_outlined),
+              title: Text('Notification settings'),
+            ),
+          ),
           if (currentMember != null)
             const PopupMenuItem(
               value: _CircleMenuAction.changeNickname,
@@ -469,7 +473,12 @@ class _SidebarHeader extends StatelessWidget {
   }
 }
 
-enum _CircleMenuAction { invite, createChannel, changeNickname }
+enum _CircleMenuAction {
+  invite,
+  createChannel,
+  notificationSettings,
+  changeNickname,
+}
 
 class _CategoryHeader extends StatelessWidget {
   const _CategoryHeader({

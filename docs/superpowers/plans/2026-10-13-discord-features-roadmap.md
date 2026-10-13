@@ -51,7 +51,7 @@
 - [x] **7. 圈子内昵称**（S）
   - `circle_members.nickname text null`（1–32 字）。RPC `set_circle_nickname(circle_id, nickname)` 改自己；owner / admin 可改他人（第 16 项后为 `manage_nicknames`）。
   - 圈子频道消息、成员列表、@提及候选里优先显示昵称。
-- [ ] **8. 圈子级通知设置**（S）
+- [x] **8. 圈子级通知设置**（S）
   - 表 `circle_notification_settings (circle_id, user_id, level text check in ('all','mentions','none'), muted_until null)`。
   - 本地通知协调器在决定是否提醒频道消息时读取：`none` 不提醒；`mentions` 只在被 @ 时提醒；静音期间不提醒。
   - 圈子菜单加「通知设置」页。

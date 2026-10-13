@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -126,6 +127,93 @@ void main() {
       'nickname': 'Grace',
     });
     expect(dataSource.calls.last.params['nickname'], isNull);
+  });
+
+  test('getNotificationSettings maps the settings payload', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = {
+        'circle_id': 'circle-1',
+        'level': 'mentions',
+        'muted_until': '2026-10-13T10:00:00+00:00',
+      };
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final settings = await repository.getNotificationSettings('circle-1');
+
+    expect(
+      dataSource.calls.single.functionName,
+      'get_circle_notification_settings',
+    );
+    expect(dataSource.calls.single.params, {'target_circle_id': 'circle-1'});
+    expect(settings.circleId, 'circle-1');
+    expect(settings.level, CircleNotificationLevel.mentions);
+    expect(settings.mutedUntil, DateTime.utc(2026, 10, 13, 10));
+    expect(settings.isMutedAt(DateTime.utc(2026, 10, 13, 9)), isTrue);
+    expect(settings.isMutedAt(DateTime.utc(2026, 10, 13, 11)), isFalse);
+  });
+
+  test('getNotificationSettings defaults unknown levels to all', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = {
+        'circle_id': 'circle-1',
+        'level': null,
+        'muted_until': null,
+      };
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final settings = await repository.getNotificationSettings('circle-1');
+
+    expect(settings.level, CircleNotificationLevel.all);
+    expect(settings.mutedUntil, isNull);
+    expect(settings.isMutedAt(DateTime.utc(2026)), isFalse);
+  });
+
+  test('setNotificationSettings sends level and UTC mute end', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = {
+        'circle_id': 'circle-1',
+        'level': 'none',
+        'muted_until': null,
+      };
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.setNotificationSettings(
+      circleId: 'circle-1',
+      level: CircleNotificationLevel.none,
+      mutedUntil: DateTime.utc(2026, 10, 13, 10, 15),
+    );
+    final cleared = await repository.setNotificationSettings(
+      circleId: 'circle-1',
+      level: CircleNotificationLevel.none,
+    );
+
+    expect(
+      dataSource.calls.first.functionName,
+      'set_circle_notification_settings',
+    );
+    expect(dataSource.calls.first.params, {
+      'target_circle_id': 'circle-1',
+      'level': 'none',
+      'muted_until': '2026-10-13T10:15:00.000Z',
+    });
+    expect(dataSource.calls.last.params['muted_until'], isNull);
+    expect(cleared.level, CircleNotificationLevel.none);
+  });
+
+  test('indefinite circle mutes are recognised', () {
+    final now = DateTime.utc(2026, 10, 13);
+    final forever = CircleNotificationSettings(
+      circleId: 'circle-1',
+      mutedUntil: now.add(circleMuteIndefinitely),
+    );
+    final oneDay = CircleNotificationSettings(
+      circleId: 'circle-1',
+      mutedUntil: now.add(const Duration(hours: 24)),
+    );
+
+    expect(forever.isMutedIndefinitelyAt(now), isTrue);
+    expect(oneDay.isMutedIndefinitelyAt(now), isFalse);
+    expect(oneDay.isMutedAt(now), isTrue);
   });
 
   test('CircleDetail limits who may change nicknames', () {

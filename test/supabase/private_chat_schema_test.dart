@@ -1203,4 +1203,82 @@ void main() {
       );
     }
   });
+
+  test('circle notification settings are own-row scoped and RPC backed', () {
+    final sql = effectiveMigrationSql();
+    final getBody = functionBody(sql, 'get_circle_notification_settings');
+    final setBody = functionBody(sql, 'set_circle_notification_settings');
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+
+    expect(
+      sql,
+      contains(
+        'create table if not exists public.circle_notification_settings',
+      ),
+    );
+    expect(sql, contains("check (level in ('all', 'mentions', 'none'))"));
+    expect(
+      sql,
+      contains('references public.circle_members(circle_id, user_id)'),
+    );
+    expect(
+      sql,
+      contains(
+        'alter table public.circle_notification_settings enable row level security',
+      ),
+    );
+    final policies = policyBodiesFor(
+      allMigrationSql(),
+      'circle_notification_settings',
+    );
+    expect(policies, hasLength(4));
+    for (final policy in policies) {
+      expect(policy, contains('user_id = auth.uid()'));
+    }
+
+    for (final body in [getBody, setBody]) {
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+      expect(body, contains('auth.uid()'));
+      expect(body, contains('public.is_current_user_circle_member'));
+    }
+    expect(getBody, contains("coalesce(stored_level, 'all')"));
+    expect(setBody, contains("not in ('all', 'mentions', 'none')"));
+    expect(setBody, contains('muted_until > now()'));
+    expect(setBody, contains('on conflict (circle_id, user_id) do update'));
+
+    // The summaries keep every earlier column and add the circle settings.
+    for (final column in [
+      'last_message_sender_id uuid',
+      'unread_count bigint',
+      'is_muted boolean',
+      'member_count bigint',
+      'mentioned_user_ids uuid[]',
+      'announcement_updated_by uuid',
+      'circle_id uuid',
+      'circle_notification_level text',
+      'circle_muted_until timestamptz',
+    ]) {
+      expect(summariesBody, contains(column));
+    }
+    expect(
+      summariesBody,
+      contains(
+        'left join public.circle_channels cc on cc.conversation_id = c.id',
+      ),
+    );
+    expect(summariesBody, contains("else coalesce(cns.level, 'all')"));
+    expect(summariesBody, contains('cns.user_id = auth.uid()'));
+
+    for (final signature in [
+      'public.get_circle_notification_settings(uuid)',
+      'public.set_circle_notification_settings(uuid, text, timestamptz)',
+      'public.list_conversation_summaries()',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

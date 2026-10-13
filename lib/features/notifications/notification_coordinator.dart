@@ -5,6 +5,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -212,6 +213,9 @@ class NotificationCoordinator {
     if (conversation.isMuted && !_mentionsCurrentUser(conversation)) {
       return false;
     }
+    if (!_circleAllows(conversation)) {
+      return false;
+    }
 
     final lastMessageAt = conversation.lastMessageAt;
     if (lastMessageAt == null) {
@@ -242,6 +246,24 @@ class NotificationCoordinator {
     }
 
     return true;
+  }
+
+  /// Circle channels follow the circle's notification settings: a muted
+  /// circle stays silent, 'none' never notifies and 'mentions' only when
+  /// the latest message mentions the current user.
+  bool _circleAllows(ConversationSummary conversation) {
+    if (conversation.circleId == null) {
+      return true;
+    }
+    if (isCircleMutedAt(conversation.circleMutedUntil, _now().toUtc())) {
+      return false;
+    }
+    return switch (conversation.circleNotificationLevel ??
+        CircleNotificationLevel.all) {
+      CircleNotificationLevel.all => true,
+      CircleNotificationLevel.mentions => _mentionsCurrentUser(conversation),
+      CircleNotificationLevel.none => false,
+    };
   }
 
   bool _mentionsCurrentUser(ConversationSummary conversation) {

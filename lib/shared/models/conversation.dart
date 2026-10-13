@@ -1,3 +1,4 @@
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 
 const _sentinel = Object();
@@ -49,6 +50,9 @@ class ConversationSummary {
     this.announcement = '',
     this.announcementUpdatedAt,
     this.announcementUpdatedBy,
+    this.circleId,
+    this.circleNotificationLevel,
+    this.circleMutedUntil,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -79,6 +83,13 @@ class ConversationSummary {
         json['announcement_updated_at'],
       ),
       announcementUpdatedBy: json['announcement_updated_by'] as String?,
+      circleId: json['circle_id'] as String?,
+      circleNotificationLevel: json['circle_notification_level'] == null
+          ? null
+          : CircleNotificationLevel.fromJson(
+              json['circle_notification_level'] as String,
+            ),
+      circleMutedUntil: _parseOptionalTimestamp(json['circle_muted_until']),
     );
   }
 
@@ -100,6 +111,15 @@ class ConversationSummary {
   final String announcement;
   final DateTime? announcementUpdatedAt;
   final String? announcementUpdatedBy;
+
+  /// The circle a channel conversation belongs to; null otherwise.
+  final String? circleId;
+
+  /// The current user's notification level for [circleId]'s channels.
+  final CircleNotificationLevel? circleNotificationLevel;
+
+  /// When the current user's mute of [circleId] ends, if muted.
+  final DateTime? circleMutedUntil;
 
   Map<String, dynamic> toJson() {
     return {'type': type.toJson(), 'title': title, 'avatar_url': avatarUrl};
@@ -124,6 +144,9 @@ class ConversationSummary {
     String? announcement,
     Object? announcementUpdatedAt = _sentinel,
     Object? announcementUpdatedBy = _sentinel,
+    Object? circleId = _sentinel,
+    Object? circleNotificationLevel = _sentinel,
+    Object? circleMutedUntil = _sentinel,
   }) {
     return ConversationSummary(
       id: id ?? this.id,
@@ -162,6 +185,15 @@ class ConversationSummary {
       announcementUpdatedBy: identical(announcementUpdatedBy, _sentinel)
           ? this.announcementUpdatedBy
           : announcementUpdatedBy as String?,
+      circleId: identical(circleId, _sentinel)
+          ? this.circleId
+          : circleId as String?,
+      circleNotificationLevel: identical(circleNotificationLevel, _sentinel)
+          ? this.circleNotificationLevel
+          : circleNotificationLevel as CircleNotificationLevel?,
+      circleMutedUntil: identical(circleMutedUntil, _sentinel)
+          ? this.circleMutedUntil
+          : circleMutedUntil as DateTime?,
     );
   }
 }

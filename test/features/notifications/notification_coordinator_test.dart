@@ -8,6 +8,7 @@ import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -122,6 +123,126 @@ void main() {
     ]);
 
     expect(harness.notifications, isEmpty);
+  });
+
+  group('circle notification settings', () {
+    // The harness clock reads 2026-05-18 12:30 UTC.
+    Future<NotificationCoordinatorHarness> emitChannelMessage({
+      CircleNotificationLevel? level,
+      DateTime? mutedUntil,
+      Set<String> mentionedUserIds = const {},
+      bool conversationMuted = false,
+    }) async {
+      final harness = NotificationCoordinatorHarness();
+      harness.seed([
+        harness.summary(
+          id: 'c1',
+          circleId: 'circle-1',
+          circleNotificationLevel: level,
+          circleMutedUntil: mutedUntil,
+        ),
+      ]);
+      await harness.start();
+      await harness.emit([
+        harness.summary(
+          id: 'c1',
+          unreadCount: 1,
+          body: 'channel news',
+          circleId: 'circle-1',
+          circleNotificationLevel: level,
+          circleMutedUntil: mutedUntil,
+          mentionedUserIds: mentionedUserIds,
+          isMuted: conversationMuted,
+        ),
+      ]);
+      return harness;
+    }
+
+    test('all notifies for every channel message', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.all,
+      );
+
+      expect(harness.notifications.single.body, 'channel news');
+    });
+
+    test('a missing level behaves like all', () async {
+      final harness = await emitChannelMessage();
+
+      expect(harness.notifications, hasLength(1));
+    });
+
+    test('mentions skips messages that do not mention me', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.mentions,
+        mentionedUserIds: {'someone-else'},
+      );
+
+      expect(harness.notifications, isEmpty);
+    });
+
+    test('mentions notifies when I am mentioned', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.mentions,
+        mentionedUserIds: {'current-user'},
+      );
+
+      expect(harness.notifications, hasLength(1));
+    });
+
+    test('none never notifies, even for mentions', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.none,
+        mentionedUserIds: {'current-user'},
+      );
+
+      expect(harness.notifications, isEmpty);
+    });
+
+    test('a muted circle never notifies, even for mentions', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.all,
+        mutedUntil: DateTime.utc(2026, 5, 18, 13),
+        mentionedUserIds: {'current-user'},
+      );
+
+      expect(harness.notifications, isEmpty);
+    });
+
+    test('an expired circle mute no longer silences', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.all,
+        mutedUntil: DateTime.utc(2026, 5, 18, 12),
+      );
+
+      expect(harness.notifications, hasLength(1));
+    });
+
+    test('a muted channel still stays quiet under all', () async {
+      final harness = await emitChannelMessage(
+        level: CircleNotificationLevel.all,
+        conversationMuted: true,
+      );
+
+      expect(harness.notifications, isEmpty);
+    });
+
+    test('circle settings do not affect other conversations', () async {
+      final harness = NotificationCoordinatorHarness();
+      harness.seed([harness.summary(id: 'dm')]);
+      await harness.start();
+
+      await harness.emit([
+        harness.summary(
+          id: 'dm',
+          unreadCount: 1,
+          circleNotificationLevel: CircleNotificationLevel.none,
+          circleMutedUntil: DateTime.utc(2026, 5, 18, 13),
+        ),
+      ]);
+
+      expect(harness.notifications, hasLength(1));
+    });
   });
 
   test('does not notify when signed out', () async {
@@ -467,10 +588,18 @@ class NotificationCoordinatorHarness {
     bool isMuted = false,
     Set<String> mentionedUserIds = const {},
     MessageType? lastMessageType,
+    String? circleId,
+    CircleNotificationLevel? circleNotificationLevel,
+    DateTime? circleMutedUntil,
   }) {
     return ConversationSummary(
       id: id,
-      type: ConversationType.direct,
+      type: circleId == null
+          ? ConversationType.direct
+          : ConversationType.channel,
+      circleId: circleId,
+      circleNotificationLevel: circleNotificationLevel,
+      circleMutedUntil: circleMutedUntil,
       title: title,
       lastMessageBody: body,
       lastMessageSenderId: lastMessageSenderId,

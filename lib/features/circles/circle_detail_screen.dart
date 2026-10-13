@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
+import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -63,6 +64,15 @@ class CircleDetailScreen extends ConsumerWidget {
             appBar: AppBar(
               title: Text(detail.circle.name),
               actions: [
+                IconButton(
+                  tooltip: 'Notification settings',
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: () => showCircleNotificationSettingsSheet(
+                    context,
+                    circleId: circleId,
+                    circleName: detail.circle.name,
+                  ),
+                ),
                 if (detail.canManageCircle) ...[
                   IconButton(
                     tooltip: 'Invite friends',

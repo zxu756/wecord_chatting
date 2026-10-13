@@ -91,7 +91,10 @@ Deno.test("content type helpers", () => {
   assertEquals(isHtmlContentType("application/json"), false);
   assertEquals(isHtmlContentType("image/png"), false);
   assertEquals(isHtmlContentType(null), false);
-  assertEquals(charsetFromContentType("text/html; charset=\"Shift_JIS\""), "shift_jis");
+  assertEquals(
+    charsetFromContentType('text/html; charset="Shift_JIS"'),
+    "shift_jis",
+  );
   assertEquals(charsetFromContentType("text/html"), null);
   assertEquals(cleanText("a&nbsp;&amp;&#x41;&bogus;"), "a &A&bogus;");
 });

@@ -3431,6 +3431,9 @@ class _ImageMessageContent extends ConsumerStatefulWidget {
 class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
   late Future<String> _imageUrl;
 
+  /// Whether the URL was signed again after the image failed to load.
+  bool _resigned = false;
+
   @override
   void initState() {
     super.initState();
@@ -3443,11 +3446,28 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
     if (oldWidget.attachment.path != widget.attachment.path ||
         oldWidget.attachment.bucket != widget.attachment.bucket) {
       _imageUrl = _loadImageUrl();
+      _resigned = false;
     }
   }
 
   Future<String> _loadImageUrl() {
     return ref.read(chatsRepositoryProvider).createImageUrl(widget.attachment);
+  }
+
+  /// The signed URL may have expired while the chat stayed open: sign it
+  /// again, once.
+  void _resignAfterError() {
+    if (_resigned) {
+      return;
+    }
+    _resigned = true;
+    scheduleMicrotask(() {
+      if (mounted) {
+        setState(() {
+          _imageUrl = _loadImageUrl();
+        });
+      }
+    });
   }
 
   @override
@@ -3475,6 +3495,7 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
               height: 160,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
+                _resignAfterError();
                 return const SizedBox(
                   width: 220,
                   height: 160,

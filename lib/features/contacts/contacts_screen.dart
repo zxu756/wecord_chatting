@@ -483,7 +483,9 @@ class _ProfileAvatar extends ConsumerWidget {
         : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       backgroundImage: image,
-      onBackgroundImageError: image == null ? null : (_, _) {},
+      onBackgroundImageError: image == null
+          ? null
+          : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
       child: image == null ? Text(_initials(profile.displayLabel)) : null,
     );
   }

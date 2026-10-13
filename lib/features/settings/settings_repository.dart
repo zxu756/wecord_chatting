@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -25,6 +26,25 @@ final avatarDisplayUrlProvider = FutureProvider.autoDispose
       }
       return ref.watch(settingsRepositoryProvider).createAvatarUrl(avatarUrl);
     });
+
+/// Signs a stored avatar again after its image failed to load (the signed
+/// URL may have expired), at most once every few minutes per avatar.
+void refreshAvatarDisplayUrl(WidgetRef ref, String? avatarUrl) {
+  if (avatarUrl == null || avatarUrl.trim().isEmpty) {
+    return;
+  }
+  final uri = Uri.tryParse(avatarUrl);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    return;
+  }
+  refreshSignedUrlSoon('avatar:$avatarUrl', () {
+    try {
+      ref.invalidate(avatarDisplayUrlProvider(avatarUrl));
+    } catch (_) {
+      // The widget is gone; the next one to show the avatar signs it.
+    }
+  });
+}
 
 abstract interface class SettingsRepository {
   Future<Profile> currentProfile();

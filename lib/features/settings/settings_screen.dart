@@ -513,7 +513,9 @@ class _ProfileAvatar extends ConsumerWidget {
     return CircleAvatar(
       radius: radius,
       backgroundImage: image,
-      onBackgroundImageError: image == null ? null : (_, _) {},
+      onBackgroundImageError: image == null
+          ? null
+          : (_, _) => refreshAvatarDisplayUrl(ref, avatarUrl),
       child: image == null ? Text(_initials(displayName)) : null,
     );
   }

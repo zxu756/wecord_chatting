@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -40,7 +41,17 @@ class CustomEmojiImage extends ConsumerWidget {
         fit: BoxFit.contain,
         semanticLabel: semanticLabel,
         gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) => fallback,
+        errorBuilder: (context, error, stackTrace) {
+          // The cached signed URL may have expired: sign it again.
+          refreshSignedUrlSoon('emoji:$storagePath', () {
+            try {
+              ref.invalidate(circleEmojiImageProvider(storagePath));
+            } catch (_) {
+              // The widget is gone; the next one to show it signs it.
+            }
+          });
+          return fallback;
+        },
       ),
       AsyncLoading() => SizedBox.square(dimension: size),
       _ => fallback,

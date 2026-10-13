@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/shared/models/discovery.dart';
 
@@ -163,7 +164,10 @@ class _DiscoveryResultTile extends StatelessWidget {
       subtitle: result.subtitle == null
           ? null
           : Text(
-              result.subtitle!,
+              // Message bodies are markdown with `<:name:id>` emoji.
+              result.type == DiscoveryResultType.message
+                  ? plainTextFromMarkdown(result.subtitle!)
+                  : result.subtitle!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

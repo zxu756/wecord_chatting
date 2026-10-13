@@ -358,7 +358,9 @@ class _ConversationAvatar extends ConsumerWidget {
         : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
       backgroundImage: image,
-      onBackgroundImageError: image == null ? null : (_, _) {},
+      onBackgroundImageError: image == null
+          ? null
+          : (_, _) => refreshAvatarDisplayUrl(ref, avatarUrl),
       child: image == null ? Text(_initials(title)) : null,
     );
   }

@@ -532,7 +532,9 @@ class _ReactorAvatar extends ConsumerWidget {
     final label = profile.displayLabel.trim();
     return CircleAvatar(
       backgroundImage: image,
-      onBackgroundImageError: image == null ? null : (_, _) {},
+      onBackgroundImageError: image == null
+          ? null
+          : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
       child: image == null
           ? Text(label.isEmpty ? '?' : label.characters.first.toUpperCase())
           : null,

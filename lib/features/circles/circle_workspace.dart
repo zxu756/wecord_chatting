@@ -698,6 +698,9 @@ class _MemberRow extends ConsumerWidget {
                 backgroundImage: avatarUrl == null
                     ? null
                     : NetworkImage(avatarUrl),
+                onBackgroundImageError: avatarUrl == null
+                    ? null
+                    : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
                 child: avatarUrl == null
                     ? Text(name.characters.first.toUpperCase())
                     : null,

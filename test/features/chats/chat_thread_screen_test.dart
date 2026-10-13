@@ -1145,10 +1145,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Image preview'), findsOneWidget);
-    expect(repository.createdImageUrls, hasLength(1));
-    expect(repository.createdImageUrls.single.bucket, 'chat-images');
-    expect(repository.createdImageUrls.single.path, 'conversation-1/photo.png');
-    expect(repository.createdImageUrls.single.mimeType, 'image/png');
+    // Test images never load, so the URL is signed once more (as when a
+    // signed URL has expired) and then left alone.
+    expect(repository.createdImageUrls, hasLength(2));
+    for (final attachment in repository.createdImageUrls) {
+      expect(attachment.bucket, 'chat-images');
+      expect(attachment.path, 'conversation-1/photo.png');
+      expect(attachment.mimeType, 'image/png');
+    }
   });
 
   testWidgets('picks and sends an image from the composer', (tester) async {

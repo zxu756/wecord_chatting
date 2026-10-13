@@ -507,7 +507,9 @@ class _Header extends ConsumerWidget {
             CircleAvatar(
               radius: 30,
               backgroundImage: image,
-              onBackgroundImageError: image == null ? null : (_, _) {},
+              onBackgroundImageError: image == null
+                  ? null
+                  : (_, _) => refreshAvatarDisplayUrl(ref, avatarUrl),
               child: image == null ? Text(_initials(detail.title)) : null,
             ),
             IconButton.filledTonal(

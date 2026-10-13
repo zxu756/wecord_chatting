@@ -856,6 +856,25 @@ class ForumThumbnail extends ConsumerStatefulWidget {
 class _ForumThumbnailState extends ConsumerState<ForumThumbnail> {
   late Future<String> _url = _load();
 
+  /// Whether the URL was signed again after the image failed to load.
+  bool _resigned = false;
+
+  /// The signed URL may have expired while the list stayed open: sign it
+  /// again, once.
+  void _resignAfterError() {
+    if (_resigned) {
+      return;
+    }
+    _resigned = true;
+    scheduleMicrotask(() {
+      if (mounted) {
+        setState(() {
+          _url = _load();
+        });
+      }
+    });
+  }
+
   Future<String> _load() {
     return ref
         .read(circlesRepositoryProvider)
@@ -868,6 +887,7 @@ class _ForumThumbnailState extends ConsumerState<ForumThumbnail> {
     if (oldWidget.attachment.path != widget.attachment.path ||
         oldWidget.attachment.bucket != widget.attachment.bucket) {
       _url = _load();
+      _resigned = false;
     }
   }
 
@@ -895,7 +915,10 @@ class _ForumThumbnailState extends ConsumerState<ForumThumbnail> {
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => placeholder,
+            errorBuilder: (context, error, stackTrace) {
+              _resignAfterError();
+              return placeholder;
+            },
           );
         },
       ),

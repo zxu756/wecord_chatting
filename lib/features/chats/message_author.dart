@@ -40,6 +40,7 @@ class _FallbackAvatarState extends ConsumerState<FallbackAvatar> {
           : (_, _) {
               if (mounted && _failedUrl != displayUrl) {
                 setState(() => _failedUrl = displayUrl);
+                refreshAvatarDisplayUrl(ref, widget.avatarUrl);
               }
             },
       child: image == null ? Text(avatarInitials(widget.title)) : null,

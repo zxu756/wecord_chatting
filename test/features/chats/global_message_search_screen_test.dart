@@ -64,6 +64,34 @@ void main() {
     expect(find.text('Thread conversation-1'), findsOneWidget);
   });
 
+  testWidgets('message results show custom emoji as :name:', (tester) async {
+    final repository = FakeChatsRepository()
+      ..discoveryResults = const [
+        DiscoveryResult(
+          type: DiscoveryResultType.message,
+          id: 'message-1',
+          conversationId: 'conversation-1',
+          title: 'Launch Crew',
+          subtitle:
+              'Ada · **ship** it <:party:11111111-1111-1111-1111-111111111111>',
+          rank: 0.9,
+        ),
+      ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: GlobalMessageSearchScreen()),
+      ),
+    );
+    await tester.enterText(find.byType(TextField), 'ship');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.text('Ada · ship it :party:'), findsOneWidget);
+    expect(find.textContaining('<:party:'), findsNothing);
+  });
+
   testWidgets('global discovery groups and opens circles and channels', (
     tester,
   ) async {

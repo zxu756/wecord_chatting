@@ -17,12 +17,16 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
+import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
+import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -220,6 +224,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _isMentioning = false;
   var _mentionQuery = '';
   final _mentionDraft = MentionDraft();
+
+  /// The command name typed after a leading `/`, while the command list
+  /// shows, and the command Enter or Tab picks from it.
+  String? _slashQuery;
+  var _slashIndex = 0;
+
+  /// What the conversation allows, refreshed on every build.
+  var _slashContext = const SlashCommandContext();
+  String? _circleId;
   var _hasCapturedReadPosition = false;
   String? _newMessageDividerId;
   var _isAtBottom = true;
@@ -435,6 +448,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
     final slowmodeSeconds =
         widget.slowmodeSeconds ?? conversationSummary?.slowmodeSeconds ?? 0;
+    _circleId = conversationSummary?.circleId;
+    _slashContext = SlashCommandContext(
+      isCircleConversation: _circleId != null,
+    );
     _slowmodeUntil = slowmodeSeconds > 0
         ? _slowmodeEnd(
             messages: thread.valueOrNull?.messages ?? const [],
@@ -908,6 +925,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   errorText: _sendError,
                   mentionCandidates: _mentionCandidates(groupDetail),
                   onSelectMention: _insertMention,
+                  slashCommands: _slashCandidates(),
+                  highlightedSlashIndex: _slashIndex,
+                  onSelectSlashCommand: _selectSlashCommand,
+                  onComposerKey: _handleComposerKey,
                   replyPreviewText: _replyingTo == null
                       ? null
                       : _replyPreviewBody(_replyingTo!),
@@ -1141,6 +1162,31 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
 
+    final command = parseSlashCommand(
+      body,
+      context: _slashContext,
+      random: ref.read(slashCommandRandomProvider),
+    );
+    final String messageBody;
+    switch (command) {
+      case SlashCommandError(:final message):
+        setState(() => _sendError = message);
+        return;
+      case SlashSetNickname(:final nickname):
+        await _runSlashAction(() => _setNicknameFromCommand(nickname));
+        return;
+      case SlashSetStatus():
+        await _runSlashAction(() => _setStatusFromCommand(command));
+        return;
+      case SlashOpenPoll():
+        _clearComposerAfterCommand();
+        return;
+      case SlashSendText(body: final commandBody):
+        messageBody = commandBody;
+      case null:
+        messageBody = body;
+    }
+
     if (_isSlowedDown) {
       return;
     }
@@ -1159,16 +1205,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .read(chatsRepositoryProvider)
           .sendTextMessage(
             conversationId: widget.conversationId,
-            body: body,
+            body: messageBody,
             replyToMessageId: replyingTo?.id,
             replyPreview: replyPreview,
-            mentions: _mentionsForBody(body),
+            mentions: _mentionsForBody(messageBody),
           );
       await _setTyping(false);
       _composerController.clear();
       _mentionDraft.clear();
       _isMentioning = false;
       _mentionQuery = '';
+      _slashQuery = null;
       _replyingTo = null;
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
@@ -1377,6 +1424,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   void _handleComposerChanged(String value) {
     _updateMentionQuery();
+    _updateSlashQuery();
     _typingTimer?.cancel();
     if (value.trim().isEmpty) {
       unawaited(_setTyping(false));
@@ -1400,6 +1448,142 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _isMentioning = isMentioning;
       _mentionQuery = nextQuery;
     });
+  }
+
+  void _updateSlashQuery() {
+    final query = slashCommandQueryAt(_composerController.text);
+    if (query == _slashQuery) {
+      return;
+    }
+    setState(() {
+      _slashQuery = query;
+      _slashIndex = 0;
+    });
+  }
+
+  /// The commands offered for what is being typed; none while editing.
+  List<SlashCommand> _slashCandidates() {
+    final query = _slashQuery;
+    if (query == null || _editingMessage != null) {
+      return const [];
+    }
+    return slashCommandCandidates(query, _slashContext);
+  }
+
+  /// Puts `/name ` in the composer, ready for the command's arguments.
+  void _selectSlashCommand(SlashCommand command) {
+    final text = '/${command.name} ';
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    setState(() {
+      _slashQuery = null;
+      _slashIndex = 0;
+    });
+  }
+
+  /// Arrow keys move through the command list; Enter and Tab pick.
+  KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
+    final commands = _slashCandidates();
+    if (commands.isEmpty || event is KeyUpEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      final step = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+      setState(() {
+        _slashIndex = (_slashIndex + step) % commands.length;
+      });
+      return KeyEventResult.handled;
+    }
+    if (event is KeyDownEvent &&
+        (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter ||
+            key == LogicalKeyboardKey.tab)) {
+      _selectSlashCommand(commands[_slashIndex.clamp(0, commands.length - 1)]);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _clearComposerAfterCommand() {
+    _composerController.clear();
+    _mentionDraft.clear();
+    setState(() {
+      _isMentioning = false;
+      _mentionQuery = '';
+      _slashQuery = null;
+      _sendError = null;
+    });
+    unawaited(_setTyping(false));
+  }
+
+  /// Runs a command that changes something other than the conversation,
+  /// clearing the composer once it worked.
+  Future<void> _runSlashAction(Future<bool> Function() action) async {
+    setState(() {
+      _isSending = true;
+      _sendError = null;
+    });
+    try {
+      if (await action() && mounted) {
+        _clearComposerAfterCommand();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  Future<bool> _setNicknameFromCommand(String? nickname) async {
+    final circleId = _circleId;
+    final userId = ref.read(authRepositoryProvider).currentUser?.id;
+    if (circleId == null || userId == null) {
+      return false;
+    }
+    try {
+      await ref
+          .read(circlesRepositoryProvider)
+          .setNickname(circleId: circleId, userId: userId, nickname: nickname);
+    } catch (_) {
+      _showSnackBar('Could not change nickname. Try again.');
+      return false;
+    }
+    // Messages, mentions and member lists show nicknames.
+    ref.invalidate(chatThreadProvider);
+    ref.invalidate(groupDetailProvider);
+    ref.invalidate(circleDetailProvider(circleId));
+    _showSnackBar(
+      nickname == null
+          ? 'Your nickname was reset.'
+          : 'Your nickname is now $nickname.',
+    );
+    return true;
+  }
+
+  Future<bool> _setStatusFromCommand(SlashSetStatus status) async {
+    try {
+      await ref
+          .read(settingsRepositoryProvider)
+          .setCustomStatus(emoji: status.emoji, text: status.text);
+    } catch (_) {
+      _showSnackBar(
+        status.clears
+            ? 'Could not clear status. Try again.'
+            : 'Could not set status. Try again.',
+      );
+      return false;
+    }
+    ref.invalidate(currentProfileProvider);
+    _showSnackBar(
+      status.clears
+          ? 'Status cleared.'
+          : 'Status set to ${CustomStatus(emoji: status.emoji, text: status.text).label}.',
+    );
+    return true;
   }
 
   List<GroupMember> _mentionCandidates(GroupDetail? detail) {
@@ -3014,6 +3198,10 @@ class _Composer extends StatelessWidget {
     required this.errorText,
     required this.mentionCandidates,
     required this.onSelectMention,
+    required this.slashCommands,
+    required this.highlightedSlashIndex,
+    required this.onSelectSlashCommand,
+    required this.onComposerKey,
     required this.replyPreviewText,
     required this.isEditing,
     required this.onChanged,
@@ -3036,6 +3224,15 @@ class _Composer extends StatelessWidget {
   final String? errorText;
   final List<GroupMember> mentionCandidates;
   final ValueChanged<GroupMember> onSelectMention;
+
+  /// The commands offered while one is typed after a leading `/`.
+  final List<SlashCommand> slashCommands;
+  final int highlightedSlashIndex;
+  final ValueChanged<SlashCommand> onSelectSlashCommand;
+
+  /// Sees the text field's key presses first (arrow keys and Enter in the
+  /// command list).
+  final FocusOnKeyEventCallback onComposerKey;
   final String? replyPreviewText;
   final bool isEditing;
   final ValueChanged<String> onChanged;
@@ -3111,6 +3308,15 @@ class _Composer extends StatelessWidget {
                     _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
                     const SizedBox(height: 8),
                   ],
+                  if (slashCommands.isNotEmpty) ...[
+                    SlashCommandList(
+                      commands: slashCommands,
+                      highlightedIndex: highlightedSlashIndex,
+                      onSelect: onSelectSlashCommand,
+                      maxHeight: math.min(240, availableHeight * 0.3),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (mentionCandidates.isNotEmpty) ...[
                     MentionCandidateList(
                       candidates: mentionCandidates,
@@ -3152,19 +3358,25 @@ class _Composer extends StatelessWidget {
                         )
                       else
                         Expanded(
-                          child: TextField(
-                            controller: controller,
-                            minLines: 1,
-                            maxLines: 4,
-                            textInputAction: TextInputAction.send,
-                            decoration: const InputDecoration(
-                              hintText: 'Message',
-                              border: OutlineInputBorder(),
+                          child: Focus(
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onKeyEvent: onComposerKey,
+                            child: TextField(
+                              key: const ValueKey('chat-composer-field'),
+                              controller: controller,
+                              minLines: 1,
+                              maxLines: 4,
+                              textInputAction: TextInputAction.send,
+                              decoration: const InputDecoration(
+                                hintText: 'Message',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: onChanged,
+                              onSubmitted: (_) {
+                                unawaited(onSend());
+                              },
                             ),
-                            onChanged: onChanged,
-                            onSubmitted: (_) {
-                              unawaited(onSend());
-                            },
                           ),
                         ),
                       const SizedBox(width: 8),

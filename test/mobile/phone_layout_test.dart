@@ -360,6 +360,35 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    phoneTestWidgets('slash commands above the keyboard', (
+      tester,
+      viewport,
+    ) async {
+      await openCircleChannel(tester);
+      final composer = find.widgetWithText(TextField, 'Message');
+      await tester.tap(composer);
+      await tester.enterText(composer, '/');
+      await showKeyboard(tester, viewport);
+      expect(find.byKey(const ValueKey('slash-command-list')), findsOneWidget);
+      expectFullyVisible(tester, composer);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('slash-command-shrug')),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('chat-message-list'))).height,
+        greaterThan(0),
+      );
+      await tester.enterText(composer, '/ni');
+      await tester.pump();
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('slash-command-nick')),
+      );
+      await tester.enterText(composer, '');
+      await tester.pump(const Duration(seconds: 4));
+    });
+
     phoneTestWidgets('message search above the keyboard', (
       tester,
       viewport,

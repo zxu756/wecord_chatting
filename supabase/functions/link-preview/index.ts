@@ -90,10 +90,10 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_url" }, 400);
   }
   const checked = normalizePreviewUrl(rawUrl);
-  if (!checked.ok && checked.reason === "invalid") {
-    return json({ error: "invalid_url" }, 400);
-  }
   if (!checked.ok) {
+    if (checked.reason === "invalid") {
+      return json({ error: "invalid_url" }, 400);
+    }
     // Refused before any lookup; nothing worth caching.
     return json(emptyRow(rawUrl.trim(), checked.reason));
   }

@@ -66,9 +66,9 @@ class _CircleChannelThreadScreenState
       }
     }
     final actions = [
-      IconButton(
+      ChatThreadAction(
         tooltip: 'Show member list',
-        icon: const Icon(Icons.people_outline),
+        icon: Icons.people_outline,
         onPressed: detail == null
             ? null
             : () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -97,7 +97,9 @@ class _CircleChannelThreadScreenState
               ),
             ),
       body:
-          widget.threadBuilder?.call(context, actions) ??
+          widget.threadBuilder?.call(context, [
+            for (final action in actions) action.toIconButton(),
+          ]) ??
           ChatThreadScreen(
             conversationId: widget.conversationId,
             title: title,

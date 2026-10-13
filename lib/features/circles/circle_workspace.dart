@@ -96,12 +96,17 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         _showMembers ??
         MediaQuery.sizeOf(context).width >=
             CircleWorkspace.memberListBreakpoint;
-    final memberToggle = IconButton(
+    final memberToggle = ChatThreadAction(
       tooltip: showMembers ? 'Hide member list' : 'Show member list',
       isSelected: showMembers,
-      icon: const Icon(Icons.people_outline),
-      selectedIcon: const Icon(Icons.people),
+      icon: Icons.people_outline,
+      selectedIcon: Icons.people,
       onPressed: () => setState(() => _showMembers = !showMembers),
+    );
+    final closeThread = ChatThreadAction(
+      tooltip: 'Close thread',
+      icon: Icons.close,
+      onPressed: () => setState(() => _openThread = null),
     );
     final selectedChannel = _selectedChannel;
     final onlineUserIds =
@@ -137,7 +142,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                 ? Scaffold(
                     appBar: AppBar(
                       title: const Text('Feed'),
-                      actions: [memberToggle],
+                      actions: [memberToggle.toIconButton()],
                     ),
                     body: CircleFeedView(
                       circleId: detail.circle.id,
@@ -145,28 +150,21 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                       onChanged: widget.onChanged,
                     ),
                   )
-                : (widget.channelViewBuilder ?? _defaultChannelView)(
-                    context,
-                    selectedChannel,
-                    [memberToggle],
-                  ),
+                : widget.channelViewBuilder?.call(context, selectedChannel, [
+                        memberToggle.toIconButton(),
+                      ]) ??
+                      _defaultChannelView(selectedChannel, [memberToggle]),
           ),
           if (_openThread case final thread?) ...[
             const VerticalDivider(width: 1),
             SizedBox(
               key: const ValueKey('circle-thread-panel'),
               width: CircleWorkspace.threadPanelWidth,
-              child: (widget.threadViewBuilder ?? _defaultThreadView)(
-                context,
-                thread,
-                [
-                  IconButton(
-                    tooltip: 'Close thread',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _openThread = null),
-                  ),
-                ],
-              ),
+              child:
+                  widget.threadViewBuilder?.call(context, thread, [
+                    closeThread.toIconButton(),
+                  ]) ??
+                  _defaultThreadView(thread, [closeThread]),
             ),
           ] else if (showMembers) ...[
             const VerticalDivider(width: 1),
@@ -208,9 +206,8 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   }
 
   Widget _defaultChannelView(
-    BuildContext context,
     CircleChannel channel,
-    List<Widget> actions,
+    List<ChatThreadAction> actions,
   ) {
     return ChatThreadScreen(
       key: ValueKey(channel.conversationId),
@@ -223,9 +220,8 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   }
 
   Widget _defaultThreadView(
-    BuildContext context,
     ThreadTarget thread,
-    List<Widget> actions,
+    List<ChatThreadAction> actions,
   ) {
     return ChatThreadScreen(
       key: ValueKey(thread.conversationId),
@@ -316,6 +312,7 @@ class _NicknameDialogState extends State<_NicknameDialog> {
         ? profile.username
         : profile.displayName;
     return AlertDialog(
+      scrollable: true,
       title: Text(widget.isSelf ? 'Change my nickname' : 'Change nickname'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -362,6 +359,7 @@ void showCircleInviteSheet(BuildContext context, CircleDetail detail) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => CircleInviteSheet(detail: detail),
   );
 }
@@ -377,6 +375,7 @@ void showCircleChannelCreationSheet(
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => CircleChannelCreationSheet(
       circleId: circleId,
       categories: categories,

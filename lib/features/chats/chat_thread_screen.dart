@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,7 @@ import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
@@ -70,6 +72,35 @@ class ChatThreadData {
 
   final List<ChatMessage> messages;
   final List<ConversationReadMarker> readMarkers;
+}
+
+/// A chat thread app bar action: an icon button when there is room, and a
+/// labelled entry in the More menu on phones.
+class ChatThreadAction {
+  const ChatThreadAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.selectedIcon,
+    this.isSelected,
+  });
+
+  /// Also the label in the More menu.
+  final String tooltip;
+  final IconData icon;
+  final IconData? selectedIcon;
+  final bool? isSelected;
+  final VoidCallback? onPressed;
+
+  IconButton toIconButton() {
+    return IconButton(
+      tooltip: tooltip,
+      isSelected: isSelected,
+      icon: Icon(icon),
+      selectedIcon: selectedIcon == null ? null : Icon(selectedIcon),
+      onPressed: onPressed,
+    );
+  }
 }
 
 class _MentionSelection {
@@ -140,7 +171,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   final String? title;
   final String? avatarUrl;
   final ConversationType? conversationType;
-  final List<Widget> extraActions;
+
+  /// Added after the built-in app bar actions. On phones the first one stays
+  /// visible next to search and the rest move into the More menu.
+  final List<ChatThreadAction> extraActions;
 
   /// Opens a thread started here. Defaults to pushing it full screen.
   final ValueChanged<ThreadTarget>? onOpenThread;
@@ -250,6 +284,72 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  /// [actions] as app bar buttons. Phones keep the first one (search) and
+  /// [primary], and list the rest under More.
+  List<Widget> _appBarActions({
+    required bool compact,
+    required List<ChatThreadAction> actions,
+    required ChatThreadAction primary,
+  }) {
+    if (!compact || actions.length <= 2) {
+      return [for (final action in actions) action.toIconButton()];
+    }
+    final search = actions.first;
+    final overflow = [
+      for (final action in actions)
+        if (!identical(action, search) && !identical(action, primary)) action,
+    ];
+    return [
+      search.toIconButton(),
+      primary.toIconButton(),
+      PopupMenuButton<ChatThreadAction>(
+        tooltip: 'More',
+        icon: const Icon(Icons.more_vert),
+        onSelected: (action) => action.onPressed?.call(),
+        itemBuilder: (context) => [
+          for (final action in overflow)
+            PopupMenuItem(
+              value: action,
+              enabled: action.onPressed != null,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  action.isSelected == true
+                      ? action.selectedIcon ?? action.icon
+                      : action.icon,
+                ),
+                title: Text(action.tooltip),
+              ),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  void _toggleMessageSearch() {
+    setState(() {
+      _isSearchingMessages = !_isSearchingMessages;
+      if (!_isSearchingMessages) {
+        _searchController.clear();
+        _messageSearchQuery = '';
+      }
+    });
+  }
+
+  void _showGroupDetails(String title) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return GroupDetailSheet(
+          conversationId: widget.conversationId,
+          title: title,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
@@ -303,329 +403,350 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ref.watch(canPinMessagesProvider(widget.conversationId)).valueOrNull ??
         false;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8),
-          child: isThread
-              ? const CircleAvatar(child: Icon(Icons.forum_outlined))
-              : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
+    final searchAction = ChatThreadAction(
+      tooltip: 'Search messages',
+      icon: Icons.search,
+      onPressed: _toggleMessageSearch,
+    );
+    final pinnedAction = ChatThreadAction(
+      tooltip: 'Pinned messages',
+      icon: Icons.push_pin_outlined,
+      onPressed: () => _showPinnedMessages(canPinMessages),
+    );
+    final groupDetailsAction = conversationType == ConversationType.group
+        ? ChatThreadAction(
+            tooltip: 'Group details',
+            icon: Icons.group_outlined,
+            onPressed: () => _showGroupDetails(title),
+          )
+        : null;
+    final archiveAction = canManageThread
+        ? ChatThreadAction(
+            tooltip: threadArchived ? 'Unarchive thread' : 'Archive thread',
+            icon: threadArchived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            onPressed: () => _setThreadArchived(threadId, !threadArchived),
+          )
+        : null;
+    final appBarActions = [
+      searchAction,
+      pinnedAction,
+      ChatThreadAction(
+        tooltip: 'Media',
+        icon: Icons.photo_library_outlined,
+        onPressed: () {
+          context.push(ChatMediaScreen.pathFor(widget.conversationId));
+        },
+      ),
+      ?groupDetailsAction,
+      ?archiveAction,
+      ...widget.extraActions,
+    ];
+    // Next to search on phones: the circle's member list, the group's
+    // details, or a managed thread's archive toggle.
+    final primaryAction =
+        widget.extraActions.firstOrNull ??
+        groupDetailsAction ??
+        archiveAction ??
+        pinnedAction;
+
+    // Measured here rather than from the screen, so a thread panel in the
+    // wide circle layout also gets the compact app bar.
+    return LayoutBuilder(
+      builder: (context, constraints) => Scaffold(
+        appBar: AppBar(
+          leading: Padding(
+            padding: const EdgeInsets.all(8),
+            child: isThread
+                ? const CircleAvatar(child: Icon(Icons.forum_outlined))
+                : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // A notch smaller than a plain app bar title, so long names
+              // keep more of themselves next to the subtitle on phones.
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                isThread
+                    ? _threadSubtitle(conversationSummary)
+                    : [
+                        peerIsOnline ? 'Online' : 'Offline',
+                        if (conversationType == ConversationType.direct)
+                          ?activeCustomStatus(
+                            conversationSummary?.directCustomStatus,
+                          )?.label,
+                      ].join(' · '),
+                key: const ValueKey('chat-thread-subtitle'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+          actions: _appBarActions(
+            compact: isCompactWidth(constraints.maxWidth),
+            actions: appBarActions,
+            primary: primaryAction,
+          ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        body: Column(
           children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(
-              isThread
-                  ? _threadSubtitle(conversationSummary)
-                  : [
-                      peerIsOnline ? 'Online' : 'Offline',
-                      if (conversationType == ConversationType.direct)
-                        ?activeCustomStatus(
-                          conversationSummary?.directCustomStatus,
-                        )?.label,
-                    ].join(' · '),
-              key: const ValueKey('chat-thread-subtitle'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall,
+            if (conversationType == ConversationType.group &&
+                conversationSummary?.announcement.trim().isNotEmpty == true)
+              _AnnouncementStrip(
+                announcement: conversationSummary!.announcement.trim(),
+              ),
+            if (_isSearchingMessages)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Search messages',
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _messageSearchQuery = value;
+                          });
+                        },
+                      ),
+                    ),
+                    if (_messageSearchQuery.trim().isNotEmpty) ...[
+                      const SizedBox(width: 12),
+                      thread.maybeWhen(
+                        data: (data) {
+                          final resultCount = ref
+                              .read(chatsRepositoryProvider)
+                              .searchThreadMessages(
+                                data.messages,
+                                _messageSearchQuery,
+                              )
+                              .length;
+                          return Text(
+                            '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
+                          );
+                        },
+                        orElse: () => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            Expanded(
+              child: thread.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stackTrace) => Center(
+                  child: Text(
+                    error.toString(),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+                data: (data) {
+                  final messages = data.messages;
+                  final visibleMessages = ref
+                      .read(chatsRepositoryProvider)
+                      .searchThreadMessages(messages, _messageSearchQuery);
+                  final messagesById = {
+                    for (final message in messages) message.id: message,
+                  };
+                  final fullOldestToNewest = _messagesOldestToNewest(messages);
+                  _captureNewMessageDivider(
+                    fullOldestToNewest,
+                    data.readMarkers,
+                    currentUserId,
+                  );
+                  _trackUnseenMessages(fullOldestToNewest, currentUserId);
+                  _markReadAfterLoad(messages);
+                  _reconcileActiveMessageState(messagesById);
+                  if (messages.isEmpty) {
+                    return const Center(child: Text('No messages yet'));
+                  }
+                  if (visibleMessages.isEmpty) {
+                    return const Center(child: Text('No matching messages'));
+                  }
+
+                  final visibleOldestToNewest = _messagesOldestToNewest(
+                    visibleMessages,
+                  );
+                  final newestFirst = visibleOldestToNewest.reversed.toList(
+                    growable: false,
+                  );
+                  final latestOutgoingReadState = _latestOutgoingReadState(
+                    messages: fullOldestToNewest,
+                    readMarkers: data.readMarkers,
+                    currentUserId: currentUserId,
+                  );
+                  // Grouping compares neighbours, which search results are not.
+                  final followUpIds = _messageSearchQuery.trim().isEmpty
+                      ? _followUpMessageIds(
+                          visibleOldestToNewest,
+                          newMessageDividerId: _newMessageDividerId,
+                        )
+                      : const <String>{};
+                  final showSenders = canStartThreads || isThread;
+                  final membersById = {
+                    for (final member
+                        in groupDetail?.members ?? const <GroupMember>[])
+                      member.profile.id: member,
+                  };
+
+                  final list = ListView.builder(
+                    key: const ValueKey('chat-message-list'),
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: newestFirst.length,
+                    itemBuilder: (context, index) {
+                      final message = newestFirst[index];
+                      final Widget bubble;
+                      if (message.type == MessageType.system) {
+                        bubble = _SystemMessageLine(
+                          message: message,
+                          onOpenPinnedMessage: _scrollToMessage,
+                        );
+                      } else {
+                        final isCurrentUser = message.senderId == currentUserId;
+                        final newerMessage = index == 0
+                            ? null
+                            : newestFirst[index - 1];
+                        bubble = _MessageBubble(
+                          message: message,
+                          messagesById: messagesById,
+                          isCurrentUser: isCurrentUser,
+                          sender: showSenders && !isCurrentUser
+                              ? _senderFor(message, membersById)
+                              : null,
+                          isFollowUp: followUpIds.contains(message.id),
+                          hasFollowUp:
+                              newerMessage != null &&
+                              followUpIds.contains(newerMessage.id),
+                          showReadReceipt:
+                              latestOutgoingReadState.latestOutgoingMessageId ==
+                                  message.id &&
+                              latestOutgoingReadState.isRead,
+                          onReply: _startReply,
+                          onEdit: _startEdit,
+                          onForward: _showForwardSheet,
+                          onDelete: _deleteMessage,
+                          onPreviewImage: _previewImage,
+                          onToggleReaction: _toggleReaction,
+                          onShowReactors: _showReactors,
+                          canPin: canPinMessages,
+                          onTogglePin: _togglePin,
+                          onRemoveEmbed: _removeEmbed,
+                          canStartThread: canStartThreads,
+                          onOpenThread: _openOrCreateThread,
+                        );
+                      }
+                      final highlighted = AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        decoration: BoxDecoration(
+                          color: message.id == _highlightedMessageId
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.14)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: bubble,
+                      );
+                      return KeyedSubtree(
+                        key: _messageKeys.putIfAbsent(
+                          message.id,
+                          GlobalKey.new,
+                        ),
+                        child: message.id == _newMessageDividerId
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const _NewMessagesDivider(),
+                                  highlighted,
+                                ],
+                              )
+                            : highlighted,
+                      );
+                    },
+                  );
+                  final showJumpToLatest =
+                      !_isAtBottom && _unseenMessageCount > 0;
+                  return Stack(
+                    children: [
+                      Positioned.fill(child: list),
+                      if (showJumpToLatest)
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: FloatingActionButton.extended(
+                            heroTag: null,
+                            tooltip: 'Jump to latest',
+                            onPressed: _jumpToLatest,
+                            icon: const Icon(Icons.arrow_downward),
+                            label: Text(
+                              _unseenMessageCount == 1
+                                  ? '1 new message'
+                                  : '$_unseenMessageCount new messages',
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (peerIsTyping)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('typing...'),
+                ),
+              ),
+            _Composer(
+              controller: _composerController,
+              isSending: _isSending,
+              isPickingImage: _isPickingImage,
+              isSendingImage: _isSendingImage,
+              errorText: _sendError,
+              mentionCandidates: _mentionCandidates(groupDetail),
+              onSelectMention: _insertMention,
+              replyPreviewText: _replyingTo == null
+                  ? null
+                  : _replyPreviewBody(_replyingTo!),
+              isEditing: _editingMessage != null,
+              onChanged: _handleComposerChanged,
+              onSend: _sendMessage,
+              onPickImage: _pickAndSendImage,
+              isRecordingVoice: _isRecordingVoice,
+              isSendingVoice: _isSendingVoice,
+              onStartVoiceRecording: _startVoiceRecording,
+              onCancelVoiceRecording: _cancelVoiceRecording,
+              onSendVoiceRecording: _sendVoiceRecording,
+              onCancelReply: _cancelReply,
+              onCancelEdit: _cancelEdit,
+              // What is left above the keyboard, so a short phone keeps
+              // some of the conversation in view while typing.
+              availableHeight:
+                  constraints.maxHeight -
+                  MediaQuery.viewInsetsOf(context).bottom,
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Search messages',
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              setState(() {
-                _isSearchingMessages = !_isSearchingMessages;
-                if (!_isSearchingMessages) {
-                  _searchController.clear();
-                  _messageSearchQuery = '';
-                }
-              });
-            },
-          ),
-          IconButton(
-            tooltip: 'Pinned messages',
-            icon: const Icon(Icons.push_pin_outlined),
-            onPressed: () => _showPinnedMessages(canPinMessages),
-          ),
-          IconButton(
-            tooltip: 'Media',
-            icon: const Icon(Icons.photo_library_outlined),
-            onPressed: () {
-              context.push(ChatMediaScreen.pathFor(widget.conversationId));
-            },
-          ),
-          if (conversationType == ConversationType.group)
-            IconButton(
-              tooltip: 'Group details',
-              icon: const Icon(Icons.group_outlined),
-              onPressed: () {
-                showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (context) {
-                    return GroupDetailSheet(
-                      conversationId: widget.conversationId,
-                      title: title,
-                    );
-                  },
-                );
-              },
-            ),
-          if (canManageThread)
-            IconButton(
-              tooltip: threadArchived ? 'Unarchive thread' : 'Archive thread',
-              icon: Icon(
-                threadArchived
-                    ? Icons.unarchive_outlined
-                    : Icons.archive_outlined,
-              ),
-              onPressed: () => _setThreadArchived(threadId, !threadArchived),
-            ),
-          ...widget.extraActions,
-        ],
-      ),
-      body: Column(
-        children: [
-          if (conversationType == ConversationType.group &&
-              conversationSummary?.announcement.trim().isNotEmpty == true)
-            _AnnouncementStrip(
-              announcement: conversationSummary!.announcement.trim(),
-            ),
-          if (_isSearchingMessages)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Search messages',
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _messageSearchQuery = value;
-                        });
-                      },
-                    ),
-                  ),
-                  if (_messageSearchQuery.trim().isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    thread.maybeWhen(
-                      data: (data) {
-                        final resultCount = ref
-                            .read(chatsRepositoryProvider)
-                            .searchThreadMessages(
-                              data.messages,
-                              _messageSearchQuery,
-                            )
-                            .length;
-                        return Text(
-                          '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
-                        );
-                      },
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          Expanded(
-            child: thread.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Center(
-                child: Text(
-                  error.toString(),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-              data: (data) {
-                final messages = data.messages;
-                final visibleMessages = ref
-                    .read(chatsRepositoryProvider)
-                    .searchThreadMessages(messages, _messageSearchQuery);
-                final messagesById = {
-                  for (final message in messages) message.id: message,
-                };
-                final fullOldestToNewest = _messagesOldestToNewest(messages);
-                _captureNewMessageDivider(
-                  fullOldestToNewest,
-                  data.readMarkers,
-                  currentUserId,
-                );
-                _trackUnseenMessages(fullOldestToNewest, currentUserId);
-                _markReadAfterLoad(messages);
-                _reconcileActiveMessageState(messagesById);
-                if (messages.isEmpty) {
-                  return const Center(child: Text('No messages yet'));
-                }
-                if (visibleMessages.isEmpty) {
-                  return const Center(child: Text('No matching messages'));
-                }
-
-                final visibleOldestToNewest = _messagesOldestToNewest(
-                  visibleMessages,
-                );
-                final newestFirst = visibleOldestToNewest.reversed.toList(
-                  growable: false,
-                );
-                final latestOutgoingReadState = _latestOutgoingReadState(
-                  messages: fullOldestToNewest,
-                  readMarkers: data.readMarkers,
-                  currentUserId: currentUserId,
-                );
-                // Grouping compares neighbours, which search results are not.
-                final followUpIds = _messageSearchQuery.trim().isEmpty
-                    ? _followUpMessageIds(
-                        visibleOldestToNewest,
-                        newMessageDividerId: _newMessageDividerId,
-                      )
-                    : const <String>{};
-                final showSenders = canStartThreads || isThread;
-                final membersById = {
-                  for (final member
-                      in groupDetail?.members ?? const <GroupMember>[])
-                    member.profile.id: member,
-                };
-
-                final list = ListView.builder(
-                  key: const ValueKey('chat-message-list'),
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: newestFirst.length,
-                  itemBuilder: (context, index) {
-                    final message = newestFirst[index];
-                    final Widget bubble;
-                    if (message.type == MessageType.system) {
-                      bubble = _SystemMessageLine(
-                        message: message,
-                        onOpenPinnedMessage: _scrollToMessage,
-                      );
-                    } else {
-                      final isCurrentUser = message.senderId == currentUserId;
-                      final newerMessage = index == 0
-                          ? null
-                          : newestFirst[index - 1];
-                      bubble = _MessageBubble(
-                        message: message,
-                        messagesById: messagesById,
-                        isCurrentUser: isCurrentUser,
-                        sender: showSenders && !isCurrentUser
-                            ? _senderFor(message, membersById)
-                            : null,
-                        isFollowUp: followUpIds.contains(message.id),
-                        hasFollowUp:
-                            newerMessage != null &&
-                            followUpIds.contains(newerMessage.id),
-                        showReadReceipt:
-                            latestOutgoingReadState.latestOutgoingMessageId ==
-                                message.id &&
-                            latestOutgoingReadState.isRead,
-                        onReply: _startReply,
-                        onEdit: _startEdit,
-                        onForward: _showForwardSheet,
-                        onDelete: _deleteMessage,
-                        onPreviewImage: _previewImage,
-                        onToggleReaction: _toggleReaction,
-                        onShowReactors: _showReactors,
-                        canPin: canPinMessages,
-                        onTogglePin: _togglePin,
-                        onRemoveEmbed: _removeEmbed,
-                        canStartThread: canStartThreads,
-                        onOpenThread: _openOrCreateThread,
-                      );
-                    }
-                    final highlighted = AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      decoration: BoxDecoration(
-                        color: message.id == _highlightedMessageId
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.14)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: bubble,
-                    );
-                    return KeyedSubtree(
-                      key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
-                      child: message.id == _newMessageDividerId
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const _NewMessagesDivider(),
-                                highlighted,
-                              ],
-                            )
-                          : highlighted,
-                    );
-                  },
-                );
-                final showJumpToLatest =
-                    !_isAtBottom && _unseenMessageCount > 0;
-                return Stack(
-                  children: [
-                    Positioned.fill(child: list),
-                    if (showJumpToLatest)
-                      Positioned(
-                        right: 16,
-                        bottom: 16,
-                        child: FloatingActionButton.extended(
-                          heroTag: null,
-                          tooltip: 'Jump to latest',
-                          onPressed: _jumpToLatest,
-                          icon: const Icon(Icons.arrow_downward),
-                          label: Text(
-                            _unseenMessageCount == 1
-                                ? '1 new message'
-                                : '$_unseenMessageCount new messages',
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-          if (peerIsTyping)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('typing...'),
-              ),
-            ),
-          _Composer(
-            controller: _composerController,
-            isSending: _isSending,
-            isPickingImage: _isPickingImage,
-            isSendingImage: _isSendingImage,
-            errorText: _sendError,
-            mentionCandidates: _mentionCandidates(groupDetail),
-            onSelectMention: _insertMention,
-            replyPreviewText: _replyingTo == null
-                ? null
-                : _replyPreviewBody(_replyingTo!),
-            isEditing: _editingMessage != null,
-            onChanged: _handleComposerChanged,
-            onSend: _sendMessage,
-            onPickImage: _pickAndSendImage,
-            isRecordingVoice: _isRecordingVoice,
-            isSendingVoice: _isSendingVoice,
-            onStartVoiceRecording: _startVoiceRecording,
-            onCancelVoiceRecording: _cancelVoiceRecording,
-            onSendVoiceRecording: _sendVoiceRecording,
-            onCancelReply: _cancelReply,
-            onCancelEdit: _cancelEdit,
-          ),
-        ],
       ),
     );
   }
@@ -1268,6 +1389,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final messageId = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) {
         return PinnedMessagesSheet(
           conversationId: widget.conversationId,
@@ -1409,6 +1531,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (context) => MessageForwardSheet(message: message),
     );
   }
@@ -1502,6 +1625,7 @@ class _ThreadTitleDialogState extends State<_ThreadTitleDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('Create thread'),
       content: TextField(
         controller: _controller,
@@ -1563,33 +1687,42 @@ class _ThreadChip extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          // Title and activity sit on their own lines so neither is squeezed
+          // out on narrow screens.
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.forum_outlined, size: 16, color: colorScheme.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  summary.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
               const SizedBox(width: 8),
-              Text(
-                detail,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: unread
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: unread ? FontWeight.w700 : null,
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: unread
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: unread ? FontWeight.w700 : null,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (unread) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Container(
                   key: const ValueKey('thread-chip-unread'),
                   width: 8,
@@ -1987,6 +2120,7 @@ class _MessageBubble extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
         return SafeArea(
@@ -2477,6 +2611,7 @@ class _Composer extends StatelessWidget {
     required this.onSendVoiceRecording,
     required this.onCancelReply,
     required this.onCancelEdit,
+    required this.availableHeight,
   });
 
   final TextEditingController controller;
@@ -2499,6 +2634,9 @@ class _Composer extends StatelessWidget {
   final VoidCallback onCancelReply;
   final VoidCallback onCancelEdit;
 
+  /// Height of the thread above the keyboard, app bar included.
+  final double availableHeight;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -2510,149 +2648,168 @@ class _Composer extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (errorText != null) ...[
-                Text(errorText!, style: TextStyle(color: colorScheme.error)),
-                const SizedBox(height: 8),
-              ],
-              if (replyPreviewText != null) ...[
-                _ComposerModeBanner(
-                  text: 'Replying to $replyPreviewText',
-                  tooltip: 'Cancel reply',
-                  icon: Icons.close,
-                  onPressed: onCancelReply,
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (isEditing) ...[
-                _ComposerModeBanner(
-                  text: 'Editing message',
-                  tooltip: 'Cancel edit',
-                  icon: Icons.close,
-                  onPressed: onCancelEdit,
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (mentionCandidates.isNotEmpty) ...[
-                Material(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 180),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final member in mentionCandidates)
-                          ListTile(
-                            dense: true,
-                            leading: CircleAvatar(
-                              child: Text(_initials(_mentionName(member))),
-                            ),
-                            title: Text(_mentionName(member)),
-                            subtitle: Text('@${member.profile.username}'),
-                            onTap: () => onSelectMention(member),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              Row(
+        // On short screens with the keyboard up, banners and suggestions
+        // scroll above the text field instead of pushing the messages out.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: availableHeight * 0.5),
+          child: SingleChildScrollView(
+            reverse: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  IconButton(
-                    tooltip: 'Send image',
-                    onPressed: isBusy || isEditing || isRecordingVoice
-                        ? null
-                        : () => unawaited(onPickImage()),
-                    icon: isSendingImage
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.image_outlined),
-                  ),
-                  const SizedBox(width: 8),
-                  if (isRecordingVoice)
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.mic,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                          const SizedBox(width: 8),
-                          const Expanded(child: Text('Recording...')),
-                        ],
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        minLines: 1,
-                        maxLines: 4,
-                        textInputAction: TextInputAction.send,
-                        decoration: const InputDecoration(
-                          hintText: 'Message',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: onChanged,
-                        onSubmitted: (_) {
-                          unawaited(onSend());
-                        },
-                      ),
+                  if (errorText != null) ...[
+                    Text(
+                      errorText!,
+                      style: TextStyle(color: colorScheme.error),
                     ),
-                  const SizedBox(width: 8),
-                  if (isRecordingVoice) ...[
-                    IconButton(
-                      tooltip: 'Cancel voice message',
-                      onPressed: isSendingVoice
-                          ? null
-                          : () => unawaited(onCancelVoiceRecording()),
-                      icon: const Icon(Icons.close),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      tooltip: 'Send voice message',
-                      onPressed: isSendingVoice
-                          ? null
-                          : () => unawaited(onSendVoiceRecording()),
-                      icon: isSendingVoice
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send),
-                    ),
-                  ] else ...[
-                    IconButton(
-                      tooltip: 'Record voice message',
-                      onPressed: isBusy || isEditing
-                          ? null
-                          : () => unawaited(onStartVoiceRecording()),
-                      icon: const Icon(Icons.mic_none_outlined),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      tooltip: isEditing ? 'Save edit' : 'Send',
-                      onPressed: isBusy ? null : () => unawaited(onSend()),
-                      icon: isSending
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send),
-                    ),
+                    const SizedBox(height: 8),
                   ],
+                  if (replyPreviewText != null) ...[
+                    _ComposerModeBanner(
+                      text: 'Replying to $replyPreviewText',
+                      tooltip: 'Cancel reply',
+                      icon: Icons.close,
+                      onPressed: onCancelReply,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (isEditing) ...[
+                    _ComposerModeBanner(
+                      text: 'Editing message',
+                      tooltip: 'Cancel edit',
+                      icon: Icons.close,
+                      onPressed: onCancelEdit,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (mentionCandidates.isNotEmpty) ...[
+                    Material(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: math.min(180, availableHeight * 0.25),
+                        ),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final member in mentionCandidates)
+                              ListTile(
+                                dense: true,
+                                leading: CircleAvatar(
+                                  child: Text(_initials(_mentionName(member))),
+                                ),
+                                title: Text(_mentionName(member)),
+                                subtitle: Text('@${member.profile.username}'),
+                                onTap: () => onSelectMention(member),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Send image',
+                        onPressed: isBusy || isEditing || isRecordingVoice
+                            ? null
+                            : () => unawaited(onPickImage()),
+                        icon: isSendingImage
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.image_outlined),
+                      ),
+                      const SizedBox(width: 8),
+                      if (isRecordingVoice)
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.mic,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(child: Text('Recording...')),
+                            ],
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.send,
+                            decoration: const InputDecoration(
+                              hintText: 'Message',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: onChanged,
+                            onSubmitted: (_) {
+                              unawaited(onSend());
+                            },
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      if (isRecordingVoice) ...[
+                        IconButton(
+                          tooltip: 'Cancel voice message',
+                          onPressed: isSendingVoice
+                              ? null
+                              : () => unawaited(onCancelVoiceRecording()),
+                          icon: const Icon(Icons.close),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          tooltip: 'Send voice message',
+                          onPressed: isSendingVoice
+                              ? null
+                              : () => unawaited(onSendVoiceRecording()),
+                          icon: isSendingVoice
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send),
+                        ),
+                      ] else ...[
+                        IconButton(
+                          tooltip: 'Record voice message',
+                          onPressed: isBusy || isEditing
+                              ? null
+                              : () => unawaited(onStartVoiceRecording()),
+                          icon: const Icon(Icons.mic_none_outlined),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          tooltip: isEditing ? 'Save edit' : 'Send',
+                          onPressed: isBusy ? null : () => unawaited(onSend()),
+                          icon: isSending
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -2690,7 +2847,8 @@ class _ComposerModeBanner extends StatelessWidget {
         ),
         IconButton(
           tooltip: tooltip,
-          visualDensity: VisualDensity.compact,
+          // Full size on touch screens, so it stays easy to hit.
+          visualDensity: usesTouchInput(context) ? null : VisualDensity.compact,
           onPressed: onPressed,
           icon: Icon(icon),
         ),

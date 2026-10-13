@@ -52,16 +52,21 @@ const _pickerEmojiGroups = <(String, String)>[
   ),
 ];
 
-Future<String?> showEmojiReactionPicker(BuildContext context) {
+Future<String?> showEmojiReactionPicker(
+  BuildContext context, {
+  String title = 'Add reaction',
+}) {
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
-    builder: (sheetContext) => const EmojiReactionPicker(),
+    builder: (sheetContext) => EmojiReactionPicker(title: title),
   );
 }
 
 class EmojiReactionPicker extends StatelessWidget {
-  const EmojiReactionPicker({super.key});
+  const EmojiReactionPicker({this.title = 'Add reaction', super.key});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +80,7 @@ class EmojiReactionPicker extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Add reaction', style: theme.textTheme.titleLarge),
+              child: Text(title, style: theme.textTheme.titleLarge),
             ),
             Flexible(
               child: ListView(

@@ -9,8 +9,10 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -42,6 +44,94 @@ void main() {
         avatarUrl: 'avatars/existing.png',
       ),
     ]);
+  });
+
+  testWidgets('sets a custom status from the Me screen', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+
+    await tester.tap(find.text('Set status'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set a status'), findsOneWidget);
+    // Nothing to save yet.
+    final saveStatus = find.descendant(
+      of: find.byType(CustomStatusSheet),
+      matching: find.widgetWithText(FilledButton, 'Save'),
+    );
+    expect(tester.widget<FilledButton>(saveStatus).onPressed, isNull);
+
+    await tester.tap(find.byTooltip('Choose emoji'));
+    await tester.pumpAndSettle();
+    expect(find.text('Status emoji'), findsOneWidget);
+    await tester.tap(find.text('😎'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, "What's happening?"),
+      '  Focusing  ',
+    );
+    await tester.tap(find.text("Don't clear"));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('4 hours').last);
+    await tester.pumpAndSettle();
+
+    final before = DateTime.now().toUtc();
+    await tester.tap(saveStatus);
+    await tester.pumpAndSettle();
+
+    final call = settingsRepository.statusCalls.single;
+    expect(call.emoji, '😎');
+    expect(call.text, '  Focusing  ');
+    final remaining = call.expiresAt!.difference(before);
+    expect(remaining.inMinutes, inInclusiveRange(239, 241));
+    expect(find.text('Set a status'), findsNothing);
+    expect(find.text('Focusing'), findsOneWidget);
+    expect(find.textContaining('Clears '), findsOneWidget);
+  });
+
+  testWidgets('clears the current custom status', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+    settingsRepository.profile = settingsRepository.profile.copyWith(
+      customStatus: const CustomStatus(emoji: '🎧', text: 'Listening'),
+    );
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+
+    expect(find.text('Listening'), findsOneWidget);
+    expect(find.text("Doesn't clear"), findsOneWidget);
+
+    await tester.tap(find.text('Listening'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, "What's happening?"), findsOneWidget);
+    expect(find.text('Listening'), findsWidgets);
+
+    await tester.tap(find.text('Clear status'));
+    await tester.pumpAndSettle();
+
+    final call = settingsRepository.statusCalls.single;
+    expect(call.emoji, isNull);
+    expect(call.text, isNull);
+    expect(call.expiresAt, isNull);
+    expect(find.text('Set status'), findsOneWidget);
+  });
+
+  testWidgets('expired statuses are not shown', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+    settingsRepository.profile = settingsRepository.profile.copyWith(
+      customStatus: CustomStatus(
+        text: 'Old news',
+        expiresAt: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      ),
+    );
+
+    await tester.pumpWidget(_app(settingsRepository: settingsRepository));
+    await tester.pump();
+
+    expect(find.text('Old news'), findsNothing);
+    expect(find.text('Set status'), findsOneWidget);
   });
 
   testWidgets('signs out through the auth repository', (tester) async {
@@ -216,6 +306,8 @@ void main() {
     await tester.pumpWidget(_app(settingsRepository: settingsRepository));
     await tester.pump();
 
+    await tester.drag(find.byType(ListView), const Offset(0, -200));
+    await tester.pump();
     await tester.tap(find.text('Blocked users'));
     await tester.pumpAndSettle();
 
@@ -323,7 +415,28 @@ class FakeSettingsRepository implements SettingsRepository {
   final uploadCalls = <UploadAvatarCall>[];
   final createdAvatarUrls = <String>[];
   final unblockedUserIds = <String>[];
+  final statusCalls = <({String? emoji, String? text, DateTime? expiresAt})>[];
   List<Profile> blockedUsers = const [];
+
+  @override
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  }) async {
+    statusCalls.add((emoji: emoji, text: text, expiresAt: expiresAt));
+    final cleared =
+        (emoji?.trim().isEmpty ?? true) && (text?.trim().isEmpty ?? true);
+    profile = profile.copyWith(
+      customStatus: cleared
+          ? null
+          : CustomStatus(
+              emoji: emoji?.trim(),
+              text: text?.trim(),
+              expiresAt: expiresAt,
+            ),
+    );
+  }
 
   @override
   Future<Profile> currentProfile() async => profile;

@@ -4,7 +4,9 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
@@ -90,7 +92,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   label: const Text('Change avatar'),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              _CustomStatusTile(
+                status: activeCustomStatus(profile.customStatus),
+                onTap: () => _editCustomStatus(profile),
+              ),
+              const SizedBox(height: 8),
               Text('@${profile.username}'),
               const SizedBox(height: 12),
               TextField(
@@ -275,6 +282,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _editCustomStatus(Profile profile) async {
+    final saved = await showCustomStatusSheet(
+      context,
+      current: activeCustomStatus(profile.customStatus),
+    );
+    if (saved == true) {
+      ref.invalidate(currentProfileProvider);
+    }
+  }
+
   Future<void> _signOut() {
     return ref.read(authRepositoryProvider).signOut();
   }
@@ -318,6 +335,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     }
   }
+}
+
+class _CustomStatusTile extends StatelessWidget {
+  const _CustomStatusTile({required this.status, required this.onTap});
+
+  final CustomStatus? status;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = this.status;
+    final expiresAt = status?.expiresAt;
+    return Card.outlined(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: status?.emoji == null
+            ? const Icon(Icons.add_reaction_outlined)
+            : Text(status!.emoji!, style: const TextStyle(fontSize: 22)),
+        title: Text(
+          status == null
+              ? 'Set status'
+              : (status.text ?? status.emoji ?? 'Status'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: status == null
+            ? null
+            : Text(
+                expiresAt == null
+                    ? "Doesn't clear"
+                    : 'Clears ${_formatExpiry(expiresAt)}',
+              ),
+        trailing: const Icon(Icons.edit_outlined),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+String _formatExpiry(DateTime expiresAt) {
+  final local = expiresAt.toLocal();
+  final now = DateTime.now();
+  final time =
+      '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
+  final sameDay =
+      local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day;
+  if (sameDay) {
+    return 'at $time';
+  }
+  return 'on ${local.month}/${local.day} at $time';
 }
 
 Future<void> showBlockedUsersSheet(BuildContext context, WidgetRef ref) {

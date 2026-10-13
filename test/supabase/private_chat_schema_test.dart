@@ -1531,4 +1531,51 @@ void main() {
       expect(body, isNot(contains("if caller_role not in")));
     }
   });
+
+  test('custom statuses are validated, RPC set and hidden once expired', () {
+    final sql = allMigrationSql();
+    final statusBody = functionBody(sql, 'custom_status');
+    final setBody = functionBody(sql, 'set_custom_status');
+
+    for (final column in [
+      'add column if not exists status_emoji text',
+      'add column if not exists status_text text',
+      'add column if not exists status_expires_at timestamptz',
+    ]) {
+      expect(sql, contains(column));
+    }
+    expect(sql, contains('char_length(status_text) between 1 and 64'));
+    expect(sql, contains('char_length(status_emoji) between 1 and 32'));
+
+    expect(statusBody, contains('profile_row public.profiles'));
+    expect(statusBody, contains('profile_row.status_expires_at <= now()'));
+    expect(statusBody, contains('then null'));
+
+    expect(setBody, contains('security definer'));
+    expect(setBody, contains('set search_path = public'));
+    expect(setBody, contains('current_user_id is null'));
+    expect(setBody, contains('where p.id = current_user_id'));
+    expect(setBody, contains('char_length(normalized_text) > 64'));
+    expect(setBody, contains('normalized_expires_at <= now()'));
+    expect(setBody, contains('normalized_expires_at := null'));
+
+    expect(
+      functionBody(sql, 'get_circle_detail'),
+      contains("'custom_status', public.custom_status(p)"),
+    );
+    final profileBody = functionBody(sql, 'get_profile_summary');
+    expect(profileBody, contains('custom_status jsonb'));
+    expect(profileBody, contains('when bs.has_blocked_me then null'));
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+    expect(summariesBody, contains('direct_custom_status jsonb'));
+    expect(summariesBody, contains('public.custom_status(p)'));
+    expect(summariesBody, contains('b.blocked_id = auth.uid()'));
+
+    for (final grant in [
+      'public.custom_status(public.profiles) to authenticated',
+      'public.set_custom_status(text, text, timestamptz) to authenticated',
+    ]) {
+      expect(sql, contains('grant execute on function $grant'));
+    }
+  });
 }

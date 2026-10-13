@@ -18,6 +18,7 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/link_preview.dart';
@@ -806,6 +807,37 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Offline'), findsOneWidget);
+  });
+
+  testWidgets('direct chat headers show the peer custom status', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          unreadCount: 0,
+          title: 'Ada Lovelace',
+          directUserId: 'user-2',
+          directCustomStatus: const CustomStatus(
+            emoji: '🎧',
+            text: 'Listening',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        conversationType: ConversationType.direct,
+        onlineUserIds: Stream.value({'user-1', 'user-2'}),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Online · 🎧 Listening'), findsOneWidget);
   });
 
   testWidgets('sends typing activity while composing and clears it on send', (
@@ -2845,6 +2877,13 @@ class FakeSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> unblockUser(String userId) async {}
+
+  @override
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  }) async {}
 }
 
 ChatMessage _message({

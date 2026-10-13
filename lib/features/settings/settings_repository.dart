@@ -46,6 +46,14 @@ abstract interface class SettingsRepository {
   Future<List<Profile>> listBlockedUsers();
 
   Future<void> unblockUser(String userId);
+
+  /// Sets the current user's status; blank [emoji] and [text] clear it. A
+  /// null [expiresAt] keeps it until changed.
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  });
 }
 
 abstract interface class SettingsDataSource {
@@ -107,6 +115,22 @@ class SupabaseSettingsRepository implements SettingsRepository {
   @override
   Future<void> unblockUser(String userId) async {
     await _dataSource.rpc('unblock_user', {'target_user_id': userId});
+  }
+
+  @override
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  }) async {
+    final trimmedEmoji = emoji?.trim() ?? '';
+    final trimmedText = text?.trim() ?? '';
+    final clearing = trimmedEmoji.isEmpty && trimmedText.isEmpty;
+    await _dataSource.rpc('set_custom_status', {
+      'emoji': trimmedEmoji.isEmpty ? null : trimmedEmoji,
+      'text': trimmedText.isEmpty ? null : trimmedText,
+      'expires_at': clearing ? null : expiresAt?.toUtc().toIso8601String(),
+    });
   }
 
   @override
@@ -222,7 +246,7 @@ class SupabaseSettingsDataSource implements SettingsDataSource {
   Future<Map<String, dynamic>> currentProfile(String currentUserId) async {
     final row = await _client
         .from('profiles')
-        .select()
+        .select('*,custom_status')
         .eq('id', currentUserId)
         .single();
     return row;
@@ -289,6 +313,15 @@ class _UninitializedSettingsRepository implements SettingsRepository {
   @override
   Future<void> unblockUser(String userId) {
     throw StateError('Supabase must be initialized before updating blocks.');
+  }
+
+  @override
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  }) {
+    throw StateError('Supabase must be initialized before setting a status.');
   }
 
   @override

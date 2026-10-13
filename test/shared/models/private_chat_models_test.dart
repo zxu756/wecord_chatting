@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/friendship.dart';
@@ -11,6 +12,58 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/profile_relationship.dart';
 
 void main() {
+  test('CustomStatus parses statuses and ignores empty ones', () {
+    final status = CustomStatus.maybeFromJson({
+      'emoji': '🎯',
+      'text': ' Focusing ',
+      'expires_at': '2026-10-13T12:00:00Z',
+    })!;
+
+    expect(status.label, '🎯 Focusing');
+    expect(status.expiresAt, DateTime.utc(2026, 10, 13, 12));
+    expect(status.isActiveAt(DateTime.utc(2026, 10, 13, 11, 59)), isTrue);
+    expect(status.isActiveAt(DateTime.utc(2026, 10, 13, 12)), isFalse);
+    expect(
+      activeCustomStatus(status, now: DateTime.utc(2026, 10, 13, 13)),
+      isNull,
+    );
+    expect(
+      CustomStatus.maybeFromJson({
+        'text': 'Around',
+      })!.isActiveAt(DateTime.utc(2099)),
+      isTrue,
+    );
+    expect(CustomStatus.maybeFromJson(null), isNull);
+    expect(CustomStatus.maybeFromJson({'emoji': ' ', 'text': ''}), isNull);
+
+    final summary = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'direct',
+      'direct_user_id': 'user-2',
+      'direct_custom_status': {'emoji': '🎧', 'text': null},
+    });
+    expect(summary.directUserId, 'user-2');
+    expect(summary.directCustomStatus?.label, '🎧');
+  });
+
+  test('CustomStatusDuration computes expiries', () {
+    final now = DateTime(2026, 10, 13, 9, 15);
+
+    expect(
+      CustomStatusDuration.thirtyMinutes.expiresAt(now),
+      DateTime(2026, 10, 13, 9, 45).toUtc(),
+    );
+    expect(
+      CustomStatusDuration.fourHours.expiresAt(now),
+      DateTime(2026, 10, 13, 13, 15).toUtc(),
+    );
+    expect(
+      CustomStatusDuration.today.expiresAt(now),
+      DateTime(2026, 10, 14).toUtc(),
+    );
+    expect(CustomStatusDuration.never.expiresAt(now), isNull);
+  });
+
   test('Profile parses Supabase rows and copies values', () {
     final profile = Profile.fromJson({
       'id': 'user-1',

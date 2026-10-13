@@ -29,6 +29,83 @@ void main() {
     ]);
   });
 
+  test('setCustomStatus trims and sends the status RPC', () async {
+    final dataSource = FakeSettingsDataSource();
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.setCustomStatus(
+      emoji: ' 🎯 ',
+      text: '  Focusing ',
+      expiresAt: DateTime.utc(2026, 10, 13, 12, 30),
+    );
+    await repository.setCustomStatus(emoji: '', text: 'Around');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'set_custom_status',
+        params: {
+          'emoji': '🎯',
+          'text': 'Focusing',
+          'expires_at': '2026-10-13T12:30:00.000Z',
+        },
+      ),
+      const RpcCall(
+        functionName: 'set_custom_status',
+        params: {'emoji': null, 'text': 'Around', 'expires_at': null},
+      ),
+    ]);
+  });
+
+  test('setCustomStatus with blanks clears the status and expiry', () async {
+    final dataSource = FakeSettingsDataSource();
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.setCustomStatus(
+      emoji: ' ',
+      text: '',
+      expiresAt: DateTime.utc(2026, 10, 13, 12, 30),
+    );
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'set_custom_status',
+        params: {'emoji': null, 'text': null, 'expires_at': null},
+      ),
+    ]);
+  });
+
+  test('currentProfile parses the custom status', () async {
+    final dataSource = FakeSettingsDataSource()
+      ..profileRow = {
+        'id': 'user-1',
+        'username': 'ada',
+        'display_name': 'Ada',
+        'bio': '',
+        'created_at': '2026-05-18T00:00:00Z',
+        'updated_at': '2026-05-18T00:00:00Z',
+        'custom_status': {
+          'emoji': '🎧',
+          'text': 'Listening',
+          'expires_at': '2026-10-13T12:00:00Z',
+        },
+      };
+    final repository = SupabaseSettingsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final profile = await repository.currentProfile();
+
+    expect(profile.customStatus?.label, '🎧 Listening');
+    expect(profile.customStatus?.expiresAt, DateTime.utc(2026, 10, 13, 12));
+  });
+
   test('uploadAvatar stores the file under the current user folder', () async {
     final dataSource = FakeSettingsDataSource();
     final repository = SupabaseSettingsRepository.withDataSource(
@@ -140,9 +217,11 @@ class FakeSettingsDataSource implements SettingsDataSource {
   final blockedUsersForUserIds = <String>[];
   List<Map<String, dynamic>> blockedRows = const [];
 
+  Map<String, dynamic>? profileRow;
+
   @override
-  Future<Map<String, dynamic>> currentProfile(String currentUserId) {
-    throw UnimplementedError();
+  Future<Map<String, dynamic>> currentProfile(String currentUserId) async {
+    return profileRow ?? (throw UnimplementedError());
   }
 
   @override

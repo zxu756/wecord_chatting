@@ -18,6 +18,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -347,11 +348,25 @@ void main() {
             role: 'admin',
           ),
           CircleMember(
-            profile: _profile(id: 'user-3', username: 'amy', name: 'Amy'),
+            profile: _profile(id: 'user-3', username: 'amy', name: 'Amy')
+                .copyWith(
+                  customStatus: const CustomStatus(
+                    emoji: '🎯',
+                    text: 'Focusing',
+                  ),
+                ),
             role: 'member',
           ),
           CircleMember(
-            profile: _profile(id: 'user-2', username: 'yan', name: 'Yan'),
+            profile: _profile(id: 'user-2', username: 'yan', name: 'Yan')
+                .copyWith(
+                  customStatus: CustomStatus(
+                    text: 'Gone',
+                    expiresAt: DateTime.now().toUtc().subtract(
+                      const Duration(minutes: 1),
+                    ),
+                  ),
+                ),
             role: 'admin',
           ),
           ...detail.members,
@@ -399,6 +414,11 @@ void main() {
     expect(find.byKey(const ValueKey('member-online-user-2')), findsOneWidget);
     expect(find.byKey(const ValueKey('member-offline-user-5')), findsOneWidget);
     expect(find.byKey(const ValueKey('member-online-user-5')), findsNothing);
+
+    // Custom statuses show under names; expired ones do not.
+    expect(find.text('🎯 Focusing'), findsOneWidget);
+    expect(top('Amy'), lessThan(top('🎯 Focusing')));
+    expect(find.text('Gone'), findsNothing);
   });
   group('circle nicknames', () {
     Future<FakeCirclesRepository> pumpWorkspace(

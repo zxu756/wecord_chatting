@@ -1,3 +1,5 @@
+import 'package:wecord/shared/models/custom_status.dart';
+
 const _sentinel = Object();
 
 class Profile {
@@ -10,6 +12,7 @@ class Profile {
     required this.updatedAt,
     this.alias,
     this.avatarUrl,
+    this.customStatus,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -22,6 +25,7 @@ class Profile {
       bio: json['bio'] as String,
       createdAt: _parseTimestamp(json['created_at']),
       updatedAt: _parseTimestamp(json['updated_at']),
+      customStatus: CustomStatus.maybeFromJson(json['custom_status']),
     );
   }
 
@@ -33,6 +37,10 @@ class Profile {
   final String bio;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Their custom status, when the source included one (and it had not
+  /// expired by then).
+  final CustomStatus? customStatus;
 
   String get displayLabel {
     final value = alias?.trim();
@@ -58,6 +66,7 @@ class Profile {
     String? bio,
     DateTime? createdAt,
     DateTime? updatedAt,
+    Object? customStatus = _sentinel,
   }) {
     return Profile(
       id: id ?? this.id,
@@ -70,6 +79,9 @@ class Profile {
       bio: bio ?? this.bio,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      customStatus: identical(customStatus, _sentinel)
+          ? this.customStatus
+          : customStatus as CustomStatus?,
     );
   }
 }

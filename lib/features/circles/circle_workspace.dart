@@ -10,10 +10,12 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 
 typedef CircleChannelViewBuilder =
     Widget Function(
@@ -468,6 +470,9 @@ class _MemberRow extends ConsumerWidget {
             ],
           ),
           title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: activeCustomStatus(profile.customStatus) == null
+              ? null
+              : CustomStatusLabel(status: profile.customStatus),
           trailing: roleIcon == null
               ? null
               : Tooltip(

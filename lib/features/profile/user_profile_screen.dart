@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/profile/report_user_sheet.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/profile_relationship.dart';
 
@@ -123,6 +125,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               Text('@${profile.username}', textAlign: TextAlign.center),
+              if (activeCustomStatus(profile.customStatus) != null) ...[
+                const SizedBox(height: 8),
+                CustomStatusLabel(
+                  status: profile.customStatus,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
               if (profile.bio.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(profile.bio, textAlign: TextAlign.center),

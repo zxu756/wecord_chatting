@@ -23,6 +23,44 @@ void main() {
     expect(find.text('Report'), findsOneWidget);
   });
 
+  testWidgets('profile page shows the custom status under the name', (
+    tester,
+  ) async {
+    final summary = friendSummary(displayName: 'Ada', username: 'ada');
+    final profileDataSource = FakeProfileDataSource()
+      ..rpcResult = [
+        {
+          ...summaryJson(summary),
+          'custom_status': {
+            'emoji': '🏖️',
+            'text': 'On holiday',
+            'expires_at': null,
+          },
+        },
+      ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileRepositoryProvider.overrideWithValue(
+            ProfileRepository.withDataSource(profileDataSource),
+          ),
+          contactsRepositoryProvider.overrideWithValue(
+            FakeContactsRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: UserProfileScreen(userId: 'user-2')),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('🏖️ On holiday'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('@ada')).dy,
+      lessThan(tester.getTopLeft(find.text('🏖️ On holiday')).dy),
+    );
+  });
+
   testWidgets('profile page shows add friend action for non-friends', (
     tester,
   ) async {

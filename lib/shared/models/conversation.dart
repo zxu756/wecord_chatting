@@ -1,4 +1,5 @@
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/message.dart';
 
 const _sentinel = Object();
@@ -53,6 +54,8 @@ class ConversationSummary {
     this.circleId,
     this.circleNotificationLevel,
     this.circleMutedUntil,
+    this.directUserId,
+    this.directCustomStatus,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -90,6 +93,10 @@ class ConversationSummary {
               json['circle_notification_level'] as String,
             ),
       circleMutedUntil: _parseOptionalTimestamp(json['circle_muted_until']),
+      directUserId: json['direct_user_id'] as String?,
+      directCustomStatus: CustomStatus.maybeFromJson(
+        json['direct_custom_status'],
+      ),
     );
   }
 
@@ -121,6 +128,12 @@ class ConversationSummary {
   /// When the current user's mute of [circleId] ends, if muted.
   final DateTime? circleMutedUntil;
 
+  /// The other member of a direct conversation; null otherwise.
+  final String? directUserId;
+
+  /// [directUserId]'s custom status, if they have one.
+  final CustomStatus? directCustomStatus;
+
   Map<String, dynamic> toJson() {
     return {'type': type.toJson(), 'title': title, 'avatar_url': avatarUrl};
   }
@@ -147,6 +160,8 @@ class ConversationSummary {
     Object? circleId = _sentinel,
     Object? circleNotificationLevel = _sentinel,
     Object? circleMutedUntil = _sentinel,
+    Object? directUserId = _sentinel,
+    Object? directCustomStatus = _sentinel,
   }) {
     return ConversationSummary(
       id: id ?? this.id,
@@ -194,6 +209,12 @@ class ConversationSummary {
       circleMutedUntil: identical(circleMutedUntil, _sentinel)
           ? this.circleMutedUntil
           : circleMutedUntil as DateTime?,
+      directUserId: identical(directUserId, _sentinel)
+          ? this.directUserId
+          : directUserId as String?,
+      directCustomStatus: identical(directCustomStatus, _sentinel)
+          ? this.directCustomStatus
+          : directCustomStatus as CustomStatus?,
     );
   }
 }

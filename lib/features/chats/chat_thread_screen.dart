@@ -22,6 +22,7 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -267,7 +268,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
     final directPeerId = conversationType == ConversationType.direct
-        ? _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
+        ? conversationSummary?.directUserId ??
+              _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
         : null;
     final peerIsOnline = conversationType == ConversationType.direct
         ? directPeerId != null && onlineUserIds.contains(directPeerId)
@@ -293,7 +295,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           children: [
             Text(title),
             Text(
-              peerIsOnline ? 'Online' : 'Offline',
+              [
+                peerIsOnline ? 'Online' : 'Offline',
+                if (conversationType == ConversationType.direct)
+                  ?activeCustomStatus(
+                    conversationSummary?.directCustomStatus,
+                  )?.label,
+              ].join(' · '),
+              key: const ValueKey('chat-thread-subtitle'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall,
             ),
           ],

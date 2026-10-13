@@ -342,6 +342,13 @@ class FakeSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> unblockUser(String userId) async {}
+
+  @override
+  Future<void> setCustomStatus({
+    String? emoji,
+    String? text,
+    DateTime? expiresAt,
+  }) async {}
 }
 
 class FakeChatsRepository implements ChatsRepository {

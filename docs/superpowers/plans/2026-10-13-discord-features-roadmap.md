@@ -73,7 +73,7 @@
 - [x] **13. 链接预览**（M）
   - Edge Function `link-preview`：校验登录 → 拒绝内网 / 非 http(s) 地址 → 抓取（5 秒超时、最多 512KB）→ 解析 Open Graph / `<title>` → 写入缓存表 `link_previews (url primary key, title, description, image_url, site_name, fetched_at)`，24 小时内直接读缓存。
   - 客户端：消息里第一个链接下方显示预览卡片；发送者可以关闭该条消息的预览（`messages.suppress_embeds`）。
-- [ ] **14. 自定义状态**（S）
+- [x] **14. 自定义状态**（S）
   - `profiles.status_emoji text null`、`status_text text null`（≤ 64 字）、`status_expires_at null`。RPC `set_custom_status`。
   - 显示在成员列表、私聊顶栏、个人资料页；设置入口在「我」页面，可以选择 30 分钟 / 4 小时 / 今天 / 不清除。
 - [ ] **15. 子话题（Threads）**（M）

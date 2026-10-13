@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
+import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -513,6 +514,9 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               onChangeNickname: widget.onChangeNickname,
               onCreateChannel: _createChannel,
               onCreateCategory: _createCategory,
+              onLeave: () => leaveCircle(context, detail: detail),
+              onTransferOwnership: () =>
+                  transferCircleOwnership(context, detail: detail),
             ),
             const Divider(height: 1),
             Expanded(child: list),
@@ -674,12 +678,16 @@ class _SidebarHeader extends StatelessWidget {
     required this.onChangeNickname,
     required this.onCreateChannel,
     required this.onCreateCategory,
+    required this.onLeave,
+    required this.onTransferOwnership,
   });
 
   final CircleDetail detail;
   final ValueChanged<CircleMember> onChangeNickname;
   final VoidCallback onCreateChannel;
   final VoidCallback onCreateCategory;
+  final VoidCallback onLeave;
+  final VoidCallback onTransferOwnership;
 
   @override
   Widget build(BuildContext context) {
@@ -717,6 +725,10 @@ class _SidebarHeader extends StatelessWidget {
                 circleId: detail.circle.id,
                 circleName: detail.circle.name,
               );
+            case _CircleMenuAction.transferOwnership:
+              onTransferOwnership();
+            case _CircleMenuAction.leave:
+              onLeave();
           }
         },
         itemBuilder: (context) => [
@@ -767,6 +779,28 @@ class _SidebarHeader extends StatelessWidget {
                 title: Text('Change my nickname'),
               ),
             ),
+          if (detail.isOwner)
+            const PopupMenuItem(
+              value: _CircleMenuAction.transferOwnership,
+              child: ListTile(
+                leading: Icon(Icons.swap_horiz),
+                title: Text('Transfer ownership'),
+              ),
+            )
+          else if (currentMember != null)
+            PopupMenuItem(
+              value: _CircleMenuAction.leave,
+              child: ListTile(
+                leading: Icon(
+                  Icons.logout,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  'Leave circle',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -789,6 +823,8 @@ enum _CircleMenuAction {
   roles,
   notificationSettings,
   changeNickname,
+  transferOwnership,
+  leave,
 }
 
 enum _CategoryMenuAction { rename, delete }

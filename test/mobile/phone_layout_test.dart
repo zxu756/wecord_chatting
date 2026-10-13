@@ -4,6 +4,7 @@ import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -521,6 +522,74 @@ void main() {
       await tester.tap(find.byTooltip('Category options').first);
       await settle(tester);
       expect(find.text('Rename category'), findsOneWidget);
+    });
+
+    phoneTestWidgets('transfer ownership dialog above the keyboard', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await settle(tester);
+      expect(find.text('Leave circle'), findsNothing);
+      await tester.ensureVisible(find.text('Transfer ownership'));
+      await settle(tester);
+      await tester.tap(find.text('Transfer ownership'));
+      await settle(tester);
+
+      await tester.tap(find.byKey(const ValueKey('transfer-owner-user-2')));
+      await settle(tester);
+      final confirm = find.byKey(const ValueKey('transfer-confirm-name'));
+      await tester.ensureVisible(confirm);
+      await settle(tester);
+      await tester.showKeyboard(confirm);
+      await showKeyboard(tester, viewport);
+      await tester.ensureVisible(confirm);
+      await settle(tester);
+      expectFullyVisible(tester, confirm);
+      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Transfer'));
+    });
+
+    phoneTestWidgets('leave circle confirmation', (tester, viewport) async {
+      final world = PhoneWorld();
+      world.circles.detail = circleDetailWith(
+        channelId: 'ch-general',
+        permissions: 1 | 2 | 64 | 8192,
+        isReadOnly: false,
+      );
+      await world.open(tester, '/circles/circle-1');
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await settle(tester);
+      expect(find.text('Transfer ownership'), findsNothing);
+      await tester.ensureVisible(find.text('Leave circle'));
+      await settle(tester);
+      await tester.tap(find.text('Leave circle'));
+      await settle(tester);
+      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Leave'));
+    });
+
+    phoneTestWidgets('circle the user is no longer in', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.circles.detailError = const CircleMembershipLostException(
+        'circle-1',
+      );
+      await world.open(tester, '/circles/circle-1');
+
+      expect(find.byType(CircleRail), findsOneWidget);
+      expectFullyVisible(
+        tester,
+        find.text("You're no longer a member of this circle"),
+      );
+      expectFullyVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Back to Circles'),
+      );
     });
 
     phoneTestWidgets('roles page and role editor', (tester, viewport) async {

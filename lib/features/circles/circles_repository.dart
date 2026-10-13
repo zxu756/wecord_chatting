@@ -25,6 +25,8 @@ final circlesRepositoryProvider = Provider<CirclesRepository>((ref) {
 abstract interface class CirclesRepository {
   Future<List<CircleSummary>> listCircles();
 
+  /// Throws [CircleMembershipLostException] when the current user is not
+  /// (or no longer) a member of the circle.
   Future<CircleDetail> getCircleDetail(String circleId);
 
   Future<String> createCircle({required String name, List<String> memberIds});
@@ -121,6 +123,17 @@ abstract interface class CirclesRepository {
   /// Removes [userId] from the circle and all of its channels.
   Future<void> kickMember({required String circleId, required String userId});
 
+  /// Leaves the circle and all of its channels. The owner must transfer
+  /// ownership first.
+  Future<void> leaveCircle(String circleId);
+
+  /// Makes [newOwnerId] the circle's owner; the current owner stays as a
+  /// member without roles.
+  Future<void> transferOwnership({
+    required String circleId,
+    required String newOwnerId,
+  });
+
   /// The permission overwrites of a channel, roles first.
   Future<List<CircleChannelOverwrite>> listChannelOverwrites(String channelId);
 
@@ -188,6 +201,17 @@ abstract interface class CirclesRepository {
   Stream<void> circleChanges(String circleId);
 }
 
+/// The current user is not a member of the circle (any more): they left,
+/// were kicked, or the circle is gone.
+class CircleMembershipLostException implements Exception {
+  const CircleMembershipLostException(this.circleId);
+
+  final String circleId;
+
+  @override
+  String toString() => 'You are no longer a member of this circle.';
+}
+
 abstract interface class CirclesDataSource {
   Future<Object?> rpc(String functionName, Map<String, dynamic> params);
 
@@ -240,6 +264,9 @@ class SupabaseCirclesRepository implements CirclesRepository {
     final payload = await _dataSource.rpc('get_circle_detail', {
       'target_circle_id': circleId,
     });
+    if (payload == null) {
+      throw CircleMembershipLostException(circleId);
+    }
     return CircleDetail.fromJson(payload as Map<String, dynamic>);
   }
 
@@ -437,6 +464,22 @@ class SupabaseCirclesRepository implements CirclesRepository {
     await _dataSource.rpc('kick_circle_member', {
       'target_circle_id': circleId,
       'target_user_id': userId,
+    });
+  }
+
+  @override
+  Future<void> leaveCircle(String circleId) async {
+    await _dataSource.rpc('leave_circle', {'target_circle_id': circleId});
+  }
+
+  @override
+  Future<void> transferOwnership({
+    required String circleId,
+    required String newOwnerId,
+  }) async {
+    await _dataSource.rpc('transfer_circle_ownership', {
+      'target_circle_id': circleId,
+      'new_owner_id': newOwnerId,
     });
   }
 
@@ -975,6 +1018,21 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<void> kickMember({required String circleId, required String userId}) {
     throw StateError('Supabase must be initialized before kicking members.');
+  }
+
+  @override
+  Future<void> leaveCircle(String circleId) {
+    throw StateError('Supabase must be initialized before leaving circles.');
+  }
+
+  @override
+  Future<void> transferOwnership({
+    required String circleId,
+    required String newOwnerId,
+  }) {
+    throw StateError(
+      'Supabase must be initialized before transferring ownership.',
+    );
   }
 
   @override

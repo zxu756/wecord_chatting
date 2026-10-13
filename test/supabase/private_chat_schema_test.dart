@@ -2246,4 +2246,35 @@ void main() {
       ),
     );
   });
+
+  test('members can leave and owners hand the circle over', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    final leaveBody = functionBody(sql, 'leave_circle');
+    expect(leaveBody, contains('security definer'));
+    expect(leaveBody, contains('set search_path = public'));
+    expect(leaveBody, contains('auth.uid()'));
+    expect(leaveBody, contains('Transfer ownership before leaving'));
+    expect(leaveBody, contains('public.conversation_threads ct'));
+    expect(leaveBody, contains('delete from public.circle_members cm'));
+
+    final transferBody = functionBody(sql, 'transfer_circle_ownership');
+    expect(transferBody, contains('security definer'));
+    expect(transferBody, contains('auth.uid()'));
+    expect(transferBody, contains('for update'));
+    expect(transferBody, contains('current_owner_id <> current_user_id'));
+    expect(transferBody, contains('set owner_id = new_owner_id'));
+    expect(transferBody, contains('delete from public.circle_member_roles mr'));
+
+    for (final signature in [
+      'public.leave_circle(uuid)',
+      'public.transfer_circle_ownership(uuid, uuid)',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

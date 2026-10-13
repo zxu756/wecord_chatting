@@ -241,6 +241,15 @@ class FakeCirclesRepository implements CirclesRepository {
   }) async {}
 
   @override
+  Future<void> leaveCircle(String circleId) async {}
+
+  @override
+  Future<void> transferOwnership({
+    required String circleId,
+    required String newOwnerId,
+  }) async {}
+
+  @override
   Future<List<CircleChannelOverwrite>> listChannelOverwrites(
     String channelId,
   ) async => const [];

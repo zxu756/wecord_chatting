@@ -256,6 +256,40 @@ void main() {
     });
   });
 
+  test('leaveCircle and transferOwnership call their RPCs', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.leaveCircle('circle-1');
+    await repository.transferOwnership(circleId: 'circle-1', newOwnerId: 'u2');
+
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'leave_circle',
+      'transfer_circle_ownership',
+    ]);
+    expect(dataSource.calls.first.params, {'target_circle_id': 'circle-1'});
+    expect(dataSource.calls.last.params, {
+      'target_circle_id': 'circle-1',
+      'new_owner_id': 'u2',
+    });
+  });
+
+  test('getCircleDetail reports a lost membership when denied', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await expectLater(
+      repository.getCircleDetail('circle-1'),
+      throwsA(
+        isA<CircleMembershipLostException>().having(
+          (error) => error.circleId,
+          'circleId',
+          'circle-1',
+        ),
+      ),
+    );
+  });
+
   test('channel overwrite methods call the overwrite RPCs', () async {
     final dataSource = FakeCirclesDataSource()
       ..rpcValue = [

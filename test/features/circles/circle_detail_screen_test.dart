@@ -2085,6 +2085,198 @@ void main() {
       );
     });
   });
+
+  group('leaving and ownership', () {
+    GoRouter circlesRouter() {
+      return GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles',
+            builder: (context, state) =>
+                const Scaffold(body: Text('Circles list')),
+          ),
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) =>
+                CircleDetailScreen(circleId: state.pathParameters['circleId']!),
+          ),
+        ],
+      );
+    }
+
+    CircleDetail memberDetail() {
+      final detail = _detail();
+      return CircleDetail(
+        circle: const CircleSummary(
+          id: 'circle-1',
+          name: 'Close Friends',
+          memberCount: 2,
+          channelCount: 1,
+          currentUserRole: 'member',
+        ),
+        members: [
+          CircleMember(
+            profile: _profile(id: 'user-1', username: 'xu', name: 'Xu'),
+            role: 'owner',
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-2', username: 'ada', name: 'Ada'),
+            role: 'member',
+            isCurrentUser: true,
+          ),
+        ],
+        channels: detail.channels,
+        posts: const [],
+      );
+    }
+
+    CircleDetail ownerDetail() {
+      final detail = _detail();
+      return CircleDetail(
+        circle: detail.circle,
+        members: [
+          CircleMember(
+            profile: _profile(id: 'user-1', username: 'xu', name: 'Xu'),
+            role: 'owner',
+            isCurrentUser: true,
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-2', username: 'ada', name: 'Ada'),
+            role: 'member',
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-3', username: 'bo', name: 'Bo'),
+            role: 'member',
+          ),
+        ],
+        channels: detail.channels,
+        posts: const [],
+      );
+    }
+
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('members leave after confirming and land on Circles', (
+      tester,
+    ) async {
+      final repository = FakeCirclesRepository()..detail = memberDetail();
+      final router = circlesRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+
+      await openMenu(tester);
+      expect(find.text('Transfer ownership'), findsNothing);
+      await tester.tap(find.text('Leave circle'));
+      await tester.pumpAndSettle();
+      expect(find.text('Leave Close Friends'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(repository.leftCircleIds, isEmpty);
+
+      await openMenu(tester);
+      await tester.tap(find.text('Leave circle'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      await tester.pumpAndSettle();
+
+      expect(repository.leftCircleIds, ['circle-1']);
+      expect(find.text('Circles list'), findsOneWidget);
+      expect(find.text('Left Close Friends.'), findsOneWidget);
+    });
+
+    testWidgets('owners transfer ownership after typing the circle name', (
+      tester,
+    ) async {
+      final repository = FakeCirclesRepository()..detail = ownerDetail();
+      final router = circlesRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+
+      await openMenu(tester);
+      expect(find.text('Leave circle'), findsNothing);
+      await tester.tap(find.text('Transfer ownership'));
+      await tester.pumpAndSettle();
+
+      FilledButton transfer() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Transfer'),
+      );
+      // The owner is not a candidate.
+      expect(find.byKey(const ValueKey('transfer-owner-user-1')), findsNothing);
+      expect(transfer().onPressed, isNull);
+
+      await tester.tap(find.byKey(const ValueKey('transfer-owner-user-3')));
+      await tester.pump();
+      expect(transfer().onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('transfer-confirm-name')),
+        'Close friends',
+      );
+      await tester.pump();
+      expect(transfer().onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('transfer-confirm-name')),
+        'Close Friends',
+      );
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Transfer'));
+      await tester.pumpAndSettle();
+
+      expect(repository.ownershipTransfers, [
+        (circleId: 'circle-1', newOwnerId: 'user-3'),
+      ]);
+      expect(find.text('Bo now owns the circle.'), findsOneWidget);
+    });
+
+    testWidgets('a circle the user lost shows a friendly state', (
+      tester,
+    ) async {
+      final repository = FakeCirclesRepository()
+        ..detail = memberDetail()
+        ..detailError = const CircleMembershipLostException('circle-1')
+        ..circles = [
+          const CircleSummary(
+            id: 'circle-2',
+            name: 'Book Club',
+            memberCount: 3,
+            channelCount: 1,
+          ),
+        ];
+      final router = circlesRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text("You're no longer a member of this circle"),
+        findsOneWidget,
+      );
+      expect(find.byType(CircleRail), findsOneWidget);
+      expect(find.byKey(const ValueKey('circle-rail-circle-1')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('circle-rail-circle-2')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Back to Circles'));
+      await tester.pumpAndSettle();
+      expect(find.text('Circles list'), findsOneWidget);
+    });
+  });
 }
 
 /// The circle route plus the nested channel route the app uses for pushed
@@ -2247,6 +2439,22 @@ class FakeCirclesRepository implements CirclesRepository {
     kickedUserIds.add(userId);
   }
 
+  final leftCircleIds = <String>[];
+  final ownershipTransfers = <({String circleId, String newOwnerId})>[];
+
+  @override
+  Future<void> leaveCircle(String circleId) async {
+    leftCircleIds.add(circleId);
+  }
+
+  @override
+  Future<void> transferOwnership({
+    required String circleId,
+    required String newOwnerId,
+  }) async {
+    ownershipTransfers.add((circleId: circleId, newOwnerId: newOwnerId));
+  }
+
   var channelOverwrites = <CircleChannelOverwrite>[];
   final overwriteCalls = <String>[];
   Object? overwriteError;
@@ -2356,7 +2564,16 @@ class FakeCirclesRepository implements CirclesRepository {
   }
 
   @override
-  Future<CircleDetail> getCircleDetail(String circleId) async => detail;
+  Future<CircleDetail> getCircleDetail(String circleId) async {
+    final error = detailError;
+    if (error != null) {
+      throw error;
+    }
+    return detail;
+  }
+
+  /// Thrown by [getCircleDetail] instead of returning [detail].
+  Object? detailError;
 
   @override
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();

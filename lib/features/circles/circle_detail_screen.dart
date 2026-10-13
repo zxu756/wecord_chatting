@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
+import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -46,10 +47,12 @@ class CircleDetailScreen extends ConsumerWidget {
         appBar: _CircleAppBar(title: 'Circle'),
         body: Center(child: CircularProgressIndicator()),
       ),
-      error: (error, stackTrace) => Scaffold(
-        appBar: const _CircleAppBar(title: 'Circle'),
-        body: Center(child: Text(error.toString())),
-      ),
+      error: (error, stackTrace) => error is CircleMembershipLostException
+          ? CircleMembershipLostView(circleId: circleId)
+          : Scaffold(
+              appBar: const _CircleAppBar(title: 'Circle'),
+              body: Center(child: Text(error.toString())),
+            ),
       data: (detail) {
         if (MediaQuery.sizeOf(context).width >= workspaceBreakpoint) {
           return CircleWorkspace(

@@ -480,9 +480,10 @@ void main() {
     await tester.tap(find.text('Create channel'));
     await settle(tester);
 
+    // Text, voice and forum channels can be created.
+    expect(find.text('Voice'), findsOneWidget);
     await tester.tap(find.text('Forum'));
     await settle(tester);
-    expect(find.text('Voice'), findsNothing);
     await tester.enterText(
       find.widgetWithText(TextField, 'Channel name'),
       'qa',

@@ -25,7 +25,9 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>WeCord uses the microphone to record voice messages.</string>
+	<string>WeCord uses the microphone to record voice messages and to talk in voice channels.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>WeCord uses the camera for video in voice channels.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

@@ -21,6 +21,8 @@ dependencies:
   record: ^6.2.0
   just_audio: ^0.10.5
   url_launcher: ^6.3.2
+  livekit_client: ^2.13.1
+  flutter_webrtc: ^1.6.2+hotfix.4
 
 dev_dependencies:
   flutter_test:

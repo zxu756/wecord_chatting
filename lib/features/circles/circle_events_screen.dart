@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/circles/calendar_file_download.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -395,6 +398,7 @@ class CircleEventCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  CircleEventJoinVoiceButton(event: event, now: now),
                   CircleEventInterestButton(
                     key: ValueKey('circle-event-interest-${event.id}'),
                     event: event,
@@ -407,6 +411,75 @@ class CircleEventCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Join" for a voice event that is on now: connects to its voice channel
+/// and opens it. Nothing for other events.
+class CircleEventJoinVoiceButton extends ConsumerWidget {
+  const CircleEventJoinVoiceButton({required this.event, this.now, super.key});
+
+  final CircleEvent event;
+
+  /// The current time, for tests.
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final channelId = event.channelId;
+    if (event.locationType != CircleEventLocationType.voice ||
+        channelId == null ||
+        event.statusAt(now ?? DateTime.now()) != CircleEventStatus.ongoing) {
+      return const SizedBox.shrink();
+    }
+    final detail = ref.watch(circleDetailProvider(event.circleId)).valueOrNull;
+    CircleChannel? channel;
+    for (final candidate in detail?.channels ?? const <CircleChannel>[]) {
+      if (candidate.id == channelId && candidate.isVoice) {
+        channel = candidate;
+      }
+    }
+    if (detail == null || channel == null) {
+      return const SizedBox.shrink();
+    }
+    final voiceChannel = channel;
+    final connected = ref.watch(voiceSessionProvider)?.channelId == channelId;
+    final canConnect = detail.canInChannel(
+      voiceChannel,
+      CirclePermission.connectVoice,
+    );
+
+    Future<void> join() async {
+      if (!connected) {
+        final joined = await joinVoiceChannel(
+          context,
+          ref,
+          circleId: event.circleId,
+          channelId: voiceChannel.id,
+          conversationId: voiceChannel.conversationId,
+          channelName: voiceChannel.name,
+        );
+        if (!joined || !context.mounted) {
+          return;
+        }
+      }
+      GoRouter.maybeOf(context)?.push(
+        CircleChannelThreadScreen.pathFor(
+          event.circleId,
+          voiceChannel.conversationId,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilledButton.icon(
+        key: ValueKey('circle-event-join-voice-${event.id}'),
+        onPressed: connected || canConnect ? join : null,
+        icon: const Icon(Icons.volume_up, size: 18),
+        label: Text(connected ? 'Open' : 'Join'),
       ),
     );
   }
@@ -760,6 +833,7 @@ class _CircleEventDetailScreenState
             spacing: 8,
             runSpacing: 8,
             children: [
+              CircleEventJoinVoiceButton(event: event, now: now),
               CircleEventInterestButton(
                 key: const ValueKey('circle-event-detail-interest'),
                 event: event,

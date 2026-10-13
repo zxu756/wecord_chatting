@@ -64,7 +64,6 @@ class _CircleChannelCreationSheetState
               const SizedBox(height: 12),
               Text('Type', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 6),
-              // Voice channels arrive with voice support.
               SegmentedButton<CircleChannelKind>(
                 key: const ValueKey('channel-kind-selector'),
                 showSelectedIcon: false,
@@ -73,6 +72,11 @@ class _CircleChannelCreationSheetState
                     value: CircleChannelKind.text,
                     icon: Icon(Icons.tag),
                     label: Text('Text'),
+                  ),
+                  ButtonSegment(
+                    value: CircleChannelKind.voice,
+                    icon: Icon(Icons.volume_up_outlined),
+                    label: Text('Voice'),
                   ),
                   ButtonSegment(
                     value: CircleChannelKind.forum,
@@ -86,12 +90,14 @@ class _CircleChannelCreationSheetState
                     : (selection) => setState(() => _kind = selection.single),
               ),
               const SizedBox(height: 4),
-              Text(
-                _kind == CircleChannelKind.forum
-                    ? 'Members start posts, each with its own replies.'
-                    : 'Members chat in one stream of messages.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(switch (_kind) {
+                CircleChannelKind.forum =>
+                  'Members start posts, each with its own replies.',
+                CircleChannelKind.voice =>
+                  'Members talk, turn on video and share screens.',
+                CircleChannelKind.text =>
+                  'Members chat in one stream of messages.',
+              }, style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 12),
               TextField(
                 controller: _nameController,

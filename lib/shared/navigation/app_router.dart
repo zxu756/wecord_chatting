@@ -71,6 +71,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return ProfileBootstrapGate(
             child: WeCordShell(
               selectedIndex: _selectedIndexForLocation(state.uri.path),
+              voicePanelInSidebar: _showsCircleSidebar(state.uri.path),
+              onOpenVoice: (session) {
+                final path = CircleChannelThreadScreen.pathFor(
+                  session.circleId,
+                  session.conversationId,
+                );
+                if (state.uri.path != path) {
+                  context.push(path);
+                }
+              },
               onDestinationSelected: (index) {
                 switch (index) {
                   case 0:
@@ -274,4 +284,10 @@ int _selectedIndexForLocation(String location) {
     return 3;
   }
   return 0;
+}
+
+/// Whether [location] is a circle's home, whose channel sidebar shows the
+/// voice panel itself on wide screens.
+bool _showsCircleSidebar(String location) {
+  return RegExp('^${CirclesScreen.path}/[^/]+/?\$').hasMatch(location);
 }

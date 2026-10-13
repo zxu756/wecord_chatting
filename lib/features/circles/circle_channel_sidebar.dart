@@ -12,9 +12,13 @@ import 'package:wecord/features/circles/circle_notification_settings_sheet.dart'
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/voice.dart';
 
 const maxCircleCategoryNameLength = 32;
 
@@ -22,7 +26,10 @@ const maxCircleCategoryNameLength = 32;
 /// channels, then each category. Categories collapse independently (kept per
 /// device); a collapsed category still lists the selected channel and
 /// channels with unread messages. Members who can manage channels can drag
-/// channels and categories into a new order and manage categories.
+/// channels and categories into a new order and manage categories. Voice
+/// channels list who is connected under them, and while the current user
+/// is in a voice call (on wide screens) the "Voice connected" panel sits at
+/// the bottom.
 class CircleChannelSidebar extends ConsumerStatefulWidget {
   const CircleChannelSidebar({
     required this.detail,
@@ -34,6 +41,7 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
     this.feedSelected = false,
     this.onSelectThread,
     this.selectedThreadConversationId,
+    this.onOpenVoice,
     this.width = defaultWidth,
     super.key,
   });
@@ -53,6 +61,9 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
 
   /// The thread conversation open next to the channel, if any.
   final String? selectedThreadConversationId;
+
+  /// Opens the voice channel of the current call from the voice panel.
+  final ValueChanged<VoiceSession>? onOpenVoice;
 
   /// Reloads the circle after a change made here.
   final VoidCallback onChanged;
@@ -411,6 +422,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final threadsByParent = widget.onSelectThread == null
         ? const <String, List<ConversationSummary>>{}
         : activeThreadsByParent(conversations, now: DateTime.now());
+    // Only circles with voice channels ask who is in them.
+    final voiceStates = detail.channels.any((channel) => channel.isVoice)
+        ? watchVoiceStates(ref, _circleId)
+        : const <VoiceMemberState>[];
+    final showVoicePanel =
+        ref.watch(voiceSessionProvider) != null &&
+        MediaQuery.sizeOf(context).width >= WeCordShell.railBreakpoint;
     final layout = _layout;
     final entries = _entries(layout, unreadCounts, threadsByParent);
     final dragOnLongPress = switch (theme.platform) {
@@ -498,9 +516,16 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               ),
             );
           case _ChannelEntry(:final channel, :final unread, :final threads):
+            final voiceMembers = channel.isVoice
+                ? voiceMembersIn(voiceStates, channel.id)
+                : const <VoiceMemberState>[];
             final channelRow = CircleChannelRow(
               key: ValueKey('circle-channel-row-${channel.id}'),
-              icon: channel.isForum ? Icons.forum_outlined : Icons.tag,
+              icon: switch (channel.kind) {
+                CircleChannelKind.forum => Icons.forum_outlined,
+                CircleChannelKind.voice => Icons.volume_up_outlined,
+                CircleChannelKind.text => Icons.tag,
+              },
               label: channel.name,
               locked: channel.isPrivate,
               selected:
@@ -518,7 +543,19 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               key: ValueKey('circle-channel-${channel.id}'),
               child: draggable(
                 index,
-                threads.isEmpty
+                voiceMembers.isNotEmpty
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          channelRow,
+                          VoiceChannelMembers(
+                            channelId: channel.id,
+                            members: voiceMembers,
+                          ),
+                        ],
+                      )
+                    : threads.isEmpty
                     ? channelRow
                     : Column(
                         mainAxisSize: MainAxisSize.min,
@@ -563,6 +600,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
             ),
             const Divider(height: 1),
             Expanded(child: list),
+            if (showVoicePanel) ...[
+              const Divider(height: 1),
+              VoiceConnectedPanel(onOpen: widget.onOpenVoice),
+            ],
           ],
         ),
       ),

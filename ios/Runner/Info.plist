@@ -29,7 +29,9 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>WeCord lets you choose photos to send in chats.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>WeCord uses the microphone to record voice messages.</string>
+	<string>WeCord uses the microphone to record voice messages and to talk in voice channels.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>WeCord uses the camera for video in voice channels.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

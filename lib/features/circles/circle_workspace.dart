@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
@@ -17,6 +18,8 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -169,7 +172,12 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                 _openThread = null;
                 _openPost = null;
               });
+              // Like Discord, clicking a voice channel joins it.
+              if (channel.isVoice) {
+                _joinVoice(channel);
+              }
             },
+            onOpenVoice: _openVoice,
             onSelectFeed: () => setState(() {
               _selectedChannelId = null;
               _openThread = null;
@@ -224,6 +232,44 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     );
   }
 
+  void _joinVoice(CircleChannel channel) {
+    final detail = widget.detail;
+    if (!detail.canInChannel(channel, CirclePermission.connectVoice) ||
+        ref.read(voiceSessionProvider)?.channelId == channel.id) {
+      return;
+    }
+    joinVoiceChannel(
+      context,
+      ref,
+      circleId: detail.circle.id,
+      channelId: channel.id,
+      conversationId: channel.conversationId,
+      channelName: channel.name,
+    );
+  }
+
+  /// Shows the current call's channel: here when it is in this circle,
+  /// otherwise on its own page.
+  void _openVoice(VoiceSession session) {
+    if (session.circleId == widget.detail.circle.id &&
+        widget.detail.channels.any(
+          (channel) => channel.id == session.channelId,
+        )) {
+      setState(() {
+        _selectedChannelId = session.channelId;
+        _openThread = null;
+        _openPost = null;
+      });
+      return;
+    }
+    GoRouter.maybeOf(context)?.push(
+      CircleChannelThreadScreen.pathFor(
+        session.circleId,
+        session.conversationId,
+      ),
+    );
+  }
+
   /// Opens a thread from the sidebar next to its channel.
   void _selectThread(ConversationSummary thread) {
     setState(() {
@@ -256,6 +302,20 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   ) {
     if (channel.isForum) {
       return _forumView(channel, actions);
+    }
+    if (channel.isVoice) {
+      return VoiceChannelView(
+        key: ValueKey('voice-${channel.id}'),
+        circleId: widget.detail.circle.id,
+        channelId: channel.id,
+        conversationId: channel.conversationId,
+        channelName: channel.name,
+        canConnect: widget.detail.canInChannel(
+          channel,
+          CirclePermission.connectVoice,
+        ),
+        actions: actions,
+      );
     }
     return ChatThreadScreen(
       key: ValueKey(channel.conversationId),

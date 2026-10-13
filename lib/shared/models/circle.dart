@@ -425,9 +425,11 @@ class CircleChannel {
   final List<ForumTag> tags;
 
   bool get isForum => kind == CircleChannelKind.forum;
+
+  bool get isVoice => kind == CircleChannelKind.voice;
 }
 
-/// What a channel holds: a chat, voice (later) or forum posts.
+/// What a channel holds: a chat, a voice call or forum posts.
 enum CircleChannelKind {
   text('text'),
   voice('voice'),

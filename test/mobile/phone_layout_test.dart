@@ -5,12 +5,14 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
 import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
+import '../features/voice/voice_fakes.dart';
 import 'phone_test_support.dart';
 
 /// Lays out every screen, sheet and dialog with realistic data on phone
@@ -1528,6 +1530,132 @@ void main() {
       final world = PhoneWorld();
       await world.open(tester, '/invite/h7Kq2mPz');
       expect(find.text(circleSummaries[3].name), findsOneWidget);
+    });
+
+    phoneTestWidgets('voice channel members, call view and panel', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.circles.detail = circleDetailWithVoice();
+      world.voice.states['circle-1'] = [
+        voiceMember(
+          userId: bart.id,
+          name: bart.displayName,
+          nickname: 'Bart the Bold',
+          selfMute: true,
+          video: true,
+          screen: true,
+        ),
+        voiceMember(userId: grace.id, name: grace.displayName, selfDeaf: true),
+      ];
+      world.voiceCalls.prepare = (call) {
+        call.remotes = [
+          VoiceCallParticipant(
+            userId: bart.id,
+            name: 'Bart the Bold',
+            isSpeaking: true,
+          ),
+          VoiceCallParticipant(
+            userId: grace.id,
+            name: grace.displayName,
+            microphoneEnabled: true,
+          ),
+        ];
+      };
+      await world.open(tester, '/circles/circle-1');
+
+      final lounge = find.byKey(const ValueKey('circle-channel-row-ch-lounge'));
+      await tester.scrollUntilVisible(
+        lounge,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(CircleChannelSidebar),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await settle(tester);
+      expect(
+        find.byKey(const ValueKey('voice-channel-members-ch-lounge')),
+        findsOneWidget,
+      );
+      expect(find.text('Bart the Bold'), findsOneWidget);
+
+      await tester.tap(lounge);
+      await settle(tester);
+      expect(world.voice.joined, ['ch-lounge']);
+      expect(find.byKey(const ValueKey('voice-call-grid')), findsOneWidget);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('voice-control-leave')),
+      );
+      expectTouchTargets(
+        tester,
+        find.descendant(
+          of: find.byKey(const ValueKey('voice-call-controls')),
+          matching: find.byType(IconButton),
+        ),
+      );
+      // The panel sits above the navigation bar on every page.
+      final panel = find.byKey(const ValueKey('voice-connected-panel'));
+      expect(panel, findsOneWidget);
+      expectFullyVisible(tester, panel);
+      expect(
+        tester.getBottomLeft(panel).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('voice-control-camera')));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('voice-control-screen')));
+      await settle(tester);
+      expect(
+        find.byKey(ValueKey('voice-screen-tile-${me.id}')),
+        findsOneWidget,
+      );
+
+      world.router.go(ChatsScreen.path);
+      await settle(tester);
+      expect(panel, findsOneWidget);
+      expectFullyVisible(tester, panel);
+      expectTouchTargets(
+        tester,
+        find.descendant(of: panel, matching: find.byType(IconButton)),
+      );
+      await world.close(tester);
+    });
+
+    phoneTestWidgets('voice channel before joining', (tester, viewport) async {
+      final world = PhoneWorld();
+      world.circles.detail = circleDetailWithVoice();
+      world.voice.states['circle-1'] = [
+        for (final profile in [bart, grace, linus, ...extraMembers.take(5)])
+          voiceMember(
+            userId: profile.id,
+            name: profile.displayName,
+            channelId: 'ch-stage',
+          ),
+      ];
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-stage',
+        extra: const ChatThreadRouteExtra(
+          title: 'Stage and very long voice channel name for testing',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('voice-not-connected')), findsOneWidget);
+      expect(find.text('8 people are here'), findsOneWidget);
+      final join = find.byKey(const ValueKey('voice-join-button'));
+      await tester.ensureVisible(join);
+      await settle(tester);
+      expectFullyVisible(tester, join);
+      expectTouchTargets(tester, join);
+      await world.close(tester);
     });
   });
 

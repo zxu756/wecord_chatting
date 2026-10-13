@@ -19,6 +19,9 @@ import 'package:wecord/features/notifications/notification_preferences_repositor
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
@@ -50,6 +53,7 @@ import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
 import '../features/contacts/contacts_screen_test.dart' as contact_fakes;
 import '../features/profile/user_profile_screen_test.dart' as profile_fakes;
 import '../features/settings/settings_screen_test.dart' as settings_fakes;
+import '../features/voice/voice_fakes.dart';
 
 /// A phone screen to lay the app out on.
 class PhoneViewport {
@@ -1194,6 +1198,38 @@ CircleDetail circleDetailWith({
   );
 }
 
+/// [circleDetail] with two voice channels in the trips category: Lounge
+/// (`ch-lounge`, `conv-lounge`) and Stage (`ch-stage`, `conv-stage`).
+CircleDetail circleDetailWithVoice() {
+  final detail = circleDetail();
+  return CircleDetail(
+    circle: detail.circle,
+    categories: detail.categories,
+    channels: [
+      ...detail.channels,
+      _channel(
+        'ch-lounge',
+        'conv-lounge',
+        'Lounge',
+        2,
+        categoryId: 'cat-2',
+        kind: CircleChannelKind.voice,
+      ),
+      _channel(
+        'ch-stage',
+        'conv-stage',
+        'Stage and very long voice channel name for testing',
+        3,
+        categoryId: 'cat-2',
+        kind: CircleChannelKind.voice,
+      ),
+    ],
+    roles: detail.roles,
+    members: detail.members,
+    posts: detail.posts,
+  );
+}
+
 CircleDetail circleDetail() {
   return CircleDetail(
     circle: circleSummaries.first,
@@ -1580,6 +1616,16 @@ class PhoneWorld {
     'circle-1': {'cat-3'},
   });
   final openedLinks = <Uri>[];
+  final voice = FakeVoiceRepository();
+  late final voiceCalls = FakeVoiceCallConnector(
+    localUserId: me.id,
+    localName: me.displayName,
+  );
+
+  /// What the screen share picker answers; null cancels.
+  VoiceScreenSource? screenShareSource = const VoiceScreenSource(
+    sourceId: 'screen-1',
+  );
 
   late GoRouter router;
 
@@ -1626,6 +1672,12 @@ class PhoneWorld {
       linkLauncherProvider.overrideWithValue((uri) async {
         openedLinks.add(uri);
       }),
+      voiceRepositoryProvider.overrideWithValue(voice),
+      voiceCallConnectorProvider.overrideWithValue(voiceCalls),
+      voiceScreenSourcePickerProvider.overrideWithValue(
+        (context) async => screenShareSource,
+      ),
+      voiceScreenShareSupportedProvider.overrideWithValue(true),
     ];
   }
 

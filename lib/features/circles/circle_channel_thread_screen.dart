@@ -9,6 +9,7 @@ import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -84,7 +85,7 @@ class _CircleChannelThreadScreenState
     // Deep links carry no title; name the channel from the circle.
     var title = widget.title;
     if (title == null && channel != null) {
-      title = '# ${channel.name}';
+      title = channel.isVoice ? channel.name : '# ${channel.name}';
     }
     final actions = [
       ChatThreadAction(
@@ -162,6 +163,20 @@ class _CircleChannelThreadScreenState
           widget.threadBuilder?.call(context, [
             for (final action in actions) action.toIconButton(),
           ]) ??
+          (detail != null && channel != null && channel.isVoice
+              ? VoiceChannelView(
+                  key: ValueKey('voice-${channel.id}'),
+                  circleId: circleId,
+                  channelId: channel.id,
+                  conversationId: channel.conversationId,
+                  channelName: channel.name,
+                  canConnect: detail.canInChannel(
+                    channel,
+                    CirclePermission.connectVoice,
+                  ),
+                  actions: actions,
+                )
+              : null) ??
           (detail != null && channel != null && channel.isForum
               ? CircleForumView(
                   key: ValueKey('forum-${channel.id}'),

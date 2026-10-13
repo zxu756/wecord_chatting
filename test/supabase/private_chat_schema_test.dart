@@ -2553,7 +2553,7 @@ void main() {
     );
     expect(
       functionBody(sql, 'create_circle_channel'),
-      contains("channel_kind not in ('text', 'forum')"),
+      contains("channel_kind not in ('text', 'forum'"),
     );
     expect(
       functionBody(sql, 'get_circle_detail'),
@@ -3190,5 +3190,121 @@ void main() {
         'grant execute on function public.recall_message(uuid) to authenticated;',
       ),
     );
+  });
+
+  test('voice channels: states, heartbeats and token access', () {
+    final sql = effectiveMigrationSql();
+    expect(
+      functionBody(sql, 'create_circle_channel'),
+      contains("channel_kind not in ('text', 'forum', 'voice')"),
+    );
+    final send = functionBody(sql, 'check_channel_message_send');
+    expect(send, contains("if channel.kind = 'voice' then"));
+    expect(send, contains("if channel.kind = 'forum' then"));
+    expect(send, contains('new.webhook_name is not null'));
+
+    expect(sql, contains('create table if not exists public.voice_states'));
+    expect(sql, contains('primary key (channel_id, user_id)'));
+    expect(
+      sql,
+      contains('constraint voice_states_one_channel unique (user_id)'),
+    );
+    expect(sql, contains('references public.circle_channels(id, circle_id)'));
+    expect(
+      sql,
+      contains('alter table public.voice_states replica identity full;'),
+    );
+    expect(
+      sql,
+      contains('alter table public.voice_states enable row level security;'),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke insert, update, delete, truncate on public.voice_states '
+        'from authenticated;',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'alter publication supabase_realtime add table public.voice_states;',
+      ),
+    );
+    final select = policyBody(allMigrationSql(), 'voice_states_select_viewer');
+    expect(select, contains('public.is_current_user_circle_member(circle_id)'));
+    expect(select, contains("'view_channel'"));
+
+    expect(
+      functionBody(sql, 'voice_state_ttl'),
+      contains("interval '60 seconds'"),
+    );
+    final join = functionBody(sql, 'join_voice_state');
+    expect(join, contains("channel.kind <> 'voice'"));
+    expect(join, contains("'connect_voice'"));
+    expect(
+      join,
+      contains(
+        'delete from public.voice_states vs where vs.user_id = current_user_id;',
+      ),
+    );
+    expect(join, contains('pg_advisory_xact_lock'));
+    final update = functionBody(sql, 'update_voice_state');
+    expect(
+      update,
+      contains('vs.last_seen_at <= now() - public.voice_state_ttl()'),
+    );
+    expect(update, contains("'connect_voice'"));
+    expect(update, contains('return false;'));
+    final list = functionBody(sql, 'list_voice_states');
+    expect(
+      list,
+      contains('public.is_current_user_circle_member(target_circle_id)'),
+    );
+    expect(
+      list,
+      contains('vs.last_seen_at > now() - public.voice_state_ttl()'),
+    );
+    expect(list, contains("'role_color'"));
+    final access = functionBody(sql, 'can_current_user_connect_voice');
+    expect(access, contains("'connect_voice'"));
+    expect(access, contains("'display_name'"));
+
+    for (final grant in [
+      'join_voice_state(uuid)',
+      'update_voice_state(boolean, boolean, boolean, boolean)',
+      'leave_voice_state()',
+      'list_voice_states(uuid)',
+      'can_current_user_connect_voice(uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function public.$grant to authenticated;'),
+      );
+      expect(
+        sql,
+        contains('revoke execute on function public.$grant from anon;'),
+      );
+    }
+  });
+
+  test('livekit-token function checks access and its configuration', () {
+    final config = File('supabase/config.toml').readAsStringSync();
+    expect(
+      config,
+      contains(
+        '[functions.livekit-token]\n'
+        'enabled = true\n'
+        '# Signed-in members only; the function checks connect_voice as the caller.\n'
+        'verify_jwt = true',
+      ),
+    );
+    final index = File(
+      'supabase/functions/livekit-token/index.ts',
+    ).readAsStringSync();
+    expect(index, contains('auth.getUser('));
+    expect(index, contains('"can_current_user_connect_voice"'));
+    expect(index, contains('{ error: "voice_not_configured" }, 503'));
+    expect(index, isNot(contains('SERVICE_ROLE')));
   });
 }

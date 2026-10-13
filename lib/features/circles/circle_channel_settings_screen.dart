@@ -268,7 +268,9 @@ class _CircleChannelSettingsScreenState
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      channel.isForum ? channel.name : '# ${channel.name}',
+                      channel.isForum || channel.isVoice
+                          ? channel.name
+                          : '# ${channel.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium,
@@ -309,7 +311,7 @@ class _CircleChannelSettingsScreenState
         ),
         if (channel.isForum)
           ..._forumTagsSection(channel)
-        else
+        else if (!channel.isVoice)
           ..._slowmodeSection(channel),
       ],
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
@@ -892,12 +894,16 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.channel.kind == CircleChannelKind.forum
-                ? 'Delete #$name with all of its posts? This cannot be undone.'
-                : 'Delete #$name with all of its messages and threads? This '
-                      'cannot be undone.',
-          ),
+          Text(switch (widget.channel.kind) {
+            CircleChannelKind.forum =>
+              'Delete #$name with all of its posts? This cannot be undone.',
+            CircleChannelKind.voice =>
+              'Delete the voice channel $name? Everyone in it is '
+                  'disconnected. This cannot be undone.',
+            CircleChannelKind.text =>
+              'Delete #$name with all of its messages and threads? This '
+                  'cannot be undone.',
+          }),
           const SizedBox(height: 12),
           TextField(
             key: const ValueKey('channel-delete-confirm-field'),

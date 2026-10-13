@@ -9,7 +9,9 @@ import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 final circleDetailProvider = FutureProvider.autoDispose
@@ -121,15 +123,41 @@ class CircleMobileHome extends ConsumerWidget {
                   member: member,
                   onChanged: onChanged,
                 ),
-                onSelectChannel: (channel) => context.push(
+                onSelectChannel: (channel) {
+                  context.push(
+                    CircleChannelThreadScreen.pathFor(
+                      circleId,
+                      channel.conversationId,
+                    ),
+                    extra: ChatThreadRouteExtra(
+                      title: channel.isVoice
+                          ? channel.name
+                          : '# ${channel.name}',
+                      type: ConversationType.channel,
+                      circleId: circleId,
+                    ),
+                  );
+                  // Voice channels open their call view and join.
+                  if (channel.isVoice &&
+                      detail.canInChannel(
+                        channel,
+                        CirclePermission.connectVoice,
+                      ) &&
+                      ref.read(voiceSessionProvider)?.channelId != channel.id) {
+                    joinVoiceChannel(
+                      context,
+                      ref,
+                      circleId: circleId,
+                      channelId: channel.id,
+                      conversationId: channel.conversationId,
+                      channelName: channel.name,
+                    );
+                  }
+                },
+                onOpenVoice: (session) => context.push(
                   CircleChannelThreadScreen.pathFor(
-                    circleId,
-                    channel.conversationId,
-                  ),
-                  extra: ChatThreadRouteExtra(
-                    title: '# ${channel.name}',
-                    type: ConversationType.channel,
-                    circleId: circleId,
+                    session.circleId,
+                    session.conversationId,
                   ),
                 ),
                 onSelectThread: (thread) => context.push(

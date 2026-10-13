@@ -13,8 +13,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
+import '../../test/features/voice/voice_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
 
 const _outputDir = String.fromEnvironment(
@@ -522,6 +525,138 @@ void main() {
 
   screen('35c-emoji-management-small', (tester, world) async {
     await openEmojiPage(tester, world);
+  }, viewport: smallPhone);
+
+  void withVoice(PhoneWorld world, {bool remotes = true}) {
+    world.circles.detail = circleDetailWithVoice();
+    world.voice.states['circle-1'] = [
+      voiceMember(
+        userId: bart.id,
+        name: bart.displayName,
+        nickname: 'Bart the Bold',
+        roleColor: 0x3498DB,
+        selfMute: true,
+      ),
+      voiceMember(
+        userId: grace.id,
+        name: grace.displayName,
+        roleColor: 0xE67E22,
+        video: true,
+        screen: true,
+      ),
+      voiceMember(userId: linus.id, name: 'Linus', selfDeaf: true),
+    ];
+    if (remotes) {
+      world.voiceCalls.prepare = (call) {
+        call.remotes = [
+          VoiceCallParticipant(userId: bart.id, name: 'Bart the Bold'),
+          VoiceCallParticipant(
+            userId: grace.id,
+            name: grace.displayName,
+            isSpeaking: true,
+            microphoneEnabled: true,
+            cameraEnabled: true,
+            cameraView: (context) => const ColoredBox(
+              color: Color(0xFF35506B),
+              child: Center(
+                child: Icon(Icons.person, size: 64, color: Colors.white54),
+              ),
+            ),
+            screenShareEnabled: true,
+            screenView: (context) => const ColoredBox(
+              color: Color(0xFF1E1F22),
+              child: Center(
+                child: Text(
+                  'Trip slides',
+                  style: TextStyle(color: Colors.white70, fontSize: 24),
+                ),
+              ),
+            ),
+          ),
+          VoiceCallParticipant(userId: linus.id, name: 'Linus'),
+        ];
+      };
+    }
+  }
+
+  Future<void> scrollToLounge(WidgetTester tester) async {
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await settle(tester);
+  }
+
+  screen('36-voice-channel-members', (tester, world) async {
+    withVoice(world);
+    await world.open(tester, '/circles/circle-1');
+    await scrollToLounge(tester);
+  });
+
+  screen('36b-voice-call', (tester, world) async {
+    withVoice(world);
+    await world.open(tester, '/circles/circle-1');
+    await scrollToLounge(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+    );
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('voice-control-mic')));
+  });
+
+  screen('36c-voice-panel-in-chats', (tester, world) async {
+    withVoice(world);
+    await world.open(tester, '/circles/circle-1');
+    await scrollToLounge(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+    );
+    await settle(tester);
+    world.router.go(ChatsScreen.path);
+  });
+
+  screen('36d-voice-not-configured', (tester, world) async {
+    withVoice(world, remotes: false);
+    world.voice.tokenError = const VoiceNotConfiguredException();
+    await world.open(tester, '/circles/circle-1');
+    await scrollToLounge(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+    );
+  });
+
+  screen('36e-voice-before-joining', (tester, world) async {
+    withVoice(world, remotes: false);
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/conv-lounge',
+      extra: const ChatThreadRouteExtra(
+        title: 'Lounge',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+  });
+
+  screen('36f-create-voice-channel', (tester, world) async {
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byTooltip('Circle menu'));
+    await settle(tester);
+    await tester.tap(find.text('Create channel'));
+    await settle(tester);
+    await tester.tap(find.text('Voice'));
+  });
+
+  screen('36g-voice-call-small', (tester, world) async {
+    withVoice(world);
+    await world.open(tester, '/circles/circle-1');
+    await scrollToLounge(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+    );
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('voice-control-camera')));
   }, viewport: smallPhone);
 
   screen('31-slash-commands', (tester, world) async {

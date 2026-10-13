@@ -399,6 +399,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/webhook/index.ts"
 
+[functions.livekit-token]
+enabled = true
+# Signed-in members only; the function checks connect_voice as the caller.
+verify_jwt = true
+entrypoint = "./functions/livekit-token/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

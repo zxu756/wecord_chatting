@@ -256,7 +256,7 @@ class SupabaseChatsRepository implements ChatsRepository {
   @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {
     final rows = await _dataSource.listMessages(conversationId);
-    return rows.map(ChatMessage.fromJson).toList(growable: false);
+    return rows.map(_chatMessageFromJson).toList(growable: false);
   }
 
   @override
@@ -887,7 +887,9 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   Future<List<Map<String, dynamic>>> listMessages(String conversationId) async {
     final rows = await _client
         .from('messages')
-        .select('*,reactions,is_pinned')
+        .select(
+          '*,reactions,is_pinned,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+        )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
         .order('id', ascending: true);
@@ -1542,6 +1544,21 @@ GroupMember _groupMemberFromJson(Map<String, dynamic> row) {
   return GroupMember.fromJson({
     ...row,
     'profile': {...profile, 'alias': alias},
+  });
+}
+
+ChatMessage _chatMessageFromJson(Map<String, dynamic> row) {
+  final sender = row['sender'];
+  if (sender is! Map<String, dynamic> || sender['alias'] != null) {
+    return ChatMessage.fromJson(row);
+  }
+  final alias = _embeddedContactAlias(sender);
+  if (alias == null) {
+    return ChatMessage.fromJson(row);
+  }
+  return ChatMessage.fromJson({
+    ...row,
+    'sender': {...sender, 'alias': alias},
   });
 }
 

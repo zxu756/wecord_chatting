@@ -419,6 +419,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   readMarkers: data.readMarkers,
                   currentUserId: currentUserId,
                 );
+                // Grouping compares neighbours, which search results are not.
+                final followUpIds = _messageSearchQuery.trim().isEmpty
+                    ? _followUpMessageIds(
+                        visibleOldestToNewest,
+                        newMessageDividerId: _newMessageDividerId,
+                      )
+                    : const <String>{};
+                final showSenders =
+                    conversationType == ConversationType.group ||
+                    conversationType == ConversationType.channel;
+                final membersById = {
+                  for (final member
+                      in groupDetail?.members ?? const <GroupMember>[])
+                    member.profile.id: member,
+                };
 
                 final list = ListView.builder(
                   key: const ValueKey('chat-message-list'),
@@ -435,10 +450,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         onOpenPinnedMessage: _scrollToMessage,
                       );
                     } else {
+                      final isCurrentUser = message.senderId == currentUserId;
+                      final newerMessage = index == 0
+                          ? null
+                          : newestFirst[index - 1];
                       bubble = _MessageBubble(
                         message: message,
                         messagesById: messagesById,
-                        isCurrentUser: message.senderId == currentUserId,
+                        isCurrentUser: isCurrentUser,
+                        sender: showSenders && !isCurrentUser
+                            ? _senderFor(message, membersById)
+                            : null,
+                        isFollowUp: followUpIds.contains(message.id),
+                        hasFollowUp:
+                            newerMessage != null &&
+                            followUpIds.contains(newerMessage.id),
                         showReadReceipt:
                             latestOutgoingReadState.latestOutgoingMessageId ==
                                 message.id &&
@@ -1270,6 +1296,72 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
 const _bottomScrollThreshold = 48.0;
 
+const _senderAvatarSize = 32.0;
+
+/// Messages from the same sender this close together read as one group.
+const _messageGroupWindow = Duration(minutes: 7);
+
+/// Ids of messages that continue the previous message's group: same sender,
+/// at most [_messageGroupWindow] apart, on the same day, and with no system
+/// notice or NEW divider between them.
+Set<String> _followUpMessageIds(
+  List<ChatMessage> oldestToNewest, {
+  required String? newMessageDividerId,
+}) {
+  final ids = <String>{};
+  for (var index = 1; index < oldestToNewest.length; index++) {
+    final previous = oldestToNewest[index - 1];
+    final message = oldestToNewest[index];
+    if (message.type == MessageType.system ||
+        previous.type == MessageType.system ||
+        message.senderId != previous.senderId ||
+        message.id == newMessageDividerId) {
+      continue;
+    }
+    final gap = message.createdAt.difference(previous.createdAt);
+    if (gap.isNegative || gap > _messageGroupWindow) {
+      continue;
+    }
+    if (!_isSameLocalDay(previous.createdAt, message.createdAt)) {
+      continue;
+    }
+    ids.add(message.id);
+  }
+  return ids;
+}
+
+bool _isSameLocalDay(DateTime left, DateTime right) {
+  final localLeft = left.toLocal();
+  final localRight = right.toLocal();
+  return localLeft.year == localRight.year &&
+      localLeft.month == localRight.month &&
+      localLeft.day == localRight.day;
+}
+
+/// Name and avatar shown above a group of incoming messages.
+_MessageSender _senderFor(
+  ChatMessage message,
+  Map<String, GroupMember> membersById,
+) {
+  final profile = message.sender ?? membersById[message.senderId]?.profile;
+  final label = profile?.displayLabel.trim() ?? '';
+  return _MessageSender(
+    name: label.isNotEmpty
+        ? label
+        : profile?.username.trim().isNotEmpty == true
+        ? profile!.username
+        : 'Unknown member',
+    avatarUrl: profile?.avatarUrl,
+  );
+}
+
+class _MessageSender {
+  const _MessageSender({required this.name, this.avatarUrl});
+
+  final String name;
+  final String? avatarUrl;
+}
+
 class _NewMessagesDivider extends StatelessWidget {
   const _NewMessagesDivider();
 
@@ -1296,10 +1388,15 @@ class _NewMessagesDivider extends StatelessWidget {
 }
 
 class _ThreadAvatar extends ConsumerWidget {
-  const _ThreadAvatar({required this.title, required this.avatarUrl});
+  const _ThreadAvatar({
+    required this.title,
+    required this.avatarUrl,
+    this.radius,
+  });
 
   final String title;
   final String? avatarUrl;
+  final double? radius;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1308,6 +1405,7 @@ class _ThreadAvatar extends ConsumerWidget {
         ? null
         : NetworkImage(displayUrl.valueOrNull!);
     return CircleAvatar(
+      radius: radius,
       backgroundImage: image,
       onBackgroundImageError: image == null ? null : (_, _) {},
       child: image == null ? Text(_initials(title)) : null,
@@ -1322,6 +1420,9 @@ class _MessageBubble extends StatelessWidget {
     required this.isCurrentUser,
     required this.showReadReceipt,
     required this.onReply,
+    this.sender,
+    this.isFollowUp = false,
+    this.hasFollowUp = false,
     required this.onEdit,
     required this.onForward,
     required this.onDelete,
@@ -1336,6 +1437,17 @@ class _MessageBubble extends StatelessWidget {
   final Map<String, ChatMessage> messagesById;
   final bool isCurrentUser;
   final bool showReadReceipt;
+
+  /// Who sent an incoming message in a group or channel; null hides the
+  /// avatar column entirely (own messages, direct chats).
+  final _MessageSender? sender;
+
+  /// Continues the previous message's group, so the avatar and name are
+  /// left out.
+  final bool isFollowUp;
+
+  /// The next message continues this one's group, so the gap below shrinks.
+  final bool hasFollowUp;
   final ValueChanged<ChatMessage> onReply;
   final ValueChanged<ChatMessage> onEdit;
   final ValueChanged<ChatMessage> onForward;
@@ -1364,12 +1476,27 @@ class _MessageBubble extends StatelessWidget {
     final reactions = isRecalled
         ? const <MessageReaction>[]
         : message.reactions;
+    final gap = hasFollowUp ? 2.0 : 8.0;
+    final sender = this.sender;
 
-    return Column(
+    final column = Column(
       crossAxisAlignment: isCurrentUser
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
+        if (sender != null && !isFollowUp)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              sender.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         Align(
           alignment: isCurrentUser
               ? Alignment.centerRight
@@ -1385,7 +1512,7 @@ class _MessageBubble extends StatelessWidget {
                   : null,
               child: Container(
                 margin: EdgeInsets.only(
-                  bottom: showReadReceipt || reactions.isNotEmpty ? 4 : 8,
+                  bottom: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -1409,7 +1536,7 @@ class _MessageBubble extends StatelessWidget {
         ),
         if (reactions.isNotEmpty)
           Padding(
-            padding: EdgeInsets.only(bottom: showReadReceipt ? 4 : 8),
+            padding: EdgeInsets.only(bottom: showReadReceipt ? 4 : gap),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
               child: MessageReactionChips(
@@ -1422,7 +1549,7 @@ class _MessageBubble extends StatelessWidget {
           ),
         if (showReadReceipt)
           Padding(
-            padding: const EdgeInsets.only(right: 4, bottom: 8),
+            padding: EdgeInsets.only(right: 4, bottom: gap),
             child: Text(
               'Read',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1430,6 +1557,26 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+    if (sender == null) {
+      return column;
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _senderAvatarSize,
+          child: isFollowUp
+              ? null
+              : _ThreadAvatar(
+                  title: sender.name,
+                  avatarUrl: sender.avatarUrl,
+                  radius: _senderAvatarSize / 2,
+                ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: column),
       ],
     );
   }

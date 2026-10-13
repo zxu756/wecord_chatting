@@ -979,6 +979,51 @@ void main() {
     expect(messages.last.pinnedMessageId, 'message-1');
   });
 
+  test('listMessages maps embedded sender profiles and aliases', () async {
+    final dataSource = FakeChatsDataSource()
+      ..messageRows = [
+        {
+          'id': 'message-1',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-2',
+          'type': 'text',
+          'body': 'Hello',
+          'created_at': '2026-05-18T04:30:00.000Z',
+          'sender': {
+            'id': 'user-2',
+            'username': 'grace',
+            'display_name': 'Grace Hopper',
+            'avatar_url': 'user-2/avatar.png',
+            'bio': '',
+            'created_at': '2026-05-18T00:00:00.000Z',
+            'updated_at': '2026-05-18T00:00:00.000Z',
+            'contact_alias': [
+              {'alias': 'Amazing Grace'},
+            ],
+          },
+        },
+        {
+          'id': 'message-2',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-3',
+          'type': 'text',
+          'body': 'No embed',
+          'created_at': '2026-05-18T04:31:00.000Z',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final messages = await repository.listMessages('conversation-1');
+
+    expect(messages.first.sender?.displayName, 'Grace Hopper');
+    expect(messages.first.sender?.displayLabel, 'Amazing Grace');
+    expect(messages.first.sender?.avatarUrl, 'user-2/avatar.png');
+    expect(messages.last.sender, isNull);
+  });
+
   test('pin RPCs are called with the target message', () async {
     final dataSource = FakeChatsDataSource()
       ..rpcResults['can_current_user_pin_messages'] = true;

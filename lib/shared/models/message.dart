@@ -1,3 +1,5 @@
+import 'package:wecord/shared/models/profile.dart';
+
 const _sentinel = Object();
 
 enum MessageType {
@@ -46,6 +48,7 @@ class ChatMessage {
     this.mentions = const <MessageMention>[],
     this.reactions = const <MessageReaction>[],
     this.isPinned = false,
+    this.sender,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -73,6 +76,9 @@ class ChatMessage {
       mentions: _parseMentions(json['mentions']),
       reactions: _parseReactions(json['reactions']),
       isPinned: json['is_pinned'] == true,
+      sender: json['sender'] is Map<String, dynamic>
+          ? Profile.fromJson(json['sender'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -91,6 +97,9 @@ class ChatMessage {
   final List<MessageMention> mentions;
   final List<MessageReaction> reactions;
   final bool isPinned;
+
+  /// The sender's profile, when the thread query embeds it.
+  final Profile? sender;
 
   /// For a "X pinned a message" system notice, the id of the pinned message.
   String? get pinnedMessageId {
@@ -151,6 +160,7 @@ class ChatMessage {
     List<MessageMention>? mentions,
     List<MessageReaction>? reactions,
     bool? isPinned,
+    Object? sender = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -180,6 +190,7 @@ class ChatMessage {
       mentions: mentions ?? this.mentions,
       reactions: reactions ?? this.reactions,
       isPinned: isPinned ?? this.isPinned,
+      sender: identical(sender, _sentinel) ? this.sender : sender as Profile?,
     );
   }
 }

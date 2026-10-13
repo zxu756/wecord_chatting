@@ -257,6 +257,288 @@ void main() {
     );
   });
 
+  group('consecutive message grouping', () {
+    final grace = _profile(
+      id: 'user-2',
+      username: 'grace',
+      displayName: 'Grace Hopper',
+    );
+    final alan = _profile(
+      id: 'user-3',
+      username: 'alan',
+      displayName: 'Alan Turing',
+    );
+
+    testWidgets('shows the sender once per group in group chats', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'First',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Second',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 4),
+          ),
+          _message(
+            id: 'message-3',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Third',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 11),
+          ),
+          _message(
+            id: 'message-4',
+            senderId: 'user-3',
+            sender: alan,
+            body: 'Interjection',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 12),
+          ),
+          _message(
+            id: 'message-5',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Back again',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 13),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // Grace starts two groups, Alan one; follow-ups carry no name.
+      expect(find.text('Grace Hopper'), findsNWidgets(2));
+      expect(find.text('Alan Turing'), findsOneWidget);
+      expect(find.text('GH'), findsNWidgets(2));
+      expect(find.text('AT'), findsOneWidget);
+
+      // Grouped messages sit closer together than separate groups.
+      double gapBetween(String upper, String lower) {
+        return tester.getTopLeft(find.text(lower)).dy -
+            tester.getBottomLeft(find.text(upper)).dy;
+      }
+
+      expect(
+        gapBetween('First', 'Second'),
+        lessThan(gapBetween('Third', 'Interjection')),
+      );
+
+      // Follow-up bubbles line up with the first one in the group.
+      expect(
+        tester.getTopLeft(find.text('Second')).dx,
+        tester.getTopLeft(find.text('First')).dx,
+      );
+    });
+
+    testWidgets('starts a new group after seven minutes', (tester) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Before the break',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Exactly seven later',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 7),
+          ),
+          _message(
+            id: 'message-3',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Eight minutes later',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 15),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.channel),
+      );
+      await tester.pump();
+
+      expect(find.text('Grace Hopper'), findsNWidgets(2));
+    });
+
+    testWidgets('NEW divider, system notices and day changes break groups', (
+      tester,
+    ) async {
+      final lateEvening = DateTime(2026, 5, 18, 23, 57).toUtc();
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Read already',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Unread one',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 1),
+          ),
+          _message(
+            id: 'message-3',
+            senderId: 'user-1',
+            type: MessageType.system,
+            body: 'Ada pinned a message.',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 2),
+          ),
+          _message(
+            id: 'message-4',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'After the notice',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 3),
+          ),
+          _message(
+            id: 'message-5',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Before midnight',
+            createdAt: lateEvening,
+          ),
+          _message(
+            id: 'message-6',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'After midnight',
+            createdAt: lateEvening.add(const Duration(minutes: 5)),
+          ),
+        ]
+        ..readMarkers = const [
+          ConversationReadMarker(
+            userId: 'user-1',
+            lastReadMessageId: 'message-1',
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('NEW'), findsOneWidget);
+      // One header for each of the five groups the breaks create.
+      expect(find.text('Grace Hopper'), findsNWidgets(5));
+    });
+
+    testWidgets('direct chats never show sender headers', (tester) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Hello',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Again',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 1),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.direct),
+      );
+      await tester.pump();
+
+      expect(find.text('Grace Hopper'), findsNothing);
+      expect(find.text('GH'), findsNothing);
+    });
+
+    testWidgets('follow-up messages keep reactions, receipts and actions', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..canPin = true
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Lead',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            sender: grace,
+            body: 'Follow-up',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 1),
+            reactions: const [
+              MessageReaction(emoji: '👍', count: 2, reactedByMe: true),
+            ],
+            replyPreview: const ReplyPreview(
+              messageId: 'message-1',
+              senderName: 'Grace Hopper',
+              body: 'Lead',
+              type: MessageType.text,
+            ),
+          ),
+          _message(
+            id: 'message-3',
+            senderId: 'user-1',
+            body: 'Mine',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 2),
+          ),
+          _message(
+            id: 'message-4',
+            senderId: 'user-1',
+            body: 'Mine too',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 3),
+          ),
+        ]
+        ..readMarkers = const [
+          ConversationReadMarker(
+            userId: 'user-2',
+            lastReadMessageId: 'message-4',
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Grace Hopper'), findsNWidgets(2)); // header + quote
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('Read'), findsOneWidget);
+
+      await tester.longPress(find.text('Follow-up'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reply'), findsOneWidget);
+      await tester.tap(find.text('Pin'));
+      await tester.pumpAndSettle();
+
+      expect(repository.pinnedMessageIds, ['message-2']);
+    });
+  });
+
   testWidgets('omits the NEW divider when everything was already read', (
     tester,
   ) async {
@@ -2253,6 +2535,7 @@ ChatMessage _message({
   DateTime? recalledAt,
   List<MessageReaction> reactions = const [],
   bool isPinned = false,
+  Profile? sender,
 }) {
   return ChatMessage(
     id: id,
@@ -2268,6 +2551,7 @@ ChatMessage _message({
     recalledAt: recalledAt,
     reactions: reactions,
     isPinned: isPinned,
+    sender: sender,
   );
 }
 

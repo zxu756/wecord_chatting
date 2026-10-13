@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
@@ -110,6 +111,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ChatThreadRouteExtra(:final avatarUrl) => avatarUrl,
                 _ => null,
               };
+              if (extra case ChatThreadRouteExtra(:final circleId?)) {
+                return CircleChannelThreadScreen(
+                  circleId: circleId,
+                  conversationId: state.pathParameters['conversationId']!,
+                  title: title,
+                );
+              }
               return ChatThreadScreen(
                 conversationId: state.pathParameters['conversationId']!,
                 title: title,

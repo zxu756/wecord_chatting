@@ -62,7 +62,7 @@
   - 表 `circle_channel_categories (id, circle_id, name, position)`；`circle_channels.category_id null`。没有分类的频道显示在最上面。
   - RPC：`create_channel_category`、`rename_channel_category`、`delete_channel_category`（频道移到无分类）、`reorder_circle_channels(circle_id, layout jsonb)`（一次提交所有分类和频道的位置）。
   - 侧栏：每个分类可以独立折叠（折叠状态存本地 `shared_preferences`）；管理员可以拖拽频道（跨分类）和分类排序。
-- [ ] **11. 窄屏 / 手机版圈子布局**（M）
+- [x] **11. 窄屏 / 手机版圈子布局**（M）
   - 宽度 < 1000 时：左边圈子图标栏 + 频道列表组成「圈子首页」；点频道进入全屏聊天，返回回到频道列表；成员列表从聊天页右上角按钮以抽屉方式打开。
 
 ## 第三批：消息体验

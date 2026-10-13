@@ -132,7 +132,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           ),
           if (showMembers) ...[
             const VerticalDivider(width: 1),
-            _MemberList(
+            CircleMemberList(
               detail: detail,
               onlineUserIds: onlineUserIds,
               onChangeNickname: _changeNickname,
@@ -143,33 +143,14 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     );
   }
 
-  Future<void> _changeNickname(CircleMember member) async {
-    final nickname = await showCircleNicknameDialog(
+  Future<void> _changeNickname(CircleMember member) {
+    return changeCircleNickname(
       context,
+      ref,
+      circleId: widget.detail.circle.id,
       member: member,
-      isSelf: member.isCurrentUser,
+      onChanged: widget.onChanged,
     );
-    if (nickname == null || !mounted) {
-      return;
-    }
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    try {
-      await ref
-          .read(circlesRepositoryProvider)
-          .setNickname(
-            circleId: widget.detail.circle.id,
-            userId: member.profile.id,
-            nickname: nickname.isEmpty ? null : nickname,
-          );
-      widget.onChanged();
-      // Open channel threads show nicknames on messages and mentions.
-      ref.invalidate(chatThreadProvider);
-      ref.invalidate(groupDetailProvider);
-    } catch (_) {
-      messenger?.showSnackBar(
-        const SnackBar(content: Text('Could not change nickname. Try again.')),
-      );
-    }
   }
 
   Widget _defaultChannelView(
@@ -183,6 +164,42 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       title: '# ${channel.name}',
       conversationType: ConversationType.channel,
       extraActions: actions,
+    );
+  }
+}
+
+/// Asks for [member]'s new nickname and saves it, then calls [onChanged].
+Future<void> changeCircleNickname(
+  BuildContext context,
+  WidgetRef ref, {
+  required String circleId,
+  required CircleMember member,
+  required VoidCallback onChanged,
+}) async {
+  final nickname = await showCircleNicknameDialog(
+    context,
+    member: member,
+    isSelf: member.isCurrentUser,
+  );
+  if (nickname == null || !context.mounted) {
+    return;
+  }
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await ref
+        .read(circlesRepositoryProvider)
+        .setNickname(
+          circleId: circleId,
+          userId: member.profile.id,
+          nickname: nickname.isEmpty ? null : nickname,
+        );
+    onChanged();
+    // Open channel threads show nicknames on messages and mentions.
+    ref.invalidate(chatThreadProvider);
+    ref.invalidate(groupDetailProvider);
+  } catch (_) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Could not change nickname. Try again.')),
     );
   }
 }
@@ -299,18 +316,25 @@ void showCircleChannelCreationSheet(
   );
 }
 
-class _MemberList extends StatelessWidget {
-  const _MemberList({
+/// Circle members split into online and offline groups, with presence dots
+/// and a menu to view profiles or change nicknames.
+class CircleMemberList extends StatelessWidget {
+  const CircleMemberList({
     required this.detail,
     required this.onlineUserIds,
     required this.onChangeNickname,
+    this.width = defaultWidth,
+    super.key,
   });
 
-  static const width = 240.0;
+  static const defaultWidth = 240.0;
 
   final CircleDetail detail;
   final Set<String> onlineUserIds;
   final ValueChanged<CircleMember> onChangeNickname;
+
+  /// Fixed width, or null to fill the available space.
+  final double? width;
 
   @override
   Widget build(BuildContext context) {

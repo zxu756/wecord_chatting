@@ -6,10 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
@@ -179,6 +183,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(GlobalMessageSearchScreen), findsOneWidget);
+  });
+
+  testWidgets('circle channels open with the circle member list', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    router.go(
+      '/chats/conversation-1',
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(CircleChannelThreadScreen), findsOneWidget);
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
+
+    router.go(
+      '/chats/conversation-2',
+      extra: const ChatThreadRouteExtra(
+        title: 'Ada',
+        type: ConversationType.direct,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(CircleChannelThreadScreen), findsNothing);
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
   });
 
   testWidgets('routes signed-in users to profile pages', (tester) async {

@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
-import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
+import 'package:wecord/features/circles/circle_channel_sidebar.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -58,56 +59,10 @@ class CircleDetailScreen extends ConsumerWidget {
             channelViewBuilder: channelViewBuilder,
           );
         }
-        return DefaultTabController(
-          length: 2,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(detail.circle.name),
-              actions: [
-                IconButton(
-                  tooltip: 'Notification settings',
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () => showCircleNotificationSettingsSheet(
-                    context,
-                    circleId: circleId,
-                    circleName: detail.circle.name,
-                  ),
-                ),
-                if (detail.canManageCircle) ...[
-                  IconButton(
-                    tooltip: 'Invite friends',
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    onPressed: () => showCircleInviteSheet(context, detail),
-                  ),
-                  IconButton(
-                    tooltip: 'Create channel',
-                    icon: const Icon(Icons.add_comment_outlined),
-                    onPressed: () => showCircleChannelCreationSheet(
-                      context,
-                      circleId,
-                      categories: detail.categories,
-                    ),
-                  ),
-                ],
-              ],
-              bottom: const TabBar(
-                tabs: [
-                  Tab(text: 'Channels'),
-                  Tab(text: 'Feed'),
-                ],
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                _ChannelsTab(channels: detail.channels),
-                CircleFeedView(
-                  circleId: circleId,
-                  posts: detail.posts,
-                  onChanged: refresh,
-                ),
-              ],
-            ),
-          ),
+        return CircleMobileHome(
+          key: ValueKey(detail.circle.id),
+          detail: detail,
+          onChanged: refresh,
         );
       },
     );
@@ -128,35 +83,82 @@ class _CircleAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
-class _ChannelsTab extends StatelessWidget {
-  const _ChannelsTab({required this.channels});
+/// Narrow circle layout: the circle rail beside the channel list. Channels
+/// open full screen on top (back returns here), and so does the feed.
+class CircleMobileHome extends ConsumerWidget {
+  const CircleMobileHome({
+    required this.detail,
+    required this.onChanged,
+    super.key,
+  });
 
-  final List<CircleChannel> channels;
+  final CircleDetail detail;
+  final VoidCallback onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    if (channels.isEmpty) {
-      return const Center(child: Text('No channels yet'));
-    }
-    return ListView.separated(
-      itemCount: channels.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final channel = channels[index];
-        return ListTile(
-          leading: const Icon(Icons.tag),
-          title: Text(channel.name),
-          onTap: () {
-            context.go(
-              '${ChatsScreen.path}/${channel.conversationId}',
-              extra: ChatThreadRouteExtra(
-                title: '# ${channel.name}',
-                type: ConversationType.channel,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final circleId = detail.circle.id;
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CircleRail(selectedCircleId: circleId),
+            Expanded(
+              child: CircleChannelSidebar(
+                detail: detail,
+                width: null,
+                onChanged: onChanged,
+                onChangeNickname: (member) => changeCircleNickname(
+                  context,
+                  ref,
+                  circleId: circleId,
+                  member: member,
+                  onChanged: onChanged,
+                ),
+                onSelectChannel: (channel) => context.push(
+                  '${ChatsScreen.path}/${channel.conversationId}',
+                  extra: ChatThreadRouteExtra(
+                    title: '# ${channel.name}',
+                    type: ConversationType.channel,
+                    circleId: circleId,
+                  ),
+                ),
+                onSelectFeed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => _CircleFeedPage(circleId: circleId),
+                  ),
+                ),
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleFeedPage extends ConsumerWidget {
+  const _CircleFeedPage({required this.circleId});
+
+  final String circleId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Feed')),
+      body: ref
+          .watch(circleDetailProvider(circleId))
+          .when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stackTrace) => Center(child: Text(error.toString())),
+            data: (detail) => CircleFeedView(
+              circleId: circleId,
+              posts: detail.posts,
+              onChanged: () => ref.invalidate(circleDetailProvider(circleId)),
+            ),
+          ),
     );
   }
 }

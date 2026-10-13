@@ -14,11 +14,16 @@ class ChatThreadRouteExtra {
     required this.title,
     required this.type,
     this.avatarUrl,
+    this.circleId,
   });
 
   final String title;
   final ConversationType type;
   final String? avatarUrl;
+
+  /// Set for circle channels opened from the circle, which then offer the
+  /// circle's member list.
+  final String? circleId;
 }
 
 final conversationsProvider =

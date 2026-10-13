@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -21,33 +22,181 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
 void main() {
-  testWidgets('circle detail opens channel threads', (tester) async {
-    final repository = FakeCirclesRepository()..detail = _detail();
-    final router = GoRouter(
-      initialLocation: '/circles/circle-1',
-      routes: [
-        GoRoute(
-          path: '/circles/:circleId',
-          builder: (context, state) =>
-              CircleDetailScreen(circleId: state.pathParameters['circleId']!),
-        ),
-        GoRoute(
-          path: '${ChatsScreen.path}/:conversationId',
-          builder: (context, state) =>
-              Text('Thread ${state.pathParameters['conversationId']}'),
-        ),
-      ],
-    );
+  testWidgets('narrow circle home opens channels full screen', (tester) async {
+    final repository = FakeCirclesRepository()
+      ..detail = _detail()
+      ..circles = [_detail().circle];
+    final router = _narrowRouter();
     addTearDown(router.dispose);
 
     await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
     await tester.pumpAndSettle();
 
-    expect(find.text('Close Friends'), findsOneWidget);
+    // Circle rail beside the channel list, no tabs.
+    expect(find.byKey(const ValueKey('circle-rail-circle-1')), findsOneWidget);
+    expect(find.byType(CircleChannelSidebar), findsOneWidget);
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('Close Friends'), findsWidgets);
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
     expect(find.text('Thread conversation-1'), findsOneWidget);
+    expect(find.byType(CircleChannelSidebar), findsNothing);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Thread conversation-1'), findsNothing);
+    expect(find.byType(CircleChannelSidebar), findsOneWidget);
+    expect(find.text('general'), findsOneWidget);
+  });
+
+  testWidgets('narrow channel threads open the member list as a drawer', (
+    tester,
+  ) async {
+    final base = _detail();
+    final repository = FakeCirclesRepository()
+      ..onlineUserIds = {'user-1'}
+      ..detail = CircleDetail(
+        circle: base.circle,
+        members: [
+          CircleMember(
+            profile: _profile(id: 'user-1', username: 'xu', name: 'Xu'),
+            role: 'owner',
+            isCurrentUser: true,
+          ),
+          CircleMember(
+            profile: _profile(id: 'user-3', username: 'amy', name: 'Amy'),
+            role: 'member',
+            nickname: 'Ames',
+          ),
+        ],
+        channels: base.channels,
+        posts: const [],
+      );
+    repository.circles = [repository.detail.circle];
+    final router = _narrowRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('general'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ONLINE — 1'), findsNothing);
+    await tester.tap(find.byTooltip('Show member list'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(find.text('ONLINE — 1'), findsOneWidget);
+    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('member-online-user-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('member-offline-user-3')), findsOneWidget);
+
+    await tester.longPress(find.text('Ames'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change nickname'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Amelia');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.nicknameUpdates, [
+      (userId: 'user-3', nickname: 'Amelia'),
+    ]);
+  });
+
+  testWidgets('narrow feed opens as a page and back returns home', (
+    tester,
+  ) async {
+    final repository = FakeCirclesRepository()
+      ..detail = _detail()
+      ..circles = [_detail().circle];
+    final router = _narrowRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Feed'));
+    await tester.pumpAndSettle();
+    expect(find.text('No posts yet'), findsOneWidget);
+    expect(find.byType(CircleChannelSidebar), findsNothing);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('No posts yet'), findsNothing);
+    expect(find.byType(CircleChannelSidebar), findsOneWidget);
+  });
+
+  testWidgets('narrow circle home shows categories with saved collapse', (
+    tester,
+  ) async {
+    final base = _detail();
+    final repository = FakeCirclesRepository()
+      ..detail = CircleDetail(
+        circle: base.circle,
+        members: base.members,
+        channels: [
+          ...base.channels,
+          const CircleChannel(
+            id: 'channel-2',
+            circleId: 'circle-1',
+            conversationId: 'conversation-2',
+            name: 'clips',
+            position: 1,
+            categoryId: 'category-1',
+          ),
+          const CircleChannel(
+            id: 'channel-3',
+            circleId: 'circle-1',
+            conversationId: 'conversation-3',
+            name: 'reels',
+            position: 2,
+            categoryId: 'category-1',
+          ),
+        ],
+        categories: const [
+          CircleChannelCategory(
+            id: 'category-1',
+            circleId: 'circle-1',
+            name: 'Media',
+            position: 0,
+          ),
+        ],
+        posts: const [],
+      );
+    final store = InMemoryCircleCategoryCollapseStore({
+      'circle-1': {'category-1'},
+    });
+    final router = _narrowRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        FakeContactsRepository(),
+        router,
+        collapseStore: store,
+        conversations: const [
+          ConversationSummary(
+            id: 'conversation-3',
+            type: ConversationType.channel,
+            unreadCount: 4,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MEDIA'), findsOneWidget);
+    expect(find.text('clips'), findsNothing);
+    // Unread channels stay visible in a collapsed category.
+    expect(find.text('reels'), findsOneWidget);
+
+    await tester.tap(find.text('MEDIA'));
+    await tester.pumpAndSettle();
+    expect(find.text('clips'), findsOneWidget);
+    expect(store.collapsed['circle-1'], isEmpty);
   });
 
   testWidgets('circle detail creates channels and invites friends', (
@@ -71,14 +220,18 @@ void main() {
     await tester.pumpWidget(_app(repository, contacts, router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Create channel'));
+    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create channel'));
     await tester.pumpAndSettle();
     await tester.enterText(find.bySemanticsLabel('Channel name'), 'photos');
     await tester.tap(find.widgetWithText(FilledButton, 'Create'));
     await tester.pumpAndSettle();
     expect(repository.createdChannelName, 'photos');
 
-    await tester.tap(find.byTooltip('Invite friends'));
+    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Invite friends'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(CheckboxListTile, 'Grace'));
     await tester.pump();
@@ -488,7 +641,9 @@ void main() {
     await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Notification settings'));
+    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Notification settings'));
     await tester.pumpAndSettle();
 
     expect(find.text('Muted until you turn it back on'), findsOneWidget);
@@ -1001,6 +1156,41 @@ void main() {
       );
     });
   });
+}
+
+/// The circle route plus the chat route the app uses for pushed channels,
+/// with a stand-in thread.
+GoRouter _narrowRouter() {
+  return GoRouter(
+    initialLocation: '/circles/circle-1',
+    routes: [
+      GoRoute(
+        path: '/circles/:circleId',
+        builder: (context, state) =>
+            CircleDetailScreen(circleId: state.pathParameters['circleId']!),
+      ),
+      GoRoute(
+        path: '${ChatsScreen.path}/:conversationId',
+        builder: (context, state) {
+          final conversationId = state.pathParameters['conversationId']!;
+          final extra = state.extra! as ChatThreadRouteExtra;
+          expect(extra.circleId, 'circle-1');
+          expect(extra.type, ConversationType.channel);
+          return CircleChannelThreadScreen(
+            circleId: extra.circleId!,
+            conversationId: conversationId,
+            title: extra.title,
+            threadBuilder: (context, actions) => Scaffold(
+              appBar: AppBar(
+                title: Text('Thread $conversationId'),
+                actions: actions,
+              ),
+            ),
+          );
+        },
+      ),
+    ],
+  );
 }
 
 Widget _app(

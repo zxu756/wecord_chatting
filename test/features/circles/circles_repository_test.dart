@@ -290,12 +290,18 @@ void main() {
       isPrivate: true,
       isReadOnly: false,
     );
+    await repository.setChannelSlowmode(channelId: 'channel-1', seconds: 30);
 
     expect(dataSource.calls.map((call) => call.functionName), [
       'list_channel_overwrites',
       'set_channel_overwrite',
       'set_channel_privacy',
+      'set_channel_slowmode',
     ]);
+    expect(dataSource.calls[3].params, {
+      'target_channel_id': 'channel-1',
+      'seconds': 30,
+    });
     expect(dataSource.calls[0].params, {'target_channel_id': 'channel-1'});
     expect(dataSource.calls[1].params, {
       'target_channel_id': 'channel-1',
@@ -345,6 +351,7 @@ void main() {
           'current_user_permissions': 1,
           'is_private': false,
           'is_read_only': true,
+          'slowmode_seconds': 300,
         },
         {
           'id': 'channel-2',
@@ -361,6 +368,9 @@ void main() {
     expect(readOnly.isReadOnly, isTrue);
     expect(readOnly.isPrivate, isFalse);
     expect(readOnly.currentUserPermissions, 1);
+    expect(readOnly.slowmodeSeconds, 300);
+    expect(detail.slowmodeFor(readOnly), 300);
+    expect(legacy.slowmodeSeconds, 0);
     expect(detail.canInChannel(readOnly, CirclePermission.viewChannel), isTrue);
     expect(
       detail.canInChannel(readOnly, CirclePermission.sendMessages),

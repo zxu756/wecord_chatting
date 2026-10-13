@@ -1693,6 +1693,169 @@ void main() {
     expect(find.text('Forward'), findsOneWidget);
   });
 
+  group('slowmode', () {
+    IconButton sendButton(WidgetTester tester) {
+      return tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.send),
+      );
+    }
+
+    testWidgets('shows the banner without a countdown before sending', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'Hello',
+            createdAt: DateTime.now().toUtc(),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.channel,
+          slowmodeSeconds: 30,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Slowmode is enabled'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+        findsNothing,
+      );
+      expect(sendButton(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('counts down from the own latest message and blocks sends', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-1',
+            body: 'Mine',
+            createdAt: DateTime.now().toUtc().subtract(
+              const Duration(seconds: 5),
+            ),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.channel,
+          slowmodeSeconds: 120,
+        ),
+      );
+      await tester.pump();
+
+      final countdown = tester.widget<Text>(
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+      );
+      expect(countdown.data, matches(RegExp(r'^1:5\d$')));
+      expect(sendButton(tester).onPressed, isNull);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.image_outlined),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      await tester.enterText(find.byType(TextField), 'Too soon');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      expect(repository.sentMessages, isEmpty);
+
+      // The countdown keeps ticking while the thread is open.
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('exempt members and old messages are not slowed', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-1',
+            body: 'Mine',
+            createdAt: DateTime.now().toUtc().subtract(
+              const Duration(minutes: 5),
+            ),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.channel,
+          slowmodeSeconds: 60,
+        ),
+      );
+      await tester.pump();
+      expect(sendButton(tester).onPressed, isNotNull);
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.channel,
+          slowmodeSeconds: 0,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Slowmode is enabled'), findsNothing);
+    });
+
+    testWidgets('a slowmode refusal starts the server countdown', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..sendError = const SlowmodeException(45);
+
+      await tester.pumpWidget(
+        _app(
+          repository,
+          conversationType: ConversationType.channel,
+          slowmodeSeconds: 60,
+        ),
+      );
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), 'Sent elsewhere');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+
+      final countdown = tester.widget<Text>(
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+      );
+      expect(countdown.data, anyOf('45s', '44s'));
+      expect(find.text('Could not send message. Try again.'), findsNothing);
+      // The draft stays for later.
+      expect(find.text('Sent elsewhere'), findsOneWidget);
+      expect(sendButton(tester).onPressed, isNull);
+    });
+
+    test('countdowns read as seconds, minutes or hours', () {
+      expect(formatSlowmodeCountdown(9), '9s');
+      expect(formatSlowmodeCountdown(59), '59s');
+      expect(formatSlowmodeCountdown(60), '1:00');
+      expect(formatSlowmodeCountdown(125), '2:05');
+      expect(formatSlowmodeCountdown(3600), '1:00:00');
+      expect(formatSlowmodeCountdown(21599), '5:59:59');
+    });
+  });
+
   testWidgets('read-only falls back to the conversation list', (tester) async {
     final repository = FakeChatsRepository()
       ..conversations = [
@@ -3060,6 +3223,7 @@ Widget _app(
   Stream<Set<String>>? onlineUserIds,
   ValueChanged<ThreadTarget>? onOpenThread,
   bool? canSendMessages,
+  int? slowmodeSeconds,
 }) {
   return ProviderScope(
     overrides: [
@@ -3086,6 +3250,7 @@ Widget _app(
         conversationType: conversationType,
         onOpenThread: onOpenThread,
         canSendMessages: canSendMessages,
+        slowmodeSeconds: slowmodeSeconds,
       ),
     ),
   );

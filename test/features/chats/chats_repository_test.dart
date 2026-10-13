@@ -502,6 +502,73 @@ void main() {
     ]);
   });
 
+  test('sends map slowmode refusals to SlowmodeException', () async {
+    final dataSource = FakeChatsDataSource()
+      ..insertError = const PostgrestException(
+        message: 'Slowmode is enabled. Try again in 7 seconds.',
+        code: 'P0001',
+        details: 'slowmode_remaining_seconds=7',
+      )
+      ..rpcErrors['forward_message'] = const PostgrestException(
+        message: 'Slowmode is enabled. Try again in 42 seconds.',
+        code: 'P0001',
+      )
+      ..rpcErrors['send_text_message'] = const PostgrestException(
+        message: 'You do not have permission to send messages in this channel',
+        code: '42501',
+      );
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await expectLater(
+      repository.sendTextMessage(conversationId: 'conversation-1', body: 'hi'),
+      throwsA(
+        isA<SlowmodeException>().having(
+          (error) => error.remainingSeconds,
+          'remainingSeconds',
+          7,
+        ),
+      ),
+    );
+    await expectLater(
+      repository.forwardMessage(
+        sourceMessageId: 'message-1',
+        targetConversationId: 'conversation-1',
+      ),
+      throwsA(
+        isA<SlowmodeException>().having(
+          (error) => error.remainingSeconds,
+          'remainingSeconds',
+          42,
+        ),
+      ),
+    );
+    // Other refusals stay as they are.
+    await expectLater(
+      repository.sendTextMessage(
+        conversationId: 'conversation-1',
+        body: 'hi @ada',
+        mentions: const [
+          MessageMention(
+            userId: 'user-2',
+            displayName: 'Ada',
+            start: 3,
+            end: 7,
+          ),
+        ],
+      ),
+      throwsA(isA<PostgrestException>()),
+    );
+    expect(
+      SlowmodeException.fromPostgrest(
+        const PostgrestException(message: 'Something else', code: 'P0001'),
+      ),
+      isNull,
+    );
+  });
+
   test('sendTextMessage can include reply preview', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -1384,6 +1451,13 @@ void main() {
             'thread_last_activity_at': '2026-10-13T09:00:00Z',
             'circle_id': 'circle-1',
             'can_send_messages': false,
+            'slowmode_seconds': 0,
+          },
+          {
+            'id': 'conversation-3',
+            'type': 'channel',
+            'unread_count': 0,
+            'slowmode_seconds': 30,
           },
           {'id': 'conversation-2', 'type': 'direct', 'unread_count': 0},
         ];
@@ -1392,7 +1466,7 @@ void main() {
         currentUserId: () => 'user-1',
       );
 
-      final [thread, direct] = await repository.listConversations();
+      final [thread, channel, direct] = await repository.listConversations();
 
       expect(thread.type, ConversationType.thread);
       expect(thread.isThread, isTrue);
@@ -1403,6 +1477,8 @@ void main() {
       expect(thread.canSendMessages, isFalse);
       // Older servers send no permission: sending stays allowed.
       expect(direct.canSendMessages, isTrue);
+      expect(direct.slowmodeSeconds, 0);
+      expect(channel.slowmodeSeconds, 30);
     });
   });
 
@@ -1792,6 +1868,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   var rpcResult = 'conversation-1';
   final rpcResults = <String, Object?>{};
   final rpcErrors = <String, Object>{};
+  Object? insertError;
   String? latestMessageResult;
   String signedUrlResult = 'https://signed.example.test/default.jpg';
   var listCalls = 0;
@@ -1852,6 +1929,9 @@ class FakeChatsDataSource implements ChatsDataSource {
 
   @override
   Future<void> insertMessage(Map<String, dynamic> values) async {
+    if (insertError case final error?) {
+      throw error;
+    }
     insertedMessages.add(values);
   }
 

@@ -165,6 +165,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.extraActions = const [],
     this.onOpenThread,
     this.canSendMessages,
+    this.slowmodeSeconds,
     super.key,
   });
 
@@ -183,6 +184,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// Whether the current user may send here; false replaces the composer
   /// with a notice. Defaults to what the conversation list says.
   final bool? canSendMessages;
+
+  /// Seconds the current user waits between messages here (0 for none).
+  /// Defaults to what the conversation list says.
+  final int? slowmodeSeconds;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -221,6 +226,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String? _highlightedMessageId;
   Timer? _highlightTimer;
 
+  /// When the server last refused a message for slowmode, the time it said
+  /// the next one is allowed.
+  DateTime? _slowmodeRetryAt;
+
+  /// The end of the current slowmode wait, refreshed on every build.
+  DateTime? _slowmodeUntil;
+
   @override
   void initState() {
     super.initState();
@@ -245,6 +257,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _messageKeys.clear();
       _highlightTimer?.cancel();
       _highlightedMessageId = null;
+      _slowmodeRetryAt = null;
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
       }
@@ -388,6 +401,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final threadArchived = conversationSummary?.threadArchivedAt != null;
     final canSend =
         widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
+    final slowmodeSeconds =
+        widget.slowmodeSeconds ?? conversationSummary?.slowmodeSeconds ?? 0;
+    _slowmodeUntil = slowmodeSeconds > 0
+        ? _slowmodeEnd(
+            messages: thread.valueOrNull?.messages ?? const [],
+            currentUserId: currentUserId,
+            slowmodeSeconds: slowmodeSeconds,
+            retryAt: _slowmodeRetryAt,
+          )
+        : null;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
     // A direct peer is online when they have the app open anywhere; in
@@ -728,33 +751,38 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             if (!canSend)
               const _ReadOnlyComposerNotice()
             else
-              _Composer(
-                controller: _composerController,
-                isSending: _isSending,
-                isPickingImage: _isPickingImage,
-                isSendingImage: _isSendingImage,
-                errorText: _sendError,
-                mentionCandidates: _mentionCandidates(groupDetail),
-                onSelectMention: _insertMention,
-                replyPreviewText: _replyingTo == null
-                    ? null
-                    : _replyPreviewBody(_replyingTo!),
-                isEditing: _editingMessage != null,
-                onChanged: _handleComposerChanged,
-                onSend: _sendMessage,
-                onPickImage: _pickAndSendImage,
-                isRecordingVoice: _isRecordingVoice,
-                isSendingVoice: _isSendingVoice,
-                onStartVoiceRecording: _startVoiceRecording,
-                onCancelVoiceRecording: _cancelVoiceRecording,
-                onSendVoiceRecording: _sendVoiceRecording,
-                onCancelReply: _cancelReply,
-                onCancelEdit: _cancelEdit,
-                // What is left above the keyboard, so a short phone keeps
-                // some of the conversation in view while typing.
-                availableHeight:
-                    constraints.maxHeight -
-                    MediaQuery.viewInsetsOf(context).bottom,
+              _SlowmodeGate(
+                until: _slowmodeUntil,
+                builder: (context, slowmodeRemaining) => _Composer(
+                  slowmodeSeconds: slowmodeSeconds,
+                  slowmodeRemainingSeconds: slowmodeRemaining,
+                  controller: _composerController,
+                  isSending: _isSending,
+                  isPickingImage: _isPickingImage,
+                  isSendingImage: _isSendingImage,
+                  errorText: _sendError,
+                  mentionCandidates: _mentionCandidates(groupDetail),
+                  onSelectMention: _insertMention,
+                  replyPreviewText: _replyingTo == null
+                      ? null
+                      : _replyPreviewBody(_replyingTo!),
+                  isEditing: _editingMessage != null,
+                  onChanged: _handleComposerChanged,
+                  onSend: _sendMessage,
+                  onPickImage: _pickAndSendImage,
+                  isRecordingVoice: _isRecordingVoice,
+                  isSendingVoice: _isSendingVoice,
+                  onStartVoiceRecording: _startVoiceRecording,
+                  onCancelVoiceRecording: _cancelVoiceRecording,
+                  onSendVoiceRecording: _sendVoiceRecording,
+                  onCancelReply: _cancelReply,
+                  onCancelEdit: _cancelEdit,
+                  // What is left above the keyboard, so a short phone keeps
+                  // some of the conversation in view while typing.
+                  availableHeight:
+                      constraints.maxHeight -
+                      MediaQuery.viewInsetsOf(context).bottom,
+                ),
               ),
           ],
         ),
@@ -919,6 +947,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
 
+    if (_isSlowedDown) {
+      return;
+    }
+
     final replyingTo = _replyingTo;
     setState(() {
       _isSending = true;
@@ -945,6 +977,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _mentionQuery = '';
       _replyingTo = null;
       ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -989,8 +1023,28 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  /// Slowmode keeps the current user from sending a new message right now.
+  bool get _isSlowedDown {
+    final until = _slowmodeUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  /// Counts down from the server's answer, which wins over the local
+  /// estimate (clocks drift, and other devices may have sent meanwhile).
+  void _waitOutSlowmode(SlowmodeException error) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _slowmodeRetryAt = DateTime.now().add(
+        Duration(seconds: error.remainingSeconds),
+      );
+      _sendError = null;
+    });
+  }
+
   Future<void> _pickAndSendImage() async {
-    if (_isPickingImage || _isSendingImage || _isSending) {
+    if (_isPickingImage || _isSendingImage || _isSending || _isSlowedDown) {
       return;
     }
 
@@ -1018,6 +1072,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             image: image,
           );
       ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1038,7 +1094,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (_isRecordingVoice ||
         _isSendingVoice ||
         _isSending ||
-        _editingMessage != null) {
+        _editingMessage != null ||
+        _isSlowedDown) {
       return;
     }
 
@@ -1103,6 +1160,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             durationMs: recording.durationMs,
           );
       ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -2617,6 +2676,8 @@ void showImagePreview(BuildContext context, String url) {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    required this.slowmodeSeconds,
+    required this.slowmodeRemainingSeconds,
     required this.controller,
     required this.isSending,
     required this.isPickingImage,
@@ -2662,10 +2723,17 @@ class _Composer extends StatelessWidget {
   /// Height of the thread above the keyboard, app bar included.
   final double availableHeight;
 
+  /// The channel's slowmode for the current user (0 when off) and how long
+  /// they still wait before their next message.
+  final int slowmodeSeconds;
+  final int slowmodeRemainingSeconds;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isBusy = isSending || isSendingImage || isSendingVoice;
+    // Edits are not new messages, so slowmode leaves them alone.
+    final isSlowed = slowmodeRemainingSeconds > 0 && !isEditing;
 
     return SafeArea(
       top: false,
@@ -2710,6 +2778,10 @@ class _Composer extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
+                  if (slowmodeSeconds > 0) ...[
+                    _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
+                    const SizedBox(height: 8),
+                  ],
                   if (mentionCandidates.isNotEmpty) ...[
                     Material(
                       color: colorScheme.surfaceContainerHighest,
@@ -2741,7 +2813,8 @@ class _Composer extends StatelessWidget {
                     children: [
                       IconButton(
                         tooltip: 'Send image',
-                        onPressed: isBusy || isEditing || isRecordingVoice
+                        onPressed:
+                            isBusy || isEditing || isRecordingVoice || isSlowed
                             ? null
                             : () => unawaited(onPickImage()),
                         icon: isSendingImage
@@ -2811,7 +2884,7 @@ class _Composer extends StatelessWidget {
                       ] else ...[
                         IconButton(
                           tooltip: 'Record voice message',
-                          onPressed: isBusy || isEditing
+                          onPressed: isBusy || isEditing || isSlowed
                               ? null
                               : () => unawaited(onStartVoiceRecording()),
                           icon: const Icon(Icons.mic_none_outlined),
@@ -2819,7 +2892,9 @@ class _Composer extends StatelessWidget {
                         const SizedBox(width: 8),
                         IconButton.filled(
                           tooltip: isEditing ? 'Save edit' : 'Send',
-                          onPressed: isBusy ? null : () => unawaited(onSend()),
+                          onPressed: isBusy || isSlowed
+                              ? null
+                              : () => unawaited(onSend()),
                           icon: isSending
                               ? const SizedBox.square(
                                   dimension: 18,
@@ -2840,6 +2915,151 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Rebuilds [builder] every second until [until], with the whole seconds
+/// left (0 once it has passed or without [until]).
+class _SlowmodeGate extends StatefulWidget {
+  const _SlowmodeGate({required this.until, required this.builder});
+
+  final DateTime? until;
+  final Widget Function(BuildContext context, int remainingSeconds) builder;
+
+  @override
+  State<_SlowmodeGate> createState() => _SlowmodeGateState();
+}
+
+class _SlowmodeGateState extends State<_SlowmodeGate> {
+  Timer? _ticker;
+
+  int get _remainingSeconds {
+    final until = widget.until;
+    if (until == null) {
+      return 0;
+    }
+    final left = until.difference(DateTime.now()).inMilliseconds;
+    return left <= 0 ? 0 : (left / 1000).ceil();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SlowmodeGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.until != widget.until) {
+      _syncTicker();
+    }
+  }
+
+  void _syncTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (_remainingSeconds == 0) {
+      return;
+    }
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {});
+      if (_remainingSeconds == 0) {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _remainingSeconds);
+  }
+}
+
+class _SlowmodeBanner extends StatelessWidget {
+  const _SlowmodeBanner({required this.remainingSeconds});
+
+  final int remainingSeconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    return Row(
+      key: const ValueKey('composer-slowmode'),
+      children: [
+        Icon(Icons.timer_outlined, size: 16, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Slowmode is enabled',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
+          ),
+        ),
+        if (remainingSeconds > 0)
+          Text(
+            formatSlowmodeCountdown(remainingSeconds),
+            key: const ValueKey('composer-slowmode-countdown'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A slowmode wait as `45s`, `2:05` or `1:00:00`.
+String formatSlowmodeCountdown(int seconds) {
+  if (seconds < 60) {
+    return '${seconds}s';
+  }
+  final hours = seconds ~/ 3600;
+  final minutes = (seconds % 3600) ~/ 60;
+  final rest = (seconds % 60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '$hours:${minutes.toString().padLeft(2, '0')}:$rest';
+  }
+  return '$minutes:$rest';
+}
+
+/// When the current user's slowmode wait ends: their latest message plus
+/// [slowmodeSeconds], or the server's [retryAt] if later. Null when they
+/// have not sent anything here.
+DateTime? _slowmodeEnd({
+  required List<ChatMessage> messages,
+  required String? currentUserId,
+  required int slowmodeSeconds,
+  required DateTime? retryAt,
+}) {
+  DateTime? lastSentAt;
+  for (final message in messages) {
+    if (message.senderId == currentUserId &&
+        message.type != MessageType.system &&
+        (lastSentAt == null || message.createdAt.isAfter(lastSentAt))) {
+      lastSentAt = message.createdAt;
+    }
+  }
+  final localEnd = lastSentAt?.add(Duration(seconds: slowmodeSeconds));
+  if (retryAt == null) {
+    return localEnd;
+  }
+  if (localEnd == null || retryAt.isAfter(localEnd)) {
+    return retryAt;
+  }
+  return localEnd;
 }
 
 /// Takes the composer's place where the current user may not send.

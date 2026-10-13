@@ -2094,7 +2094,8 @@ void main() {
     );
 
     final sendBody = functionBody(sql, 'check_channel_message_send');
-    expect(sendBody, contains("new.type <> 'system'"));
+    // System notices are written by RPCs that check their own permission.
+    expect(sendBody, contains("new.type = 'system'"));
     expect(sendBody, contains("'send_messages'"));
     expect(
       sql,
@@ -2104,5 +2105,55 @@ void main() {
       ),
     );
     expect(functionBody(sql, 'create_thread'), contains("'send_messages'"));
+  });
+
+  test('channel slowmode is validated, exempts managers and spares threads', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      sql,
+      contains(
+        'add column if not exists slowmode_seconds integer not null default 0',
+      ),
+    );
+    expect(sql, contains('check (slowmode_seconds between 0 and 21600)'));
+    expect(sql, contains('messages_conversation_sender_created_idx'));
+
+    final sendBody = functionBody(sql, 'check_channel_message_send');
+    expect(sendBody, contains("'send_messages'"));
+    // Only the channel itself: threads have their own conversation id.
+    expect(
+      sendBody,
+      contains('where cc.conversation_id = new.conversation_id'),
+    );
+    expect(sendBody, contains("'manage_messages'"));
+    expect(sendBody, contains('pg_advisory_xact_lock'));
+    expect(sendBody, contains("m.type <> 'system'"));
+    expect(sendBody, contains("errcode = 'P0001'"));
+    expect(sendBody, contains('slowmode_remaining_seconds=%s'));
+
+    final setBody = functionBody(sql, 'set_channel_slowmode');
+    expect(setBody, contains('security definer'));
+    expect(setBody, contains('auth.uid()'));
+    expect(setBody, contains("'manage_channels'"));
+    expect(setBody, contains('seconds > 21600'));
+    expect(
+      rawSql,
+      contains(
+        'grant execute on function '
+        'public.set_channel_slowmode(uuid, integer) to authenticated',
+      ),
+    );
+
+    expect(
+      functionBody(sql, 'get_circle_detail'),
+      contains("'slowmode_seconds', cc.slowmode_seconds"),
+    );
+    final summariesBody = functionBody(sql, 'list_conversation_summaries');
+    expect(summariesBody, contains('slowmode_seconds integer'));
+    expect(summariesBody, contains('when ct.id is null'));
+    expect(summariesBody, contains("'manage_messages'"));
+    expect(summariesBody, contains('can_send_messages'));
   });
 }

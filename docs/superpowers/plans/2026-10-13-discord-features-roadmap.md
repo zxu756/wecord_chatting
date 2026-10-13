@@ -93,7 +93,7 @@
   - 表 `circle_channel_overwrites (channel_id, role_id null, user_id null, allow bigint, deny bigint)`。计算顺序：基础角色权限 → @everyone 覆盖 → 角色覆盖（合并）→ 成员覆盖。
   - 没有 `view_channel` 的频道不出现在列表里，也不能读消息（`messages` 的 RLS 与读取 RPC 对频道会话额外检查）；没有 `send_messages` 的频道输入框变成只读提示。
   - UI：频道设置 → 权限：快捷开关「私密频道」「只读频道」+ 高级的逐角色设置。
-- [ ] **18. 慢速模式（Slowmode）**（S）
+- [x] **18. 慢速模式（Slowmode）**（S）
   - `circle_channels.slowmode_seconds int default 0`（0–21600）。发送消息的 RPC 对频道会话检查该用户上一条消息时间；有 `manage_messages` 权限的人不受限制。
   - 输入框上方显示「慢速模式已开启」和倒计时。
 - [ ] **19. 操作日志（Audit Log）**（M）

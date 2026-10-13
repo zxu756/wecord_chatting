@@ -126,6 +126,9 @@ class _CircleChannelThreadScreenState
             canSendMessages: detail != null && channel != null
                 ? detail.canInChannel(channel, CirclePermission.sendMessages)
                 : null,
+            slowmodeSeconds: detail != null && channel != null
+                ? detail.slowmodeFor(channel)
+                : null,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(
                 circleId,

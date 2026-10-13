@@ -342,13 +342,15 @@ class SupabaseChatsRepository implements ChatsRepository {
   }) async {
     final trimmedBody = body.trim();
     if (mentions.isNotEmpty) {
-      await _dataSource.rpc('send_text_message', {
-        'target_conversation_id': conversationId,
-        'body': trimmedBody,
-        'reply_to_message_id': replyToMessageId,
-        'reply_preview': replyPreview?.toJson(),
-        'mentions': mentions.map((mention) => mention.toJson()).toList(),
-      });
+      await _send(
+        () => _dataSource.rpc('send_text_message', {
+          'target_conversation_id': conversationId,
+          'body': trimmedBody,
+          'reply_to_message_id': replyToMessageId,
+          'reply_preview': replyPreview?.toJson(),
+          'mentions': mentions.map((mention) => mention.toJson()).toList(),
+        }),
+      );
       return;
     }
     final values = {
@@ -359,7 +361,21 @@ class SupabaseChatsRepository implements ChatsRepository {
       if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
       if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
     };
-    await _dataSource.insertMessage(values);
+    await _send(() => _dataSource.insertMessage(values));
+  }
+
+  /// Runs a send, turning the server's slowmode refusal into a
+  /// [SlowmodeException].
+  Future<void> _send(Future<Object?> Function() send) async {
+    try {
+      await send();
+    } on PostgrestException catch (error) {
+      final slowmode = SlowmodeException.fromPostgrest(error);
+      if (slowmode != null) {
+        throw slowmode;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -386,13 +402,15 @@ class SupabaseChatsRepository implements ChatsRepository {
       width: image.width,
       height: image.height,
     );
-    await _dataSource.insertMessage({
-      'conversation_id': conversationId,
-      'sender_id': _requireCurrentUserId(),
-      'type': MessageType.image.toJson(),
-      'body': '',
-      'attachment': attachment.toJson(),
-    });
+    await _send(
+      () => _dataSource.insertMessage({
+        'conversation_id': conversationId,
+        'sender_id': _requireCurrentUserId(),
+        'type': MessageType.image.toJson(),
+        'body': '',
+        'attachment': attachment.toJson(),
+      }),
+    );
   }
 
   @override
@@ -420,13 +438,15 @@ class SupabaseChatsRepository implements ChatsRepository {
       size: bytes.length,
       durationMs: durationMs,
     );
-    await _dataSource.insertMessage({
-      'conversation_id': conversationId,
-      'sender_id': _requireCurrentUserId(),
-      'type': MessageType.voice.toJson(),
-      'body': '',
-      'attachment': attachment.toJson(),
-    });
+    await _send(
+      () => _dataSource.insertMessage({
+        'conversation_id': conversationId,
+        'sender_id': _requireCurrentUserId(),
+        'type': MessageType.voice.toJson(),
+        'body': '',
+        'attachment': attachment.toJson(),
+      }),
+    );
   }
 
   @override
@@ -456,10 +476,12 @@ class SupabaseChatsRepository implements ChatsRepository {
     required String sourceMessageId,
     required String targetConversationId,
   }) async {
-    await _dataSource.rpc('forward_message', {
-      'source_message_id': sourceMessageId,
-      'target_conversation_id': targetConversationId,
-    });
+    await _send(
+      () => _dataSource.rpc('forward_message', {
+        'source_message_id': sourceMessageId,
+        'target_conversation_id': targetConversationId,
+      }),
+    );
   }
 
   @override
@@ -909,6 +931,39 @@ class SupabaseChatsRepository implements ChatsRepository {
 const _pinLimitErrorCode = '54000';
 
 const maxPinnedMessagesPerConversation = 50;
+
+/// The channel's slowmode refused a message: the sender may post again
+/// after [remainingSeconds].
+class SlowmodeException implements Exception {
+  const SlowmodeException(this.remainingSeconds);
+
+  /// Reads the server's slowmode refusal (SQLSTATE P0001, detail
+  /// `slowmode_remaining_seconds=<n>`), or returns null for other errors.
+  static SlowmodeException? fromPostgrest(PostgrestException error) {
+    if (error.code != 'P0001') {
+      return null;
+    }
+    final detail = RegExp(
+      r'slowmode_remaining_seconds=(\d+)',
+    ).firstMatch('${error.details ?? ''}');
+    if (detail != null) {
+      return SlowmodeException(int.parse(detail.group(1)!));
+    }
+    final message = RegExp(
+      r'^Slowmode is enabled\. Try again in (\d+) seconds',
+    ).firstMatch(error.message);
+    if (message != null) {
+      return SlowmodeException(int.parse(message.group(1)!));
+    }
+    return null;
+  }
+
+  final int remainingSeconds;
+
+  @override
+  String toString() =>
+      'Slowmode is enabled. Try again in $remainingSeconds seconds.';
+}
 
 class PinnedMessageLimitException implements Exception {
   const PinnedMessageLimitException();

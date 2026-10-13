@@ -697,6 +697,8 @@ final circleSummaries = [
 CircleDetail circleDetailWith({
   required String channelId,
   required int permissions,
+  bool isReadOnly = true,
+  int slowmodeSeconds = 0,
 }) {
   final detail = circleDetail();
   return CircleDetail(
@@ -719,7 +721,8 @@ CircleDetail circleDetailWith({
                 name: channel.name,
                 position: channel.position,
                 categoryId: channel.categoryId,
-                isReadOnly: true,
+                isReadOnly: isReadOnly,
+                slowmodeSeconds: slowmodeSeconds,
                 currentUserPermissions: permissions,
               )
             : channel,

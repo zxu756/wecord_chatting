@@ -9,6 +9,38 @@ import 'package:wecord/shared/models/circle_role.dart';
 
 typedef ChannelOverwritesKey = ({String circleId, String channelId});
 
+/// The slowmode choices, in seconds (0 = off), like Discord's.
+const channelSlowmodeOptions = [
+  0,
+  5,
+  10,
+  15,
+  30,
+  60,
+  120,
+  300,
+  600,
+  900,
+  1800,
+  3600,
+  7200,
+  21600,
+];
+
+/// `Off`, `30s`, `5m` or `2h`.
+String channelSlowmodeLabel(int seconds) {
+  if (seconds <= 0) {
+    return 'Off';
+  }
+  if (seconds % 3600 == 0) {
+    return '${seconds ~/ 3600}h';
+  }
+  if (seconds % 60 == 0) {
+    return '${seconds ~/ 60}m';
+  }
+  return '${seconds}s';
+}
+
 /// A channel's permission overwrites. Reloads whenever the circle does, which
 /// realtime refreshes when overwrites change.
 final channelOverwritesProvider = FutureProvider.autoDispose
@@ -35,9 +67,9 @@ void openCircleChannelSettings(
   );
 }
 
-/// Channel settings. Members who can manage roles make the channel private
-/// or read-only for `@everyone` and give roles and members their own
-/// permissions in it.
+/// Channel settings. Members who can manage channels set slowmode; members
+/// who can manage roles make the channel private or read-only for
+/// `@everyone` and give roles and members their own permissions in it.
 class CircleChannelSettingsScreen extends ConsumerStatefulWidget {
   const CircleChannelSettingsScreen({
     required this.circleId,
@@ -91,6 +123,16 @@ class _CircleChannelSettingsScreenState
         isReadOnly: isReadOnly,
       ),
       failure: 'Could not change channel permissions. Try again.',
+    );
+  }
+
+  Future<void> _setSlowmode(CircleChannel channel, int seconds) {
+    return _run(
+      (repository) => repository.setChannelSlowmode(
+        channelId: channel.id,
+        seconds: seconds,
+      ),
+      failure: 'Could not change slowmode. Try again.',
     );
   }
 
@@ -204,6 +246,7 @@ class _CircleChannelSettingsScreenState
 
   Widget _buildSettings(CircleDetail detail, CircleChannel channel) {
     final children = <Widget>[
+      if (detail.canManageChannels) ..._slowmodeSection(channel),
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
     ];
     if (children.isEmpty) {
@@ -218,6 +261,42 @@ class _CircleChannelSettingsScreenState
       padding: const EdgeInsets.only(bottom: 24),
       children: children,
     );
+  }
+
+  List<Widget> _slowmodeSection(CircleChannel channel) {
+    final current = channel.slowmodeSeconds;
+    final options = [
+      ...channelSlowmodeOptions,
+      if (!channelSlowmodeOptions.contains(current)) current,
+    ]..sort();
+    return [
+      const _SectionHeader('Slowmode'),
+      ListTile(
+        title: const Text('Slowmode'),
+        subtitle: const Text(
+          'How long members wait between messages. Members who can manage '
+          'messages are exempt.',
+        ),
+        trailing: DropdownButton<int>(
+          key: const ValueKey('channel-slowmode-dropdown'),
+          value: current,
+          onChanged: _saving
+              ? null
+              : (seconds) {
+                  if (seconds != null && seconds != current) {
+                    _setSlowmode(channel, seconds);
+                  }
+                },
+          items: [
+            for (final seconds in options)
+              DropdownMenuItem(
+                value: seconds,
+                child: Text(channelSlowmodeLabel(seconds)),
+              ),
+          ],
+        ),
+      ),
+    ];
   }
 
   List<Widget> _permissionsSection(CircleDetail detail, CircleChannel channel) {

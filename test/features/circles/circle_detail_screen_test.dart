@@ -1247,6 +1247,53 @@ void main() {
       expect(repository.overwriteCalls, ['set channel-1 role-helpers 1 0']);
     });
 
+    testWidgets('channel managers set slowmode', (tester) async {
+      final repository = await pumpChannels(
+        tester,
+        currentUserId: 'user-3',
+        // manage_channels without manage_roles.
+        permissions: 1 | 2 | 64 | 8192 | 8,
+      );
+
+      await tester.tap(find.byTooltip('Channel settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Private channel'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('channel-slowmode-dropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('5m').last);
+      await tester.pumpAndSettle();
+
+      expect(repository.overwriteCalls, ['slowmode channel-1 300']);
+    });
+
+    test('slowmode spares members who manage messages', () {
+      const channel = CircleChannel(
+        id: 'channel-1',
+        circleId: 'circle-1',
+        conversationId: 'conversation-1',
+        name: 'general',
+        position: 0,
+        slowmodeSeconds: 30,
+      );
+      CircleDetail detailWith(int permissions) => CircleDetail(
+        circle: CircleSummary(
+          id: 'circle-1',
+          name: 'Close Friends',
+          memberCount: 1,
+          channelCount: 1,
+          currentUserRole: 'member',
+          currentUserPermissions: permissions,
+        ),
+        members: const [],
+        channels: const [channel],
+        posts: const [],
+      );
+
+      expect(detailWith(1 | 2).slowmodeFor(channel), 30);
+      expect(detailWith(1 | 2 | 4).slowmodeFor(channel), 0);
+    });
+
     testWidgets('failed saves show a snackbar', (tester) async {
       final repository =
           await pumpChannels(
@@ -2231,6 +2278,14 @@ class FakeCirclesRepository implements CirclesRepository {
     required bool isReadOnly,
   }) async {
     overwriteCalls.add('privacy $channelId $isPrivate $isReadOnly');
+  }
+
+  @override
+  Future<void> setChannelSlowmode({
+    required String channelId,
+    required int seconds,
+  }) async {
+    overwriteCalls.add('slowmode $channelId $seconds');
   }
 
   @override

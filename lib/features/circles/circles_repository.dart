@@ -142,6 +142,13 @@ abstract interface class CirclesRepository {
     required bool isReadOnly,
   });
 
+  /// Sets how many seconds members wait between messages in a channel; 0
+  /// turns slowmode off.
+  Future<void> setChannelSlowmode({
+    required String channelId,
+    required int seconds,
+  });
+
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
 
@@ -473,6 +480,17 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_channel_id': channelId,
       'private': isPrivate,
       'read_only': isReadOnly,
+    });
+  }
+
+  @override
+  Future<void> setChannelSlowmode({
+    required String channelId,
+    required int seconds,
+  }) async {
+    await _dataSource.rpc('set_channel_slowmode', {
+      'target_channel_id': channelId,
+      'seconds': seconds,
     });
   }
 
@@ -988,6 +1006,14 @@ class UninitializedCirclesRepository implements CirclesRepository {
     throw StateError(
       'Supabase must be initialized before changing channel permissions.',
     );
+  }
+
+  @override
+  Future<void> setChannelSlowmode({
+    required String channelId,
+    required int seconds,
+  }) {
+    throw StateError('Supabase must be initialized before changing slowmode.');
   }
 
   @override

@@ -67,6 +67,7 @@ class ConversationSummary {
     this.threadArchivedAt,
     this.threadLastActivityAt,
     this.canSendMessages = true,
+    this.slowmodeSeconds = 0,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -116,6 +117,7 @@ class ConversationSummary {
         json['thread_last_activity_at'],
       ),
       canSendMessages: json['can_send_messages'] as bool? ?? true,
+      slowmodeSeconds: (json['slowmode_seconds'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -167,6 +169,10 @@ class ConversationSummary {
   /// False in circle channels (and their threads) where the current user
   /// lacks send_messages.
   final bool canSendMessages;
+
+  /// The channel's slowmode for the current user, in seconds; 0 when off,
+  /// exempt, or not a circle channel.
+  final int slowmodeSeconds;
 
   bool get isThread => type == ConversationType.thread;
 
@@ -257,6 +263,7 @@ class ConversationSummary {
       threadArchivedAt: threadArchivedAt,
       threadLastActivityAt: threadLastActivityAt,
       canSendMessages: canSendMessages,
+      slowmodeSeconds: slowmodeSeconds,
     );
   }
 }

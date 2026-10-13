@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 
 import 'phone_test_support.dart';
 
@@ -627,7 +628,13 @@ void main() {
       await tester.tap(find.text('Channel settings'));
       await settle(tester);
       expect(find.text('# general'), findsOneWidget);
-      expectFullyVisible(tester, find.text('Private channel'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('channel-slowmode-dropdown')),
+      );
+      final privateChannel = find.text('Private channel');
+      await scrollIntoView(tester, privateChannel);
+      expectFullyVisible(tester, privateChannel);
       expectFullyVisible(tester, find.text('Read-only channel'));
       expectTouchTargets(
         tester,
@@ -681,6 +688,47 @@ void main() {
         find.text("You don't have permission to send messages in this channel"),
       );
       expect(find.widgetWithText(TextField, 'Message'), findsNothing);
+    });
+
+    phoneTestWidgets('slowmode countdown above the keyboard', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.circles.detail = circleDetailWith(
+        channelId: 'ch-general',
+        permissions: 1 | 2 | 64 | 8192,
+        isReadOnly: false,
+        slowmodeSeconds: 21600,
+      );
+      world.chats.messages = [
+        ...richMessages(withThread: true),
+        ChatMessage(
+          id: 'my-latest',
+          conversationId: 'conv-general',
+          senderId: me.id,
+          type: MessageType.text,
+          body: 'Just posted',
+          createdAt: DateTime.now().toUtc(),
+        ),
+      ];
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+      await tester.tap(find.widgetWithText(TextField, 'Message'));
+      await showKeyboard(tester, viewport);
+      expectFullyVisible(tester, find.text('Slowmode is enabled'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('composer-slowmode-countdown')),
+      );
+      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
     });
 
     phoneTestWidgets('private channels show a lock', (tester, viewport) async {

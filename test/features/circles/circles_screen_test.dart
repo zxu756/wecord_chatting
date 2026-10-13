@@ -529,6 +529,12 @@ class FakeCirclesRepository implements CirclesRepository {
   }) async {}
 
   @override
+  Future<void> setChannelSlowmode({
+    required String channelId,
+    required int seconds,
+  }) async {}
+
+  @override
   Future<String> createRole({
     required String circleId,
     required String name,

@@ -239,6 +239,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         channel,
         CirclePermission.sendMessages,
       ),
+      slowmodeSeconds: widget.detail.slowmodeFor(channel),
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
   }
@@ -258,6 +259,8 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       canSendMessages: channel == null
           ? null
           : widget.detail.canInChannel(channel, CirclePermission.sendMessages),
+      // Threads have no slowmode of their own.
+      slowmodeSeconds: 0,
     );
   }
 }

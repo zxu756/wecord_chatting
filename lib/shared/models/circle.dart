@@ -158,6 +158,14 @@ class CircleDetail {
     return permission.isGrantedBy(channelPermissionsOf(channel));
   }
 
+  /// The slowmode the current user waits out in [channel]: none with
+  /// manage messages there.
+  int slowmodeFor(CircleChannel channel) {
+    return canInChannel(channel, CirclePermission.manageMessages)
+        ? 0
+        : channel.slowmodeSeconds;
+  }
+
   /// Whether the current user may open channel settings: permissions need
   /// manage roles, the rest manage channels.
   bool get canOpenChannelSettings => canManageRoles || canManageChannels;
@@ -341,6 +349,7 @@ class CircleChannel {
     this.currentUserPermissions,
     this.isPrivate = false,
     this.isReadOnly = false,
+    this.slowmodeSeconds = 0,
   });
 
   factory CircleChannel.fromJson(Map<String, dynamic> json) {
@@ -355,6 +364,7 @@ class CircleChannel {
           ?.toInt(),
       isPrivate: json['is_private'] == true,
       isReadOnly: json['is_read_only'] == true,
+      slowmodeSeconds: (json['slowmode_seconds'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -376,6 +386,9 @@ class CircleChannel {
 
   /// `@everyone` may not send messages in the channel.
   final bool isReadOnly;
+
+  /// How long members wait between messages; 0 when slowmode is off.
+  final int slowmodeSeconds;
 }
 
 class CircleChannelCategory {

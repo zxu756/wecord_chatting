@@ -196,6 +196,176 @@ void main() {
     expect(find.text('Incoming message'), findsOneWidget);
   });
 
+  testWidgets('draws a NEW divider before the first unread incoming message', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Already read',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'My reply',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+        _message(
+          id: 'message-3',
+          senderId: 'user-2',
+          body: 'First unread',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 32),
+        ),
+        _message(
+          id: 'message-4',
+          senderId: 'user-2',
+          body: 'Second unread',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 33),
+        ),
+      ]
+      ..readMarkers = const [
+        ConversationReadMarker(
+          userId: 'user-1',
+          lastReadMessageId: 'message-1',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('NEW'), findsOneWidget);
+    final dividerY = tester.getCenter(find.text('NEW')).dy;
+    expect(dividerY, greaterThan(tester.getCenter(find.text('My reply')).dy));
+    expect(dividerY, lessThan(tester.getCenter(find.text('First unread')).dy));
+
+    // Opening the thread marks it read; the divider must survive the refresh.
+    repository.readMarkers = const [
+      ConversationReadMarker(userId: 'user-1', lastReadMessageId: 'message-4'),
+    ];
+    repository.emitMessageChange();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('NEW'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('NEW')).dy,
+      lessThan(tester.getCenter(find.text('First unread')).dy),
+    );
+  });
+
+  testWidgets('omits the NEW divider when everything was already read', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Read message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'My own newer message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ]
+      ..readMarkers = const [
+        ConversationReadMarker(
+          userId: 'user-1',
+          lastReadMessageId: 'message-1',
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('NEW'), findsNothing);
+
+    repository.messages = [
+      ...repository.messages,
+      _message(
+        id: 'message-3',
+        senderId: 'user-2',
+        body: 'Arrived while open',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 32),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Arrived while open'), findsOneWidget);
+    expect(find.text('NEW'), findsNothing);
+  });
+
+  testWidgets('jump to latest appears with a count when scrolled up', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        for (var index = 0; index < 30; index++)
+          _message(
+            id: 'message-$index',
+            senderId: index.isEven ? 'user-2' : 'user-1',
+            body: 'History $index',
+            createdAt: DateTime.utc(
+              2026,
+              5,
+              18,
+              4,
+            ).add(Duration(minutes: index)),
+          ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.byTooltip('Jump to latest'), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('chat-message-list')),
+      const Offset(0, 400),
+    );
+    await tester.pump();
+
+    // Scrolled up but nothing new yet.
+    expect(find.byTooltip('Jump to latest'), findsNothing);
+
+    repository.messages = [
+      ...repository.messages,
+      _message(
+        id: 'message-30',
+        senderId: 'user-2',
+        body: 'Fresh one',
+        createdAt: DateTime.utc(2026, 5, 18, 5),
+      ),
+      _message(
+        id: 'message-31',
+        senderId: 'user-2',
+        body: 'Fresh two',
+        createdAt: DateTime.utc(2026, 5, 18, 5, 1),
+      ),
+    ];
+    repository.emitMessageChange();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byTooltip('Jump to latest'), findsOneWidget);
+    expect(find.text('2 new messages'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Jump to latest'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byTooltip('Jump to latest'), findsNothing);
+    expect(find.text('Fresh two'), findsOneWidget);
+  });
+
   testWidgets('shows online and typing activity from the peer', (tester) async {
     final repository = FakeChatsRepository()
       ..activity = const ConversationActivity(

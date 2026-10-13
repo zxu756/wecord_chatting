@@ -134,6 +134,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _composerController = TextEditingController();
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   Timer? _typingTimer;
   ChatsRepository? _typingRepository;
   VoiceMessageRecorder? _voiceMessageRecorder;
@@ -153,10 +154,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _isMentioning = false;
   var _mentionQuery = '';
   final _mentionSelections = <String, _MentionSelection>{};
+  var _hasCapturedReadPosition = false;
+  String? _newMessageDividerId;
+  var _isAtBottom = true;
+  String? _latestMessageId;
+  String? _latestSeenMessageId;
+  var _unseenMessageCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _activeConversationController = ref.read(
       activeConversationIdProvider.notifier,
     );
@@ -168,6 +176,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversationId != widget.conversationId) {
       _scheduleActiveConversationUpdate(widget.conversationId);
+      _hasCapturedReadPosition = false;
+      _newMessageDividerId = null;
+      _isAtBottom = true;
+      _latestMessageId = null;
+      _latestSeenMessageId = null;
+      _unseenMessageCount = 0;
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
     }
   }
 
@@ -195,6 +212,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
     _composerController.dispose();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -358,6 +376,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 final messagesById = {
                   for (final message in messages) message.id: message,
                 };
+                final fullOldestToNewest = _messagesOldestToNewest(messages);
+                _captureNewMessageDivider(
+                  fullOldestToNewest,
+                  data.readMarkers,
+                  currentUserId,
+                );
+                _trackUnseenMessages(fullOldestToNewest, currentUserId);
                 _markReadAfterLoad(messages);
                 _reconcileActiveMessageState(messagesById);
                 if (messages.isEmpty) {
@@ -367,7 +392,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   return const Center(child: Text('No matching messages'));
                 }
 
-                final fullOldestToNewest = _messagesOldestToNewest(messages);
                 final visibleOldestToNewest = _messagesOldestToNewest(
                   visibleMessages,
                 );
@@ -380,13 +404,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   currentUserId: currentUserId,
                 );
 
-                return ListView.builder(
+                final list = ListView.builder(
+                  key: const ValueKey('chat-message-list'),
+                  controller: _scrollController,
                   reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: newestFirst.length,
                   itemBuilder: (context, index) {
                     final message = newestFirst[index];
-                    return _MessageBubble(
+                    final bubble = _MessageBubble(
                       message: message,
                       messagesById: messagesById,
                       isCurrentUser: message.senderId == currentUserId,
@@ -402,7 +428,37 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onToggleReaction: _toggleReaction,
                       onShowReactors: _showReactors,
                     );
+                    if (message.id != _newMessageDividerId) {
+                      return bubble;
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [const _NewMessagesDivider(), bubble],
+                    );
                   },
+                );
+                final showJumpToLatest =
+                    !_isAtBottom && _unseenMessageCount > 0;
+                return Stack(
+                  children: [
+                    Positioned.fill(child: list),
+                    if (showJumpToLatest)
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: FloatingActionButton.extended(
+                          heroTag: null,
+                          tooltip: 'Jump to latest',
+                          onPressed: _jumpToLatest,
+                          icon: const Icon(Icons.arrow_downward),
+                          label: Text(
+                            _unseenMessageCount == 1
+                                ? '1 new message'
+                                : '$_unseenMessageCount new messages',
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
@@ -439,6 +495,76 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onCancelEdit: _cancelEdit,
           ),
         ],
+      ),
+    );
+  }
+
+  /// Remembers where the reader left off before the thread marks itself read,
+  /// so the NEW divider stays put for as long as the thread stays open.
+  void _captureNewMessageDivider(
+    List<ChatMessage> oldestToNewest,
+    List<ConversationReadMarker> readMarkers,
+    String? currentUserId,
+  ) {
+    if (_hasCapturedReadPosition) {
+      return;
+    }
+    _hasCapturedReadPosition = true;
+    _newMessageDividerId = _firstUnreadMessageId(
+      messages: oldestToNewest,
+      readMarkers: readMarkers,
+      currentUserId: currentUserId,
+    );
+  }
+
+  void _trackUnseenMessages(
+    List<ChatMessage> oldestToNewest,
+    String? currentUserId,
+  ) {
+    _latestMessageId = oldestToNewest.isEmpty ? null : oldestToNewest.last.id;
+    final latestSeenMessageId = _latestSeenMessageId;
+    if (_isAtBottom || latestSeenMessageId == null) {
+      _latestSeenMessageId = _latestMessageId;
+      _unseenMessageCount = 0;
+      return;
+    }
+    final seenIndex = oldestToNewest.indexWhere(
+      (message) => message.id == latestSeenMessageId,
+    );
+    if (seenIndex == -1) {
+      return;
+    }
+    _unseenMessageCount = oldestToNewest
+        .skip(seenIndex + 1)
+        .where((message) => message.senderId != currentUserId)
+        .length;
+  }
+
+  void _handleScroll() {
+    final isAtBottom =
+        !_scrollController.hasClients ||
+        _scrollController.position.pixels <= _bottomScrollThreshold;
+    if (isAtBottom == _isAtBottom) {
+      return;
+    }
+    setState(() {
+      _isAtBottom = isAtBottom;
+      if (isAtBottom) {
+        _latestSeenMessageId = _latestMessageId;
+        _unseenMessageCount = 0;
+      }
+    });
+  }
+
+  void _jumpToLatest() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    unawaited(
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
       ),
     );
   }
@@ -956,6 +1082,33 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         });
       }
     }
+  }
+}
+
+const _bottomScrollThreshold = 48.0;
+
+class _NewMessagesDivider extends StatelessWidget {
+  const _NewMessagesDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: color, height: 1)),
+          const SizedBox(width: 8),
+          Text(
+            'NEW',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1856,6 +2009,45 @@ _LatestOutgoingReadState _latestOutgoingReadState({
     latestOutgoingMessageId: latestOutgoing.id,
     isRead: isRead,
   );
+}
+
+/// The first message from someone else after the reader's last read message,
+/// or null when everything was already read or the read position is unknown.
+String? _firstUnreadMessageId({
+  required List<ChatMessage> messages,
+  required List<ConversationReadMarker> readMarkers,
+  required String? currentUserId,
+}) {
+  if (currentUserId == null) {
+    return null;
+  }
+  ConversationReadMarker? marker;
+  for (final readMarker in readMarkers) {
+    if (readMarker.userId == currentUserId) {
+      marker = readMarker;
+      break;
+    }
+  }
+  if (marker == null) {
+    return null;
+  }
+  final lastReadMessageId = marker.lastReadMessageId;
+  var startIndex = 0;
+  if (lastReadMessageId != null) {
+    final lastReadIndex = messages.indexWhere(
+      (message) => message.id == lastReadMessageId,
+    );
+    if (lastReadIndex == -1) {
+      return null;
+    }
+    startIndex = lastReadIndex + 1;
+  }
+  for (final message in messages.skip(startIndex)) {
+    if (message.senderId != currentUserId) {
+      return message.id;
+    }
+  }
+  return null;
 }
 
 List<ChatMessage> _messagesOldestToNewest(List<ChatMessage> messages) {

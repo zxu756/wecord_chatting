@@ -102,7 +102,7 @@ enum CircleAuditActionGroup {
   member('member', 'Members'),
   circle('circle', 'Ownership'),
   invite('invite', 'Invites'),
-  message('message', 'Pins'),
+  message('message', 'Messages'),
   thread('thread', 'Threads'),
   post('post', 'Posts'),
   forum('forum', 'Forums'),

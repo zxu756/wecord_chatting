@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -119,12 +120,30 @@ class _PinnedMessageTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pinnedByName = item.pinnedByName?.trim();
+    // Webhook messages show the webhook, not its creator.
+    final webhookName = item.message.webhookName;
+    final authorName = webhookName ?? item.sender.displayLabel;
     return ListTile(
-      leading: const Icon(Icons.push_pin_outlined),
-      title: Text(
-        item.sender.displayLabel,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      leading: FallbackAvatar(
+        title: authorName,
+        avatarUrl: webhookName != null
+            ? item.message.webhookAvatarUrl
+            : item.sender.avatarUrl,
+      ),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              authorName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (webhookName != null) ...[
+            const SizedBox(width: 6),
+            const MessageBotTag(),
+          ],
+        ],
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

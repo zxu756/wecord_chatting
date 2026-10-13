@@ -1145,6 +1145,9 @@ class _FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<bool> canModerateMessages(String conversationId) async => false;
+
+  @override
   Future<void> recallMessage({required String messageId}) {
     throw UnimplementedError();
   }

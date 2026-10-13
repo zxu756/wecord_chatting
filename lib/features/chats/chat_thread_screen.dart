@@ -12,6 +12,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
+import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
@@ -74,6 +75,14 @@ final canModeratePollsProvider = FutureProvider.autoDispose
       return ref
           .watch(chatsRepositoryProvider)
           .canModeratePolls(conversationId);
+    });
+
+/// Whether the current user may delete others' messages in a conversation.
+final canModerateMessagesProvider = FutureProvider.autoDispose
+    .family<bool, String>((ref, conversationId) {
+      return ref
+          .watch(chatsRepositoryProvider)
+          .canModerateMessages(conversationId);
     });
 
 final chatConversationSummaryProvider = FutureProvider.autoDispose
@@ -498,6 +507,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             .watch(canModeratePollsProvider(widget.conversationId))
             .valueOrNull ??
         false;
+    final canModerateMessages =
+        ref
+            .watch(canModerateMessagesProvider(widget.conversationId))
+            .valueOrNull ??
+        false;
+    // Moderators delete others' messages; a webhook's creator deletes its
+    // messages (they are sent as the creator).
+    bool canDeleteAsModerator(ChatMessage message) {
+      return !message.isSentBy(currentUserId) &&
+          message.type != MessageType.system &&
+          (canModerateMessages ||
+              (message.isWebhook &&
+                  currentUserId != null &&
+                  message.senderId == currentUserId));
+    }
+
     final pollActions = PollActions(
       onVote: _votePoll,
       onEnd: _endPoll,
@@ -574,7 +599,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   padding: const EdgeInsets.all(8),
                   child: isThread
                       ? const CircleAvatar(child: Icon(Icons.forum_outlined))
-                      : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
+                      : FallbackAvatar(title: title, avatarUrl: avatarUrl),
                 ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -792,6 +817,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onEdit: _startEdit,
                           onForward: _showForwardSheet,
                           onDelete: _deleteMessage,
+                          canModerate: canDeleteAsModerator(message),
                           onPreviewImage: _previewImage,
                           onToggleReaction: _toggleReaction,
                           onShowReactors: _showReactors,
@@ -830,6 +856,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onEdit: _startEdit,
                           onForward: _showForwardSheet,
                           onDelete: _deleteMessage,
+                          canModerate: canDeleteAsModerator(message),
                           onPreviewImage: _previewImage,
                           onToggleReaction: _toggleReaction,
                           onShowReactors: _showReactors,
@@ -1727,6 +1754,39 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   Future<void> _deleteMessage(ChatMessage message) async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.id;
+    // Someone else's message (as a moderator, or a webhook's creator) is
+    // deleted only after confirming.
+    if (!message.isSentBy(currentUserId)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          scrollable: true,
+          title: const Text('Delete message'),
+          content: const Text(
+            'Delete this message for everyone? This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('message-delete-confirm'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
     try {
       await ref
           .read(chatsRepositoryProvider)
@@ -2369,33 +2429,6 @@ class _MessageSender {
   final int? roleColor;
 }
 
-/// The small "BOT" label next to a webhook's name.
-class _BotTag extends StatelessWidget {
-  const _BotTag();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      key: const ValueKey('message-bot-tag'),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        'BOT',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onPrimary,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-          height: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
 class _NewMessagesDivider extends StatelessWidget {
   const _NewMessagesDivider();
 
@@ -2417,32 +2450,6 @@ class _NewMessagesDivider extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ThreadAvatar extends ConsumerWidget {
-  const _ThreadAvatar({
-    required this.title,
-    required this.avatarUrl,
-    this.radius,
-  });
-
-  final String title;
-  final String? avatarUrl;
-  final double? radius;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final displayUrl = ref.watch(avatarDisplayUrlProvider(avatarUrl));
-    final image = displayUrl.valueOrNull == null
-        ? null
-        : NetworkImage(displayUrl.valueOrNull!);
-    return CircleAvatar(
-      radius: radius,
-      backgroundImage: image,
-      onBackgroundImageError: image == null ? null : (_, _) {},
-      child: image == null ? Text(_initials(title)) : null,
     );
   }
 }
@@ -2473,11 +2480,16 @@ class _MessageBubble extends StatelessWidget {
     this.postTitle,
     this.replyCount = 0,
     this.pollActions,
+    this.canModerate = false,
   });
 
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
   final bool isCurrentUser;
+
+  /// Offers "Delete message" on someone else's message: the current user
+  /// moderates the conversation, or created the webhook that posted it.
+  final bool canModerate;
 
   /// Votes, voter lists and ending for poll messages.
   final PollActions? pollActions;
@@ -2594,7 +2606,7 @@ class _MessageBubble extends StatelessWidget {
                   ],
                   Row(
                     children: [
-                      _ThreadAvatar(
+                      FallbackAvatar(
                         title: sender?.name ?? '?',
                         avatarUrl: sender?.avatarUrl,
                         radius: 18,
@@ -2630,7 +2642,7 @@ class _MessageBubble extends StatelessWidget {
                   const SizedBox(height: 12),
                   if (isRecalled)
                     Text(
-                      'Message deleted',
+                      message.deletedLabel,
                       style: TextStyle(
                         color: colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -2751,7 +2763,7 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 if (sender.isBot) ...[
                   const SizedBox(width: 6),
-                  const _BotTag(),
+                  const MessageBotTag(),
                 ],
               ],
             ),
@@ -2848,7 +2860,7 @@ class _MessageBubble extends StatelessWidget {
           width: _senderAvatarSize,
           child: isFollowUp
               ? null
-              : _ThreadAvatar(
+              : FallbackAvatar(
                   title: sender.name,
                   avatarUrl: sender.avatarUrl,
                   radius: _senderAvatarSize / 2,
@@ -3000,6 +3012,18 @@ class _MessageBubble extends StatelessWidget {
                       Navigator.of(sheetContext).pop();
                       unawaited(onDelete(message));
                     },
+                  )
+                else if (canModerate)
+                  ListTile(
+                    key: const ValueKey('message-moderator-delete'),
+                    iconColor: colorScheme.error,
+                    textColor: colorScheme.error,
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Delete message'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onDelete(message));
+                    },
                   ),
               ],
             ),
@@ -3085,7 +3109,7 @@ class _MessageContent extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isRecalled) {
       return Text(
-        'Message deleted',
+        message.deletedLabel,
         style: TextStyle(color: textColor, fontStyle: FontStyle.italic),
       );
     }
@@ -3908,20 +3932,6 @@ String _imageSendErrorText(Object error) {
     return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
   }
   return 'Could not send image. Try again. $error';
-}
-
-String _initials(String value) {
-  final parts = value
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  final first = parts.first.characters.first;
-  final second = parts.length > 1 ? parts.last.characters.first : '';
-  return '$first$second'.toUpperCase();
 }
 
 _LatestOutgoingReadState _latestOutgoingReadState({

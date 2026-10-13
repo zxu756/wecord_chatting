@@ -340,6 +340,7 @@ IconData circleAuditIcon(String action) {
     'invite_revoke' => Icons.link_off,
     'message_pin' => Icons.push_pin_outlined,
     'message_unpin' => Icons.push_pin,
+    'message_delete' => Icons.delete_outline,
     'thread_archive' => Icons.archive_outlined,
     'thread_unarchive' => Icons.unarchive_outlined,
     'post_delete' => Icons.delete_outline,
@@ -433,6 +434,11 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     'invite_revoke' => [text(' revoked invite '), name(target)],
     'message_pin' => [text(' pinned a message in '), name('#$target')],
     'message_unpin' => [text(' unpinned a message in '), name('#$target')],
+    'message_delete' => [
+      text(' deleted a message by '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
     'thread_archive' => [text(' archived thread '), name(target)],
     'thread_unarchive' => [text(' unarchived thread '), name(target)],
     'post_delete' => [text(' deleted a post by '), name(target)],
@@ -527,7 +533,9 @@ List<CircleAuditDetail> circleAuditDetails(CircleAuditEntry entry) {
     if (key == 'id' ||
         key.endsWith('_id') ||
         key == 'created_by' ||
-        (key == 'channel_name' && entry.action.startsWith('forum_')) ||
+        (key == 'channel_name' &&
+            (entry.action.startsWith('forum_') ||
+                entry.action == 'message_delete')) ||
         (key == 'target_name' &&
             entry.action == 'channel_permissions_update')) {
       continue;

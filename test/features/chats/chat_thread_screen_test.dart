@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
@@ -3095,16 +3096,21 @@ void main() {
       find.byType(ChatThreadScreen),
     );
     expect(screen.avatarUrl, 'profile-avatars/user-2/ada.png');
-    final avatar = tester.widget<CircleAvatar>(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.byType(CircleAvatar),
-      ),
+    final avatarFinder = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.byType(FallbackAvatar),
     );
-    final image = avatar.backgroundImage;
-    expect(image, isA<NetworkImage>());
     expect(
-      (image! as NetworkImage).url,
+      tester.widget<FallbackAvatar>(avatarFinder).avatarUrl,
+      'profile-avatars/user-2/ada.png',
+    );
+    // The signed URL is what the avatar loads; images cannot load in tests,
+    // so the initials show afterwards.
+    final container = ProviderScope.containerOf(tester.element(avatarFinder));
+    expect(
+      container
+          .read(avatarDisplayUrlProvider('profile-avatars/user-2/ada.png'))
+          .valueOrNull,
       'https://signed.example.com/profile-avatars/user-2/ada.png',
     );
   });
@@ -3429,6 +3435,7 @@ class FakeChatsRepository implements ChatsRepository {
   final pollVotes = <(String, List<String>)>[];
   final endedPolls = <String>[];
   var canModeratePollsValue = false;
+  var canModerateMessagesValue = false;
   var pollVoters = <String, List<Profile>>{};
 
   @override
@@ -3645,6 +3652,10 @@ class FakeChatsRepository implements ChatsRepository {
     required String conversationId,
     required List<String> memberIds,
   }) async {}
+
+  @override
+  Future<bool> canModerateMessages(String conversationId) async =>
+      canModerateMessagesValue;
 
   @override
   Future<void> recallMessage({required String messageId}) async {

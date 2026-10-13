@@ -669,7 +669,10 @@ void main() {
 
     expect(sql, contains('create or replace function public.recall_message'));
     expect(recallBody, contains('target_message_id uuid'));
-    expect(recallBody, contains('sender_id = auth.uid()'));
+    expect(
+      recallBody,
+      contains('is_own := coalesce(target.sender_id = current_user_id, false)'),
+    );
     expect(recallBody, contains('recalled_at = now()'));
     expect(recallBody, contains('public.is_current_user_conversation_member'));
     expect(
@@ -2969,6 +2972,40 @@ void main() {
         r'\[functions\.webhook\][^\[]*verify_jwt = false',
       ).hasMatch(config),
       isTrue,
+    );
+  });
+
+  test('moderators delete others\' messages, audited in circle channels', () {
+    final sql = effectiveMigrationSql();
+    expect(
+      sql,
+      contains(
+        'add column if not exists recalled_by uuid\n'
+        '    references public.profiles(id) on delete set null',
+      ),
+    );
+    expect(
+      policyBody(allMigrationSql(), 'messages_insert_member'),
+      contains('recalled_by is null'),
+    );
+
+    final moderate = functionBody(sql, 'can_current_user_moderate_messages');
+    expect(moderate, contains("'manage_messages'"));
+    expect(moderate, contains("cm.role in ('owner', 'admin')"));
+    expect(moderate, contains('public.conversation_circle_channel_id'));
+
+    final recall = functionBody(sql, 'recall_message');
+    expect(recall, contains("target.type = 'system'"));
+    expect(recall, contains('public.can_current_user_moderate_messages'));
+    expect(recall, contains('recalled_by = current_user_id'));
+    expect(recall, contains("'message_delete'"));
+    expect(recall, isNot(contains('target.body')));
+    expect(
+      sql,
+      contains(
+        'grant execute on function '
+        'public.can_current_user_moderate_messages(uuid) to authenticated;',
+      ),
     );
   });
 }

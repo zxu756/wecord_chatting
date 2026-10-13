@@ -301,6 +301,9 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {}
 
   @override
+  Future<bool> canModerateMessages(String conversationId) async => false;
+
+  @override
   Future<void> recallMessage({required String messageId}) async {}
 
   @override

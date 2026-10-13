@@ -132,7 +132,14 @@ abstract interface class ChatsRepository {
 
   Future<String> createVoiceUrl(VoiceAttachment attachment);
 
+  /// Deletes a message: the current user's own, or anyone's when they
+  /// moderate the conversation ([canModerateMessages]).
   Future<void> recallMessage({required String messageId});
+
+  /// Whether the current user may delete others' messages in a
+  /// conversation: manage_messages in circle channels, the owner or an
+  /// admin in groups.
+  Future<bool> canModerateMessages(String conversationId);
 
   Future<void> editMessage({required String messageId, required String body});
 
@@ -699,6 +706,15 @@ class SupabaseChatsRepository implements ChatsRepository {
   @override
   Future<void> recallMessage({required String messageId}) async {
     await _dataSource.rpc('recall_message', {'target_message_id': messageId});
+  }
+
+  @override
+  Future<bool> canModerateMessages(String conversationId) async {
+    final allowed = await _dataSource.rpc(
+      'can_current_user_moderate_messages',
+      {'target_conversation_id': conversationId},
+    );
+    return allowed == true;
   }
 
   @override
@@ -1705,6 +1721,9 @@ class _UninitializedChatsRepository implements ChatsRepository {
   Future<void> recallMessage({required String messageId}) {
     throw StateError('Supabase must be initialized before deleting messages.');
   }
+
+  @override
+  Future<bool> canModerateMessages(String conversationId) async => false;
 
   @override
   Future<void> editMessage({required String messageId, required String body}) {

@@ -50,6 +50,7 @@ class ChatMessage {
     this.forwardPreview,
     this.editedAt,
     this.recalledAt,
+    this.recalledBy,
     this.mentions = const <MessageMention>[],
     this.reactions = const <MessageReaction>[],
     this.isPinned = false,
@@ -86,6 +87,7 @@ class ChatMessage {
       createdAt: _parseTimestamp(json['created_at']),
       editedAt: _parseOptionalTimestamp(json['edited_at']),
       recalledAt: _parseOptionalTimestamp(json['recalled_at']),
+      recalledBy: json['recalled_by'] as String?,
       mentions: _parseMentions(json['mentions']),
       reactions: _parseReactions(json['reactions']),
       isPinned: json['is_pinned'] == true,
@@ -115,6 +117,9 @@ class ChatMessage {
   final DateTime createdAt;
   final DateTime? editedAt;
   final DateTime? recalledAt;
+
+  /// Who deleted the message: the sender, or a moderator.
+  final String? recalledBy;
   final List<MessageMention> mentions;
   final List<MessageReaction> reactions;
   final bool isPinned;
@@ -149,6 +154,18 @@ class ChatMessage {
   /// Posted through a webhook: shown under the webhook's name, not as a
   /// message of [senderId] (the webhook's creator).
   bool get isWebhook => webhookName != null;
+
+  /// Deleted by someone other than its sender (a moderator).
+  bool get isDeletedByModerator {
+    return recalledAt != null && recalledBy != null && recalledBy != senderId;
+  }
+
+  /// "Message deleted", or "Message deleted by a moderator".
+  String get deletedLabel {
+    return isDeletedByModerator
+        ? 'Message deleted by a moderator'
+        : 'Message deleted';
+  }
 
   /// Whether [userId] wrote this message themselves (webhook messages are
   /// nobody's own).
@@ -225,6 +242,7 @@ class ChatMessage {
     DateTime? createdAt,
     Object? editedAt = _sentinel,
     Object? recalledAt = _sentinel,
+    Object? recalledBy = _sentinel,
     List<MessageMention>? mentions,
     List<MessageReaction>? reactions,
     bool? isPinned,
@@ -263,6 +281,9 @@ class ChatMessage {
       recalledAt: identical(recalledAt, _sentinel)
           ? this.recalledAt
           : recalledAt as DateTime?,
+      recalledBy: identical(recalledBy, _sentinel)
+          ? this.recalledBy
+          : recalledBy as String?,
       mentions: mentions ?? this.mentions,
       reactions: reactions ?? this.reactions,
       isPinned: isPinned ?? this.isPinned,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -176,6 +177,139 @@ void main() {
     // The new post opens.
     expect(find.byKey(const ValueKey('forum-post-list')), findsNothing);
     expect(find.widgetWithText(AppBar, 'Sunrise spots'), findsOneWidget);
+    await world.close(tester);
+  });
+
+  testWidgets('new posts mention members picked from the forum', (
+    tester,
+  ) async {
+    final world = await openForum(tester);
+
+    await tester.tap(find.byKey(const ValueKey('forum-new-post')));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('forum-post-title-field')),
+      'Tripod advice',
+    );
+    final body = find.byKey(const ValueKey('forum-post-body-field'));
+    await tester.enterText(body, 'Thanks @gra');
+    await settle(tester);
+    expect(
+      find.byKey(const ValueKey('forum-post-mention-candidates')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('mention-candidate-user-3')));
+    await settle(tester);
+    expect(
+      find.byKey(const ValueKey('forum-post-mention-candidates')),
+      findsNothing,
+    );
+    final field = tester.widget<TextField>(body);
+    expect(field.controller!.text, 'Thanks @grace ');
+    await tester.enterText(body, 'Thanks @grace for the tips');
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('forum-post-submit')));
+    await tester.tap(find.byKey(const ValueKey('forum-post-submit')));
+    await settle(tester);
+
+    final mention = world.circles.createdForumPosts.single.mentions.single;
+    expect(mention.userId, 'user-3');
+    expect(mention.displayName, 'Amazing Grace');
+    expect((mention.start, mention.end), (7, 13));
+    await world.close(tester);
+  });
+
+  Future<PhoneWorld> openLongPost(
+    WidgetTester tester, {
+    String? lastReadMessageId,
+  }) async {
+    final world = PhoneWorld();
+    world.chats
+      ..messages = [
+        forumPostMessages().first,
+        for (var index = 0; index < 30; index++)
+          phoneMessage(
+            'reply-$index',
+            index.isEven ? bart : linus,
+            'Reply number $index with a few words so it wraps a little.',
+            minutesAgo: 200 - index,
+            conversationId: 'post-conv-1',
+          ),
+      ]
+      ..readMarkers = [
+        if (lastReadMessageId != null)
+          ConversationReadMarker(
+            userId: 'user-1',
+            lastReadMessageId: lastReadMessageId,
+          ),
+      ];
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/post-conv-1',
+      extra: const ChatThreadRouteExtra(
+        title: forumPostTitle,
+        type: ConversationType.thread,
+        circleId: 'circle-1',
+      ),
+    );
+    return world;
+  }
+
+  testWidgets('forum posts open at the opening post', (tester) async {
+    final world = await openLongPost(tester, lastReadMessageId: 'reply-29');
+
+    expectFullyVisible(
+      tester,
+      find.descendant(
+        of: find.byKey(const ValueKey('forum-opening-post')),
+        matching: find.text(forumPostTitle),
+      ),
+    );
+    expect(
+      find.text(
+        'Reply number 29 with a few words so it wraps a little.',
+        findRichText: true,
+      ),
+      findsNothing,
+    );
+    // Everything was read: nothing to jump to.
+    expect(
+      find.byKey(const ValueKey('forum-jump-to-new-replies')),
+      findsNothing,
+    );
+    await world.close(tester);
+  });
+
+  testWidgets('unread replies offer a jump instead of scrolling there', (
+    tester,
+  ) async {
+    final world = await openLongPost(tester, lastReadMessageId: 'reply-24');
+
+    expectFullyVisible(
+      tester,
+      find.descendant(
+        of: find.byKey(const ValueKey('forum-opening-post')),
+        matching: find.text(forumPostTitle),
+      ),
+    );
+    final jump = find.byKey(const ValueKey('forum-jump-to-new-replies'));
+    expect(jump, findsOneWidget);
+    expect(find.text('Jump to new replies'), findsOneWidget);
+
+    await tester.tap(jump);
+    // The jump looks for the reply a screen at a time, one per frame.
+    for (var round = 0; round < 4; round++) {
+      await settle(tester);
+    }
+    expect(
+      find.text(
+        'Reply number 25 with a few words so it wraps a little.',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('NEW'), findsOneWidget);
+    expect(jump, findsNothing);
     await world.close(tester);
   });
 

@@ -3032,7 +3032,15 @@ class FakeCirclesRepository implements CirclesRepository {
         })
       >[];
   final createdForumPosts =
-      <({String title, String body, List<String> tagIds, bool hasImage})>[];
+      <
+        ({
+          String title,
+          String body,
+          List<String> tagIds,
+          bool hasImage,
+          List<MessageMention> mentions,
+        })
+      >[];
   final forumChangeControllers = <StreamController<void>>[];
 
   @override
@@ -3079,12 +3087,14 @@ class FakeCirclesRepository implements CirclesRepository {
     required String body,
     List<String> tagIds = const [],
     ImageAttachment? image,
+    List<MessageMention> mentions = const [],
   }) async {
     createdForumPosts.add((
       title: title,
       body: body,
       tagIds: tagIds,
       hasImage: image != null,
+      mentions: mentions,
     ));
     final now = DateTime.utc(2026, 10, 14, 12);
     final post = ForumPost(

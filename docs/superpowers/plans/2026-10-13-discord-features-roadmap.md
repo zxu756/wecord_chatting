@@ -110,7 +110,7 @@
   - `circle_channels.kind text check in ('text','voice','forum') default 'text'`。论坛里的每个帖子就是一个子话题（第 15 项），`root_message_id` 为空，帖子正文是子话题的第一条消息。
   - 表 `forum_tags (id, channel_id, name, emoji)`、`thread_tags (thread_id, tag_id)`；`conversation_threads` 增加 `is_pinned`。
   - UI：论坛频道显示帖子卡片列表（标题、作者、标签、回复数、最后活动、首图缩略图），按最新活动或创建时间排序、按标签筛选；「发帖」表单填标题、正文、标签。
-  - 已实现：`create_forum_post`（需要 `send_messages`，一次建好子话题、首条消息和标签）、`list_forum_posts`（置顶在前，游标分页）、`set_forum_post_tags`、`pin_forum_post`（`manage_messages`）、标签增删改排（`manage_channels`，每个论坛最多 20 个、每帖最多 5 个）；论坛自身的会话拒收消息、不能用 `create_thread`；标签和置顶写操作日志（`forum_*`）。帖子不进侧栏子话题列表，未读汇总到论坛频道；频道设置里管理标签，建频道时可选「论坛」。
+  - 已实现：`create_forum_post`（需要 `send_messages`，一次建好子话题、首条消息和标签）、`list_forum_posts`（置顶在前，游标分页）、`set_forum_post_tags`、`pin_forum_post`（`manage_messages`）、标签增删改排（`manage_channels`，每个论坛最多 20 个、每帖最多 5 个）；论坛自身的会话拒收消息、不能用 `create_thread`；标签和置顶写操作日志（`forum_*`）。帖子不进侧栏子话题列表，未读汇总到论坛频道；频道设置里管理标签，建频道时可选「论坛」。发帖支持 @提及（与聊天相同，看不到该论坛的人被丢弃）；打开帖子停在开头，有未读回复时显示「跳到新回复」。
   - 频道管理（同批）：`update_circle_channel` / `delete_circle_channel`，频道设置里改名、话题、删除；话题显示在频道顶栏。
 - [ ] **22. 活动日程（Events）**（M–L）
   - 表 `circle_events (id, circle_id, title, description, location_type text check in ('voice','text','external'), channel_id null, location_text null, starts_at, ends_at null, created_by, cancelled_at null)`、`circle_event_rsvps (event_id, user_id, created_at)`。

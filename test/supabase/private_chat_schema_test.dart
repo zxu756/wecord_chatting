@@ -2583,4 +2583,32 @@ void main() {
       );
     }
   });
+
+  test('forum posts record mentions of members who can see the forum', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      rawSql,
+      contains(
+        'drop function if exists '
+        'public.create_forum_post(uuid, text, text, uuid[], jsonb);',
+      ),
+    );
+    final body = functionBody(sql, 'create_forum_post');
+    expect(body, contains("post_mentions jsonb default '[]'::jsonb"));
+    expect(body, contains('mentioned users must be conversation members'));
+    expect(body, contains('public.user_has_conversation_channel_permission('));
+    expect(body, contains("'view_channel'"));
+    expect(body, contains('insert into public.message_mentions'));
+    expect(body, contains('visible_mentions'));
+    expect(
+      rawSql,
+      contains(
+        'grant execute on function '
+        'public.create_forum_post(uuid, text, text, uuid[], jsonb, jsonb) '
+        'to authenticated',
+      ),
+    );
+  });
 }

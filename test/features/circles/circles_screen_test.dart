@@ -696,6 +696,7 @@ class FakeCirclesRepository implements CirclesRepository {
     required String body,
     List<String> tagIds = const [],
     ImageAttachment? image,
+    List<MessageMention> mentions = const [],
   }) => throw UnimplementedError();
 
   @override

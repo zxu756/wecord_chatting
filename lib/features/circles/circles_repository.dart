@@ -198,13 +198,15 @@ abstract interface class CirclesRepository {
   });
 
   /// Creates a post with its body (and [image], uploaded with
-  /// [uploadForumImage]) as the first message.
+  /// [uploadForumImage]) as the first message. [mentions] index into the
+  /// trimmed body; mentions of members who cannot see the forum are dropped.
   Future<ForumPost> createForumPost({
     required String channelId,
     required String title,
     required String body,
     List<String> tagIds = const [],
     ImageAttachment? image,
+    List<MessageMention> mentions = const [],
   });
 
   /// Uploads an image for a new post of the forum whose conversation is
@@ -703,6 +705,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     required String body,
     List<String> tagIds = const [],
     ImageAttachment? image,
+    List<MessageMention> mentions = const [],
   }) async {
     final payload = await _dataSource.rpc('create_forum_post', {
       'target_channel_id': channelId,
@@ -710,6 +713,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'post_body': body.trim(),
       'tag_ids': tagIds,
       'post_attachment': image?.toJson(),
+      'post_mentions': [for (final mention in mentions) mention.toJson()],
     });
     return ForumPost.fromJson(payload as Map<String, dynamic>);
   }
@@ -1531,6 +1535,7 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required String body,
     List<String> tagIds = const [],
     ImageAttachment? image,
+    List<MessageMention> mentions = const [],
   }) {
     throw StateError('Supabase must be initialized before posting.');
   }

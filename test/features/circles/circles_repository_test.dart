@@ -559,6 +559,9 @@ void main() {
       body: ' Body ',
       tagIds: const ['tag-1'],
       image: image,
+      mentions: const [
+        MessageMention(userId: 'user-2', displayName: 'Bart', start: 0, end: 5),
+      ],
     );
     expect(created.id, 'thread-3');
     expect(dataSource.calls.last.functionName, 'create_forum_post');
@@ -568,6 +571,15 @@ void main() {
       'post_body': 'Body',
       'tag_ids': ['tag-1'],
       'post_attachment': image.toJson(),
+      'post_mentions': [
+        {
+          'user_id': 'user-2',
+          'display_name': 'Bart',
+          'start': 0,
+          'end': 5,
+          'kind': 'user',
+        },
+      ],
     });
 
     dataSource.rpcValue = 'tag-new';

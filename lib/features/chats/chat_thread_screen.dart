@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
+import 'package:wecord/features/chats/mention_picker.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
@@ -103,18 +104,6 @@ class ChatThreadAction {
   }
 }
 
-class _MentionSelection {
-  const _MentionSelection({
-    required this.userId,
-    required this.username,
-    required this.displayName,
-  });
-
-  final String userId;
-  final String username;
-  final String displayName;
-}
-
 class _AnnouncementStrip extends StatelessWidget {
   const _AnnouncementStrip({required this.announcement});
 
@@ -197,7 +186,8 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   final String? topic;
 
   /// A forum post: its first message shows as the opening post, larger and
-  /// with the post's title, and the rest as replies.
+  /// with the post's title, and the rest as replies. Posts read top down:
+  /// they open at the opening post, offering a jump to unread replies.
   final bool forumPost;
 
   /// Shows a back button in place of the avatar.
@@ -229,13 +219,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _messageSearchQuery = '';
   var _isMentioning = false;
   var _mentionQuery = '';
-  final _mentionSelections = <String, _MentionSelection>{};
+  final _mentionDraft = MentionDraft();
   var _hasCapturedReadPosition = false;
   String? _newMessageDividerId;
   var _isAtBottom = true;
   String? _latestMessageId;
   String? _latestSeenMessageId;
   var _unseenMessageCount = 0;
+
+  /// Whether the reader took (or no longer needs) the jump to a forum
+  /// post's unread replies.
+  var _newRepliesDismissed = false;
   final _messageKeys = <String, GlobalKey>{};
   String? _highlightedMessageId;
   Timer? _highlightTimer;
@@ -268,6 +262,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _latestMessageId = null;
       _latestSeenMessageId = null;
       _unseenMessageCount = 0;
+      _newRepliesDismissed = false;
       _messageKeys.clear();
       _highlightTimer?.cancel();
       _highlightedMessageId = null;
@@ -673,9 +668,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   final visibleOldestToNewest = _messagesOldestToNewest(
                     visibleMessages,
                   );
-                  final newestFirst = visibleOldestToNewest.reversed.toList(
-                    growable: false,
-                  );
+                  // Chats list newest first from the bottom; forum posts read
+                  // top down from the opening post.
+                  final ordered = widget.forumPost
+                      ? visibleOldestToNewest
+                      : visibleOldestToNewest.reversed.toList(growable: false);
                   final latestOutgoingReadState = _latestOutgoingReadState(
                     messages: fullOldestToNewest,
                     readMarkers: data.readMarkers,
@@ -717,11 +714,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   final list = ListView.builder(
                     key: const ValueKey('chat-message-list'),
                     controller: _scrollController,
-                    reverse: true,
+                    reverse: !widget.forumPost,
                     padding: const EdgeInsets.all(16),
-                    itemCount: newestFirst.length,
+                    itemCount: ordered.length,
                     itemBuilder: (context, index) {
-                      final message = newestFirst[index];
+                      final message = ordered[index];
                       final Widget bubble;
                       if (message.type == MessageType.system) {
                         bubble = _SystemMessageLine(
@@ -762,9 +759,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         );
                       } else {
                         final isCurrentUser = message.senderId == currentUserId;
-                        final newerMessage = index == 0
+                        final newerIndex = widget.forumPost
+                            ? index + 1
+                            : index - 1;
+                        final newerMessage =
+                            newerIndex < 0 || newerIndex >= ordered.length
                             ? null
-                            : newestFirst[index - 1];
+                            : ordered[newerIndex];
                         bubble = _MessageBubble(
                           message: message,
                           messagesById: messagesById,
@@ -826,9 +827,43 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   );
                   final showJumpToLatest =
                       !_isAtBottom && _unseenMessageCount > 0;
+                  final newRepliesId = _newMessageDividerId;
+                  final showJumpToNewReplies =
+                      widget.forumPost &&
+                      !showJumpToLatest &&
+                      !_isAtBottom &&
+                      !_newRepliesDismissed &&
+                      newRepliesId != null &&
+                      newRepliesId != openingPostId &&
+                      _messageSearchQuery.trim().isEmpty;
+                  if (widget.forumPost) {
+                    // Whether the post fits on screen is only known after
+                    // layout.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        _handleScroll();
+                      }
+                    });
+                  }
                   return Stack(
                     children: [
                       Positioned.fill(child: list),
+                      if (showJumpToNewReplies)
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: FloatingActionButton.extended(
+                            key: const ValueKey('forum-jump-to-new-replies'),
+                            heroTag: null,
+                            tooltip: 'Jump to new replies',
+                            onPressed: () {
+                              setState(() => _newRepliesDismissed = true);
+                              unawaited(_scrollToMessage(newRepliesId));
+                            },
+                            icon: const Icon(Icons.arrow_downward),
+                            label: const Text('Jump to new replies'),
+                          ),
+                        ),
                       if (showJumpToLatest)
                         Positioned(
                           right: 16,
@@ -922,7 +957,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     List<ChatMessage> oldestToNewest,
     String? currentUserId,
   ) {
+    final previousLatestMessageId = _latestMessageId;
     _latestMessageId = oldestToNewest.isEmpty ? null : oldestToNewest.last.id;
+    // Reversed chats keep the newest message in view by themselves; forum
+    // posts follow new replies while the reader is at the end, and show
+    // the reader's own replies.
+    if (widget.forumPost &&
+        previousLatestMessageId != null &&
+        _latestMessageId != previousLatestMessageId &&
+        (_isAtBottom || oldestToNewest.last.senderId == currentUserId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(_scrollToEnd());
+        }
+      });
+    }
     final latestSeenMessageId = _latestSeenMessageId;
     if (_isAtBottom || latestSeenMessageId == null) {
       _latestSeenMessageId = _latestMessageId;
@@ -942,9 +991,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _handleScroll() {
-    final isAtBottom =
-        !_scrollController.hasClients ||
-        _scrollController.position.pixels <= _bottomScrollThreshold;
+    final bool isAtBottom;
+    if (!_scrollController.hasClients) {
+      isAtBottom = true;
+    } else {
+      final position = _scrollController.position;
+      // Forum posts are not reversed, so their latest end is at the bottom.
+      isAtBottom = widget.forumPost
+          ? position.maxScrollExtent - position.pixels <= _bottomScrollThreshold
+          : position.pixels <= _bottomScrollThreshold;
+    }
     if (isAtBottom == _isAtBottom) {
       return;
     }
@@ -961,6 +1017,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (!_scrollController.hasClients) {
       return;
     }
+    if (widget.forumPost) {
+      unawaited(_scrollToEnd());
+      return;
+    }
     unawaited(
       _scrollController.animateTo(
         0,
@@ -968,6 +1028,30 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         curve: Curves.easeOut,
       ),
     );
+  }
+
+  /// Scrolls a forum post to its latest reply. The list builds lazily, so
+  /// its extent grows as the end comes into view.
+  Future<void> _scrollToEnd() async {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    await _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      if (position.pixels >= position.maxScrollExtent) {
+        return;
+      }
+      _scrollController.jumpTo(position.maxScrollExtent);
+      await WidgetsBinding.instance.endOfFrame;
+    }
   }
 
   void _markReadAfterLoad(List<ChatMessage> messages) {
@@ -1082,7 +1166,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
       await _setTyping(false);
       _composerController.clear();
-      _mentionSelections.clear();
+      _mentionDraft.clear();
       _isMentioning = false;
       _mentionQuery = '';
       _replyingTo = null;
@@ -1306,15 +1390,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _updateMentionQuery() {
-    final selection = _composerController.selection;
-    final cursor = selection.isValid
-        ? selection.baseOffset
-        : _composerController.text.length;
-    final safeCursor = cursor.clamp(0, _composerController.text.length);
-    final prefix = _composerController.text.substring(0, safeCursor);
-    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(prefix);
-    final isMentioning = match != null;
-    final nextQuery = match?.group(1)?.toLowerCase() ?? '';
+    final query = mentionQueryAt(_composerController.value);
+    final isMentioning = query != null;
+    final nextQuery = query ?? '';
     if (_isMentioning == isMentioning && _mentionQuery == nextQuery) {
       return;
     }
@@ -1328,38 +1406,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (detail == null || !_isMentioning) {
       return const [];
     }
-    final query = _mentionQuery;
-    return detail.members
-        .where((member) {
-          return member.profile.username.toLowerCase().contains(query) ||
-              _mentionName(member).toLowerCase().contains(query);
-        })
-        .take(6)
-        .toList(growable: false);
+    return mentionCandidates(detail.members, _mentionQuery);
   }
 
   void _insertMention(GroupMember member) {
-    final text = _composerController.text;
-    final selection = _composerController.selection;
-    final cursor = selection.isValid ? selection.baseOffset : text.length;
-    final safeCursor = cursor.clamp(0, text.length);
-    final prefix = text.substring(0, safeCursor);
-    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(prefix);
-    if (match == null) {
+    if (!_mentionDraft.insert(_composerController, member)) {
       return;
     }
-    final tokenStart = match.start + (prefix[match.start] == '@' ? 0 : 1);
-    final mentionText = '@${member.profile.username} ';
-    final nextText = text.replaceRange(tokenStart, safeCursor, mentionText);
-    _composerController.text = nextText;
-    _composerController.selection = TextSelection.collapsed(
-      offset: tokenStart + mentionText.length,
-    );
-    _mentionSelections[member.profile.username] = _MentionSelection(
-      userId: member.profile.id,
-      username: member.profile.username,
-      displayName: _mentionName(member),
-    );
     setState(() {
       _isMentioning = false;
       _mentionQuery = '';
@@ -1367,24 +1420,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   List<MessageMention> _mentionsForBody(String body) {
-    final mentions = <MessageMention>[];
-    for (final selection in _mentionSelections.values) {
-      final token = '@${selection.username}';
-      var start = body.indexOf(token);
-      while (start != -1) {
-        mentions.add(
-          MessageMention(
-            userId: selection.userId,
-            displayName: selection.displayName,
-            start: start,
-            end: start + token.length,
-          ),
-        );
-        start = body.indexOf(token, start + token.length);
-      }
-    }
-    mentions.sort((a, b) => a.start.compareTo(b.start));
-    return mentions;
+    return _mentionDraft.mentionsFor(body);
   }
 
   Future<void> _setTyping(bool isTyping) async {
@@ -3076,29 +3112,10 @@ class _Composer extends StatelessWidget {
                     const SizedBox(height: 8),
                   ],
                   if (mentionCandidates.isNotEmpty) ...[
-                    Material(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: math.min(180, availableHeight * 0.25),
-                        ),
-                        child: ListView(
-                          shrinkWrap: true,
-                          children: [
-                            for (final member in mentionCandidates)
-                              ListTile(
-                                dense: true,
-                                leading: CircleAvatar(
-                                  child: Text(_initials(_mentionName(member))),
-                                ),
-                                title: Text(_mentionName(member)),
-                                subtitle: Text('@${member.profile.username}'),
-                                onTap: () => onSelectMention(member),
-                              ),
-                          ],
-                        ),
-                      ),
+                    MentionCandidateList(
+                      candidates: mentionCandidates,
+                      onSelect: onSelectMention,
+                      maxHeight: math.min(180, availableHeight * 0.25),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -3471,15 +3488,6 @@ String _imageSendErrorText(Object error) {
     return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
   }
   return 'Could not send image. Try again. $error';
-}
-
-/// A mention candidate's name: their circle nickname in channels, otherwise
-/// their display name.
-String _mentionName(GroupMember member) {
-  final nickname = member.nickname?.trim();
-  return nickname == null || nickname.isEmpty
-      ? member.profile.displayName
-      : nickname;
 }
 
 String _initials(String value) {

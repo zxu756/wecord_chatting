@@ -4,6 +4,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 typedef CircleChannelThreadBuilder =
@@ -45,10 +46,8 @@ class _CircleChannelThreadScreenState
   Widget build(BuildContext context) {
     final circleId = widget.circleId;
     final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
-    // Still in the circle: keep announcing presence.
     final onlineUserIds =
-        ref.watch(circlePresenceProvider(circleId)).valueOrNull ??
-        const <String>{};
+        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
     // Deep links carry no title; name the channel from the circle.
     var title = widget.title;
     if (title == null && detail != null) {

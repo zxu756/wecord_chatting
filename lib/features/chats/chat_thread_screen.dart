@@ -18,6 +18,7 @@ import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -261,9 +262,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         : null;
     final currentActivity =
         activity.valueOrNull ?? const ConversationActivity();
-    final peerIsOnline = currentActivity.onlineUserIds.any((id) {
-      return id != currentUserId;
-    });
+    // A direct peer is online when they have the app open anywhere; in
+    // groups and channels this still means another member is viewing.
+    final onlineUserIds =
+        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+    final directPeerId = conversationType == ConversationType.direct
+        ? _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
+        : null;
+    final peerIsOnline = conversationType == ConversationType.direct
+        ? directPeerId != null && onlineUserIds.contains(directPeerId)
+        : currentActivity.onlineUserIds.any((id) {
+            return id != currentUserId;
+          });
     final peerIsTyping = currentActivity.typingUserIds.any((id) {
       return id != currentUserId;
     });
@@ -1310,6 +1320,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
     }
   }
+}
+
+/// The other member of a direct conversation, from its read markers (one
+/// per member).
+String? _directPeerId(
+  List<ConversationReadMarker>? readMarkers,
+  String? currentUserId,
+) {
+  for (final marker in readMarkers ?? const <ConversationReadMarker>[]) {
+    if (marker.userId != currentUserId) {
+      return marker.userId;
+    }
+  }
+  return null;
 }
 
 const _bottomScrollThreshold = 48.0;

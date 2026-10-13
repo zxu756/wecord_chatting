@@ -590,10 +590,6 @@ class FakeCirclesRepository implements CirclesRepository {
   }) async {}
 
   @override
-  Stream<Set<String>> circlePresence(String circleId) =>
-      const Stream<Set<String>>.empty();
-
-  @override
   Future<String> createChannelCategory({
     required String circleId,
     required String name,

@@ -10,6 +10,7 @@ import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/notifications/notification_shell_listener.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
@@ -42,6 +43,40 @@ void main() {
     expect(coordinator.startCount, 1);
   });
 
+  testWidgets('stays on app-wide presence while mounted', (tester) async {
+    final presence = _FakePresenceRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationCoordinatorProvider.overrideWithValue(
+            _RecordingNotificationCoordinator(),
+          ),
+          localNotificationServiceProvider.overrideWithValue(
+            FakeLocalNotificationService(),
+          ),
+          authStateProvider.overrideWith(
+            (ref) => Stream.value(const AuthUser(id: 'user-1')),
+          ),
+          presenceRepositoryProvider.overrideWithValue(presence),
+        ],
+        child: const MaterialApp(
+          home: NotificationShellListener(child: Text('child')),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(presence.listening, isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pump();
+
+    expect(presence.listening, isFalse);
+  });
+
   testWidgets('disposes the notification coordinator', (tester) async {
     final coordinator = _RecordingNotificationCoordinator();
 
@@ -65,6 +100,23 @@ void main() {
 
     expect(coordinator.disposeCount, 1);
   });
+}
+
+class _FakePresenceRepository implements PresenceRepository {
+  var listening = false;
+
+  @override
+  Stream<Set<String>> onlineUserIds() {
+    late StreamController<Set<String>> controller;
+    controller = StreamController<Set<String>>(
+      onListen: () {
+        listening = true;
+        controller.add({'user-1'});
+      },
+      onCancel: () => listening = false,
+    );
+    return controller.stream;
+  }
 }
 
 class _RecordingNotificationCoordinator extends NotificationCoordinator {

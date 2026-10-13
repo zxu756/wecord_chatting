@@ -9,18 +9,11 @@ import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
-
-/// Members who have the circle open right now (see
-/// [CirclesRepository.circlePresence]). Watching it announces the current
-/// user to the rest of the circle.
-final circlePresenceProvider = StreamProvider.autoDispose
-    .family<Set<String>, String>((ref, circleId) {
-      return ref.watch(circlesRepositoryProvider).circlePresence(circleId);
-    });
 
 typedef CircleChannelViewBuilder =
     Widget Function(
@@ -91,8 +84,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     );
     final selectedChannel = _selectedChannel;
     final onlineUserIds =
-        ref.watch(circlePresenceProvider(detail.circle.id)).valueOrNull ??
-        const <String>{};
+        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
 
     return Scaffold(
       body: Row(

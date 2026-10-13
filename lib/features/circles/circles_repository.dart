@@ -121,10 +121,6 @@ abstract interface class CirclesRepository {
   Future<String> createImageUrl(ImageAttachment attachment);
 
   Stream<void> circleChanges(String circleId);
-
-  /// Ids of members who have this circle open right now, always including
-  /// the current user. Listening also announces the current user.
-  Stream<Set<String>> circlePresence(String circleId);
 }
 
 abstract interface class CirclesDataSource {
@@ -144,8 +140,6 @@ abstract interface class CirclesDataSource {
   });
 
   Stream<void> circleChanges(String circleId);
-
-  Stream<Set<String>> circlePresence(String circleId);
 }
 
 class SupabaseCirclesRepository implements CirclesRepository {
@@ -443,11 +437,6 @@ class SupabaseCirclesRepository implements CirclesRepository {
     return _dataSource.circleChanges(circleId);
   }
 
-  @override
-  Stream<Set<String>> circlePresence(String circleId) {
-    return _dataSource.circlePresence(circleId);
-  }
-
   String _nextStoragePathSeed() {
     return _storagePathSeed?.call() ??
         DateTime.now().toUtc().microsecondsSinceEpoch.toString();
@@ -594,57 +583,6 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .subscribe();
       },
       onCancel: () async {
-        await _client.removeChannel(channel);
-      },
-    );
-    return controller.stream;
-  }
-
-  /// Same Realtime presence mechanism as a chat thread's online state, but
-  /// on one channel per circle, keyed by user id.
-  @override
-  Stream<Set<String>> circlePresence(String circleId) {
-    final currentUserId = _client.auth.currentUser?.id;
-    if (currentUserId == null) {
-      return Stream<Set<String>>.value(const <String>{});
-    }
-    late RealtimeChannel channel;
-    late StreamController<Set<String>> controller;
-
-    void emit() {
-      if (controller.isClosed) {
-        return;
-      }
-      controller.add({
-        currentUserId,
-        for (final state in channel.presenceState()) state.key,
-      });
-    }
-
-    controller = StreamController<Set<String>>(
-      onListen: () {
-        controller.add({currentUserId});
-        channel = _client
-            .channel(
-              'circle-presence-$circleId',
-              opts: RealtimeChannelConfig(key: currentUserId),
-            )
-            .onPresenceSync((payload) => emit())
-            .onPresenceJoin((payload) => emit())
-            .onPresenceLeave((payload) => emit())
-            .subscribe((status, error) {
-              if (status == RealtimeSubscribeStatus.subscribed) {
-                unawaited(
-                  channel.track({
-                    'user_id': currentUserId,
-                    'online_at': DateTime.now().toUtc().toIso8601String(),
-                  }),
-                );
-              }
-            });
-      },
-      onCancel: () async {
-        await channel.untrack();
         await _client.removeChannel(channel);
       },
     );
@@ -830,11 +768,6 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Stream<void> circleChanges(String circleId) {
     return const Stream<void>.empty();
-  }
-
-  @override
-  Stream<Set<String>> circlePresence(String circleId) {
-    return const Stream<Set<String>>.empty();
   }
 }
 

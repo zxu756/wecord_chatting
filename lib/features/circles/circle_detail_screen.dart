@@ -37,9 +37,6 @@ class CircleDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(circleDetailProvider(circleId));
-    // Keep announcing presence for as long as the circle is open, whichever
-    // layout shows it.
-    ref.watch(circlePresenceProvider(circleId));
     void refresh() => ref.invalidate(circleDetailProvider(circleId));
 
     return detail.when(

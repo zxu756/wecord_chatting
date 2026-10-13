@@ -14,6 +14,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -770,6 +771,41 @@ void main() {
 
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('typing...'), findsOneWidget);
+  });
+
+  testWidgets('direct chats show the peer online anywhere in the app', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..readMarkers = const [
+        ConversationReadMarker(userId: 'user-1', lastReadMessageId: null),
+        ConversationReadMarker(userId: 'user-2', lastReadMessageId: null),
+      ];
+    final online = StreamController<Set<String>>.broadcast();
+    addTearDown(online.close);
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        conversationType: ConversationType.direct,
+        onlineUserIds: online.stream,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Offline'), findsOneWidget);
+
+    online.add({'user-1', 'user-2'});
+    await tester.pump();
+    expect(find.text('Online'), findsOneWidget);
+
+    // Viewing this conversation is not what makes a direct peer online.
+    repository.emitActivity(
+      const ConversationActivity(onlineUserIds: {'user-2'}),
+    );
+    online.add({'user-1'});
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Offline'), findsOneWidget);
   });
 
   testWidgets('sends typing activity while composing and clears it on send', (
@@ -2743,10 +2779,14 @@ Widget _app(
   String? title = 'Ada Lovelace',
   ConversationType? conversationType,
   LinkLauncher? linkLauncher,
+  Stream<Set<String>>? onlineUserIds,
 }) {
   return ProviderScope(
     overrides: [
       chatsRepositoryProvider.overrideWithValue(repository),
+      onlineUserIdsProvider.overrideWith(
+        (ref) => onlineUserIds ?? const Stream<Set<String>>.empty(),
+      ),
       if (linkLauncher != null)
         linkLauncherProvider.overrideWithValue(linkLauncher),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
@@ -3199,6 +3239,11 @@ class FakeChatsRepository implements ChatsRepository {
 
   void emitMessageChange() {
     _messageChanges.add(null);
+  }
+
+  void emitActivity(ConversationActivity next) {
+    activity = next;
+    _activityChanges.add(next);
   }
 }
 

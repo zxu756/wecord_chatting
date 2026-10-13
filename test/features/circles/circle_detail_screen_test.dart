@@ -12,6 +12,7 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -381,7 +382,6 @@ void main() {
     await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
     await tester.pumpAndSettle();
 
-    expect(repository.presenceRequests, contains('circle-1'));
     expect(find.text('ONLINE — 4'), findsOneWidget);
     expect(find.text('OFFLINE — 2'), findsOneWidget);
 
@@ -1207,6 +1207,9 @@ Widget _app(
     overrides: [
       circlesRepositoryProvider.overrideWithValue(circlesRepository),
       contactsRepositoryProvider.overrideWithValue(contactsRepository),
+      onlineUserIdsProvider.overrideWith(
+        (ref) => Stream.value(circlesRepository.onlineUserIds),
+      ),
       circleCategoryCollapseStoreProvider.overrideWithValue(
         collapseStore ?? InMemoryCircleCategoryCollapseStore(),
       ),
@@ -1295,8 +1298,9 @@ class FakeCirclesRepository implements CirclesRepository {
   Completer<void>? reorderCompleter;
   Object? reorderError;
   var invitedMemberIds = <String>[];
+
+  /// Fed to [onlineUserIdsProvider] by [_app].
   var onlineUserIds = <String>{'user-1'};
-  final presenceRequests = <String>[];
   final nicknameUpdates = <({String userId, String? nickname})>[];
   CircleNotificationSettings? notificationSettings;
   final notificationUpdates = <CircleNotificationSettings>[];
@@ -1336,12 +1340,6 @@ class FakeCirclesRepository implements CirclesRepository {
     required String? nickname,
   }) async {
     nicknameUpdates.add((userId: userId, nickname: nickname));
-  }
-
-  @override
-  Stream<Set<String>> circlePresence(String circleId) {
-    presenceRequests.add(circleId);
-    return Stream<Set<String>>.value(onlineUserIds);
   }
 
   @override

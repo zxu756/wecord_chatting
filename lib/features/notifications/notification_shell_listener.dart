@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 
 class NotificationShellListener extends ConsumerStatefulWidget {
   const NotificationShellListener({required this.child, super.key});
@@ -46,7 +47,12 @@ class _NotificationShellListenerState
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // Stay on the app-wide presence channel while the shell is up, so
+    // others see the current user online on every screen.
+    ref.listen(onlineUserIdsProvider, (previous, next) {});
+    return widget.child;
+  }
 
   void _openConversation(String conversationId) {
     if (!mounted || conversationId.trim().isEmpty) {

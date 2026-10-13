@@ -1,3 +1,4 @@
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -10,6 +11,7 @@ class CircleSummary {
     this.avatarUrl,
     this.latestActivityAt,
     this.currentUserRole,
+    this.currentUserPermissions,
     this.unreadCount = 0,
     this.mentionCount = 0,
     this.isMuted = false,
@@ -24,6 +26,8 @@ class CircleSummary {
       channelCount: (json['channel_count'] as num?)?.toInt() ?? 0,
       latestActivityAt: _parseOptionalTimestamp(json['latest_activity_at']),
       currentUserRole: json['current_user_role'] as String?,
+      currentUserPermissions: (json['current_user_permissions'] as num?)
+          ?.toInt(),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       mentionCount: (json['mention_count'] as num?)?.toInt() ?? 0,
       isMuted: json['is_muted'] as bool? ?? false,
@@ -37,6 +41,10 @@ class CircleSummary {
   final int channelCount;
   final DateTime? latestActivityAt;
   final String? currentUserRole;
+
+  /// The current user's permission bits in the circle (see
+  /// [CirclePermission]), when the server sent them.
+  final int? currentUserPermissions;
 
   /// Unread messages across the circle's channels.
   final int unreadCount;
@@ -56,6 +64,8 @@ class CircleSummary {
       'channel_count': channelCount,
       'latest_activity_at': latestActivityAt?.toIso8601String(),
       'current_user_role': currentUserRole,
+      if (currentUserPermissions != null)
+        'current_user_permissions': currentUserPermissions,
       'unread_count': unreadCount,
       'mention_count': mentionCount,
       'is_muted': isMuted,
@@ -70,6 +80,7 @@ class CircleDetail {
     required this.channels,
     required this.posts,
     this.categories = const [],
+    this.roles = const [],
   });
 
   factory CircleDetail.fromJson(Map<String, dynamic> json) {
@@ -82,6 +93,8 @@ class CircleDetail {
         CircleChannelCategory.fromJson,
       ),
       posts: _parseList(json['posts'], CirclePost.fromJson),
+      roles: _parseList(json['roles'], CircleRole.fromJson)
+        ..sort((left, right) => right.position.compareTo(left.position)),
     );
   }
 
@@ -95,21 +108,142 @@ class CircleDetail {
   final List<CircleChannelCategory> categories;
   final List<CirclePost> posts;
 
-  bool get canManageCircle =>
-      circle.currentUserRole == 'owner' || circle.currentUserRole == 'admin';
+  /// Every role, highest first; `@everyone` is last.
+  final List<CircleRole> roles;
 
-  /// Everyone may rename themselves; owners and admins may rename others,
-  /// but only the owner may rename the owner.
+  bool get isOwner => circle.currentUserRole == 'owner';
+
+  /// The current user's permission bits. Payloads without them (older
+  /// servers, tests) fall back to what the legacy owner / admin / member
+  /// roles could do.
+  int get currentUserPermissions {
+    final permissions = circle.currentUserPermissions;
+    if (permissions != null) {
+      return permissions;
+    }
+    return switch (circle.currentUserRole) {
+      'owner' => CirclePermission.all,
+      'admin' =>
+        CirclePermission.all &
+            ~CirclePermission.maskOf(const [
+              CirclePermission.manageRoles,
+              CirclePermission.administrator,
+            ]),
+      'member' => CirclePermission.defaultRolePermissions,
+      _ => 0,
+    };
+  }
+
+  bool can(CirclePermission permission) {
+    return isOwner || permission.isGrantedBy(currentUserPermissions);
+  }
+
+  bool get canManageChannels => can(CirclePermission.manageChannels);
+
+  bool get canCreateInvites => can(CirclePermission.createInvites);
+
+  bool get canManageRoles => can(CirclePermission.manageRoles);
+
+  CircleMember? get currentMember {
+    for (final member in members) {
+      if (member.isCurrentUser) {
+        return member;
+      }
+    }
+    return null;
+  }
+
+  /// The assigned roles of [member], highest first (without `@everyone`).
+  List<CircleRole> rolesOf(CircleMember member) {
+    if (member.roleIds.isEmpty) {
+      return const [];
+    }
+    return [
+      for (final role in roles)
+        if (!role.isDefault && member.roleIds.contains(role.id)) role,
+    ];
+  }
+
+  /// Where [member] stands in the role hierarchy: the owner above everyone,
+  /// others at their highest role's position (0 with none).
+  int rankOf(CircleMember member) {
+    if (member.role == 'owner') {
+      return circleOwnerRank;
+    }
+    final memberRoles = rolesOf(member);
+    if (memberRoles.isNotEmpty) {
+      return memberRoles.first.position;
+    }
+    // Payloads without roles rank legacy admins above members.
+    return roles.isEmpty && member.role == 'admin' ? 1 : 0;
+  }
+
+  int get currentUserRank {
+    if (isOwner) {
+      return circleOwnerRank;
+    }
+    final member = currentMember;
+    if (member != null) {
+      return rankOf(member);
+    }
+    return roles.isEmpty && circle.currentUserRole == 'admin' ? 1 : 0;
+  }
+
+  /// The colour of [member]'s highest coloured role, as 0xRRGGBB.
+  int? roleColorOf(CircleMember member) {
+    for (final role in rolesOf(member)) {
+      if (role.color != null) {
+        return role.color;
+      }
+    }
+    return null;
+  }
+
+  /// [member]'s highest hoisted role, which groups them in the member list.
+  CircleRole? hoistedRoleOf(CircleMember member) {
+    for (final role in rolesOf(member)) {
+      if (role.hoist) {
+        return role;
+      }
+    }
+    return null;
+  }
+
+  /// Whether the current user may edit [role]: it must rank below them.
+  bool canManageRole(CircleRole role) {
+    return canManageRoles && role.position < currentUserRank;
+  }
+
+  /// Roles the current user may assign or remove.
+  List<CircleRole> get assignableRoles {
+    return [
+      for (final role in roles)
+        if (!role.isDefault && canManageRole(role)) role,
+    ];
+  }
+
+  /// Whether the current user may change [member]'s roles: only the owner
+  /// may change the owner's.
+  bool canManageRolesOf(CircleMember member) {
+    if (!canManageRoles || assignableRoles.isEmpty) {
+      return false;
+    }
+    return member.role != 'owner' || isOwner;
+  }
+
+  /// Everyone may rename themselves; renaming others needs manage
+  /// nicknames and a higher rank than theirs.
   bool canChangeNickname(CircleMember member) {
     if (member.isCurrentUser) {
       return true;
     }
-    if (!canManageCircle) {
-      return false;
-    }
-    return member.role != 'owner' || circle.currentUserRole == 'owner';
+    return can(CirclePermission.manageNicknames) &&
+        rankOf(member) < currentUserRank;
   }
 }
+
+/// The rank of a circle's owner, above every role.
+const circleOwnerRank = 0x7fffffff;
 
 class CircleMember {
   const CircleMember({
@@ -117,6 +251,7 @@ class CircleMember {
     required this.role,
     this.nickname,
     this.isCurrentUser = false,
+    this.roleIds = const [],
   });
 
   factory CircleMember.fromJson(Map<String, dynamic> json) {
@@ -125,6 +260,10 @@ class CircleMember {
       profile: Profile.fromJson(json['profile'] as Map<String, dynamic>),
       nickname: json['nickname'] as String?,
       isCurrentUser: json['is_current_user'] == true,
+      roleIds: [
+        for (final id in json['role_ids'] as List<dynamic>? ?? const [])
+          id as String,
+      ],
     );
   }
 
@@ -134,6 +273,9 @@ class CircleMember {
   /// This circle's nickname for the member, if they have one.
   final String? nickname;
   final bool isCurrentUser;
+
+  /// Assigned role ids, highest first (`@everyone` is implied).
+  final List<String> roleIds;
 
   /// The name shown inside the circle: nickname, then display name, then
   /// username.

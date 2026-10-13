@@ -699,7 +699,7 @@ void main() {
     expect(detail.circle.id, 'circle-1');
     expect(detail.members.single.profile.username, 'xu');
     expect(detail.channels.single.name, 'general');
-    expect(detail.canManageCircle, isTrue);
+    expect(detail.canManageChannels, isTrue);
   });
 
   test('CirclePost parses nested author comments and image metadata', () {

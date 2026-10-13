@@ -464,6 +464,8 @@ void main() {
       Future<void> fromMenu(String label) async {
         await tester.tap(find.byTooltip('Circle menu'));
         await settle(tester);
+        await tester.ensureVisible(find.text(label));
+        await settle(tester);
         await tester.tap(find.text(label));
         await settle(tester);
       }
@@ -505,6 +507,9 @@ void main() {
 
       await tester.tap(find.byTooltip('Circle menu'));
       await settle(tester);
+      // The menu scrolls on short screens.
+      await tester.ensureVisible(find.text('Change my nickname'));
+      await settle(tester);
       await tester.tap(find.text('Change my nickname'));
       await settle(tester);
       expectFullyVisible(tester, find.widgetWithText(TextField, 'Nickname'));
@@ -515,6 +520,35 @@ void main() {
       await tester.tap(find.byTooltip('Category options').first);
       await settle(tester);
       expect(find.text('Rename category'), findsOneWidget);
+    });
+
+    phoneTestWidgets('roles page and role editor', (tester, viewport) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await settle(tester);
+      await tester.ensureVisible(find.text('Roles'));
+      await settle(tester);
+      await tester.tap(find.text('Roles'));
+      await settle(tester);
+      expect(find.text('Moderators of the Valley'), findsOneWidget);
+      expect(find.text('@everyone'), findsOneWidget);
+      expectTouchTargets(tester, iconButtonWithTooltip('Create role'));
+
+      await tester.tap(find.byTooltip('Create role'));
+      await settle(tester);
+      await showKeyboard(tester, viewport);
+      expectFullyVisible(tester, find.widgetWithText(TextField, 'Role name'));
+      await popTopRoute(tester);
+
+      await tester.tap(find.text('Trip Leaders'));
+      await settle(tester);
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await tester.ensureVisible(save);
+      await settle(tester);
+      expectFullyVisible(tester, save);
+      expectFullyVisible(tester, find.text('Delete role'));
     });
 
     phoneTestWidgets('create circle sheet', (tester, viewport) async {
@@ -569,6 +603,11 @@ void main() {
       await settle(tester);
       expect(find.text('View profile'), findsOneWidget);
       expect(find.text('Change nickname'), findsOneWidget);
+
+      await tester.tap(find.text('Manage roles'));
+      await settle(tester);
+      expect(find.text('Moderators of the Valley'), findsOneWidget);
+      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Save'));
     });
 
     phoneTestWidgets('circle channel composer stays above the keyboard', (

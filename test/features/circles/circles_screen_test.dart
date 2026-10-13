@@ -501,6 +501,40 @@ class FakeCirclesRepository implements CirclesRepository {
       <({String circleId, Duration? expiresIn, int? maxUses})>[];
 
   @override
+  Future<String> createRole({
+    required String circleId,
+    required String name,
+    int? color,
+    int permissions = 0,
+    bool hoist = false,
+  }) async => 'role-new';
+
+  @override
+  Future<void> updateRole({
+    required String roleId,
+    required String name,
+    int? color,
+    required int permissions,
+    bool hoist = false,
+  }) async {}
+
+  @override
+  Future<void> deleteRole(String roleId) async {}
+
+  @override
+  Future<void> reorderRoles({
+    required String circleId,
+    required List<String> roleIds,
+  }) async {}
+
+  @override
+  Future<void> setMemberRoles({
+    required String circleId,
+    required String userId,
+    required List<String> roleIds,
+  }) async {}
+
+  @override
   Future<CircleNotificationSettings> getNotificationSettings(
     String circleId,
   ) async => CircleNotificationSettings(circleId: circleId);

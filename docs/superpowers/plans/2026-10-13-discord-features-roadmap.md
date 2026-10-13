@@ -84,7 +84,7 @@
 
 ## 第四批：权限与管理
 
-- [ ] **16. 自定义角色**（M–L）
+- [x] **16. 自定义角色**（M–L）
   - 表 `circle_roles (id, circle_id, name, color int, position, permissions bigint, hoist bool, is_default bool)`、`circle_member_roles (circle_id, user_id, role_id)`。创建圈子时自动建 `@everyone` 默认角色；owner 拥有全部权限。
   - 权限位：`view_channel`、`send_messages`、`manage_messages`、`manage_channels`、`manage_roles`、`kick_members`、`create_invites`、`manage_nicknames`、`mention_everyone`、`manage_events`、`manage_emojis`、`manage_webhooks`、`view_audit_log`、`connect_voice`、`administrator`。
   - SQL 辅助函数 `circle_member_permissions(circle_id, user_id)` 和 `circle_member_has_permission(circle_id, user_id, permission)`；之前所有 owner / admin 判断改为调用它（新 migration 里 `create or replace`）。现有 admin 迁移为一个带管理权限的「管理员」角色。

@@ -84,6 +84,39 @@ abstract interface class CirclesRepository {
     required String? nickname,
   });
 
+  /// Creates a role just above `@everyone` and returns its id. [color] is
+  /// 0xRRGGBB or null; [permissions] are `CirclePermission` bits.
+  Future<String> createRole({
+    required String circleId,
+    required String name,
+    int? color,
+    int permissions = 0,
+    bool hoist = false,
+  });
+
+  Future<void> updateRole({
+    required String roleId,
+    required String name,
+    int? color,
+    required int permissions,
+    bool hoist = false,
+  });
+
+  Future<void> deleteRole(String roleId);
+
+  /// Stores the order of every role except `@everyone`, highest first.
+  Future<void> reorderRoles({
+    required String circleId,
+    required List<String> roleIds,
+  });
+
+  /// Replaces the roles assigned to [userId] (without `@everyone`).
+  Future<void> setMemberRoles({
+    required String circleId,
+    required String userId,
+    required List<String> roleIds,
+  });
+
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
 
@@ -297,6 +330,70 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_circle_id': circleId,
       'target_user_id': userId,
       'nickname': trimmed == null || trimmed.isEmpty ? null : trimmed,
+    });
+  }
+
+  @override
+  Future<String> createRole({
+    required String circleId,
+    required String name,
+    int? color,
+    int permissions = 0,
+    bool hoist = false,
+  }) async {
+    final roleId = await _dataSource.rpc('create_circle_role', {
+      'target_circle_id': circleId,
+      'role_name': name.trim(),
+      'role_color': color,
+      'role_permissions': permissions,
+      'role_hoist': hoist,
+    });
+    return roleId as String;
+  }
+
+  @override
+  Future<void> updateRole({
+    required String roleId,
+    required String name,
+    int? color,
+    required int permissions,
+    bool hoist = false,
+  }) async {
+    await _dataSource.rpc('update_circle_role', {
+      'target_role_id': roleId,
+      'role_name': name.trim(),
+      'role_color': color,
+      'role_permissions': permissions,
+      'role_hoist': hoist,
+    });
+  }
+
+  @override
+  Future<void> deleteRole(String roleId) async {
+    await _dataSource.rpc('delete_circle_role', {'target_role_id': roleId});
+  }
+
+  @override
+  Future<void> reorderRoles({
+    required String circleId,
+    required List<String> roleIds,
+  }) async {
+    await _dataSource.rpc('reorder_circle_roles', {
+      'target_circle_id': circleId,
+      'role_ids': roleIds,
+    });
+  }
+
+  @override
+  Future<void> setMemberRoles({
+    required String circleId,
+    required String userId,
+    required List<String> roleIds,
+  }) async {
+    await _dataSource.rpc('set_member_roles', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'role_ids': roleIds,
     });
   }
 
@@ -560,6 +657,28 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
+              table: 'circle_roles',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'circle_member_roles',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
               table: 'circle_posts',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
@@ -699,6 +818,50 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<String> acceptInvite(String code) {
     throw StateError('Supabase must be initialized before joining circles.');
+  }
+
+  @override
+  Future<String> createRole({
+    required String circleId,
+    required String name,
+    int? color,
+    int permissions = 0,
+    bool hoist = false,
+  }) {
+    throw StateError('Supabase must be initialized before creating roles.');
+  }
+
+  @override
+  Future<void> updateRole({
+    required String roleId,
+    required String name,
+    int? color,
+    required int permissions,
+    bool hoist = false,
+  }) {
+    throw StateError('Supabase must be initialized before editing roles.');
+  }
+
+  @override
+  Future<void> deleteRole(String roleId) {
+    throw StateError('Supabase must be initialized before deleting roles.');
+  }
+
+  @override
+  Future<void> reorderRoles({
+    required String circleId,
+    required List<String> roleIds,
+  }) {
+    throw StateError('Supabase must be initialized before reordering roles.');
+  }
+
+  @override
+  Future<void> setMemberRoles({
+    required String circleId,
+    required String userId,
+    required List<String> roleIds,
+  }) {
+    throw StateError('Supabase must be initialized before assigning roles.');
   }
 
   @override

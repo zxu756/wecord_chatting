@@ -1835,14 +1835,18 @@ _MessageSender _senderFor(
         ? profile!.username
         : 'Unknown member',
     avatarUrl: profile?.avatarUrl,
+    roleColor: message.senderRoleColor,
   );
 }
 
 class _MessageSender {
-  const _MessageSender({required this.name, this.avatarUrl});
+  const _MessageSender({required this.name, this.avatarUrl, this.roleColor});
 
   final String name;
   final String? avatarUrl;
+
+  /// The sender's highest coloured circle role, as 0xRRGGBB.
+  final int? roleColor;
 }
 
 class _NewMessagesDivider extends StatelessWidget {
@@ -1996,7 +2000,10 @@ class _MessageBubble extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurface,
+                color: switch (sender.roleColor) {
+                  final color? => Color(0xFF000000 | color),
+                  null => colorScheme.onSurface,
+                },
                 fontWeight: FontWeight.w700,
               ),
             ),

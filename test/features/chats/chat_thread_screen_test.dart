@@ -482,7 +482,7 @@ void main() {
       expect(find.text('Grace Hopper'), findsNWidgets(5));
     });
 
-    testWidgets('channel threads prefer circle nicknames for senders', (
+    testWidgets('channel threads prefer circle nicknames and role colors', (
       tester,
     ) async {
       final repository = FakeChatsRepository()
@@ -500,7 +500,7 @@ void main() {
             sender: grace,
             body: 'From the message nickname',
             createdAt: DateTime.utc(2026, 5, 18, 10, 0),
-          ).copyWith(senderNickname: 'Admiral'),
+          ).copyWith(senderNickname: 'Admiral', senderRoleColor: 0xE91E63),
           _message(
             id: 'message-2',
             senderId: 'user-3',
@@ -519,6 +519,15 @@ void main() {
       expect(find.text('Grace Hopper'), findsNothing);
       expect(find.text('Prof'), findsOneWidget);
       expect(find.text('Alan Turing'), findsNothing);
+      // Names take the sender's highest coloured circle role.
+      expect(
+        tester.widget<Text>(find.text('Admiral')).style?.color,
+        const Color(0xFFE91E63),
+      );
+      expect(
+        tester.widget<Text>(find.text('Prof')).style?.color,
+        isNot(const Color(0xFFE91E63)),
+      );
     });
 
     testWidgets('channel mention candidates show and match nicknames', (

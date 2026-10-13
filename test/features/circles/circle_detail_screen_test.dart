@@ -18,6 +18,7 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -584,6 +585,340 @@ void main() {
     expect(top('Amy'), lessThan(top('🎯 Focusing')));
     expect(find.text('Gone'), findsNothing);
   });
+  group('circle roles', () {
+    const everyone = CircleRole(
+      id: 'role-everyone',
+      name: '@everyone',
+      position: 0,
+      permissions: 1 | 2 | 64 | 8192,
+      isDefault: true,
+      memberCount: 5,
+    );
+    const mods = CircleRole(
+      id: 'role-mods',
+      name: 'Mods',
+      position: 3,
+      color: 0x3498DB,
+      hoist: true,
+      permissions: 4 | 16 | 32 | 128,
+      memberCount: 1,
+    );
+    const crew = CircleRole(
+      id: 'role-crew',
+      name: 'Crew',
+      position: 2,
+      color: 0xE91E63,
+      hoist: true,
+      permissions: 16,
+      memberCount: 1,
+    );
+    const helpers = CircleRole(
+      id: 'role-helpers',
+      name: 'Helpers',
+      position: 1,
+      color: 0x2ECC71,
+      permissions: 0,
+      memberCount: 2,
+    );
+
+    Future<FakeCirclesRepository> pumpRoles(
+      WidgetTester tester, {
+      required String currentUserId,
+      required int permissions,
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final base = _detail();
+      CircleMember member(
+        String id,
+        String name,
+        String role, [
+        List<String> roleIds = const [],
+      ]) {
+        return CircleMember(
+          profile: _profile(id: id, username: name.toLowerCase(), name: name),
+          role: role,
+          roleIds: roleIds,
+          isCurrentUser: id == currentUserId,
+        );
+      }
+
+      final repository = FakeCirclesRepository()
+        ..onlineUserIds = {'user-1', 'user-2', 'user-3', 'user-4'}
+        ..detail = CircleDetail(
+          circle: CircleSummary(
+            id: 'circle-1',
+            name: 'Close Friends',
+            memberCount: 5,
+            channelCount: 1,
+            currentUserRole: currentUserId == 'user-1' ? 'owner' : 'member',
+            currentUserPermissions: permissions,
+          ),
+          roles: const [mods, crew, helpers, everyone],
+          members: [
+            member('user-1', 'Xu', 'owner'),
+            member('user-2', 'Yan', 'admin', ['role-mods']),
+            member('user-3', 'Amy', 'member', ['role-crew', 'role-helpers']),
+            member('user-4', 'Bo', 'member', ['role-helpers']),
+            member('user-5', 'Cy', 'member'),
+          ],
+          channels: base.channels,
+          posts: const [],
+        );
+      repository.circles = [repository.detail.circle];
+      final router = GoRouter(
+        initialLocation: '/circles/circle-1',
+        routes: [
+          GoRoute(
+            path: '/circles/:circleId',
+            builder: (context, state) => CircleDetailScreen(
+              circleId: state.pathParameters['circleId']!,
+              channelViewBuilder: (context, channel, actions) => Scaffold(
+                appBar: AppBar(title: Text(channel.name), actions: actions),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    Future<void> openRolesPage(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Roles'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('member list groups online members by hoisted role', (
+      tester,
+    ) async {
+      await pumpRoles(tester, currentUserId: 'user-1', permissions: 32767);
+
+      double y(String text) => tester.getTopLeft(find.text(text).last).dy;
+      expect(find.text('MODS — 1'), findsOneWidget);
+      expect(find.text('CREW — 1'), findsOneWidget);
+      expect(find.text('ONLINE — 2'), findsOneWidget);
+      expect(find.text('OFFLINE — 1'), findsOneWidget);
+      // Helpers is not hoisted, so Bo stays under Online.
+      expect(find.textContaining('HELPERS'), findsNothing);
+      expect(y('MODS — 1'), lessThan(y('Yan')));
+      expect(y('Yan'), lessThan(y('CREW — 1')));
+      expect(y('CREW — 1'), lessThan(y('Amy')));
+      expect(y('Amy'), lessThan(y('ONLINE — 2')));
+      expect(y('ONLINE — 2'), lessThan(y('Xu')));
+      expect(y('Xu'), lessThan(y('Bo')));
+      expect(y('Bo'), lessThan(y('OFFLINE — 1')));
+
+      // Names take the highest coloured role's colour.
+      Color? colorOf(String name) =>
+          tester.widget<Text>(find.text(name).last).style?.color;
+      expect(colorOf('Yan'), const Color(0xFF3498DB));
+      expect(colorOf('Amy'), const Color(0xFFE91E63));
+      expect(colorOf('Bo'), const Color(0xFF2ECC71));
+      expect(colorOf('Cy'), isNull);
+    });
+
+    testWidgets('the owner creates, edits and deletes roles', (tester) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-1',
+        permissions: 32767,
+      );
+      await openRolesPage(tester);
+
+      expect(find.text('Mods'), findsOneWidget);
+      expect(find.text('@everyone'), findsOneWidget);
+      expect(find.text('Every member'), findsOneWidget);
+      expect(find.text('2 members'), findsOneWidget);
+      expect(find.byIcon(Icons.drag_handle), findsNWidgets(3));
+      double y(String text) => tester.getTopLeft(find.text(text)).dy;
+      expect(y('Mods'), lessThan(y('Crew')));
+      expect(y('Crew'), lessThan(y('Helpers')));
+      expect(y('Helpers'), lessThan(y('@everyone')));
+
+      await tester.tap(find.byTooltip('Create role'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Role name'),
+        'Artists',
+      );
+      await tester.tap(find.byTooltip('#E67E22'));
+      await tester.tap(find.text('Show separately'));
+      final manageMessages = find.byKey(
+        const ValueKey('role-permission-manage_messages'),
+      );
+      // The focused name field would scroll itself back into view.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(manageMessages);
+      await tester.pumpAndSettle();
+      await tester.tap(manageMessages);
+      await tester.pumpAndSettle();
+      final create = find.widgetWithText(FilledButton, 'Create');
+      await tester.ensureVisible(create);
+      await tester.pumpAndSettle();
+      await tester.tap(create);
+      await tester.pumpAndSettle();
+      expect(repository.roleCalls, ['create Artists 15105570 4 true']);
+
+      await tester.tap(find.text('Helpers'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit role'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Role name'),
+        'Helpers 2',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(
+        repository.roleCalls.last,
+        'update role-helpers Helpers 2 3066993 0 false',
+      );
+
+      await tester.tap(find.text('Crew'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Delete role'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete role'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(repository.roleCalls.last, 'delete role-crew');
+
+      // @everyone only offers its permissions.
+      await tester.tap(find.text('@everyone'));
+      await tester.pumpAndSettle();
+      expect(find.text('Every member has these permissions.'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Role name'), findsNothing);
+      expect(find.text('Show separately'), findsNothing);
+    });
+
+    testWidgets('roles at or above the user stay locked', (tester) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-3',
+        // @everyone plus manage_roles from Crew.
+        permissions: 1 | 2 | 64 | 8192 | 16,
+      );
+      await openRolesPage(tester);
+
+      // Only Helpers (below Crew) can move; Mods and Crew are locked.
+      expect(find.byIcon(Icons.drag_handle), findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline), findsNWidgets(2));
+
+      await tester.tap(find.text('Mods'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('This role ranks at or above your highest role.'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Helpers'));
+      await tester.pumpAndSettle();
+      // Permissions the user lacks cannot be granted.
+      SwitchListTile permissionSwitch(String key) =>
+          tester.widget(find.byKey(ValueKey('role-permission-$key')));
+      expect(permissionSwitch('manage_roles').onChanged, isNotNull);
+      expect(permissionSwitch('kick_members').onChanged, isNull);
+      expect(repository.roleCalls, isEmpty);
+    });
+
+    testWidgets('reordering keeps locked roles in place', (tester) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-1',
+        permissions: 32767,
+      );
+      await openRolesPage(tester);
+
+      // Drag Helpers above Crew.
+      final handle = find.descendant(
+        of: find.byKey(const ValueKey('circle-role-role-helpers')),
+        matching: find.byIcon(Icons.drag_handle),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var step = 0; step < 4; step++) {
+        await gesture.moveBy(const Offset(0, -25));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(repository.roleCalls, [
+        'reorder role-mods,role-helpers,role-crew',
+      ]);
+    });
+
+    testWidgets("managing a member's roles from the member list", (
+      tester,
+    ) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-3',
+        permissions: 1 | 2 | 64 | 8192 | 16,
+      );
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change nickname'), findsNothing);
+      await tester.tap(find.text('Manage roles'));
+      await tester.pumpAndSettle();
+
+      CheckboxListTile box(String id) =>
+          tester.widget(find.byKey(ValueKey('member-role-$id')));
+      expect(box('role-mods').onChanged, isNull);
+      expect(box('role-crew').onChanged, isNull);
+      expect(box('role-helpers').value, isTrue);
+      await tester.tap(find.byKey(const ValueKey('member-role-role-helpers')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      expect(repository.roleCalls, ['assign user-4 ']);
+
+      // The owner's roles are off limits.
+      await tester.longPress(find.text('Xu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Manage roles'), findsNothing);
+    });
+
+    testWidgets('plain members get no role management', (tester) async {
+      await pumpRoles(
+        tester,
+        currentUserId: 'user-5',
+        permissions: 1 | 2 | 64 | 8192,
+      );
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Roles'), findsNothing);
+      await tester.tapAt(const Offset(1000, 800));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      expect(find.text('View profile'), findsOneWidget);
+      expect(find.text('Manage roles'), findsNothing);
+    });
+  });
+
   group('circle nicknames', () {
     Future<FakeCirclesRepository> pumpWorkspace(
       WidgetTester tester, {
@@ -738,8 +1073,11 @@ void main() {
 
       await tester.tap(find.byTooltip('Circle menu'));
       await tester.pumpAndSettle();
-      // Plain members only get the nickname entry.
-      expect(find.text('Invite friends'), findsNothing);
+      // Plain members can invite (an @everyone permission) and rename
+      // themselves, but not manage channels or roles.
+      expect(find.text('Invite friends'), findsOneWidget);
+      expect(find.text('Create channel'), findsNothing);
+      expect(find.text('Roles'), findsNothing);
       await tester.tap(find.text('Change my nickname'));
       await tester.pumpAndSettle();
 
@@ -1485,12 +1823,58 @@ class FakeCirclesRepository implements CirclesRepository {
   Completer<void>? reorderCompleter;
   Object? reorderError;
   var invitedMemberIds = <String>[];
+  final roleCalls = <String>[];
 
   /// Fed to [onlineUserIdsProvider] by [_app].
   var onlineUserIds = <String>{'user-1'};
   final nicknameUpdates = <({String userId, String? nickname})>[];
   CircleNotificationSettings? notificationSettings;
   final notificationUpdates = <CircleNotificationSettings>[];
+
+  @override
+  Future<String> createRole({
+    required String circleId,
+    required String name,
+    int? color,
+    int permissions = 0,
+    bool hoist = false,
+  }) async {
+    roleCalls.add('create $name $color $permissions $hoist');
+    return 'role-new';
+  }
+
+  @override
+  Future<void> updateRole({
+    required String roleId,
+    required String name,
+    int? color,
+    required int permissions,
+    bool hoist = false,
+  }) async {
+    roleCalls.add('update $roleId $name $color $permissions $hoist');
+  }
+
+  @override
+  Future<void> deleteRole(String roleId) async {
+    roleCalls.add('delete $roleId');
+  }
+
+  @override
+  Future<void> reorderRoles({
+    required String circleId,
+    required List<String> roleIds,
+  }) async {
+    roleCalls.add('reorder ${roleIds.join(',')}');
+  }
+
+  @override
+  Future<void> setMemberRoles({
+    required String circleId,
+    required String userId,
+    required List<String> roleIds,
+  }) async {
+    roleCalls.add('assign $userId ${roleIds.join(',')}');
+  }
 
   @override
   Future<CircleNotificationSettings> getNotificationSettings(

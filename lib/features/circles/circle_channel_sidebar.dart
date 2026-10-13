@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
+import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -15,8 +16,8 @@ const maxCircleCategoryNameLength = 32;
 /// The circle's channel list: header menu, Feed entry, uncategorized
 /// channels, then each category. Categories collapse independently (kept per
 /// device); a collapsed category still lists the selected channel and
-/// channels with unread messages. Owners and admins can drag channels and
-/// categories into a new order and manage categories.
+/// channels with unread messages. Members who can manage channels can drag
+/// channels and categories into a new order and manage categories.
 class CircleChannelSidebar extends ConsumerStatefulWidget {
   const CircleChannelSidebar({
     required this.detail,
@@ -346,7 +347,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final detail = widget.detail;
-    final canManage = detail.canManageCircle;
+    final canManage = detail.canManageChannels;
     final conversations =
         ref.watch(conversationsProvider).valueOrNull ??
         const <ConversationSummary>[];
@@ -652,14 +653,8 @@ class _SidebarHeader extends StatelessWidget {
         context,
       ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
     );
-    CircleMember? currentMember;
-    for (final member in detail.members) {
-      if (member.isCurrentUser) {
-        currentMember = member;
-        break;
-      }
-    }
-    final canManage = detail.canManageCircle;
+    final currentMember = detail.currentMember;
+    final canManageChannels = detail.canManageChannels;
 
     return SizedBox(
       height: kToolbarHeight,
@@ -674,6 +669,8 @@ class _SidebarHeader extends StatelessWidget {
               onCreateChannel();
             case _CircleMenuAction.createCategory:
               onCreateCategory();
+            case _CircleMenuAction.roles:
+              openCircleRolesScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
               onChangeNickname(currentMember!);
             case _CircleMenuAction.notificationSettings:
@@ -685,14 +682,15 @@ class _SidebarHeader extends StatelessWidget {
           }
         },
         itemBuilder: (context) => [
-          if (canManage) ...const [
-            PopupMenuItem(
+          if (detail.canCreateInvites)
+            const PopupMenuItem(
               value: _CircleMenuAction.invite,
               child: ListTile(
                 leading: Icon(Icons.person_add_alt_1_outlined),
                 title: Text('Invite friends'),
               ),
             ),
+          if (canManageChannels) ...const [
             PopupMenuItem(
               value: _CircleMenuAction.createChannel,
               child: ListTile(
@@ -708,6 +706,14 @@ class _SidebarHeader extends StatelessWidget {
               ),
             ),
           ],
+          if (detail.canManageRoles)
+            const PopupMenuItem(
+              value: _CircleMenuAction.roles,
+              child: ListTile(
+                leading: Icon(Icons.shield_outlined),
+                title: Text('Roles'),
+              ),
+            ),
           const PopupMenuItem(
             value: _CircleMenuAction.notificationSettings,
             child: ListTile(
@@ -742,6 +748,7 @@ enum _CircleMenuAction {
   invite,
   createChannel,
   createCategory,
+  roles,
   notificationSettings,
   changeNickname,
 }

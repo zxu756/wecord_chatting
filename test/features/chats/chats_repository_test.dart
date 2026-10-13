@@ -1029,6 +1029,7 @@ void main() {
             ],
           },
           'sender_nickname': 'Admiral',
+          'sender_role_color': 3447003,
         },
         {
           'id': 'message-2',
@@ -1050,6 +1051,7 @@ void main() {
     expect(messages.first.sender?.displayLabel, 'Amazing Grace');
     expect(messages.first.sender?.avatarUrl, 'user-2/avatar.png');
     expect(messages.first.senderNickname, 'Admiral');
+    expect(messages.first.senderRoleColor, 3447003);
     expect(messages.last.sender, isNull);
     expect(messages.last.senderNickname, isNull);
   });

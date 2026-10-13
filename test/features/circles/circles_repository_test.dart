@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -180,6 +181,125 @@ void main() {
     expect(dataSource.calls.last.params['nickname'], isNull);
   });
 
+  test('role methods call the role RPCs', () async {
+    final dataSource = FakeCirclesDataSource()..rpcValue = 'role-1';
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final roleId = await repository.createRole(
+      circleId: 'circle-1',
+      name: '  Mods ',
+      color: 0x3498DB,
+      permissions: 4 | 16,
+      hoist: true,
+    );
+    await repository.updateRole(
+      roleId: 'role-1',
+      name: 'Moderators',
+      permissions: 4,
+    );
+    await repository.deleteRole('role-1');
+    await repository.reorderRoles(
+      circleId: 'circle-1',
+      roleIds: ['role-2', 'role-1'],
+    );
+    await repository.setMemberRoles(
+      circleId: 'circle-1',
+      userId: 'u2',
+      roleIds: ['role-2'],
+    );
+
+    expect(roleId, 'role-1');
+    expect(dataSource.calls.map((call) => call.functionName), [
+      'create_circle_role',
+      'update_circle_role',
+      'delete_circle_role',
+      'reorder_circle_roles',
+      'set_member_roles',
+    ]);
+    expect(dataSource.calls[0].params, {
+      'target_circle_id': 'circle-1',
+      'role_name': 'Mods',
+      'role_color': 0x3498DB,
+      'role_permissions': 20,
+      'role_hoist': true,
+    });
+    expect(dataSource.calls[1].params, {
+      'target_role_id': 'role-1',
+      'role_name': 'Moderators',
+      'role_color': null,
+      'role_permissions': 4,
+      'role_hoist': false,
+    });
+    expect(dataSource.calls[2].params, {'target_role_id': 'role-1'});
+    expect(dataSource.calls[3].params, {
+      'target_circle_id': 'circle-1',
+      'role_ids': ['role-2', 'role-1'],
+    });
+    expect(dataSource.calls[4].params, {
+      'target_circle_id': 'circle-1',
+      'target_user_id': 'u2',
+      'role_ids': ['role-2'],
+    });
+  });
+
+  test('getCircleDetail maps roles and permissions', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = {
+        'circle': {
+          'id': 'circle-1',
+          'name': 'Circle',
+          'current_user_role': 'member',
+          'current_user_permissions': 1 | 2 | 16,
+        },
+        'roles': [
+          {
+            'id': 'everyone',
+            'name': '@everyone',
+            'color': null,
+            'position': 0,
+            'permissions': 3,
+            'hoist': false,
+            'is_default': true,
+            'member_count': 2,
+          },
+          {
+            'id': 'mods',
+            'name': 'Mods',
+            'color': 3447003,
+            'position': 1,
+            'permissions': 16,
+            'hoist': true,
+            'is_default': false,
+            'member_count': 1,
+          },
+        ],
+        'members': [
+          {
+            'role': 'admin',
+            'is_current_user': true,
+            'role_ids': ['mods'],
+            'profile': _profileRow(id: 'u1', name: 'One'),
+          },
+        ],
+        'channels': const [],
+        'posts': const [],
+      };
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final detail = await repository.getCircleDetail('circle-1');
+
+    expect(detail.circle.currentUserPermissions, 19);
+    expect([for (final role in detail.roles) role.name], ['Mods', '@everyone']);
+    expect(detail.roles.first.color, 3447003);
+    expect(detail.roles.first.hoist, isTrue);
+    expect(detail.roles.last.isDefault, isTrue);
+    expect(detail.roles.last.memberCount, 2);
+    expect(detail.members.single.roleIds, ['mods']);
+    expect(detail.canManageRoles, isTrue);
+    expect(detail.currentUserRank, 1);
+    expect(detail.assignableRoles, isEmpty);
+  });
+
   test('getNotificationSettings maps the settings payload', () async {
     final dataSource = FakeCirclesDataSource()
       ..rpcValue = {
@@ -296,12 +416,108 @@ void main() {
     final other = member('other', 'member');
     final me = member('me', 'member', self: true);
 
+    // Payloads without roles fall back to the legacy owner / admin ranks.
     expect(detail('member').canChangeNickname(me), isTrue);
     expect(detail('member').canChangeNickname(other), isFalse);
     expect(detail('admin').canChangeNickname(other), isTrue);
-    expect(detail('admin').canChangeNickname(admin), isTrue);
+    expect(detail('admin').canChangeNickname(admin), isFalse);
     expect(detail('admin').canChangeNickname(owner), isFalse);
-    expect(detail('owner').canChangeNickname(owner), isTrue);
+    expect(
+      detail('owner').canChangeNickname(member('owner', 'owner', self: true)),
+      isTrue,
+    );
+    expect(detail('owner').canChangeNickname(admin), isTrue);
+  });
+
+  test('CircleDetail applies role permissions and hierarchy', () {
+    const everyone = CircleRole(
+      id: 'everyone',
+      name: '@everyone',
+      position: 0,
+      permissions: 1 | 2 | 64 | 8192,
+      isDefault: true,
+    );
+    const mod = CircleRole(
+      id: 'mod',
+      name: 'Mod',
+      position: 2,
+      color: 0x3498DB,
+      hoist: true,
+      permissions: 16 | 128,
+    );
+    const helper = CircleRole(
+      id: 'helper',
+      name: 'Helper',
+      position: 1,
+      color: 0x2ECC71,
+      permissions: 2,
+    );
+    CircleMember member(String id, List<String> roleIds, {bool self = false}) {
+      return CircleMember(
+        profile: Profile.fromJson(_profileRow(id: id, name: id)),
+        role: id == 'owner' ? 'owner' : 'member',
+        roleIds: roleIds,
+        isCurrentUser: self,
+      );
+    }
+
+    final me = member('me', ['mod'], self: true);
+    final peer = member('peer', ['mod']);
+    final helped = member('helped', ['helper']);
+    final owner = member('owner', const []);
+    final detail = CircleDetail.fromJson({
+      'circle': {
+        'id': 'circle-1',
+        'name': 'Circle',
+        'current_user_role': 'member',
+        'current_user_permissions': 1 | 2 | 64 | 8192 | 16 | 128,
+      },
+      'roles': [
+        for (final role in [everyone, helper, mod])
+          {
+            'id': role.id,
+            'name': role.name,
+            'color': role.color,
+            'position': role.position,
+            'permissions': role.permissions,
+            'hoist': role.hoist,
+            'is_default': role.isDefault,
+          },
+      ],
+      'members': const [],
+      'channels': const [],
+      'posts': const [],
+    });
+    final withMembers = CircleDetail(
+      circle: detail.circle,
+      roles: detail.roles,
+      members: [me, peer, helped, owner],
+      channels: const [],
+      posts: const [],
+    );
+
+    expect(
+      [for (final role in detail.roles) role.id],
+      ['mod', 'helper', 'everyone'],
+    );
+    expect(withMembers.canManageRoles, isTrue);
+    expect(withMembers.canManageChannels, isFalse);
+    expect(withMembers.canCreateInvites, isTrue);
+    expect(withMembers.currentUserRank, 2);
+    expect(withMembers.rankOf(owner), circleOwnerRank);
+    expect(
+      [for (final role in withMembers.assignableRoles) role.id],
+      ['helper'],
+    );
+    expect(withMembers.canManageRolesOf(helped), isTrue);
+    expect(withMembers.canManageRolesOf(owner), isFalse);
+    expect(withMembers.canChangeNickname(helped), isTrue);
+    expect(withMembers.canChangeNickname(peer), isFalse);
+    expect(withMembers.canChangeNickname(owner), isFalse);
+    expect(withMembers.roleColorOf(helped), 0x2ECC71);
+    expect(withMembers.hoistedRoleOf(peer)?.id, 'mod');
+    expect(withMembers.hoistedRoleOf(helped), isNull);
+    expect(CirclePermission.kickMembers.isGrantedBy(16384), isTrue);
   });
 
   test('createCircle trims name and calls create_circle rpc', () async {

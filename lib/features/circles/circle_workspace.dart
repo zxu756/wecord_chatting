@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -384,8 +385,10 @@ void showCircleChannelCreationSheet(
   );
 }
 
-/// Circle members split into online and offline groups, with presence dots
-/// and a menu to view profiles or change nicknames.
+/// Circle members split into groups: online members under their highest
+/// hoisted role (highest role first), the remaining online members, then
+/// everyone offline. Names take their highest coloured role's colour; a
+/// menu views profiles, changes nicknames and manages roles.
 class CircleMemberList extends StatelessWidget {
   const CircleMemberList({
     required this.detail,
@@ -406,19 +409,38 @@ class CircleMemberList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hoisted = <String, List<CircleMember>>{};
     final online = <CircleMember>[];
     final offline = <CircleMember>[];
     for (final member in detail.members) {
-      (onlineUserIds.contains(member.profile.id) ? online : offline).add(
-        member,
-      );
+      if (!onlineUserIds.contains(member.profile.id)) {
+        offline.add(member);
+        continue;
+      }
+      final role = detail.hoistedRoleOf(member);
+      if (role == null) {
+        online.add(member);
+      } else {
+        hoisted.putIfAbsent(role.id, () => []).add(member);
+      }
     }
-    online.sort((left, right) {
-      final byRole = _roleRank(left.role).compareTo(_roleRank(right.role));
-      return byRole != 0 ? byRole : _compareNames(left, right);
-    });
+    int byRank(CircleMember left, CircleMember right) {
+      final rank = detail.rankOf(right).compareTo(detail.rankOf(left));
+      return rank != 0 ? rank : _compareNames(left, right);
+    }
+
+    for (final members in hoisted.values) {
+      members.sort(byRank);
+    }
+    online.sort(byRank);
     offline.sort(_compareNames);
     final theme = Theme.of(context);
+    final groups = [
+      for (final role in detail.roles)
+        if (hoisted[role.id] case final members?) (role.name, members, true),
+      ('Online', online, true),
+      ('Offline', offline, false),
+    ];
 
     return Material(
       color: theme.colorScheme.surfaceContainerLow,
@@ -427,15 +449,14 @@ class CircleMemberList extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
           children: [
-            for (final (label, groupMembers, isOnline) in [
-              ('Online', online, true),
-              ('Offline', offline, false),
-            ])
+            for (final (label, groupMembers, isOnline) in groups)
               if (groupMembers.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
                   child: Text(
                     '${label.toUpperCase()} — ${groupMembers.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.4,
@@ -447,8 +468,16 @@ class CircleMemberList extends StatelessWidget {
                   _MemberRow(
                     member: member,
                     isOnline: isOnline,
+                    roleColor: detail.roleColorOf(member),
                     onChangeNickname: detail.canChangeNickname(member)
                         ? () => onChangeNickname(member)
+                        : null,
+                    onManageRoles: detail.canManageRolesOf(member)
+                        ? () => showCircleMemberRolesSheet(
+                            context,
+                            detail: detail,
+                            member: member,
+                          )
                         : null,
                   ),
               ],
@@ -457,14 +486,6 @@ class CircleMemberList extends StatelessWidget {
       ),
     );
   }
-}
-
-int _roleRank(String role) {
-  return switch (role) {
-    'owner' => 0,
-    'admin' => 1,
-    _ => 2,
-  };
 }
 
 int _compareNames(CircleMember left, CircleMember right) {
@@ -477,14 +498,22 @@ class _MemberRow extends ConsumerWidget {
   const _MemberRow({
     required this.member,
     required this.isOnline,
+    this.roleColor,
     this.onChangeNickname,
+    this.onManageRoles,
   });
 
   final CircleMember member;
   final bool isOnline;
 
+  /// The member's highest coloured role, as 0xRRGGBB.
+  final int? roleColor;
+
   /// Null when the current user may not change this member's nickname.
   final VoidCallback? onChangeNickname;
+
+  /// Null when the current user may not change this member's roles.
+  final VoidCallback? onManageRoles;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -543,7 +572,15 @@ class _MemberRow extends ConsumerWidget {
               ),
             ],
           ),
-          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: switch (roleColor) {
+              final color? => TextStyle(color: circleRoleColor(color)),
+              null => null,
+            },
+          ),
           subtitle: activeCustomStatus(profile.customStatus) == null
               ? null
               : CustomStatusLabel(status: profile.customStatus),
@@ -587,6 +624,15 @@ class _MemberRow extends ConsumerWidget {
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     onChangeNickname!();
+                  },
+                ),
+              if (onManageRoles != null)
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Manage roles'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onManageRoles!();
                   },
                 ),
             ],

@@ -52,6 +52,7 @@ class ChatMessage {
     this.suppressEmbeds = false,
     this.sender,
     this.senderNickname,
+    this.senderRoleColor,
     this.threadSummary,
   });
 
@@ -85,6 +86,7 @@ class ChatMessage {
           ? Profile.fromJson(json['sender'] as Map<String, dynamic>)
           : null,
       senderNickname: json['sender_nickname'] as String?,
+      senderRoleColor: (json['sender_role_color'] as num?)?.toInt(),
       threadSummary: MessageThreadSummary.maybeFromJson(json['thread_summary']),
     );
   }
@@ -113,6 +115,10 @@ class ChatMessage {
 
   /// The sender's circle nickname in circle channel threads.
   final String? senderNickname;
+
+  /// The colour (0xRRGGBB) of the sender's highest coloured circle role in
+  /// circle channel threads.
+  final int? senderRoleColor;
 
   /// The thread started from this message, if any.
   final MessageThreadSummary? threadSummary;
@@ -179,6 +185,7 @@ class ChatMessage {
     bool? suppressEmbeds,
     Object? sender = _sentinel,
     Object? senderNickname = _sentinel,
+    Object? senderRoleColor = _sentinel,
     Object? threadSummary = _sentinel,
   }) {
     return ChatMessage(
@@ -214,6 +221,9 @@ class ChatMessage {
       senderNickname: identical(senderNickname, _sentinel)
           ? this.senderNickname
           : senderNickname as String?,
+      senderRoleColor: identical(senderRoleColor, _sentinel)
+          ? this.senderRoleColor
+          : senderRoleColor as int?,
       threadSummary: identical(threadSummary, _sentinel)
           ? this.threadSummary
           : threadSummary as MessageThreadSummary?,

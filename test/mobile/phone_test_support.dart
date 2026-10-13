@@ -20,6 +20,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -733,10 +734,55 @@ CircleDetail circleDetail() {
       ),
       _channel('ch-old', 'conv-old', 'old-stuff', 0, categoryId: 'cat-3'),
     ],
+    roles: const [
+      CircleRole(
+        id: 'role-mods',
+        name: 'Moderators of the Valley',
+        position: 3,
+        color: 0x3498DB,
+        hoist: true,
+        permissions: 4 | 8 | 32 | 128,
+        memberCount: 1,
+      ),
+      CircleRole(
+        id: 'role-leaders',
+        name: 'Trip Leaders',
+        position: 2,
+        color: 0xE67E22,
+        hoist: true,
+        permissions: 512,
+        memberCount: 1,
+      ),
+      CircleRole(
+        id: 'role-photo',
+        name: 'Photographers',
+        position: 1,
+        color: 0x2ECC71,
+        permissions: 0,
+        memberCount: 1,
+      ),
+      CircleRole(
+        id: 'role-everyone',
+        name: '@everyone',
+        position: 0,
+        permissions: 1 | 2 | 64 | 8192,
+        isDefault: true,
+        memberCount: 128,
+      ),
+    ],
     members: [
       CircleMember(profile: me, role: 'owner', isCurrentUser: true),
-      CircleMember(profile: bart, role: 'admin', nickname: 'Bart the Bold'),
-      CircleMember(profile: grace, role: 'member'),
+      CircleMember(
+        profile: bart,
+        role: 'admin',
+        nickname: 'Bart the Bold',
+        roleIds: const ['role-mods'],
+      ),
+      CircleMember(
+        profile: grace,
+        role: 'member',
+        roleIds: const ['role-leaders', 'role-photo'],
+      ),
       CircleMember(profile: linus, role: 'member', nickname: 'Linus'),
       for (final profile in extraMembers)
         CircleMember(profile: profile, role: 'member'),

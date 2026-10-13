@@ -987,8 +987,9 @@ void main() {
     expect(permissionBody, contains('public.circle_channels'));
     expect(
       permissionBody,
-      contains("circle_member.role in ('owner', 'admin')"),
+      contains('public.current_user_has_circle_permission('),
     );
+    expect(permissionBody, contains("'manage_messages'"));
 
     for (final body in [pinBody, unpinBody, listBody]) {
       expect(body, contains('security definer'));
@@ -1048,7 +1049,14 @@ void main() {
     expect(
       selectPolicy,
       contains(
-        "public.current_user_circle_role(circle_id) in ('owner', 'admin')",
+        "public.current_user_has_circle_permission(circle_id, 'manage_channels')",
+      ),
+    );
+    expect(selectPolicy, contains('created_by = auth.uid()'));
+    expect(
+      selectPolicy,
+      contains(
+        "public.current_user_has_circle_permission(circle_id, 'create_invites')",
       ),
     );
     expect(
@@ -1089,7 +1097,11 @@ void main() {
       expect(body, contains('auth.uid()'));
     }
     for (final body in [createBody, listBody, revokeBody]) {
-      expect(body, contains("in ('owner', 'admin')"));
+      expect(body, contains('public.current_user_has_circle_permission('));
+      expect(body, contains("'create_invites'"));
+    }
+    for (final body in [listBody, revokeBody]) {
+      expect(body, contains("'manage_channels'"));
     }
 
     expect(createBody, contains('make_interval(hours => expires_in_hours)'));
@@ -1174,11 +1186,14 @@ void main() {
     expect(setBody, contains('auth.uid()'));
     expect(setBody, contains("nullif(btrim(coalesce(nickname, '')), '')"));
     expect(setBody, contains('> 32'));
-    expect(setBody, contains('public.current_user_circle_role'));
-    expect(setBody, contains("caller_role not in ('owner', 'admin')"));
+    expect(setBody, contains('public.is_current_user_circle_member'));
+    expect(setBody, contains("'manage_nicknames'"));
     expect(
       setBody,
-      contains("target_role = 'owner' and caller_role <> 'owner'"),
+      contains(
+        'public.circle_member_rank(target_circle_id, target_user_id)\n'
+        '      >= public.circle_member_rank(target_circle_id, current_user_id)',
+      ),
     );
     expect(setBody, contains('update public.circle_members'));
 
@@ -1384,11 +1399,9 @@ void main() {
       expect(body, contains('security definer'));
       expect(body, contains('set search_path = public'));
       expect(body, contains('auth.uid()'));
-      expect(body, contains('public.current_user_circle_role'));
-      expect(
-        body,
-        contains("coalesce(caller_role, '') not in ('owner', 'admin')"),
-      );
+      expect(body, contains('public.current_user_has_circle_permission('));
+      expect(body, contains("'manage_channels'"));
+      expect(body, isNot(contains('caller_role')));
     }
     expect(createBody, contains('> 32'));
     expect(renameBody, contains('> 32'));
@@ -1522,14 +1535,14 @@ void main() {
   test('circle manager checks reject non-members', () {
     final sql = allMigrationSql();
 
-    for (final functionName in [
-      'invite_circle_members',
-      'delete_circle_post',
+    for (final (functionName, permission) in [
+      ('invite_circle_members', 'create_invites'),
+      ('delete_circle_post', 'manage_messages'),
     ]) {
       final body = functionBody(sql, functionName);
-      expect(body, contains("coalesce(caller_role, '') not in"));
-      expect(body, isNot(contains("and caller_role not in")));
-      expect(body, isNot(contains("if caller_role not in")));
+      expect(body, contains('not public.current_user_has_circle_permission('));
+      expect(body, contains("'$permission'"));
+      expect(body, isNot(contains('caller_role')));
     }
   });
 
@@ -1663,10 +1676,8 @@ void main() {
     );
     final manageBody = functionBody(sql, 'can_current_user_manage_thread');
     expect(manageBody, contains('ct.created_by = auth.uid()'));
-    expect(
-      manageBody,
-      contains("coalesce(public.current_user_circle_role(cc.circle_id), '')"),
-    );
+    expect(manageBody, contains('public.current_user_has_circle_permission('));
+    expect(manageBody, contains("'manage_messages'"));
     expect(manageBody, contains("cm.role in ('owner', 'admin')"));
     expect(
       functionBody(sql, 'set_thread_archived'),
@@ -1718,5 +1729,157 @@ void main() {
         'public.set_thread_archived(uuid, boolean) from authenticated',
       ),
     );
+  });
+
+  test('circle roles are member scoped, RPC written and realtime', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final bitBody = functionBody(sql, 'circle_permission_bit');
+    final permissionsBody = functionBody(sql, 'circle_member_permissions');
+    final hasBody = functionBody(sql, 'circle_member_has_permission');
+    final rankBody = functionBody(sql, 'circle_member_rank');
+    final createCircleBody = functionBody(sql, 'create_circle');
+    final detailBody = functionBody(sql, 'get_circle_detail');
+    final colorBody = functionBody(sql, 'circle_channel_role_color');
+
+    expect(sql, contains('create table if not exists public.circle_roles'));
+    expect(
+      sql,
+      contains('create table if not exists public.circle_member_roles'),
+    );
+    expect(
+      sql,
+      contains('references public.circle_members(circle_id, user_id)'),
+    );
+    expect(sql, contains('references public.circle_roles(id, circle_id)'));
+    expect(sql, contains('circle_roles_one_default_idx'));
+    expect(sql, contains('deferrable initially immediate'));
+    for (final table in ['circle_roles', 'circle_member_roles']) {
+      expect(
+        sql,
+        contains('alter table public.$table enable row level security'),
+      );
+      expect(
+        rawSql,
+        contains('alter publication supabase_realtime add table public.$table'),
+      );
+      expect(
+        policyBodiesFor(rawSql, table).where(
+          (policy) => RegExp(
+            r'for (insert|update|delete|all)',
+            caseSensitive: false,
+          ).hasMatch(policy),
+        ),
+        isEmpty,
+      );
+    }
+
+    // Bits mirror lib/shared/models/circle_role.dart.
+    for (final (name, bit) in [
+      ('view_channel', 1),
+      ('send_messages', 2),
+      ('manage_messages', 4),
+      ('manage_channels', 8),
+      ('manage_roles', 16),
+      ('kick_members', 32),
+      ('create_invites', 64),
+      ('manage_nicknames', 128),
+      ('mention_everyone', 256),
+      ('manage_events', 512),
+      ('manage_emojis', 1024),
+      ('manage_webhooks', 2048),
+      ('view_audit_log', 4096),
+      ('connect_voice', 8192),
+      ('administrator', 16384),
+    ]) {
+      expect(bitBody, contains("when '$name' then $bit::bigint"));
+    }
+    expect(permissionsBody, contains('c.owner_id = cm.user_id'));
+    expect(permissionsBody, contains("circle_permission_bit('administrator')"));
+    expect(permissionsBody, contains('r.is_default'));
+    expect(hasBody, contains('public.circle_member_permissions('));
+    expect(rankBody, contains('2147483647'));
+    expect(createCircleBody, contains("'@everyone'"));
+    expect(
+      createCircleBody,
+      contains('public.circle_default_role_permissions()'),
+    );
+    expect(detailBody, contains("'current_user_permissions'"));
+    expect(detailBody, contains("'roles'"));
+    expect(detailBody, contains("'role_ids'"));
+    expect(colorBody, contains('public.is_current_user_circle_member'));
+
+    for (final name in [
+      'create_circle_role',
+      'update_circle_role',
+      'delete_circle_role',
+      'reorder_circle_roles',
+      'set_member_roles',
+    ]) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+      expect(body, contains('auth.uid()'));
+      expect(body, contains("'manage_roles'"));
+    }
+    for (final name in [
+      'update_circle_role',
+      'delete_circle_role',
+      'reorder_circle_roles',
+      'set_member_roles',
+    ]) {
+      expect(functionBody(sql, name), contains('public.circle_member_rank('));
+    }
+
+    for (final signature in [
+      'public.circle_member_permissions(uuid, uuid)',
+      'public.circle_member_has_permission(uuid, uuid, text)',
+      'public.circle_member_rank(uuid, uuid)',
+      'public.sync_circle_admin_roles(uuid)',
+      'public.circle_channel_role_color(uuid, uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('revoke execute on function $signature from authenticated'),
+      );
+    }
+    for (final signature in [
+      'public.current_user_has_circle_permission(uuid, text)',
+      'public.sender_role_color(public.messages)',
+      'public.create_circle_role(uuid, text, integer, bigint, boolean)',
+      'public.update_circle_role(uuid, text, integer, bigint, boolean)',
+      'public.delete_circle_role(uuid)',
+      'public.reorder_circle_roles(uuid, uuid[])',
+      'public.set_member_roles(uuid, uuid, uuid[])',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
+
+  test('circle manager checks use role permissions', () {
+    final sql = allMigrationSql();
+    for (final (name, permission) in [
+      ('create_circle_channel', 'manage_channels'),
+      ('create_channel_category', 'manage_channels'),
+      ('rename_channel_category', 'manage_channels'),
+      ('delete_channel_category', 'manage_channels'),
+      ('reorder_circle_channels', 'manage_channels'),
+      ('invite_circle_members', 'create_invites'),
+      ('create_circle_invite', 'create_invites'),
+      ('list_circle_invites', 'create_invites'),
+      ('revoke_circle_invite', 'create_invites'),
+      ('set_circle_nickname', 'manage_nicknames'),
+      ('delete_circle_post', 'manage_messages'),
+      ('can_current_user_pin_messages', 'manage_messages'),
+      ('can_current_user_manage_thread', 'manage_messages'),
+    ]) {
+      final body = functionBody(sql, name);
+      expect(body, contains("'$permission'"), reason: name);
+      expect(body, isNot(contains('current_user_circle_role')), reason: name);
+      expect(body, isNot(contains('circle_member.role')), reason: name);
+    }
   });
 }

@@ -8,6 +8,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
@@ -483,6 +484,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         onShowReactors: _showReactors,
                         canPin: canPinMessages,
                         onTogglePin: _togglePin,
+                        onRemoveEmbed: _removeEmbed,
                       );
                     }
                     final highlighted = AnimatedContainer(
@@ -1105,6 +1107,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _removeEmbed(ChatMessage message) async {
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .setMessageSuppressEmbeds(messageId: message.id, suppress: true);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      _showSnackBar('Could not remove the link preview. Try again.');
+    }
+  }
+
   Future<void> _unpinFromList(String messageId) async {
     try {
       await ref
@@ -1440,6 +1453,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onShowReactors,
     required this.canPin,
     required this.onTogglePin,
+    required this.onRemoveEmbed,
   });
 
   final ChatMessage message;
@@ -1468,6 +1482,17 @@ class _MessageBubble extends StatelessWidget {
   onShowReactors;
   final bool canPin;
   final Future<void> Function(ChatMessage message) onTogglePin;
+  final Future<void> Function(ChatMessage message) onRemoveEmbed;
+
+  /// The link whose preview card shows under this message, if any.
+  String? get _previewUrl {
+    if (message.recalledAt != null ||
+        message.type != MessageType.text ||
+        message.suppressEmbeds) {
+      return null;
+    }
+    return firstLinkInMarkdown(message.body, mentions: message.mentions);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1487,6 +1512,7 @@ class _MessageBubble extends StatelessWidget {
         : message.reactions;
     final gap = hasFollowUp ? 2.0 : 8.0;
     final sender = this.sender;
+    final previewUrl = _previewUrl;
 
     final column = Column(
       crossAxisAlignment: isCurrentUser
@@ -1543,6 +1569,11 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ),
+        if (previewUrl != null)
+          MessageLinkPreviewCard(
+            url: previewUrl,
+            bottomGap: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
+          ),
         if (reactions.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(bottom: showReadReceipt ? 4 : gap),
@@ -1588,6 +1619,18 @@ class _MessageBubble extends StatelessWidget {
         Expanded(child: column),
       ],
     );
+  }
+
+  bool _hasVisiblePreview(BuildContext context) {
+    final url = _previewUrl;
+    if (url == null) {
+      return false;
+    }
+    return ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(linkPreviewProvider(url)).valueOrNull !=
+        null;
   }
 
   void _showActions(BuildContext context, ImageAttachment? imageAttachment) {
@@ -1664,6 +1707,15 @@ class _MessageBubble extends StatelessWidget {
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onTogglePin(message));
+                    },
+                  ),
+                if (isCurrentUser && _hasVisiblePreview(context))
+                  ListTile(
+                    leading: const Icon(Icons.link_off),
+                    title: const Text('Remove embed'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onRemoveEmbed(message));
                     },
                   ),
                 if (message.type == MessageType.text)

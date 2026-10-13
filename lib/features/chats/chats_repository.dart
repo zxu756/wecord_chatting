@@ -8,6 +8,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
@@ -127,6 +128,15 @@ abstract interface class ChatsRepository {
 
   Future<List<PinnedMessage>> listPinnedMessages(String conversationId);
 
+  /// Preview metadata for [url], or null when the link has none or could not
+  /// be fetched.
+  Future<LinkPreview?> getLinkPreview(String url);
+
+  Future<void> setMessageSuppressEmbeds({
+    required String messageId,
+    required bool suppress,
+  });
+
   Future<void> markConversationRead(String conversationId);
 
   Future<void> markConversationUnread(String conversationId);
@@ -194,6 +204,11 @@ abstract interface class ChatsDataSource {
   });
 
   Future<Object?> rpc(String functionName, Map<String, dynamic> params);
+
+  Future<Object?> invokeFunction(
+    String functionName,
+    Map<String, dynamic> body,
+  );
 
   Stream<void> conversationChanges();
 
@@ -637,6 +652,27 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<LinkPreview?> getLinkPreview(String url) async {
+    final data = await _dataSource.invokeFunction('link-preview', {'url': url});
+    if (data is! Map || data['status'] != 'ok' || data['url'] is! String) {
+      return null;
+    }
+    final preview = LinkPreview.fromJson(Map<String, dynamic>.from(data));
+    return preview.hasContent ? preview : null;
+  }
+
+  @override
+  Future<void> setMessageSuppressEmbeds({
+    required String messageId,
+    required bool suppress,
+  }) async {
+    await _dataSource.rpc('set_message_suppress_embeds', {
+      'target_message_id': messageId,
+      'suppress': suppress,
+    });
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     await _dataSource.rpc('mark_conversation_read', {
       'target_conversation_id': conversationId,
@@ -971,6 +1007,15 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   @override
   Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
     return _client.rpc<Object?>(functionName, params: params);
+  }
+
+  @override
+  Future<Object?> invokeFunction(
+    String functionName,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _client.functions.invoke(functionName, body: body);
+    return response.data;
   }
 
   @override
@@ -1427,6 +1472,17 @@ class _UninitializedChatsRepository implements ChatsRepository {
   @override
   Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
     return const [];
+  }
+
+  @override
+  Future<LinkPreview?> getLinkPreview(String url) async => null;
+
+  @override
+  Future<void> setMessageSuppressEmbeds({
+    required String messageId,
+    required bool suppress,
+  }) {
+    throw StateError('Supabase must be initialized before changing embeds.');
   }
 
   @override

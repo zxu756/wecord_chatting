@@ -48,6 +48,7 @@ class ChatMessage {
     this.mentions = const <MessageMention>[],
     this.reactions = const <MessageReaction>[],
     this.isPinned = false,
+    this.suppressEmbeds = false,
     this.sender,
     this.senderNickname,
   });
@@ -77,6 +78,7 @@ class ChatMessage {
       mentions: _parseMentions(json['mentions']),
       reactions: _parseReactions(json['reactions']),
       isPinned: json['is_pinned'] == true,
+      suppressEmbeds: json['suppress_embeds'] == true,
       sender: json['sender'] is Map<String, dynamic>
           ? Profile.fromJson(json['sender'] as Map<String, dynamic>)
           : null,
@@ -99,6 +101,9 @@ class ChatMessage {
   final List<MessageMention> mentions;
   final List<MessageReaction> reactions;
   final bool isPinned;
+
+  /// The sender hid the link preview under this message.
+  final bool suppressEmbeds;
 
   /// The sender's profile, when the thread query embeds it.
   final Profile? sender;
@@ -165,6 +170,7 @@ class ChatMessage {
     List<MessageMention>? mentions,
     List<MessageReaction>? reactions,
     bool? isPinned,
+    bool? suppressEmbeds,
     Object? sender = _sentinel,
     Object? senderNickname = _sentinel,
   }) {
@@ -196,6 +202,7 @@ class ChatMessage {
       mentions: mentions ?? this.mentions,
       reactions: reactions ?? this.reactions,
       isPinned: isPinned ?? this.isPinned,
+      suppressEmbeds: suppressEmbeds ?? this.suppressEmbeds,
       sender: identical(sender, _sentinel) ? this.sender : sender as Profile?,
       senderNickname: identical(senderNickname, _sentinel)
           ? this.senderNickname

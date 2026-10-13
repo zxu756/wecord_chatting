@@ -12,6 +12,7 @@ import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
@@ -860,6 +861,15 @@ class _FakeChatsRepository implements ChatsRepository {
   Future<List<ConversationReadMarker>> listReadMarkers(String conversationId) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<LinkPreview?> getLinkPreview(String url) async => null;
+
+  @override
+  Future<void> setMessageSuppressEmbeds({
+    required String messageId,
+    required bool suppress,
+  }) async {}
 
   @override
   Future<void> markConversationRead(String conversationId) {

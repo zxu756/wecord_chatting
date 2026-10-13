@@ -70,7 +70,7 @@
 - [x] **12. 简单 Markdown**（M）
   - 支持：`**粗体**`、`*斜体*`、`__下划线__`、`~~删除线~~`、`` `行内代码` ``、```` ```代码块``` ````、`> 引用`、`||剧透||`（点击显示）、自动识别链接。
   - 自己写解析器（不引入 HTML），输出 `TextSpan` 树；@提及高亮与之共存。消息搜索仍按原文。
-- [ ] **13. 链接预览**（M）
+- [x] **13. 链接预览**（M）
   - Edge Function `link-preview`：校验登录 → 拒绝内网 / 非 http(s) 地址 → 抓取（5 秒超时、最多 512KB）→ 解析 Open Graph / `<title>` → 写入缓存表 `link_previews (url primary key, title, description, image_url, site_name, fetched_at)`，24 小时内直接读缓存。
   - 客户端：消息里第一个链接下方显示预览卡片；发送者可以关闭该条消息的预览（`messages.suppress_embeds`）。
 - [ ] **14. 自定义状态**（S）

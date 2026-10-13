@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -18,6 +19,7 @@ import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
@@ -1146,6 +1148,179 @@ void main() {
 
     expect(find.text('Reply'), findsNothing);
     expect(find.text('Pin'), findsNothing);
+  });
+
+  group('link previews', () {
+    const examplePreview = LinkPreview(
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      description: 'For use in examples',
+      siteName: 'Example',
+    );
+
+    testWidgets('shows a card for the first link and opens it on tap', (
+      tester,
+    ) async {
+      final opened = <Uri>[];
+      final repository = FakeChatsRepository()
+        ..linkPreviews = {'https://example.com': examplePreview}
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body:
+                'look `https://code.example` https://example.com '
+                'and https://second.example',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, linkLauncher: (uri) async => opened.add(uri)),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.linkPreviewRequests, ['https://example.com']);
+      expect(find.byKey(const ValueKey('link-preview-card')), findsOneWidget);
+      expect(find.text('Example'), findsOneWidget);
+      expect(find.text('Example Domain'), findsOneWidget);
+      expect(find.text('For use in examples'), findsOneWidget);
+
+      await tester.tap(find.text('Example Domain'));
+      await tester.pump();
+
+      expect(opened, [Uri.parse('https://example.com')]);
+    });
+
+    testWidgets('suppressed, recalled and code-only links show no card', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..linkPreviews = {'https://example.com': examplePreview}
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'https://example.com',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+            suppressEmbeds: true,
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            body: 'https://example.com',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+            recalledAt: DateTime.utc(2026, 5, 18, 4, 32),
+          ),
+          _message(
+            id: 'message-3',
+            senderId: 'user-2',
+            body: '```\nhttps://example.com\n```',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 33),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.linkPreviewRequests, isEmpty);
+      expect(find.byKey(const ValueKey('link-preview-card')), findsNothing);
+    });
+
+    testWidgets('failed or empty previews render nothing', (tester) async {
+      final repository = FakeChatsRepository()
+        ..linkPreviewError = Exception('offline')
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'see https://broken.example',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-2',
+            body: 'see https://empty.example',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        repository.linkPreviewRequests,
+        containsAll(['https://broken.example', 'https://empty.example']),
+      );
+      expect(find.byKey(const ValueKey('link-preview-card')), findsNothing);
+      expect(find.text('see https://broken.example'), findsOneWidget);
+    });
+
+    testWidgets('the sender can remove the embed from the action menu', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..linkPreviews = {'https://example.com': examplePreview}
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-1',
+            body: 'mine https://example.com',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('link-preview-card')), findsOneWidget);
+
+      await tester.longPress(find.text('mine https://example.com'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove embed'));
+      await tester.pumpAndSettle();
+
+      expect(repository.suppressEmbedCalls, [('message-1', true)]);
+      expect(find.byKey(const ValueKey('link-preview-card')), findsNothing);
+    });
+
+    testWidgets('remove embed is not offered on other people\'s messages', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..linkPreviews = {'https://example.com': examplePreview}
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: 'theirs https://example.com',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          ),
+          _message(
+            id: 'message-2',
+            senderId: 'user-1',
+            body: 'mine without a link',
+            createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.text('theirs https://example.com'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove embed'), findsNothing);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('mine without a link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove embed'), findsNothing);
+    });
   });
 
   testWidgets('pins a message from the action menu when permitted', (
@@ -2567,10 +2742,13 @@ Widget _app(
   VoiceMessageRecorder? voiceMessageRecorder,
   String? title = 'Ada Lovelace',
   ConversationType? conversationType,
+  LinkLauncher? linkLauncher,
 }) {
   return ProviderScope(
     overrides: [
       chatsRepositoryProvider.overrideWithValue(repository),
+      if (linkLauncher != null)
+        linkLauncherProvider.overrideWithValue(linkLauncher),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
@@ -2642,6 +2820,7 @@ ChatMessage _message({
   DateTime? recalledAt,
   List<MessageReaction> reactions = const [],
   bool isPinned = false,
+  bool suppressEmbeds = false,
   Profile? sender,
 }) {
   return ChatMessage(
@@ -2658,6 +2837,7 @@ ChatMessage _message({
     recalledAt: recalledAt,
     reactions: reactions,
     isPinned: isPinned,
+    suppressEmbeds: suppressEmbeds,
     sender: sender,
   );
 }
@@ -2684,6 +2864,10 @@ class FakeChatsRepository implements ChatsRepository {
   Object? pinError;
   final pinnedMessageIds = <String>[];
   final unpinnedMessageIds = <String>[];
+  var linkPreviews = <String, LinkPreview>{};
+  Object? linkPreviewError;
+  final linkPreviewRequests = <String>[];
+  final suppressEmbedCalls = <(String, bool)>[];
   final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
   String? sentReplyToMessageId;
@@ -2880,6 +3064,29 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
     return pinnedMessages;
+  }
+
+  @override
+  Future<LinkPreview?> getLinkPreview(String url) async {
+    linkPreviewRequests.add(url);
+    if (linkPreviewError case final error?) {
+      throw error;
+    }
+    return linkPreviews[url];
+  }
+
+  @override
+  Future<void> setMessageSuppressEmbeds({
+    required String messageId,
+    required bool suppress,
+  }) async {
+    suppressEmbedCalls.add((messageId, suppress));
+    messages = [
+      for (final message in messages)
+        message.id == messageId
+            ? message.copyWith(suppressEmbeds: suppress)
+            : message,
+    ];
   }
 
   @override

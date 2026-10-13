@@ -1426,6 +1426,98 @@ void main() {
     }
   });
 
+  test('link previews are read-only cache rows and embeds are sender-only', () {
+    final sql = allMigrationSql();
+    final selectPolicy = policyBody(sql, 'link_previews_select_authenticated');
+    final suppressBody = functionBody(sql, 'set_message_suppress_embeds');
+
+    expect(sql, contains('create table if not exists public.link_previews'));
+    expect(sql, contains('url text primary key'));
+    for (final column in [
+      'title text',
+      'description text',
+      'image_url text',
+      'site_name text',
+      'fetched_at timestamptz not null default now()',
+    ]) {
+      expect(sql, contains(column));
+    }
+    expect(
+      sql,
+      contains("check (status in ('ok', 'error', 'blocked', 'unsupported'))"),
+    );
+    expect(
+      sql,
+      contains('alter table public.link_previews enable row level security'),
+    );
+    expect(selectPolicy, contains('for select'));
+    expect(selectPolicy, contains('to authenticated'));
+    expect(
+      policyBodiesFor(sql, 'link_previews').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(
+      sql,
+      contains(
+        'revoke insert, update, delete, truncate on public.link_previews '
+        'from authenticated',
+      ),
+    );
+
+    expect(
+      sql,
+      contains(
+        'add column if not exists suppress_embeds boolean not null default false',
+      ),
+    );
+    expect(suppressBody, contains('security definer'));
+    expect(suppressBody, contains('set search_path = public'));
+    expect(suppressBody, contains('auth.uid() is null'));
+    expect(suppressBody, contains('m.sender_id = auth.uid()'));
+    expect(suppressBody, contains("m.type = 'text'"));
+    expect(suppressBody, contains('m.recalled_at is null'));
+    expect(
+      suppressBody,
+      contains('public.is_current_user_conversation_member(m.conversation_id)'),
+    );
+    expect(
+      sql,
+      contains(
+        'grant execute on function '
+        'public.set_message_suppress_embeds(uuid, boolean) to authenticated',
+      ),
+    );
+  });
+
+  test('link-preview function requires a user and guards fetches', () {
+    final config = File('supabase/config.toml').readAsStringSync();
+    final source = File(
+      'supabase/functions/link-preview/index.ts',
+    ).readAsStringSync();
+
+    expect(
+      RegExp(
+        r'\[functions\.link-preview\][^\[]*verify_jwt = true',
+      ).hasMatch(config),
+      isTrue,
+    );
+    expect(source, contains('auth.getUser('));
+    expect(source, contains('SUPABASE_SERVICE_ROLE_KEY'));
+    expect(source, contains('redirect: "manual"'));
+    expect(source, contains('MAX_REDIRECTS = 3'));
+    expect(source, contains('FETCH_TIMEOUT_MS = 5_000'));
+    expect(source, contains('MAX_BODY_BYTES = 512 * 1024'));
+    expect(source, contains('Deno.resolveDns(host, "A")'));
+    expect(source, contains('Deno.resolveDns(host, "AAAA")'));
+    expect(source, contains('isBlockedAddress'));
+    expect(source, contains('isHtmlContentType'));
+  });
+
   test('circle manager checks reject non-members', () {
     final sql = allMigrationSql();
 

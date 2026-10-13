@@ -1054,6 +1054,133 @@ void main() {
     expect(messages.last.senderNickname, isNull);
   });
 
+  group('link previews', () {
+    test('getLinkPreview invokes the function and maps the card', () async {
+      final dataSource = FakeChatsDataSource()
+        ..functionResults['link-preview'] = {
+          'url': 'https://example.com/',
+          'status': 'ok',
+          'title': ' Example Domain ',
+          'description': 'An example',
+          'image_url': 'https://example.com/cover.png',
+          'site_name': 'Example',
+          'fetched_at': '2026-10-13T09:00:00Z',
+        };
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final preview = await repository.getLinkPreview('https://example.com');
+
+      expect(dataSource.functionCalls, [
+        const RpcCall(
+          functionName: 'link-preview',
+          params: {'url': 'https://example.com'},
+        ),
+      ]);
+      expect(preview?.url, 'https://example.com/');
+      expect(preview?.title, 'Example Domain');
+      expect(preview?.description, 'An example');
+      expect(preview?.imageUrl, 'https://example.com/cover.png');
+      expect(preview?.siteName, 'Example');
+    });
+
+    test('getLinkPreview returns null for failed or empty previews', () async {
+      final dataSource = FakeChatsDataSource();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      for (final result in <Object?>[
+        null,
+        'oops',
+        {'url': 'https://a.example/', 'status': 'blocked', 'title': 'x'},
+        {'url': 'https://a.example/', 'status': 'error'},
+        {'url': 'https://a.example/', 'status': 'ok', 'title': '  '},
+      ]) {
+        dataSource.functionResults['link-preview'] = result;
+        expect(
+          await repository.getLinkPreview('https://a.example'),
+          isNull,
+          reason: '$result',
+        );
+      }
+    });
+
+    test('getLinkPreview drops non-http images', () async {
+      final dataSource = FakeChatsDataSource()
+        ..functionResults['link-preview'] = {
+          'url': 'https://a.example/',
+          'status': 'ok',
+          'title': 'A',
+          'image_url': 'javascript:alert(1)',
+        };
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final preview = await repository.getLinkPreview('https://a.example');
+
+      expect(preview?.title, 'A');
+      expect(preview?.imageUrl, isNull);
+    });
+
+    test('setMessageSuppressEmbeds calls the sender RPC', () async {
+      final dataSource = FakeChatsDataSource();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      await repository.setMessageSuppressEmbeds(
+        messageId: 'message-1',
+        suppress: true,
+      );
+
+      expect(dataSource.rpcCalls, [
+        const RpcCall(
+          functionName: 'set_message_suppress_embeds',
+          params: {'target_message_id': 'message-1', 'suppress': true},
+        ),
+      ]);
+    });
+
+    test('listMessages maps suppress_embeds', () async {
+      final dataSource = FakeChatsDataSource()
+        ..messageRows = [
+          {
+            'id': 'message-1',
+            'conversation_id': 'conversation-1',
+            'sender_id': 'user-1',
+            'type': 'text',
+            'body': 'https://example.com',
+            'created_at': '2026-05-18T04:30:00.000Z',
+            'suppress_embeds': true,
+          },
+          {
+            'id': 'message-2',
+            'conversation_id': 'conversation-1',
+            'sender_id': 'user-1',
+            'type': 'text',
+            'body': 'https://example.org',
+            'created_at': '2026-05-18T04:31:00.000Z',
+          },
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      final messages = await repository.listMessages('conversation-1');
+
+      expect(messages.first.suppressEmbeds, isTrue);
+      expect(messages.last.suppressEmbeds, isFalse);
+    });
+  });
+
   test('pin RPCs are called with the target message', () async {
     final dataSource = FakeChatsDataSource()
       ..rpcResults['can_current_user_pin_messages'] = true;
@@ -1480,6 +1607,9 @@ class FakeChatsDataSource implements ChatsDataSource {
   final uploadedImages = <UploadedImage>[];
   final signedUrlCalls = <SignedUrlCall>[];
   final rpcCalls = <RpcCall>[];
+  final functionCalls = <RpcCall>[];
+  final functionResults = <String, Object?>{};
+  final functionErrors = <String, Object>{};
   final activityCalls = <ActivityCall>[];
   final typingCalls = <TypingCall>[];
   final _changes = StreamController<void>.broadcast();
@@ -1584,6 +1714,18 @@ class FakeChatsDataSource implements ChatsDataSource {
       return reactorRows;
     }
     return rpcResult;
+  }
+
+  @override
+  Future<Object?> invokeFunction(
+    String functionName,
+    Map<String, dynamic> body,
+  ) async {
+    functionCalls.add(RpcCall(functionName: functionName, params: body));
+    if (functionErrors[functionName] case final error?) {
+      throw error;
+    }
+    return functionResults[functionName];
   }
 
   @override

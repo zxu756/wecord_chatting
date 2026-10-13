@@ -360,6 +360,121 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    Future<PhoneWorld> openPolls(WidgetTester tester) async {
+      final world = PhoneWorld();
+      world.chats.messages = pollMessages();
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+      return world;
+    }
+
+    phoneTestWidgets('poll bubbles with long answers', (
+      tester,
+      viewport,
+    ) async {
+      await openPolls(tester);
+      expect(find.text('4 votes · Closed'), findsOneWidget);
+      final longAnswer = find.text(
+        'Thursday evening, after the long planning meeting wraps up',
+      );
+      await tester.ensureVisible(longAnswer);
+      await settle(tester);
+      expectFullyVisible(tester, longAnswer);
+      expect(find.text('6 votes · Ends in 19h'), findsOneWidget);
+      final rows = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'poll-option-poll-open-',
+            ),
+      );
+      expect(rows, findsNWidgets(4));
+      for (final element in rows.evaluate()) {
+        expect(
+          (element.renderObject! as RenderBox).size.height,
+          greaterThanOrEqualTo(44),
+        );
+      }
+      final viewVotes = find.byKey(const ValueKey('poll-view-votes-poll-open'));
+      await tester.ensureVisible(viewVotes);
+      await settle(tester);
+      expectFullyVisible(tester, viewVotes);
+    });
+
+    phoneTestWidgets('poll votes sheet', (tester, viewport) async {
+      final world = await openPolls(tester);
+      world.chats.pollVoters = {
+        'o1': [bart, grace],
+        'o2': [me, bart, grace, linus],
+      };
+      final viewVotes = find.byKey(const ValueKey('poll-view-votes-poll-open'));
+      await tester.ensureVisible(viewVotes);
+      await settle(tester);
+      await tester.tap(viewVotes);
+      await settle(tester);
+      expect(find.text('Votes'), findsOneWidget);
+      expectFullyVisible(tester, find.text(grace.displayName));
+      await tester.tap(find.byKey(const ValueKey('poll-voters-option-o2')));
+      await settle(tester);
+      final lastVoter = find.text('@${linus.username}');
+      await tester.scrollUntilVisible(
+        lastVoter,
+        80,
+        scrollable: find
+            .descendant(
+              of: find.byType(BottomSheet),
+              matching: find.byType(Scrollable),
+            )
+            .last,
+      );
+      await settle(tester);
+      expectFullyVisible(tester, lastVoter);
+    });
+
+    phoneTestWidgets('poll form above the keyboard', (tester, viewport) async {
+      await openPolls(tester);
+      await tester.tap(find.byTooltip('Attach'));
+      await settle(tester);
+      await tester.tap(find.text('Create poll'));
+      await settle(tester);
+
+      final question = find.byKey(const ValueKey('poll-question-field'));
+      await tester.tap(question);
+      await tester.enterText(
+        question,
+        'Which day works best for the release retrospective?',
+      );
+      await showKeyboard(tester, viewport);
+      expectCaretVisible(tester, question);
+
+      for (var index = 0; index < 4; index++) {
+        final add = find.byKey(const ValueKey('poll-add-option'));
+        await tester.ensureVisible(add);
+        await settle(tester);
+        await tester.tap(add);
+        await settle(tester);
+      }
+      final last = find.byKey(const ValueKey('poll-option-field-5'));
+      await tester.ensureVisible(last);
+      await tester.tap(last);
+      await tester.enterText(last, 'Thursday evening after planning');
+      await settle(tester);
+      expectCaretVisible(tester, last);
+
+      final post = find.byKey(const ValueKey('poll-post-button'));
+      await tester.ensureVisible(post);
+      await settle(tester);
+      expectFullyVisible(tester, post);
+      expectTouchTargets(tester, post);
+    });
+
     phoneTestWidgets('slash commands above the keyboard', (
       tester,
       viewport,

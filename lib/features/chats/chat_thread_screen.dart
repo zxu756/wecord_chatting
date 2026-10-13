@@ -17,6 +17,8 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
+import 'package:wecord/features/chats/poll_composer_sheet.dart';
+import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
@@ -34,6 +36,7 @@ import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/poll.dart';
 
 final chatThreadProvider = FutureProvider.autoDispose
     .family<ChatThreadData, String>((ref, conversationId) async {
@@ -64,6 +67,14 @@ final canManageThreadProvider = FutureProvider.autoDispose.family<bool, String>(
     return ref.watch(chatsRepositoryProvider).canManageThread(threadId);
   },
 );
+
+/// Whether the current user may end others' polls in a conversation.
+final canModeratePollsProvider = FutureProvider.autoDispose
+    .family<bool, String>((ref, conversationId) {
+      return ref
+          .watch(chatsRepositoryProvider)
+          .canModeratePolls(conversationId);
+    });
 
 final chatConversationSummaryProvider = FutureProvider.autoDispose
     .family<ConversationSummary?, String>((ref, conversationId) {
@@ -451,6 +462,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _circleId = conversationSummary?.circleId;
     _slashContext = SlashCommandContext(
       isCircleConversation: _circleId != null,
+      canCreatePolls: true,
     );
     _slowmodeUntil = slowmodeSeconds > 0
         ? _slowmodeEnd(
@@ -481,6 +493,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final canPinMessages =
         ref.watch(canPinMessagesProvider(widget.conversationId)).valueOrNull ??
         false;
+    final canModeratePolls =
+        ref
+            .watch(canModeratePollsProvider(widget.conversationId))
+            .valueOrNull ??
+        false;
+    final pollActions = PollActions(
+      onVote: _votePoll,
+      onEnd: _endPoll,
+      onShowVoters: _showPollVoters,
+      canEnd: (message) =>
+          canSend &&
+          (canModeratePolls ||
+              (currentUserId != null && message.senderId == currentUserId)),
+    );
 
     final searchAction = ChatThreadAction(
       tooltip: 'Search messages',
@@ -773,6 +799,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onTogglePin: _togglePin,
                           onRemoveEmbed: _removeEmbed,
                           canStartThread: false,
+                          pollActions: pollActions,
                         );
                       } else {
                         final isCurrentUser = message.senderId == currentUserId;
@@ -811,6 +838,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           onRemoveEmbed: _removeEmbed,
                           canStartThread: canStartThreads && canSend,
                           onOpenThread: _openOrCreateThread,
+                          pollActions: pollActions,
                         );
                       }
                       final highlighted = AnimatedContainer(
@@ -936,6 +964,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onChanged: _handleComposerChanged,
                   onSend: _sendMessage,
                   onPickImage: _pickAndSendImage,
+                  onCreatePoll: _openPollComposer,
                   isRecordingVoice: _isRecordingVoice,
                   isSendingVoice: _isSendingVoice,
                   onStartVoiceRecording: _startVoiceRecording,
@@ -1180,6 +1209,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         return;
       case SlashOpenPoll():
         _clearComposerAfterCommand();
+        await _openPollComposer();
         return;
       case SlashSendText(body: final commandBody):
         messageBody = commandBody;
@@ -1331,6 +1361,73 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _openPollComposer() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    final posted = await showPollComposerSheet(
+      context,
+      conversationId: widget.conversationId,
+    );
+    if (posted == true && mounted) {
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    }
+  }
+
+  Future<void> _votePoll(ChatMessage message, List<String> optionIds) async {
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .votePoll(messageId: message.id, optionIds: optionIds);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      _showSnackBar('Could not record your vote. Try again.');
+      rethrow;
+    }
+  }
+
+  Future<void> _endPoll(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: const Text('End poll'),
+        content: const Text(
+          'End this poll now? Nobody can vote after it ends.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('poll-end-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('End poll'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    try {
+      await ref.read(chatsRepositoryProvider).endPoll(messageId: message.id);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } catch (_) {
+      _showSnackBar('Could not end the poll. Try again.');
+    }
+  }
+
+  void _showPollVoters(ChatMessage message) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => PollVotersSheet(message: message),
+    );
+  }
+
   Future<void> _startVoiceRecording() async {
     if (_isRecordingVoice ||
         _isSendingVoice ||
@@ -1470,8 +1567,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return slashCommandCandidates(query, _slashContext);
   }
 
-  /// Puts `/name ` in the composer, ready for the command's arguments.
+  /// Puts `/name ` in the composer, ready for the command's arguments;
+  /// `/poll` opens the poll form instead.
   void _selectSlashCommand(SlashCommand command) {
+    if (command == SlashCommand.poll) {
+      _clearComposerAfterCommand();
+      unawaited(_openPollComposer());
+      return;
+    }
     final text = '/${command.name} ';
     _composerController.value = TextEditingValue(
       text: text,
@@ -1989,6 +2092,7 @@ String _suggestedTitleFor(ChatMessage message) {
     MessageType.voice => 'Voice message',
     MessageType.file => 'File',
     MessageType.system => 'Thread',
+    MessageType.poll => suggestedThreadTitle(message.body),
   };
 }
 
@@ -2325,11 +2429,15 @@ class _MessageBubble extends StatelessWidget {
     this.isOpeningPost = false,
     this.postTitle,
     this.replyCount = 0,
+    this.pollActions,
   });
 
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
   final bool isCurrentUser;
+
+  /// Votes, voter lists and ending for poll messages.
+  final PollActions? pollActions;
 
   /// The first message of a forum post, shown full width and larger with
   /// [postTitle] above it and [replyCount] below.
@@ -2627,6 +2735,7 @@ class _MessageBubble extends StatelessWidget {
                   voiceAttachment: voiceAttachment,
                   textColor: textColor,
                   isRecalled: isRecalled,
+                  pollActions: pollActions,
                 ),
               ),
             ),
@@ -2764,14 +2873,17 @@ class _MessageBubble extends StatelessWidget {
                       unawaited(onOpenThread!(message));
                     },
                   ),
-                ListTile(
-                  leading: const Icon(Icons.forward_outlined),
-                  title: const Text('Forward'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onForward(message);
-                  },
-                ),
+                // A poll's votes belong to the original, so polls are not
+                // forwarded.
+                if (message.type != MessageType.poll)
+                  ListTile(
+                    leading: const Icon(Icons.forward_outlined),
+                    title: const Text('Forward'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onForward(message);
+                    },
+                  ),
                 if (canCompose &&
                     isCurrentUser &&
                     message.type == MessageType.text)
@@ -2905,6 +3017,7 @@ class _MessageContent extends StatelessWidget {
     required this.voiceAttachment,
     required this.textColor,
     required this.isRecalled,
+    this.pollActions,
   });
 
   final ChatMessage message;
@@ -2913,6 +3026,7 @@ class _MessageContent extends StatelessWidget {
   final VoiceAttachment? voiceAttachment;
   final Color textColor;
   final bool isRecalled;
+  final PollActions? pollActions;
 
   @override
   Widget build(BuildContext context) {
@@ -2946,6 +3060,14 @@ class _MessageContent extends StatelessWidget {
       content.add(_ImageMessageContent(attachment: attachment));
     } else if (voiceAttachment != null) {
       content.add(VoiceMessagePlayer(attachment: voiceAttachment!));
+    } else if (message.type == MessageType.poll) {
+      content.add(
+        PollMessageContent(
+          message: message,
+          textColor: textColor,
+          actions: pollActions,
+        ),
+      );
     } else {
       content.add(
         MessageMarkdownText(
@@ -3087,6 +3209,7 @@ String _displayBodyForForwardPreview(ForwardPreview preview) {
     MessageType.image => 'Image',
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
+    MessageType.poll => pollPreviewText(body),
   };
 }
 
@@ -3207,6 +3330,7 @@ class _Composer extends StatelessWidget {
     required this.onChanged,
     required this.onSend,
     required this.onPickImage,
+    required this.onCreatePoll,
     required this.isRecordingVoice,
     required this.isSendingVoice,
     required this.onStartVoiceRecording,
@@ -3238,6 +3362,7 @@ class _Composer extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final Future<void> Function() onSend;
   final Future<void> Function() onPickImage;
+  final Future<void> Function() onCreatePoll;
   final bool isRecordingVoice;
   final bool isSendingVoice;
   final Future<void> Function() onStartVoiceRecording;
@@ -3327,21 +3452,48 @@ class _Composer extends StatelessWidget {
                   ],
                   Row(
                     children: [
-                      IconButton(
-                        tooltip: 'Send image',
-                        onPressed:
-                            isBusy || isEditing || isRecordingVoice || isSlowed
-                            ? null
-                            : () => unawaited(onPickImage()),
-                        icon: isSendingImage
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.image_outlined),
-                      ),
+                      if (isSendingImage)
+                        const IconButton(
+                          tooltip: 'Sending image',
+                          onPressed: null,
+                          icon: SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else
+                        PopupMenuButton<_ComposerAttachment>(
+                          key: const ValueKey('composer-attach-button'),
+                          tooltip: 'Attach',
+                          enabled:
+                              !isBusy &&
+                              !isEditing &&
+                              !isRecordingVoice &&
+                              !isSlowed,
+                          icon: const Icon(Icons.add_circle_outline),
+                          onSelected: (choice) => unawaited(switch (choice) {
+                            _ComposerAttachment.image => onPickImage(),
+                            _ComposerAttachment.poll => onCreatePoll(),
+                          }),
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(
+                              value: _ComposerAttachment.image,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.image_outlined),
+                                title: Text('Send image'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _ComposerAttachment.poll,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.poll_outlined),
+                                title: Text('Create poll'),
+                              ),
+                            ),
+                          ],
+                        ),
                       const SizedBox(width: 8),
                       if (isRecordingVoice)
                         Expanded(
@@ -3438,6 +3590,8 @@ class _Composer extends StatelessWidget {
     );
   }
 }
+
+enum _ComposerAttachment { image, poll }
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).
@@ -3689,6 +3843,7 @@ String _replyPreviewBody(ChatMessage message) {
     MessageType.image => 'Image',
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
+    MessageType.poll => pollPreviewText(message.body),
   };
 }
 

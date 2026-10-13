@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/poll.dart';
 
 final chatMediaProvider = FutureProvider.autoDispose
     .family<List<ConversationMediaItem>, String>((ref, conversationId) {
@@ -136,6 +137,7 @@ class _MediaLeading extends ConsumerWidget {
       MessageType.voice => Icons.mic_none_outlined,
       MessageType.file => Icons.insert_drive_file_outlined,
       MessageType.image => Icons.image_outlined,
+      MessageType.poll => Icons.poll_outlined,
       MessageType.text || MessageType.system => Icons.chat_bubble_outline,
     });
   }
@@ -157,6 +159,7 @@ String _titleFor(ConversationMediaItem item) {
     MessageType.image => '[Image]',
     MessageType.voice => '[Voice]',
     MessageType.file => '[File]',
+    MessageType.poll => pollPreviewText(item.body),
     MessageType.text || MessageType.system => item.body,
   };
 }

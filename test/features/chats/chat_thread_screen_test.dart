@@ -1162,7 +1162,9 @@ void main() {
     await tester.pumpWidget(_app(repository, imagePickerService: picker));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.tap(find.byTooltip('Attach'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send image'));
     await tester.pump();
 
     expect(picker.pickCalls, 1);
@@ -1306,17 +1308,19 @@ void main() {
     await tester.pumpWidget(_app(repository, imagePickerService: picker));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.tap(find.byTooltip('Attach'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send image'));
     await tester.pump();
 
-    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    expect(find.byTooltip('Attach'), findsOneWidget);
     expect(
       tester
-          .widget<IconButton>(
-            find.widgetWithIcon(IconButton, Icons.image_outlined),
+          .widget<PopupMenuButton<Object?>>(
+            find.byKey(const ValueKey('composer-attach-button')),
           )
-          .onPressed,
-      isNotNull,
+          .enabled,
+      isTrue,
     );
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
@@ -1336,7 +1340,9 @@ void main() {
     await tester.pumpWidget(_app(repository, imagePickerService: picker));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.tap(find.byTooltip('Attach'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send image'));
     await tester.pump();
 
     expect(repository.sentImages, isEmpty);
@@ -1361,7 +1367,9 @@ void main() {
     await tester.pumpWidget(_app(repository, imagePickerService: picker));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.image_outlined));
+    await tester.tap(find.byTooltip('Attach'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send image'));
     await tester.pump();
 
     expect(find.byIcon(Icons.image_outlined), findsOneWidget);
@@ -1705,7 +1713,7 @@ void main() {
       find.text("You don't have permission to send messages in this channel"),
       findsOneWidget,
     );
-    expect(find.byTooltip('Send image'), findsNothing);
+    expect(find.byTooltip('Attach'), findsNothing);
     expect(find.byType(TextField), findsNothing);
 
     await tester.longPress(find.text('Announcement'));
@@ -1785,11 +1793,11 @@ void main() {
       expect(sendButton(tester).onPressed, isNull);
       expect(
         tester
-            .widget<IconButton>(
-              find.widgetWithIcon(IconButton, Icons.image_outlined),
+            .widget<PopupMenuButton<Object?>>(
+              find.byKey(const ValueKey('composer-attach-button')),
             )
-            .onPressed,
-        isNull,
+            .enabled,
+        isFalse,
       );
 
       await tester.enterText(find.byType(TextField), 'Too soon');
@@ -3408,6 +3416,64 @@ ChatMessage _message({
 }
 
 class FakeChatsRepository implements ChatsRepository {
+  final createdPolls =
+      <
+        ({
+          String conversationId,
+          String question,
+          List<String> options,
+          bool multi,
+          int? durationHours,
+        })
+      >[];
+  final pollVotes = <(String, List<String>)>[];
+  final endedPolls = <String>[];
+  var canModeratePollsValue = false;
+  var pollVoters = <String, List<Profile>>{};
+
+  @override
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  }) async {
+    if (sendError case final error?) {
+      throw error;
+    }
+    createdPolls.add((
+      conversationId: conversationId,
+      question: question,
+      options: options,
+      multi: multi,
+      durationHours: durationHours,
+    ));
+  }
+
+  @override
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  }) async {
+    pollVotes.add((messageId, optionIds));
+  }
+
+  @override
+  Future<void> endPoll({required String messageId}) async {
+    endedPolls.add(messageId);
+  }
+
+  @override
+  Future<bool> canModeratePolls(String conversationId) async =>
+      canModeratePollsValue;
+
+  @override
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  }) async => pollVoters[optionId] ?? const [];
+
   var conversations = <ConversationSummary>[];
   var messages = <ChatMessage>[];
   var readMarkers = <ConversationReadMarker>[];

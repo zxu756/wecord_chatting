@@ -61,6 +61,31 @@ abstract interface class ChatsRepository {
     required String targetConversationId,
   });
 
+  /// Posts a poll; [durationHours] null keeps it open until ended.
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  });
+
+  /// Replaces the current user's votes on a poll; empty withdraws them.
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  });
+
+  Future<void> endPoll({required String messageId});
+
+  /// Whether the current user may end others' polls in a conversation.
+  Future<bool> canModeratePolls(String conversationId);
+
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  });
+
   Future<List<MessageSearchResult>> searchMessages(String query);
 
   Future<List<DiscoveryResult>> searchDiscovery(String query);
@@ -482,6 +507,64 @@ class SupabaseChatsRepository implements ChatsRepository {
         'target_conversation_id': targetConversationId,
       }),
     );
+  }
+
+  @override
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  }) async {
+    await _send(
+      () => _dataSource.rpc('create_poll', {
+        'target_conversation_id': conversationId,
+        'question': question.trim(),
+        'options': [for (final option in options) option.trim()],
+        'multi': multi,
+        'duration_hours': durationHours,
+      }),
+    );
+  }
+
+  @override
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  }) async {
+    await _dataSource.rpc('vote_poll', {
+      'target_message_id': messageId,
+      'option_ids': optionIds,
+    });
+  }
+
+  @override
+  Future<void> endPoll({required String messageId}) async {
+    await _dataSource.rpc('end_poll', {'target_message_id': messageId});
+  }
+
+  @override
+  Future<bool> canModeratePolls(String conversationId) async {
+    final allowed = await _dataSource.rpc('can_current_user_moderate_polls', {
+      'target_conversation_id': conversationId,
+    });
+    return allowed == true;
+  }
+
+  @override
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  }) async {
+    final rows = await _dataSource.rpc('list_poll_voters', {
+      'target_message_id': messageId,
+      'target_option_id': optionId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(Profile.fromJson)
+        .toList(growable: false);
   }
 
   @override
@@ -1047,7 +1130,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('messages')
         .select(
-          '*,reactions,is_pinned,sender_nickname,sender_role_color,thread_summary,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+          '*,reactions,is_pinned,sender_nickname,sender_role_color,thread_summary,poll_results,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
@@ -1245,6 +1328,17 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               event: PostgresChangeEvent.all,
               schema: 'public',
               table: 'message_reactions',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'conversation_id',
+                value: conversationId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'message_poll_votes',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'conversation_id',
@@ -1501,6 +1595,41 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  }) {
+    throw StateError('Supabase must be initialized before creating polls.');
+  }
+
+  @override
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  }) {
+    throw StateError('Supabase must be initialized before voting.');
+  }
+
+  @override
+  Future<void> endPoll({required String messageId}) {
+    throw StateError('Supabase must be initialized before ending polls.');
+  }
+
+  @override
+  Future<bool> canModeratePolls(String conversationId) async => false;
+
+  @override
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  }) async {
+    return const [];
+  }
+
+  @override
   Future<List<MessageSearchResult>> searchMessages(String query) {
     throw StateError('Supabase must be initialized before searching messages.');
   }
@@ -1749,6 +1878,10 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
             message.replyToMessageId != null &&
             recalledMessageIds.contains(message.replyToMessageId);
         return _containsQuery(message.body, normalizedQuery) ||
+            (message.pollAttachment?.options.any(
+                  (option) => _containsQuery(option.text, normalizedQuery),
+                ) ??
+                false) ||
             (!previewParentIsRecalled &&
                 (_containsQuery(preview?.body, normalizedQuery) ||
                     _containsQuery(preview?.senderName, normalizedQuery)));

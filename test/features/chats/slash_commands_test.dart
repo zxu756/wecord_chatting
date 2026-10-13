@@ -160,7 +160,10 @@ void main() {
       expect(find.byKey(const ValueKey('slash-command-list')), findsOneWidget);
       expect(find.byKey(const ValueKey('slash-command-shrug')), findsOneWidget);
       expect(find.byKey(const ValueKey('slash-command-nick')), findsNothing);
-      expect(find.byKey(const ValueKey('slash-command-poll')), findsNothing);
+
+      await tester.enterText(_field, '/p');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('slash-command-poll')), findsOneWidget);
 
       await tester.enterText(_field, '/ta');
       await tester.pump();

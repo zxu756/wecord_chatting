@@ -352,6 +352,53 @@ void main() {
     await tester.tap(find.text('Elsewhere'));
     await tester.tap(find.byKey(const ValueKey('event-end-switch')));
   });
+
+  Future<void> openPolls(WidgetTester tester, PhoneWorld world) async {
+    world.chats.messages = pollMessages();
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/conv-general',
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+  }
+
+  screen('29-poll-bubbles', (tester, world) async {
+    await openPolls(tester, world);
+    await scrollThreadUp(tester, 260);
+  });
+
+  screen('29b-poll-bubbles-small', (tester, world) async {
+    await openPolls(tester, world);
+  }, viewport: smallPhone);
+
+  screen('30-poll-composer-keyboard', (tester, world) async {
+    await openPolls(tester, world);
+    await tester.tap(find.byTooltip('Attach'));
+    await settle(tester);
+    await tester.tap(find.text('Create poll'));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('poll-question-field')),
+      'Which day works best for the retro?',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('poll-option-field-0')),
+      'Monday',
+    );
+    await showKeyboard(tester, notchedPhone);
+  });
+
+  screen('31-slash-commands', (tester, world) async {
+    await openChannel(tester, world);
+    final composer = find.widgetWithText(TextField, 'Message');
+    await tester.tap(composer);
+    await tester.enterText(composer, '/');
+    await showKeyboard(tester, notchedPhone);
+  });
 }
 
 /// Loads Roboto and the Material icons from the Flutter SDK, so text is not

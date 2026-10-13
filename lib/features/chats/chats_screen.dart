@@ -10,6 +10,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/poll.dart';
 
 class ChatThreadRouteExtra {
   const ChatThreadRouteExtra({
@@ -139,6 +140,8 @@ class _ConversationTile extends ConsumerWidget {
         : 'Conversation';
     final lastMessage = conversation.lastMessageType == MessageType.voice
         ? '[Voice]'
+        : conversation.lastMessageType == MessageType.poll
+        ? pollPreviewText(conversation.lastMessageBody ?? '')
         : conversation.lastMessageBody?.trim().isNotEmpty == true
         ? (conversation.lastMessageType ?? MessageType.text) == MessageType.text
               ? plainTextFromMarkdown(conversation.lastMessageBody!)

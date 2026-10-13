@@ -2732,4 +2732,114 @@ void main() {
       );
     }
   });
+
+  test('polls are RPC written, member scoped, realtime and not forwarded', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      rawSql,
+      contains(
+        "check (type in ('text', 'image', 'file', 'voice', 'system', 'poll'))",
+      ),
+    );
+    final insertPolicy = policyBody(rawSql, 'messages_insert_member');
+    expect(insertPolicy, contains("type <> 'system'"));
+    expect(insertPolicy, contains("type <> 'poll'"));
+
+    expect(
+      sql,
+      contains('create table if not exists public.message_poll_votes'),
+    );
+    expect(sql, contains('primary key (message_id, user_id, option_id)'));
+    expect(
+      sql,
+      contains(
+        'alter table public.message_poll_votes enable row level security',
+      ),
+    );
+    expect(
+      sql,
+      contains('alter table public.message_poll_votes replica identity full'),
+    );
+    expect(
+      rawSql,
+      contains(
+        'alter publication supabase_realtime add table public.message_poll_votes',
+      ),
+    );
+    expect(
+      policyBody(rawSql, 'message_poll_votes_select_member'),
+      contains('current_user_readable_conversation_ids()'),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'message_poll_votes').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+
+    final createBody = functionBody(sql, 'create_poll');
+    expect(createBody, contains('Poll question must be 1 to 300 characters'));
+    expect(createBody, contains('A poll needs 2 to 10 options'));
+    expect(createBody, contains('Poll options must be 1 to 100 characters'));
+    expect(createBody, contains('is_current_user_blocked_in_conversation'));
+    final voteBody = functionBody(sql, 'vote_poll');
+    expect(voteBody, contains('public.poll_is_closed(poll)'));
+    expect(voteBody, contains('This poll takes one answer'));
+    expect(voteBody, contains('for share'));
+    final endBody = functionBody(sql, 'end_poll');
+    expect(endBody, contains('can_current_user_moderate_polls'));
+    expect(
+      functionBody(sql, 'can_current_user_moderate_polls'),
+      contains("'manage_messages'"),
+    );
+    final resultsBody = functionBody(sql, 'poll_results');
+    expect(resultsBody, contains("'total_voters'"));
+    expect(resultsBody, contains("'my_votes'"));
+    expect(resultsBody, contains('is_current_user_conversation_member'));
+    expect(
+      functionBody(sql, 'list_poll_voters'),
+      contains('is_current_user_conversation_member(m.conversation_id)'),
+    );
+    expect(functionBody(sql, 'forward_message'), contains("type <> 'poll'"));
+    expect(
+      functionBody(sql, 'search_messages'),
+      contains('public.message_search_text(m.type, m.body, m.attachment)'),
+    );
+    for (final name in [
+      'create_poll',
+      'vote_poll',
+      'end_poll',
+      'poll_results',
+      'list_poll_voters',
+    ]) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('set search_path = public'), reason: name);
+      expect(body, contains('auth.uid()'), reason: name);
+    }
+    expect(
+      rawSql,
+      contains(
+        'revoke execute on function public.poll_is_closed(public.messages) '
+        'from authenticated',
+      ),
+    );
+    for (final signature in [
+      'public.create_poll(uuid, text, text[], boolean, integer)',
+      'public.vote_poll(uuid, text[])',
+      'public.end_poll(uuid)',
+      'public.poll_results(public.messages)',
+      'public.list_poll_voters(uuid, text)',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

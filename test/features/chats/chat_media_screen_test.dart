@@ -81,12 +81,40 @@ ConversationMediaItem _media({
       MessageType.file => null,
       MessageType.text => null,
       MessageType.system => null,
+      MessageType.poll => null,
     },
     createdAt: DateTime.utc(2026, 5, 19, 10),
   );
 }
 
 class FakeChatsRepository implements ChatsRepository {
+  @override
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  }) async {}
+
+  @override
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  }) async {}
+
+  @override
+  Future<void> endPoll({required String messageId}) async {}
+
+  @override
+  Future<bool> canModeratePolls(String conversationId) async => false;
+
+  @override
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  }) async => const [];
+
   var media = <ConversationMediaItem>[];
 
   @override

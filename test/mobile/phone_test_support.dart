@@ -35,6 +35,7 @@ import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
+import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
@@ -709,6 +710,77 @@ List<ForumPost> forumPosts() {
       createdMinutesAgo: 2000,
       activeMinutesAgo: 1500,
       tags: [forumTags[1], forumTags[3]],
+    ),
+  ];
+}
+
+/// An open multiple-answer poll with long texts and a closed one.
+List<ChatMessage> pollMessages({String conversationId = 'conv-general'}) {
+  Map<String, dynamic> poll(
+    String question,
+    List<String> options, {
+    bool multi = false,
+    DateTime? endsAt,
+  }) {
+    return {
+      'kind': 'poll',
+      'question': question,
+      'options': [
+        for (final (index, text) in options.indexed)
+          {'id': 'o${index + 1}', 'text': text},
+      ],
+      'multi': multi,
+      'ends_at': endsAt?.toIso8601String(),
+    };
+  }
+
+  const question =
+      'Which day works best for the release retrospective and the team '
+      'dinner afterwards?';
+  return [
+    phoneMessage(
+      'poll-open',
+      bart,
+      question,
+      minutesAgo: 30,
+      type: MessageType.poll,
+      conversationId: conversationId,
+      attachment: poll(
+        question,
+        [
+          'Monday',
+          'Thursday evening, after the long planning meeting wraps up',
+          'Friday',
+          'Not this week',
+        ],
+        multi: true,
+        endsAt: _now.add(const Duration(hours: 20)),
+      ),
+    ).copyWith(
+      pollResults: const PollResults(
+        counts: {'o1': 2, 'o2': 5, 'o4': 1},
+        totalVoters: 6,
+        myVotes: {'o2'},
+      ),
+    ),
+    phoneMessage(
+      'poll-closed',
+      me,
+      'Tabs or spaces?',
+      minutesAgo: 10,
+      type: MessageType.poll,
+      conversationId: conversationId,
+      attachment: poll('Tabs or spaces?', [
+        'Tabs',
+        'Spaces',
+      ], endsAt: _now.subtract(const Duration(minutes: 5))),
+    ).copyWith(
+      pollResults: const PollResults(
+        counts: {'o1': 1, 'o2': 3},
+        totalVoters: 4,
+        myVotes: {'o2'},
+        closed: true,
+      ),
     ),
   ];
 }

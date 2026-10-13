@@ -380,6 +380,33 @@ class FakeSettingsRepository implements SettingsRepository {
 }
 
 class FakeChatsRepository implements ChatsRepository {
+  @override
+  Future<void> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    required bool multi,
+    int? durationHours,
+  }) async {}
+
+  @override
+  Future<void> votePoll({
+    required String messageId,
+    required List<String> optionIds,
+  }) async {}
+
+  @override
+  Future<void> endPoll({required String messageId}) async {}
+
+  @override
+  Future<bool> canModeratePolls(String conversationId) async => false;
+
+  @override
+  Future<List<Profile>> listPollVoters({
+    required String messageId,
+    required String optionId,
+  }) async => const [];
+
   var conversations = <ConversationSummary>[];
   Future<List<ConversationSummary>>? conversationsFuture;
   final pinnedCalls = <ConversationToggleCall>[];

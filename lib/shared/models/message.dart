@@ -1,4 +1,5 @@
 import 'package:wecord/shared/models/conversation_thread.dart';
+import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 const _sentinel = Object();
@@ -8,7 +9,8 @@ enum MessageType {
   image,
   file,
   voice,
-  system;
+  system,
+  poll;
 
   factory MessageType.fromJson(String value) {
     return switch (value) {
@@ -17,6 +19,7 @@ enum MessageType {
       'file' => MessageType.file,
       'voice' => MessageType.voice,
       'system' => MessageType.system,
+      'poll' => MessageType.poll,
       _ => throw ArgumentError.value(value, 'value', 'Unknown message type'),
     };
   }
@@ -28,6 +31,7 @@ enum MessageType {
       MessageType.file => 'file',
       MessageType.voice => 'voice',
       MessageType.system => 'system',
+      MessageType.poll => 'poll',
     };
   }
 }
@@ -54,6 +58,7 @@ class ChatMessage {
     this.senderNickname,
     this.senderRoleColor,
     this.threadSummary,
+    this.pollResults,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -88,6 +93,7 @@ class ChatMessage {
       senderNickname: json['sender_nickname'] as String?,
       senderRoleColor: (json['sender_role_color'] as num?)?.toInt(),
       threadSummary: MessageThreadSummary.maybeFromJson(json['thread_summary']),
+      pollResults: PollResults.maybeFromJson(json['poll_results']),
     );
   }
 
@@ -123,6 +129,9 @@ class ChatMessage {
   /// The thread started from this message, if any.
   final MessageThreadSummary? threadSummary;
 
+  /// Votes on a poll message, when the thread query includes them.
+  final PollResults? pollResults;
+
   /// For a "X pinned a message" system notice, the id of the pinned message.
   String? get pinnedMessageId {
     final value = attachment;
@@ -141,6 +150,13 @@ class ChatMessage {
       return null;
     }
     return ImageAttachment.fromJson(value);
+  }
+
+  PollAttachment? get pollAttachment {
+    if (type != MessageType.poll) {
+      return null;
+    }
+    return PollAttachment.maybeFromJson(attachment);
   }
 
   VoiceAttachment? get voiceAttachment {
@@ -187,6 +203,7 @@ class ChatMessage {
     Object? senderNickname = _sentinel,
     Object? senderRoleColor = _sentinel,
     Object? threadSummary = _sentinel,
+    Object? pollResults = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -227,6 +244,9 @@ class ChatMessage {
       threadSummary: identical(threadSummary, _sentinel)
           ? this.threadSummary
           : threadSummary as MessageThreadSummary?,
+      pollResults: identical(pollResults, _sentinel)
+          ? this.pollResults
+          : pollResults as PollResults?,
     );
   }
 }

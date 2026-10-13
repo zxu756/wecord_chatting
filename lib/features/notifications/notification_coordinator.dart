@@ -11,6 +11,7 @@ import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/poll.dart';
 
 final activeConversationIdProvider = StateProvider<String?>((ref) => null);
 
@@ -436,12 +437,13 @@ class NotificationCoordinator {
   ) {
     if (preferences.showPreviews) {
       final body = conversation.lastMessageBody?.trim();
-      final preview =
-          body != null &&
-              (conversation.lastMessageType ?? MessageType.text) ==
-                  MessageType.text
-          ? plainTextFromMarkdown(body).trim()
-          : body;
+      final preview = body == null
+          ? null
+          : switch (conversation.lastMessageType ?? MessageType.text) {
+              MessageType.text => plainTextFromMarkdown(body).trim(),
+              MessageType.poll => pollPreviewText(body),
+              _ => body,
+            };
       if (preview != null && preview.isNotEmpty) {
         return preview;
       }

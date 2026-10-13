@@ -133,6 +133,60 @@ void main() {
     expect(dataSource.rpcCalls.single.functionName, 'forward_message');
   });
 
+  test('poll calls send the poll RPCs', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcResults['can_current_user_moderate_polls'] = true
+      ..rpcResults['list_poll_voters'] = [
+        {
+          'id': 'user-2',
+          'username': 'ada',
+          'display_name': 'Ada',
+          'bio': '',
+          'created_at': '2026-10-13T09:00:00Z',
+          'updated_at': '2026-10-13T09:00:00Z',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await repository.createPoll(
+      conversationId: 'conversation-1',
+      question: ' Lunch? ',
+      options: [' Pizza', 'Sushi '],
+      multi: true,
+      durationHours: 24,
+    );
+    await repository.votePoll(messageId: 'poll-1', optionIds: ['o2']);
+    await repository.endPoll(messageId: 'poll-1');
+    expect(await repository.canModeratePolls('conversation-1'), isTrue);
+    final voters = await repository.listPollVoters(
+      messageId: 'poll-1',
+      optionId: 'o2',
+    );
+
+    expect(voters.single.username, 'ada');
+    expect(dataSource.rpcCalls.map((call) => call.functionName), [
+      'create_poll',
+      'vote_poll',
+      'end_poll',
+      'can_current_user_moderate_polls',
+      'list_poll_voters',
+    ]);
+    expect(dataSource.rpcCalls.first.params, {
+      'target_conversation_id': 'conversation-1',
+      'question': 'Lunch?',
+      'options': ['Pizza', 'Sushi'],
+      'multi': true,
+      'duration_hours': 24,
+    });
+    expect(dataSource.rpcCalls[1].params, {
+      'target_message_id': 'poll-1',
+      'option_ids': ['o2'],
+    });
+  });
+
   test('searchMessages maps global search rows', () async {
     final dataSource = FakeChatsDataSource()
       ..searchRows = [

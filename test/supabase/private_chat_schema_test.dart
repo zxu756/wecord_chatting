@@ -1425,4 +1425,18 @@ void main() {
       );
     }
   });
+
+  test('circle manager checks reject non-members', () {
+    final sql = allMigrationSql();
+
+    for (final functionName in [
+      'invite_circle_members',
+      'delete_circle_post',
+    ]) {
+      final body = functionBody(sql, functionName);
+      expect(body, contains("coalesce(caller_role, '') not in"));
+      expect(body, isNot(contains("and caller_role not in")));
+      expect(body, isNot(contains("if caller_role not in")));
+    }
+  });
 }

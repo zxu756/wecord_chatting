@@ -5,9 +5,11 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
+import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
 import 'phone_test_support.dart';
 
 /// Lays out every screen, sheet and dialog with realistic data on phone
@@ -589,6 +591,62 @@ void main() {
       expectFullyVisible(
         tester,
         find.widgetWithText(FilledButton, 'Back to Circles'),
+      );
+    });
+
+    phoneTestWidgets('audit log with filters and details', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      final now = DateTime.now();
+      world.circles.auditEntries = [
+        CircleAuditEntry(
+          id: 'audit-long',
+          circleId: 'circle-1',
+          action: 'channel_permissions_update',
+          targetType: 'channel',
+          targetLabel: 'yosemite-2026-planning-and-logistics',
+          changes: const {
+            'target_name': 'Moderators of the Valley',
+            'allow': {'old': 0, 'new': 1 | 2 | 4 | 64 | 256 | 8192},
+            'deny': {'old': 2, 'new': 0},
+          },
+          createdAt: now.subtract(const Duration(minutes: 1)),
+          actor: const CircleAuditActor(
+            id: 'user-9',
+            username: 'bartholomew_the_bold',
+            displayName: 'Bartholomew the Extremely Bold and Verbose',
+          ),
+        ),
+        ...circle_fakes.sampleAuditEntries(now: now, count: 30),
+      ];
+      await world.open(tester, '/circles/circle-1');
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await settle(tester);
+      await tester.ensureVisible(find.text('Audit log'));
+      await settle(tester);
+      await tester.tap(find.text('Audit log'));
+      await settle(tester);
+
+      expect(find.text('Audit log'), findsOneWidget);
+      expectTouchTargets(tester, iconButtonWithTooltip('Filter by action'));
+      await tester.tap(find.byKey(const ValueKey('circle-audit-audit-long')));
+      await settle(tester);
+      expect(
+        find.textContaining('Mention everyone', findRichText: true),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('Filter by action'));
+      await settle(tester);
+      await tester.tap(find.text('Roles').last);
+      await settle(tester);
+      expectFullyVisible(tester, find.byType(InputChip));
+      expect(
+        find.byKey(const ValueKey('circle-audit-audit-1')),
+        findsOneWidget,
       );
     });
 

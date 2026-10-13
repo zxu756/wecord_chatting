@@ -2277,4 +2277,101 @@ void main() {
       );
     }
   });
+
+  test('circle audit log is read-only for clients and written by RPCs', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(sql, contains('create table if not exists public.circle_audit_log'));
+    expect(sql, contains('circle_audit_log_circle_created_idx'));
+    expect(
+      sql,
+      contains('on public.circle_audit_log (circle_id, created_at desc)'),
+    );
+    expect(
+      sql,
+      contains('alter table public.circle_audit_log enable row level security'),
+    );
+    expect(
+      policyBody(rawSql, 'circle_audit_log_select_viewer'),
+      contains(
+        "current_user_has_circle_permission(circle_id, 'view_audit_log')",
+      ),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'circle_audit_log').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(
+      rawSql,
+      contains(
+        'revoke insert, update, delete, truncate on public.circle_audit_log '
+        'from authenticated',
+      ),
+    );
+
+    final writeBody = functionBody(sql, 'write_circle_audit');
+    expect(writeBody, contains('security definer'));
+    expect(writeBody, contains('auth.uid()'));
+    for (final signature in [
+      'public.write_circle_audit(uuid, text, text, uuid, text, jsonb)',
+      'public.circle_member_label(uuid, uuid)',
+    ]) {
+      expect(
+        rawSql,
+        contains('revoke execute on function $signature from authenticated'),
+      );
+    }
+
+    final listBody = functionBody(sql, 'list_circle_audit_log');
+    expect(listBody, contains("'view_audit_log'"));
+    expect(listBody, contains('order by a.created_at desc, a.id desc'));
+    expect(listBody, contains("split_part(a.action, '_', 1)"));
+    expect(
+      rawSql,
+      contains(
+        'grant execute on function '
+        'public.list_circle_audit_log(uuid, timestamptz, integer, text) '
+        'to authenticated',
+      ),
+    );
+
+    // Every management RPC writes its entry.
+    const actions = {
+      'create_circle_channel': 'channel_create',
+      'create_channel_category': 'category_create',
+      'rename_channel_category': 'category_rename',
+      'delete_channel_category': 'category_delete',
+      'reorder_circle_channels': 'channel_reorder',
+      'set_channel_overwrite': 'channel_permissions_update',
+      'set_channel_privacy': 'channel_privacy_update',
+      'set_channel_slowmode': 'channel_slowmode_update',
+      'create_circle_role': 'role_create',
+      'update_circle_role': 'role_update',
+      'delete_circle_role': 'role_delete',
+      'reorder_circle_roles': 'role_reorder',
+      'set_member_roles': 'member_roles_update',
+      'set_circle_nickname': 'member_nickname_update',
+      'kick_circle_member': 'member_kick',
+      'leave_circle': 'member_leave',
+      'transfer_circle_ownership': 'circle_ownership_transfer',
+      'create_circle_invite': 'invite_create',
+      'revoke_circle_invite': 'invite_revoke',
+      'invite_circle_members': 'member_add',
+      'pin_message': 'message_pin',
+      'unpin_message': 'message_unpin',
+      'set_thread_archived': 'thread_archive',
+      'delete_circle_post': 'post_delete',
+    };
+    for (final MapEntry(key: name, value: action) in actions.entries) {
+      final body = functionBody(sql, name);
+      expect(body, contains('public.write_circle_audit('), reason: name);
+      expect(body, contains("'$action'"), reason: name);
+    }
+  });
 }

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -132,6 +133,16 @@ abstract interface class CirclesRepository {
   Future<void> transferOwnership({
     required String circleId,
     required String newOwnerId,
+  });
+
+  /// A page of the circle's audit log, newest first: entries older than
+  /// [before] (from the newest when null), at most [limit]. [action] is an
+  /// action or an action group's filter (see `CircleAuditActionGroup`).
+  Future<List<CircleAuditEntry>> listAuditLog({
+    required String circleId,
+    DateTime? before,
+    int limit = 50,
+    String? action,
   });
 
   /// The permission overwrites of a channel, roles first.
@@ -481,6 +492,25 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_circle_id': circleId,
       'new_owner_id': newOwnerId,
     });
+  }
+
+  @override
+  Future<List<CircleAuditEntry>> listAuditLog({
+    required String circleId,
+    DateTime? before,
+    int limit = 50,
+    String? action,
+  }) async {
+    final rows = await _dataSource.rpc('list_circle_audit_log', {
+      'target_circle_id': circleId,
+      'before': before?.toUtc().toIso8601String(),
+      'limit_count': limit,
+      'action_filter': action,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleAuditEntry.fromJson)
+        .toList(growable: false);
   }
 
   @override
@@ -1033,6 +1063,16 @@ class UninitializedCirclesRepository implements CirclesRepository {
     throw StateError(
       'Supabase must be initialized before transferring ownership.',
     );
+  }
+
+  @override
+  Future<List<CircleAuditEntry>> listAuditLog({
+    required String circleId,
+    DateTime? before,
+    int limit = 50,
+    String? action,
+  }) async {
+    return const [];
   }
 
   @override

@@ -144,6 +144,8 @@ class CircleDetail {
 
   bool get canManageRoles => can(CirclePermission.manageRoles);
 
+  bool get canViewAuditLog => can(CirclePermission.viewAuditLog);
+
   /// The current user's permission bits in [channel]: what the server
   /// computed with its overwrites, otherwise the circle-wide permissions.
   int channelPermissionsOf(CircleChannel channel) {

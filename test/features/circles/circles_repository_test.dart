@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -288,6 +289,65 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('listAuditLog calls list_circle_audit_log and maps entries', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = [
+        {
+          'id': 'audit-1',
+          'circle_id': 'circle-1',
+          'action': 'role_update',
+          'target_type': 'role',
+          'target_id': 'role-1',
+          'target_label': 'Mods',
+          'changes': {
+            'name': {'old': 'Mod', 'new': 'Mods'},
+          },
+          'created_at': '2026-10-14T01:02:03Z',
+          'actor': {
+            'id': 'u1',
+            'username': 'ada',
+            'display_name': 'Ada',
+            'avatar_url': null,
+            'nickname': 'Countess',
+          },
+        },
+        {
+          'id': 'audit-2',
+          'circle_id': 'circle-1',
+          'action': 'member_leave',
+          'target_type': 'member',
+          'target_id': null,
+          'target_label': null,
+          'changes': {},
+          'created_at': '2026-10-14T01:00:00Z',
+          'actor': null,
+        },
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final entries = await repository.listAuditLog(
+      circleId: 'circle-1',
+      before: DateTime.utc(2026, 10, 14, 2),
+      limit: 20,
+      action: 'role',
+    );
+
+    expect(dataSource.calls.single.functionName, 'list_circle_audit_log');
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'before': '2026-10-14T02:00:00.000Z',
+      'limit_count': 20,
+      'action_filter': 'role',
+    });
+    expect(entries.first.action, 'role_update');
+    expect(entries.first.group, CircleAuditActionGroup.role);
+    expect(entries.first.actor?.name, 'Countess');
+    expect(entries.first.changes['name'], {'old': 'Mod', 'new': 'Mods'});
+    expect(entries.first.createdAt, DateTime.utc(2026, 10, 14, 1, 2, 3));
+    expect(entries.last.actor, isNull);
+    expect(entries.last.group, CircleAuditActionGroup.member);
   });
 
   test('channel overwrite methods call the overwrite RPCs', () async {

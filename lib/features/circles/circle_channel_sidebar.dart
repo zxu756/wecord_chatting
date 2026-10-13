@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
@@ -717,6 +718,8 @@ class _SidebarHeader extends StatelessWidget {
               onCreateCategory();
             case _CircleMenuAction.roles:
               openCircleRolesScreen(context, detail.circle.id);
+            case _CircleMenuAction.auditLog:
+              openCircleAuditLogScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
               onChangeNickname(currentMember!);
             case _CircleMenuAction.notificationSettings:
@@ -762,6 +765,14 @@ class _SidebarHeader extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.shield_outlined),
                 title: Text('Roles'),
+              ),
+            ),
+          if (detail.canViewAuditLog)
+            const PopupMenuItem(
+              value: _CircleMenuAction.auditLog,
+              child: ListTile(
+                leading: Icon(Icons.history),
+                title: Text('Audit log'),
               ),
             ),
           const PopupMenuItem(
@@ -821,6 +832,7 @@ enum _CircleMenuAction {
   createChannel,
   createCategory,
   roles,
+  auditLog,
   notificationSettings,
   changeNickname,
   transferOwnership,

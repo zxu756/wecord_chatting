@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -242,6 +243,14 @@ class FakeCirclesRepository implements CirclesRepository {
 
   @override
   Future<void> leaveCircle(String circleId) async {}
+
+  @override
+  Future<List<CircleAuditEntry>> listAuditLog({
+    required String circleId,
+    DateTime? before,
+    int limit = 50,
+    String? action,
+  }) async => const [];
 
   @override
   Future<void> transferOwnership({

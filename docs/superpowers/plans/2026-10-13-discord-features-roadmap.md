@@ -96,9 +96,10 @@
 - [x] **18. 慢速模式（Slowmode）**（S）
   - `circle_channels.slowmode_seconds int default 0`（0–21600）。发送消息的 RPC 对频道会话检查该用户上一条消息时间；有 `manage_messages` 权限的人不受限制。
   - 输入框上方显示「慢速模式已开启」和倒计时。
-- [ ] **19. 操作日志（Audit Log）**（M）
+- [x] **19. 操作日志（Audit Log）**（M）
   - 表 `circle_audit_log (id, circle_id, actor_id, action text, target_type, target_id, changes jsonb, created_at)`；所有管理类 RPC 写入（建 / 删 / 改频道、角色、权限、邀请、踢人、昵称、慢速模式、固定消息、Webhook、表情、活动）。
   - RPC `list_circle_audit_log(circle_id, before, limit)`，需要 `view_audit_log`。UI：圈子设置 → 操作日志，可按操作类型筛选。
+  - 已接入：频道（创建、排序、权限覆盖、私密 / 只读、慢速模式）、分类、角色（含字段新旧值）、成员角色、他人昵称、踢人、退出、转让所有权、邀请（链接创建 / 撤销、直接拉人）、频道内固定 / 取消固定、管理者归档子话题、删除他人帖子；无变化的调用不记录。Webhook、表情、活动在对应功能实现时补上。
 - [x] **20. 踢出成员**（S）
   - RPC `kick_circle_member`（需要 `kick_members`，不能踢 owner，也不能踢角色比自己高的人），同时移出所有频道会话；写操作日志。
   - 退出与转让：`leave_circle`（owner 以外的成员，移出方式同踢人）、`transfer_circle_ownership`（仅 owner，对象须为成员；原 owner 降为无角色的普通成员）。圈子菜单「退出圈子」/「转让所有权」（选成员 + 输入圈子名确认）；被移出的人打开圈子时显示「你已不是该圈子成员」并从图标栏移除。

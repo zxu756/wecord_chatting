@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
@@ -16,6 +17,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -2277,6 +2279,176 @@ void main() {
       expect(find.text('Circles list'), findsOneWidget);
     });
   });
+
+  group('audit log', () {
+    final now = DateTime.utc(2026, 10, 14, 12);
+
+    Future<FakeCirclesRepository> openLog(
+      WidgetTester tester, {
+      List<CircleAuditEntry>? entries,
+      int pageSize = 50,
+    }) async {
+      final repository = FakeCirclesRepository()
+        ..detail = _detail()
+        ..auditEntries = entries ?? sampleAuditEntries(now: now);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [circlesRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            home: CircleAuditLogScreen(
+              circleId: 'circle-1',
+              pageSize: pageSize,
+              now: () => now,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return repository;
+    }
+
+    String summary(WidgetTester tester, String id) {
+      final text = tester.widget<Text>(
+        find.byKey(ValueKey('circle-audit-summary-$id')),
+      );
+      return text.textSpan!.toPlainText();
+    }
+
+    testWidgets('is in the circle menu only with view audit log', (
+      tester,
+    ) async {
+      final repository = FakeCirclesRepository()..detail = _detail();
+      final router = _narrowRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        _app(repository, FakeContactsRepository(), router),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Audit log'), findsOneWidget);
+      await tester.tap(find.text('Audit log'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CircleAuditLogScreen), findsOneWidget);
+
+      final member = FakeCirclesRepository()
+        ..detail = CircleDetail(
+          circle: const CircleSummary(
+            id: 'circle-1',
+            name: 'Close Friends',
+            memberCount: 2,
+            channelCount: 1,
+            currentUserRole: 'member',
+            currentUserPermissions: 1 | 2,
+          ),
+          members: const [],
+          channels: _detail().channels,
+          posts: const [],
+        );
+      final memberRouter = _narrowRouter();
+      addTearDown(memberRouter.dispose);
+      await tester.pumpWidget(
+        _app(member, FakeContactsRepository(), memberRouter),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Audit log'), findsNothing);
+    });
+
+    testWidgets('lists entries with summaries, times and details', (
+      tester,
+    ) async {
+      await openLog(tester);
+
+      expect(summary(tester, 'audit-0'), 'Ada created channel #general');
+      expect(find.text('5m ago'), findsOneWidget);
+      expect(
+        summary(tester, 'audit-1'),
+        'Grace updated role Moderators of the Valley',
+      );
+      expect(summary(tester, 'audit-2'), 'Ada set slowmode in #general to 2m');
+
+      // Role changes expand into old → new lines with permission names.
+      expect(find.textContaining('Send messages'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('circle-audit-audit-1')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'Mods → Moderators of the Valley',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'View channels → View channels, Send messages',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('#3498DB', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('loads older pages while scrolling', (tester) async {
+      final repository = await openLog(
+        tester,
+        entries: sampleAuditEntries(now: now, count: 45),
+        pageSize: 20,
+      );
+      expect(repository.auditCalls.first.before, isNull);
+      expect(repository.auditCalls.first.limit, 20);
+
+      final list = find.byKey(const ValueKey('circle-audit-log-list'));
+      for (var step = 0; step < 30; step++) {
+        await tester.drag(list, const Offset(0, -600));
+        await tester.pumpAndSettle();
+      }
+
+      expect(repository.auditCalls.length, 3);
+      expect(
+        repository.auditCalls[1].before,
+        sampleAuditEntries(now: now, count: 45)[19].createdAt,
+      );
+      expect(
+        find.byKey(const ValueKey('circle-audit-audit-44')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('filters by action group', (tester) async {
+      final repository = await openLog(tester);
+
+      await tester.tap(find.byTooltip('Filter by action'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Roles').last);
+      await tester.pumpAndSettle();
+
+      expect(repository.auditCalls.last.action, 'role');
+      expect(
+        find.byKey(const ValueKey('circle-audit-audit-1')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('circle-audit-audit-0')), findsNothing);
+
+      await tester.tap(find.byTooltip('Show all actions'));
+      await tester.pumpAndSettle();
+      expect(repository.auditCalls.last.action, isNull);
+      expect(
+        find.byKey(const ValueKey('circle-audit-audit-0')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('says when nothing matches', (tester) async {
+      await openLog(tester, entries: const []);
+      expect(find.text('Nothing has been logged yet.'), findsOneWidget);
+    });
+  });
 }
 
 /// The circle route plus the nested channel route the app uses for pushed
@@ -2445,6 +2617,30 @@ class FakeCirclesRepository implements CirclesRepository {
   @override
   Future<void> leaveCircle(String circleId) async {
     leftCircleIds.add(circleId);
+  }
+
+  /// Every audit entry, newest first; pages are served like the server.
+  var auditEntries = <CircleAuditEntry>[];
+  final auditCalls = <({DateTime? before, int limit, String? action})>[];
+
+  @override
+  Future<List<CircleAuditEntry>> listAuditLog({
+    required String circleId,
+    DateTime? before,
+    int limit = 50,
+    String? action,
+  }) async {
+    auditCalls.add((before: before, limit: limit, action: action));
+    return auditEntries
+        .where(
+          (entry) =>
+              (before == null || entry.createdAt.isBefore(before)) &&
+              (action == null ||
+                  entry.action == action ||
+                  entry.group.filter == action),
+        )
+        .take(limit)
+        .toList();
   }
 
   @override
@@ -2727,4 +2923,80 @@ Profile _profile({
     createdAt: DateTime.utc(2026, 5, 19),
     updatedAt: DateTime.utc(2026, 5, 19),
   );
+}
+
+/// Audit entries a minute apart, newest first: three handmade ones, then
+/// pins up to [count].
+List<CircleAuditEntry> sampleAuditEntries({
+  required DateTime now,
+  int count = 3,
+}) {
+  const ada = CircleAuditActor(
+    id: 'user-1',
+    username: 'ada',
+    displayName: 'Ada',
+  );
+  const grace = CircleAuditActor(
+    id: 'user-2',
+    username: 'grace',
+    displayName: 'Grace Hopper',
+    nickname: 'Grace',
+  );
+  final handmade = [
+    CircleAuditEntry(
+      id: 'audit-0',
+      circleId: 'circle-1',
+      action: 'channel_create',
+      targetType: 'channel',
+      targetId: 'channel-1',
+      targetLabel: 'general',
+      changes: const {'name': 'general', 'category_id': null},
+      createdAt: now.subtract(const Duration(minutes: 5)),
+      actor: ada,
+    ),
+    CircleAuditEntry(
+      id: 'audit-1',
+      circleId: 'circle-1',
+      action: 'role_update',
+      targetType: 'role',
+      targetId: 'role-1',
+      targetLabel: 'Moderators of the Valley',
+      changes: const {
+        'name': {'old': 'Mods', 'new': 'Moderators of the Valley'},
+        'color': {'old': null, 'new': 0x3498DB},
+        'permissions': {'old': 1, 'new': 3},
+        'hoist': {'old': false, 'new': true},
+      },
+      createdAt: now.subtract(const Duration(minutes: 6)),
+      actor: grace,
+    ),
+    CircleAuditEntry(
+      id: 'audit-2',
+      circleId: 'circle-1',
+      action: 'channel_slowmode_update',
+      targetType: 'channel',
+      targetId: 'channel-1',
+      targetLabel: 'general',
+      changes: const {
+        'slowmode_seconds': {'old': 0, 'new': 120},
+      },
+      createdAt: now.subtract(const Duration(minutes: 7)),
+      actor: ada,
+    ),
+  ];
+  return [
+    for (var index = 0; index < count; index++)
+      index < handmade.length
+          ? handmade[index]
+          : CircleAuditEntry(
+              id: 'audit-$index',
+              circleId: 'circle-1',
+              action: 'message_pin',
+              targetType: 'message',
+              targetId: 'message-$index',
+              targetLabel: 'general',
+              createdAt: now.subtract(Duration(minutes: 5 + index)),
+              actor: ada,
+            ),
+  ];
 }

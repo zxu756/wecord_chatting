@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -941,6 +942,198 @@ void main() {
     ]);
   });
 
+  test('listMessages maps pinned state and system pin notices', () async {
+    final dataSource = FakeChatsDataSource()
+      ..messageRows = [
+        {
+          'id': 'message-1',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-2',
+          'type': 'text',
+          'body': 'Pin me',
+          'created_at': '2026-05-18T04:30:00.000Z',
+          'is_pinned': true,
+        },
+        {
+          'id': 'message-2',
+          'conversation_id': 'conversation-1',
+          'sender_id': 'user-1',
+          'type': 'system',
+          'body': 'Grace pinned a message.',
+          'attachment': {'kind': 'pin', 'message_id': 'message-1'},
+          'created_at': '2026-05-18T04:31:00.000Z',
+          'is_pinned': false,
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final messages = await repository.listMessages('conversation-1');
+
+    expect(messages.first.isPinned, isTrue);
+    expect(messages.first.pinnedMessageId, isNull);
+    expect(messages.last.type, MessageType.system);
+    expect(messages.last.isPinned, isFalse);
+    expect(messages.last.pinnedMessageId, 'message-1');
+  });
+
+  test('pin RPCs are called with the target message', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcResults['can_current_user_pin_messages'] = true;
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    expect(await repository.canPinMessages('conversation-1'), isTrue);
+    await repository.pinMessage(messageId: 'message-1');
+    await repository.unpinMessage(messageId: 'message-1');
+
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'can_current_user_pin_messages',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+      const RpcCall(
+        functionName: 'pin_message',
+        params: {'target_message_id': 'message-1'},
+      ),
+      const RpcCall(
+        functionName: 'unpin_message',
+        params: {'target_message_id': 'message-1'},
+      ),
+    ]);
+  });
+
+  test('canPinMessages treats a null RPC result as not allowed', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcResults['can_current_user_pin_messages'] = null;
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    expect(await repository.canPinMessages('conversation-1'), isFalse);
+  });
+
+  test('pinMessage maps the pin limit error to a typed exception', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcErrors['pin_message'] = const PostgrestException(
+        message: 'A conversation can have at most 50 pinned messages',
+        code: '54000',
+      );
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await expectLater(
+      repository.pinMessage(messageId: 'message-1'),
+      throwsA(isA<PinnedMessageLimitException>()),
+    );
+  });
+
+  test('pinMessage rethrows other database errors', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcErrors['pin_message'] = const PostgrestException(
+        message: 'Message not found or caller cannot pin messages',
+        code: '42501',
+      );
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await expectLater(
+      repository.pinMessage(messageId: 'message-1'),
+      throwsA(isA<PostgrestException>()),
+    );
+  });
+
+  test('listPinnedMessages maps message, sender and pin metadata', () async {
+    final dataSource = FakeChatsDataSource()
+      ..rpcResults['list_pinned_messages'] = [
+        {
+          'message': {
+            'id': 'message-1',
+            'conversation_id': 'conversation-1',
+            'sender_id': 'user-2',
+            'type': 'text',
+            'body': 'Remember this',
+            'attachment': null,
+            'mentions': <Object>[],
+            'created_at': '2026-05-18T04:30:00.123456+00:00',
+            'recalled_at': null,
+            'is_pinned': true,
+          },
+          'sender': {
+            'id': 'user-2',
+            'username': 'ada',
+            'display_name': 'Ada Lovelace',
+            'alias': 'Countess',
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-05-18T00:00:00+00:00',
+            'updated_at': '2026-05-18T00:00:00+00:00',
+          },
+          'pinned_by': 'user-1',
+          'pinned_by_name': 'Grace',
+          'pinned_at': '2026-05-18T05:00:00+00:00',
+        },
+      ];
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    final pinned = await repository.listPinnedMessages('conversation-1');
+
+    expect(pinned.single.message.id, 'message-1');
+    expect(pinned.single.message.body, 'Remember this');
+    expect(pinned.single.message.isPinned, isTrue);
+    expect(pinned.single.sender.displayLabel, 'Countess');
+    expect(pinned.single.pinnedBy, 'user-1');
+    expect(pinned.single.pinnedByName, 'Grace');
+    expect(pinned.single.pinnedAt, DateTime.utc(2026, 5, 18, 5));
+    expect(dataSource.rpcCalls, [
+      const RpcCall(
+        functionName: 'list_pinned_messages',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+    ]);
+  });
+
+  test('searchThreadMessages skips system notices', () {
+    final repository = SupabaseChatsRepository.withDataSource(
+      FakeChatsDataSource(),
+      currentUserId: () => 'user-1',
+    );
+    final messages = [
+      ChatMessage(
+        id: 'message-1',
+        conversationId: 'conversation-1',
+        senderId: 'user-2',
+        type: MessageType.text,
+        body: 'We pinned the plan',
+        createdAt: DateTime.utc(2026, 5, 18),
+      ),
+      ChatMessage(
+        id: 'message-2',
+        conversationId: 'conversation-1',
+        senderId: 'user-1',
+        type: MessageType.system,
+        body: 'Grace pinned a message.',
+        createdAt: DateTime.utc(2026, 5, 18, 0, 1),
+      ),
+    ];
+
+    final results = repository.searchThreadMessages(messages, 'pinned');
+
+    expect(results.map((message) => message.id), ['message-1']);
+  });
+
   test('editMessage calls the edit RPC', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -1198,6 +1391,8 @@ class FakeChatsDataSource implements ChatsDataSource {
   var readMarkerRows = <Map<String, dynamic>>[];
   var groupMemberRows = <Map<String, dynamic>>[];
   var rpcResult = 'conversation-1';
+  final rpcResults = <String, Object?>{};
+  final rpcErrors = <String, Object>{};
   String? latestMessageResult;
   String signedUrlResult = 'https://signed.example.test/default.jpg';
   var listCalls = 0;
@@ -1295,6 +1490,12 @@ class FakeChatsDataSource implements ChatsDataSource {
   @override
   Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
     rpcCalls.add(RpcCall(functionName: functionName, params: params));
+    if (rpcErrors[functionName] case final error?) {
+      throw error;
+    }
+    if (rpcResults.containsKey(functionName)) {
+      return rpcResults[functionName];
+    }
     if (functionName == 'search_messages') {
       return searchRows;
     }

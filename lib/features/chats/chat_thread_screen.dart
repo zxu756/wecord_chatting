@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
@@ -160,6 +161,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String? _latestMessageId;
   String? _latestSeenMessageId;
   var _unseenMessageCount = 0;
+  final _messageKeys = <String, GlobalKey>{};
+  String? _highlightedMessageId;
+  Timer? _highlightTimer;
 
   @override
   void initState() {
@@ -182,6 +186,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _latestMessageId = null;
       _latestSeenMessageId = null;
       _unseenMessageCount = 0;
+      _messageKeys.clear();
+      _highlightTimer?.cancel();
+      _highlightedMessageId = null;
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
       }
@@ -191,6 +198,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   @override
   void dispose() {
     _typingTimer?.cancel();
+    _highlightTimer?.cancel();
     if (_isTypingShared) {
       unawaited(
         _typingRepository
@@ -253,6 +261,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final peerIsTyping = currentActivity.typingUserIds.any((id) {
       return id != currentUserId;
     });
+    final canPinMessages =
+        ref.watch(canPinMessagesProvider(widget.conversationId)).valueOrNull ??
+        false;
 
     return Scaffold(
       appBar: AppBar(
@@ -284,6 +295,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 }
               });
             },
+          ),
+          IconButton(
+            tooltip: 'Pinned messages',
+            icon: const Icon(Icons.push_pin_outlined),
+            onPressed: () => _showPinnedMessages(canPinMessages),
           ),
           IconButton(
             tooltip: 'Media',
@@ -412,28 +428,55 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   itemCount: newestFirst.length,
                   itemBuilder: (context, index) {
                     final message = newestFirst[index];
-                    final bubble = _MessageBubble(
-                      message: message,
-                      messagesById: messagesById,
-                      isCurrentUser: message.senderId == currentUserId,
-                      showReadReceipt:
-                          latestOutgoingReadState.latestOutgoingMessageId ==
-                              message.id &&
-                          latestOutgoingReadState.isRead,
-                      onReply: _startReply,
-                      onEdit: _startEdit,
-                      onForward: _showForwardSheet,
-                      onDelete: _deleteMessage,
-                      onPreviewImage: _previewImage,
-                      onToggleReaction: _toggleReaction,
-                      onShowReactors: _showReactors,
-                    );
-                    if (message.id != _newMessageDividerId) {
-                      return bubble;
+                    final Widget bubble;
+                    if (message.type == MessageType.system) {
+                      bubble = _SystemMessageLine(
+                        message: message,
+                        onOpenPinnedMessage: _scrollToMessage,
+                      );
+                    } else {
+                      bubble = _MessageBubble(
+                        message: message,
+                        messagesById: messagesById,
+                        isCurrentUser: message.senderId == currentUserId,
+                        showReadReceipt:
+                            latestOutgoingReadState.latestOutgoingMessageId ==
+                                message.id &&
+                            latestOutgoingReadState.isRead,
+                        onReply: _startReply,
+                        onEdit: _startEdit,
+                        onForward: _showForwardSheet,
+                        onDelete: _deleteMessage,
+                        onPreviewImage: _previewImage,
+                        onToggleReaction: _toggleReaction,
+                        onShowReactors: _showReactors,
+                        canPin: canPinMessages,
+                        onTogglePin: _togglePin,
+                      );
                     }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [const _NewMessagesDivider(), bubble],
+                    final highlighted = AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      decoration: BoxDecoration(
+                        color: message.id == _highlightedMessageId
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.14)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: bubble,
+                    );
+                    return KeyedSubtree(
+                      key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
+                      child: message.id == _newMessageDividerId
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const _NewMessagesDivider(),
+                                highlighted,
+                              ],
+                            )
+                          : highlighted,
                     );
                   },
                 );
@@ -1004,6 +1047,146 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _togglePin(ChatMessage message) async {
+    if (message.recalledAt != null || message.type == MessageType.system) {
+      return;
+    }
+    final repository = ref.read(chatsRepositoryProvider);
+    try {
+      if (message.isPinned) {
+        await repository.unpinMessage(messageId: message.id);
+      } else {
+        await repository.pinMessage(messageId: message.id);
+      }
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+      ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+    } on PinnedMessageLimitException {
+      _showSnackBar(
+        'This conversation already has $maxPinnedMessagesPerConversation '
+        'pinned messages.',
+      );
+    } catch (_) {
+      _showSnackBar(
+        message.isPinned
+            ? 'Could not unpin message. Try again.'
+            : 'Could not pin message. Try again.',
+      );
+    }
+  }
+
+  Future<void> _unpinFromList(String messageId) async {
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .unpinMessage(messageId: messageId);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+      ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+    } catch (_) {
+      _showSnackBar('Could not unpin message. Try again.');
+    }
+  }
+
+  Future<void> _showPinnedMessages(bool canManagePins) async {
+    ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+    final messageId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return PinnedMessagesSheet(
+          conversationId: widget.conversationId,
+          canManagePins: canManagePins,
+          onUnpin: _unpinFromList,
+        );
+      },
+    );
+    if (messageId != null && mounted) {
+      await _scrollToMessage(messageId);
+    }
+  }
+
+  /// Scrolls the thread to [messageId] and briefly highlights it. The list is
+  /// built lazily, so walk up from the newest message until it is built.
+  Future<void> _scrollToMessage(String messageId) async {
+    final messages =
+        ref
+            .read(chatThreadProvider(widget.conversationId))
+            .valueOrNull
+            ?.messages ??
+        const <ChatMessage>[];
+    if (!messages.any((message) => message.id == messageId)) {
+      _showSnackBar('That message is not loaded.');
+      return;
+    }
+    if (_messageSearchQuery.trim().isNotEmpty) {
+      setState(() {
+        _searchController.clear();
+        _messageSearchQuery = '';
+      });
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted || !_scrollController.hasClients) {
+      return;
+    }
+
+    if (_messageKeys[messageId]?.currentContext == null) {
+      _scrollController.jumpTo(0);
+      for (var attempt = 0; attempt < 500; attempt++) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        if (_messageKeys[messageId]?.currentContext != null) {
+          break;
+        }
+        final position = _scrollController.position;
+        if (position.pixels >= position.maxScrollExtent) {
+          break;
+        }
+        _scrollController.jumpTo(
+          (position.pixels + position.viewportDimension * 0.8).clamp(
+            0.0,
+            position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+
+    final targetContext = _messageKeys[messageId]?.currentContext;
+    if (targetContext == null || !targetContext.mounted) {
+      _showSnackBar('That message is not loaded.');
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+    if (!mounted) {
+      return;
+    }
+    _highlightTimer?.cancel();
+    setState(() {
+      _highlightedMessageId = messageId;
+    });
+    _highlightTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _highlightedMessageId = null;
+        });
+      }
+    });
+  }
+
+  void _showSnackBar(String text) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(text)));
+  }
+
   void _showReactors(ChatMessage message, MessageReaction reaction) {
     showModalBottomSheet<void>(
       context: context,
@@ -1145,6 +1328,8 @@ class _MessageBubble extends StatelessWidget {
     required this.onPreviewImage,
     required this.onToggleReaction,
     required this.onShowReactors,
+    required this.canPin,
+    required this.onTogglePin,
   });
 
   final ChatMessage message;
@@ -1160,6 +1345,8 @@ class _MessageBubble extends StatelessWidget {
   onToggleReaction;
   final void Function(ChatMessage message, MessageReaction reaction)
   onShowReactors;
+  final bool canPin;
+  final Future<void> Function(ChatMessage message) onTogglePin;
 
   @override
   Widget build(BuildContext context) {
@@ -1310,6 +1497,19 @@ class _MessageBubble extends StatelessWidget {
                       unawaited(onPreviewImage(imageAttachment));
                     },
                   ),
+                if (canPin)
+                  ListTile(
+                    leading: Icon(
+                      message.isPinned
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                    ),
+                    title: Text(message.isPinned ? 'Unpin' : 'Pin'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(onTogglePin(message));
+                    },
+                  ),
                 if (message.type == MessageType.text)
                   ListTile(
                     leading: const Icon(Icons.copy_outlined),
@@ -1337,6 +1537,58 @@ class _MessageBubble extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _SystemMessageLine extends StatelessWidget {
+  const _SystemMessageLine({
+    required this.message,
+    required this.onOpenPinnedMessage,
+  });
+
+  final ChatMessage message;
+  final Future<void> Function(String messageId) onOpenPinnedMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pinnedMessageId = message.pinnedMessageId;
+    final text = Text(
+      message.body,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Center(
+        child: pinnedMessageId == null
+            ? text
+            : InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => unawaited(onOpenPinnedMessage(pinnedMessageId)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.push_pin_outlined,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(child: text),
+                    ],
+                  ),
+                ),
+              ),
+      ),
     );
   }
 }
@@ -1524,7 +1776,7 @@ class _QuotedReplyPreview extends StatelessWidget {
 String _displayBodyForForwardPreview(ForwardPreview preview) {
   final body = preview.body.trim();
   return switch (preview.type) {
-    MessageType.text => body.isEmpty ? 'Message' : body,
+    MessageType.text || MessageType.system => body.isEmpty ? 'Message' : body,
     MessageType.image => 'Image',
     MessageType.file => 'File',
     MessageType.voice => 'Voice message',
@@ -1944,7 +2196,7 @@ String _replyPreviewBody(ChatMessage message) {
     return 'Message';
   }
   return switch (message.type) {
-    MessageType.text =>
+    MessageType.text || MessageType.system =>
       message.body.trim().isEmpty ? 'Message' : message.body.trim(),
     MessageType.image => 'Image',
     MessageType.file => 'File',
@@ -1987,7 +2239,8 @@ _LatestOutgoingReadState _latestOutgoingReadState({
 
   ChatMessage? latestOutgoing;
   for (final message in messages) {
-    if (message.senderId == currentUserId) {
+    if (message.senderId == currentUserId &&
+        message.type != MessageType.system) {
       latestOutgoing = message;
     }
   }

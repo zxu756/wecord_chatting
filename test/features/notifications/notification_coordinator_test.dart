@@ -13,6 +13,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -101,6 +102,23 @@ void main() {
 
     await harness.emit([
       harness.summary(id: 'c1', unreadCount: 1, lastMessageSenderId: 'me'),
+    ]);
+
+    expect(harness.notifications, isEmpty);
+  });
+
+  test('does not notify for system notices such as pins', () async {
+    final harness = NotificationCoordinatorHarness();
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 1,
+        body: 'Ada pinned a message.',
+        lastMessageType: MessageType.system,
+      ),
     ]);
 
     expect(harness.notifications, isEmpty);
@@ -448,6 +466,7 @@ class NotificationCoordinatorHarness {
     bool hasLastMessageAt = true,
     bool isMuted = false,
     Set<String> mentionedUserIds = const {},
+    MessageType? lastMessageType,
   }) {
     return ConversationSummary(
       id: id,
@@ -455,6 +474,7 @@ class NotificationCoordinatorHarness {
       title: title,
       lastMessageBody: body,
       lastMessageSenderId: lastMessageSenderId,
+      lastMessageType: lastMessageType,
       lastMessageAt: hasLastMessageAt
           ? lastMessageAt ?? DateTime.utc(2026, 5, 18, 12, unreadCount + 1)
           : null,
@@ -649,6 +669,20 @@ class _FakeChatsRepository implements ChatsRepository {
     required String emoji,
   }) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<bool> canPinMessages(String conversationId) async => false;
+
+  @override
+  Future<void> pinMessage({required String messageId}) async {}
+
+  @override
+  Future<void> unpinMessage({required String messageId}) async {}
+
+  @override
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
+    return const [];
   }
 
   @override

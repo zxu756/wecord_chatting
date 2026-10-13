@@ -11,6 +11,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -77,6 +78,7 @@ ConversationMediaItem _media({
       },
       MessageType.file => null,
       MessageType.text => null,
+      MessageType.system => null,
     },
     createdAt: DateTime.utc(2026, 5, 19, 10),
   );
@@ -229,6 +231,20 @@ class FakeChatsRepository implements ChatsRepository {
     required String messageId,
     required String emoji,
   }) async {
+    return const [];
+  }
+
+  @override
+  Future<bool> canPinMessages(String conversationId) async => false;
+
+  @override
+  Future<void> pinMessage({required String messageId}) async {}
+
+  @override
+  Future<void> unpinMessage({required String messageId}) async {}
+
+  @override
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
     return const [];
   }
 

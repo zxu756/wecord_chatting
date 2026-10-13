@@ -10,6 +10,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
@@ -117,6 +118,14 @@ abstract interface class ChatsRepository {
     required String messageId,
     required String emoji,
   });
+
+  Future<bool> canPinMessages(String conversationId);
+
+  Future<void> pinMessage({required String messageId});
+
+  Future<void> unpinMessage({required String messageId});
+
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId);
 
   Future<void> markConversationRead(String conversationId);
 
@@ -592,6 +601,42 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<bool> canPinMessages(String conversationId) async {
+    final allowed = await _dataSource.rpc('can_current_user_pin_messages', {
+      'target_conversation_id': conversationId,
+    });
+    return allowed == true;
+  }
+
+  @override
+  Future<void> pinMessage({required String messageId}) async {
+    try {
+      await _dataSource.rpc('pin_message', {'target_message_id': messageId});
+    } on PostgrestException catch (error) {
+      if (error.code == _pinLimitErrorCode) {
+        throw const PinnedMessageLimitException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> unpinMessage({required String messageId}) async {
+    await _dataSource.rpc('unpin_message', {'target_message_id': messageId});
+  }
+
+  @override
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
+    final rows = await _dataSource.rpc('list_pinned_messages', {
+      'target_conversation_id': conversationId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(PinnedMessage.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {
     await _dataSource.rpc('mark_conversation_read', {
       'target_conversation_id': conversationId,
@@ -755,6 +800,21 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 }
 
+/// Raised by `pin_message` (SQLSTATE 54000) when a conversation already has
+/// the maximum number of pinned messages.
+const _pinLimitErrorCode = '54000';
+
+const maxPinnedMessagesPerConversation = 50;
+
+class PinnedMessageLimitException implements Exception {
+  const PinnedMessageLimitException();
+
+  @override
+  String toString() =>
+      'A conversation can have at most $maxPinnedMessagesPerConversation '
+      'pinned messages.';
+}
+
 class ChatImageUpload {
   ChatImageUpload({
     required this.bytes,
@@ -827,7 +887,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   Future<List<Map<String, dynamic>>> listMessages(String conversationId) async {
     final rows = await _client
         .from('messages')
-        .select('*,reactions')
+        .select('*,reactions,is_pinned')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
         .order('id', ascending: true);
@@ -1009,6 +1069,17 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               event: PostgresChangeEvent.all,
               schema: 'public',
               table: 'message_reactions',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'conversation_id',
+                value: conversationId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'pinned_messages',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'conversation_id',
@@ -1339,6 +1410,24 @@ class _UninitializedChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<bool> canPinMessages(String conversationId) async => false;
+
+  @override
+  Future<void> pinMessage({required String messageId}) {
+    throw StateError('Supabase must be initialized before pinning messages.');
+  }
+
+  @override
+  Future<void> unpinMessage({required String messageId}) {
+    throw StateError('Supabase must be initialized before unpinning messages.');
+  }
+
+  @override
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
+    return const [];
+  }
+
+  @override
   Future<void> markConversationRead(String conversationId) async {}
 
   @override
@@ -1425,7 +1514,7 @@ List<ChatMessage> _searchMessages(List<ChatMessage> messages, String query) {
   };
   return messages
       .where((message) {
-        if (message.recalledAt != null) {
+        if (message.recalledAt != null || message.type == MessageType.system) {
           return false;
         }
         final preview = message.replyPreview;

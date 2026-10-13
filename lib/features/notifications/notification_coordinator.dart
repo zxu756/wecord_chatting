@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 
 final activeConversationIdProvider = StateProvider<String?>((ref) => null);
 
@@ -233,6 +234,10 @@ class NotificationCoordinator {
       return false;
     }
     if (conversation.lastMessageSenderId == currentUserId) {
+      return false;
+    }
+    // System notices such as "X pinned a message." do not alert.
+    if (conversation.lastMessageType == MessageType.system) {
       return false;
     }
 

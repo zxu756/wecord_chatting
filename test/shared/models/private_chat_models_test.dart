@@ -247,6 +247,23 @@ void main() {
     expect(conversation.announcementUpdatedBy, 'user-1');
   });
 
+  test('Conversation previews a system notice as its last message', () {
+    final conversation = ConversationSummary.fromJson({
+      'id': 'conversation-1',
+      'type': 'channel',
+      'title': 'general',
+      'last_message_body': 'Ada pinned a message.',
+      'last_message_sender_id': 'user-1',
+      'last_message_at': '2026-10-13T09:30:00.000Z',
+      'last_message_type': 'system',
+      'unread_count': 1,
+    });
+
+    expect(conversation.lastMessageType, MessageType.system);
+    expect(conversation.lastMessageBody, 'Ada pinned a message.');
+    expect(MessageType.system.toJson(), 'system');
+  });
+
   test('Conversation copyWith can clear nullable fields', () {
     final conversation = ConversationSummary.fromJson({
       'id': 'conversation-1',

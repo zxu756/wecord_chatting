@@ -4,7 +4,8 @@ enum MessageType {
   text,
   image,
   file,
-  voice;
+  voice,
+  system;
 
   factory MessageType.fromJson(String value) {
     return switch (value) {
@@ -12,6 +13,7 @@ enum MessageType {
       'image' => MessageType.image,
       'file' => MessageType.file,
       'voice' => MessageType.voice,
+      'system' => MessageType.system,
       _ => throw ArgumentError.value(value, 'value', 'Unknown message type'),
     };
   }
@@ -22,6 +24,7 @@ enum MessageType {
       MessageType.image => 'image',
       MessageType.file => 'file',
       MessageType.voice => 'voice',
+      MessageType.system => 'system',
     };
   }
 }
@@ -42,6 +45,7 @@ class ChatMessage {
     this.recalledAt,
     this.mentions = const <MessageMention>[],
     this.reactions = const <MessageReaction>[],
+    this.isPinned = false,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -68,6 +72,7 @@ class ChatMessage {
       recalledAt: _parseOptionalTimestamp(json['recalled_at']),
       mentions: _parseMentions(json['mentions']),
       reactions: _parseReactions(json['reactions']),
+      isPinned: json['is_pinned'] == true,
     );
   }
 
@@ -85,6 +90,19 @@ class ChatMessage {
   final DateTime? recalledAt;
   final List<MessageMention> mentions;
   final List<MessageReaction> reactions;
+  final bool isPinned;
+
+  /// For a "X pinned a message" system notice, the id of the pinned message.
+  String? get pinnedMessageId {
+    final value = attachment;
+    if (type != MessageType.system || value == null) {
+      return null;
+    }
+    if (value['kind'] != 'pin') {
+      return null;
+    }
+    return value['message_id'] as String?;
+  }
 
   ImageAttachment? get imageAttachment {
     final value = attachment;
@@ -132,6 +150,7 @@ class ChatMessage {
     Object? recalledAt = _sentinel,
     List<MessageMention>? mentions,
     List<MessageReaction>? reactions,
+    bool? isPinned,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -160,6 +179,7 @@ class ChatMessage {
           : recalledAt as DateTime?,
       mentions: mentions ?? this.mentions,
       reactions: reactions ?? this.reactions,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

@@ -912,4 +912,121 @@ void main() {
       );
     }
   });
+
+  test('pinned messages table is member scoped and realtime enabled', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final selectPolicy = policyBody(rawSql, 'pinned_messages_select_member');
+
+    expect(sql, contains('create table if not exists public.pinned_messages'));
+    expect(sql, contains('primary key (conversation_id, message_id)'));
+    expect(sql, contains('pinned_by uuid references public.profiles(id)'));
+    expect(
+      sql,
+      contains('alter table public.pinned_messages enable row level security'),
+    );
+    expect(
+      sql,
+      contains('alter table public.pinned_messages replica identity full'),
+    );
+    expect(selectPolicy, contains('for select'));
+    expect(
+      selectPolicy,
+      contains('public.is_current_user_conversation_member(conversation_id)'),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'pinned_messages').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+    expect(
+      rawSql,
+      contains(
+        'alter publication supabase_realtime add table public.pinned_messages',
+      ),
+    );
+  });
+
+  test('system messages are allowed but only written by RPCs', () {
+    final sql = allMigrationSql();
+    final insertPolicy = policyBody(sql, 'messages_insert_member');
+    final forwardBody = functionBody(sql, 'forward_message');
+    final searchBody = functionBody(sql, 'search_messages');
+
+    expect(sql, contains('drop constraint if exists messages_type_check'));
+    expect(
+      sql,
+      contains("check (type in ('text', 'image', 'file', 'voice', 'system'))"),
+    );
+    expect(insertPolicy, contains("type <> 'system'"));
+    expect(insertPolicy, contains('sender_id = auth.uid()'));
+    expect(insertPolicy, contains('forwarded_from is null'));
+    expect(
+      insertPolicy,
+      contains('not public.is_current_user_blocked_in_conversation'),
+    );
+    expect(forwardBody, contains("type <> 'system'"));
+    expect(searchBody, contains("m.type <> 'system'"));
+  });
+
+  test('pin RPCs check membership, role and the pin limit', () {
+    final sql = effectiveMigrationSql();
+    final permissionBody = functionBody(sql, 'can_current_user_pin_messages');
+    final pinBody = functionBody(sql, 'pin_message');
+    final unpinBody = functionBody(sql, 'unpin_message');
+    final listBody = functionBody(sql, 'list_pinned_messages');
+    final computedBody = functionBody(sql, 'is_pinned');
+
+    expect(permissionBody, contains('security definer'));
+    expect(permissionBody, contains("when 'direct'"));
+    expect(permissionBody, contains("cm.role = 'owner'"));
+    expect(permissionBody, contains('public.circle_channels'));
+    expect(
+      permissionBody,
+      contains("circle_member.role in ('owner', 'admin')"),
+    );
+
+    for (final body in [pinBody, unpinBody, listBody]) {
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+      expect(body, contains('auth.uid()'));
+      expect(body, contains('public.is_current_user_conversation_member'));
+    }
+    for (final body in [pinBody, unpinBody]) {
+      expect(body, contains('public.can_current_user_pin_messages'));
+    }
+
+    expect(pinBody, contains('recalled_at is null'));
+    expect(pinBody, contains('public.is_current_user_blocked_in_conversation'));
+    expect(pinBody, contains('active_pin_count >= 50'));
+    expect(pinBody, contains("errcode = '54000'"));
+    expect(pinBody, contains('for update'));
+    expect(pinBody, contains('insert into public.pinned_messages'));
+    expect(pinBody, contains("'system'"));
+    expect(pinBody, contains("' pinned a message.'"));
+    expect(pinBody, contains("jsonb_build_object('kind', 'pin'"));
+    expect(unpinBody, contains('delete from public.pinned_messages'));
+
+    expect(listBody, contains("'display_name'"));
+    expect(listBody, contains('pinned_by_name'));
+    expect(listBody, contains('order by pm.pinned_at desc'));
+    expect(computedBody, contains('message_row public.messages'));
+
+    for (final signature in [
+      'public.can_current_user_pin_messages(uuid)',
+      'public.is_pinned(public.messages)',
+      'public.pin_message(uuid)',
+      'public.unpin_message(uuid)',
+      'public.list_pinned_messages(uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

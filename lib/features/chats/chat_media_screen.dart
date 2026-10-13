@@ -136,7 +136,7 @@ class _MediaLeading extends ConsumerWidget {
       MessageType.voice => Icons.mic_none_outlined,
       MessageType.file => Icons.insert_drive_file_outlined,
       MessageType.image => Icons.image_outlined,
-      MessageType.text => Icons.chat_bubble_outline,
+      MessageType.text || MessageType.system => Icons.chat_bubble_outline,
     });
   }
 }
@@ -157,7 +157,7 @@ String _titleFor(ConversationMediaItem item) {
     MessageType.image => '[Image]',
     MessageType.voice => '[Voice]',
     MessageType.file => '[File]',
-    MessageType.text => item.body,
+    MessageType.text || MessageType.system => item.body,
   };
 }
 

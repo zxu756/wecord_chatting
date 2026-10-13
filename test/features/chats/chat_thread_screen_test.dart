@@ -20,6 +20,7 @@ import 'package:wecord/shared/models/discovery.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
@@ -718,6 +719,324 @@ void main() {
 
     expect(find.byIcon(Icons.image_outlined), findsOneWidget);
     expect(find.textContaining('storage denied'), findsOneWidget);
+  });
+
+  testWidgets('renders system notices as a centered line without actions', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..canPin = true
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'The plan',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          type: MessageType.system,
+          body: 'Grace pinned a message.',
+          attachment: const {'kind': 'pin', 'message_id': 'message-1'},
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    final noticeCenter = tester.getCenter(find.text('Grace pinned a message.'));
+    final screenWidth = tester.getSize(find.byType(Scaffold)).width;
+    expect(noticeCenter.dx, closeTo(screenWidth / 2, 24));
+    // A system notice is never the latest outgoing message.
+    expect(find.text('Read'), findsNothing);
+
+    await tester.longPress(find.text('Grace pinned a message.'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reply'), findsNothing);
+    expect(find.text('Pin'), findsNothing);
+  });
+
+  testWidgets('pins a message from the action menu when permitted', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..canPin = true
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Pin me',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Pin me'));
+    await tester.pumpAndSettle();
+    expect(find.text('Unpin'), findsNothing);
+    await tester.tap(find.text('Pin'));
+    await tester.pumpAndSettle();
+
+    expect(repository.pinnedMessageIds, ['message-1']);
+  });
+
+  testWidgets('unpins an already pinned message from the action menu', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..canPin = true
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Pinned already',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          isPinned: true,
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Pinned already'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unpin'));
+    await tester.pumpAndSettle();
+
+    expect(repository.unpinnedMessageIds, ['message-1']);
+    expect(repository.pinnedMessageIds, isEmpty);
+  });
+
+  testWidgets('hides pin actions when the user cannot pin', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Not mine to pin',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('Not mine to pin'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reply'), findsOneWidget);
+    expect(find.text('Pin'), findsNothing);
+    expect(find.text('Unpin'), findsNothing);
+  });
+
+  testWidgets('pin limit shows a snackbar', (tester) async {
+    final repository = FakeChatsRepository()
+      ..canPin = true
+      ..pinError = const PinnedMessageLimitException()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'One too many',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.longPress(find.text('One too many'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.text('This conversation already has 50 pinned messages.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('pinned list scrolls to and highlights the original message', (
+    tester,
+  ) async {
+    final messages = [
+      for (var index = 0; index < 40; index++)
+        _message(
+          id: 'message-$index',
+          senderId: index.isEven ? 'user-2' : 'user-1',
+          body: 'History $index',
+          createdAt: DateTime.utc(2026, 5, 18, 4).add(Duration(minutes: index)),
+        ),
+    ];
+    final repository = FakeChatsRepository()
+      ..messages = messages
+      ..pinnedMessages = [
+        PinnedMessage(
+          message: messages.first.copyWith(isPinned: true),
+          sender: _profile(id: 'user-2', username: 'ada'),
+          pinnedBy: 'user-1',
+          pinnedByName: 'Grace',
+          pinnedAt: DateTime.utc(2026, 5, 18, 6),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    // The oldest message is far above the viewport and not built yet.
+    expect(find.text('History 0'), findsNothing);
+
+    await tester.tap(find.byTooltip('Pinned messages'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pinned messages'), findsOneWidget);
+    expect(find.text('Pinned by Grace'), findsOneWidget);
+    expect(find.byTooltip('Unpin'), findsNothing);
+
+    await tester.tap(find.text('History 0'));
+    for (var frame = 0; frame < 40; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.text('Pinned messages'), findsNothing);
+    final target = find.text('History 0');
+    expect(target, findsOneWidget);
+    final targetY = tester.getCenter(target).dy;
+    expect(targetY, greaterThan(0));
+    expect(targetY, lessThan(tester.getSize(find.byType(Scaffold)).height));
+
+    Color? highlightColor() {
+      final container = tester.widget<AnimatedContainer>(
+        find
+            .ancestor(of: target, matching: find.byType(AnimatedContainer))
+            .first,
+      );
+      return (container.decoration as BoxDecoration?)?.color;
+    }
+
+    expect(highlightColor(), isNot(Colors.transparent));
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(highlightColor(), Colors.transparent);
+  });
+
+  testWidgets('tapping a pin notice scrolls to the pinned message', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        for (var index = 0; index < 40; index++)
+          _message(
+            id: 'message-$index',
+            senderId: index.isEven ? 'user-2' : 'user-1',
+            body: 'History $index',
+            createdAt: DateTime.utc(
+              2026,
+              5,
+              18,
+              4,
+            ).add(Duration(minutes: index)),
+          ),
+        _message(
+          id: 'notice',
+          senderId: 'user-2',
+          type: MessageType.system,
+          body: 'Ada pinned a message.',
+          attachment: const {'kind': 'pin', 'message_id': 'message-0'},
+          createdAt: DateTime.utc(2026, 5, 18, 6),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('History 0'), findsNothing);
+
+    await tester.tap(find.text('Ada pinned a message.'));
+    for (var frame = 0; frame < 40; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.text('History 0'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('opening a pinned message that is not loaded shows a snackbar', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Loaded message',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ]
+      ..pinnedMessages = [
+        PinnedMessage(
+          message: _message(
+            id: 'message-old',
+            senderId: 'user-2',
+            body: 'Ancient history',
+            createdAt: DateTime.utc(2026, 1, 1),
+            isPinned: true,
+          ),
+          sender: _profile(id: 'user-2', username: 'ada'),
+          pinnedAt: DateTime.utc(2026, 5, 18, 6),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Pinned messages'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ancient history'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('That message is not loaded.'), findsOneWidget);
+  });
+
+  testWidgets('pinned list can unpin when permitted', (tester) async {
+    final pinned = _message(
+      id: 'message-1',
+      senderId: 'user-2',
+      body: 'Pinned body',
+      createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+      isPinned: true,
+    );
+    final repository = FakeChatsRepository()
+      ..canPin = true
+      ..messages = [pinned]
+      ..pinnedMessages = [
+        PinnedMessage(
+          message: pinned,
+          sender: _profile(id: 'user-2', username: 'ada'),
+          pinnedAt: DateTime.utc(2026, 5, 18, 6),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Pinned messages'));
+    await tester.pumpAndSettle();
+
+    repository.pinnedMessages = [];
+    await tester.tap(find.byTooltip('Unpin'));
+    await tester.pumpAndSettle();
+
+    expect(repository.unpinnedMessageIds, ['message-1']);
+    expect(find.text('No pinned messages yet'), findsOneWidget);
   });
 
   testWidgets('long pressing a text message can copy it', (tester) async {
@@ -1933,6 +2252,7 @@ ChatMessage _message({
   DateTime? editedAt,
   DateTime? recalledAt,
   List<MessageReaction> reactions = const [],
+  bool isPinned = false,
 }) {
   return ChatMessage(
     id: id,
@@ -1947,6 +2267,7 @@ ChatMessage _message({
     editedAt: editedAt,
     recalledAt: recalledAt,
     reactions: reactions,
+    isPinned: isPinned,
   );
 }
 
@@ -1967,6 +2288,11 @@ class FakeChatsRepository implements ChatsRepository {
   final toggledReactions = <(String, String)>[];
   final reactorRequests = <(String, String)>[];
   var reactors = <Profile>[];
+  var canPin = false;
+  var pinnedMessages = <PinnedMessage>[];
+  Object? pinError;
+  final pinnedMessageIds = <String>[];
+  final unpinnedMessageIds = <String>[];
   final typingUpdates = <TypingUpdate>[];
   final markReadCalls = <String>[];
   String? sentReplyToMessageId;
@@ -2142,6 +2468,27 @@ class FakeChatsRepository implements ChatsRepository {
   }) async {
     reactorRequests.add((messageId, emoji));
     return reactors;
+  }
+
+  @override
+  Future<bool> canPinMessages(String conversationId) async => canPin;
+
+  @override
+  Future<void> pinMessage({required String messageId}) async {
+    if (pinError case final error?) {
+      throw error;
+    }
+    pinnedMessageIds.add(messageId);
+  }
+
+  @override
+  Future<void> unpinMessage({required String messageId}) async {
+    unpinnedMessageIds.add(messageId);
+  }
+
+  @override
+  Future<List<PinnedMessage>> listPinnedMessages(String conversationId) async {
+    return pinnedMessages;
   }
 
   @override

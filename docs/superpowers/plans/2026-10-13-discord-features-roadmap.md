@@ -31,7 +31,7 @@
 - [x] **2. 「新消息」分隔线 + 跳到最新**（S）
   - 打开会话时记下当时的 `last_read_message_id`（进入后会被标记已读，所以要在标记前取），在其后的第一条他人消息前画一条「NEW」分隔线，直到离开会话。
   - 列表不在底部且有新消息时，右下角浮动「跳到最新」按钮，显示新消息数。
-- [ ] **3. 固定消息（Pinned Messages）**（S）
+- [x] **3. 固定消息（Pinned Messages）**（S）
   - 表 `pinned_messages (conversation_id, message_id, pinned_by, pinned_at)`，每个会话最多 50 条。
   - RPC `pin_message` / `unpin_message`：私聊双方都可以；群聊群主可以；圈子频道 owner / admin 可以（第 16 项后改为 `manage_messages` 权限）。`list_pinned_messages(conversation_id)`。
   - 固定时在会话里插入一条系统提示「X 固定了一条消息」（`messages.type = 'system'`）。

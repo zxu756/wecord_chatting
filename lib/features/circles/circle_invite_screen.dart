@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 
 final circleInvitePreviewProvider = FutureProvider.autoDispose
@@ -58,8 +59,8 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                     title: 'Invite invalid',
                     message: _invalidMessage(preview.invalidReason),
                     action: OutlinedButton(
-                      onPressed: () => context.go(CirclesScreen.path),
-                      child: const Text('Back to circles'),
+                      onPressed: () => context.go(HomeScreen.path),
+                      child: const Text('Back to home'),
                     ),
                   );
                 }
@@ -118,7 +119,7 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                           child: preview.alreadyMember
                               ? FilledButton(
                                   onPressed: () => context.go(
-                                    '${CirclesScreen.path}/${circle.id}',
+                                    '${CircleRoutes.path}/${circle.id}',
                                   ),
                                   child: const Text('Open circle'),
                                 )
@@ -151,7 +152,7 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
           .read(circlesRepositoryProvider)
           .acceptInvite(widget.code);
       ref.invalidate(circleSummariesProvider);
-      if (mounted) context.go('${CirclesScreen.path}/$circleId');
+      if (mounted) context.go('${CircleRoutes.path}/$circleId');
     } catch (error) {
       if (!mounted) return;
       setState(() {

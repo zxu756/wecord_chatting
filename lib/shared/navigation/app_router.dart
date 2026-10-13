@@ -12,11 +12,15 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/home/home_sidebar.dart';
+import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -25,8 +29,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     authRouter.authState = next;
   });
 
+  final pushedPageObserver = PushedPageObserver();
   final router = GoRouter(
-    initialLocation: ChatsScreen.path,
+    initialLocation: HomeScreen.path,
     refreshListenable: authRouter,
     redirect: (context, state) {
       final authState = authRouter.authState;
@@ -53,7 +58,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return _withPendingLocation(AuthScreen.path, pendingLocation);
       }
       if (signedIn && (onAuthRoute || onLoadingRoute)) {
-        return pendingLocation ?? ChatsScreen.path;
+        return pendingLocation ?? HomeScreen.path;
+      }
+      // Circles are listed in the rail; there is no page of them.
+      if (location == CircleRoutes.path || location == '/') {
+        return HomeScreen.path;
       }
       return null;
     },
@@ -67,11 +76,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AuthScreen(),
       ),
       ShellRoute(
+        observers: [pushedPageObserver],
         builder: (context, state, child) {
+          final placement = _placementFor(state);
+          final location = state.uri.toString();
+          if (placement.tab == WeCordTab.home) {
+            homeTabMemory.location = location;
+          }
           return ProfileBootstrapGate(
             child: WeCordShell(
-              selectedIndex: _selectedIndexForLocation(state.uri.path),
-              voicePanelInSidebar: _showsCircleSidebar(state.uri.path),
+              placement: placement,
+              pushedPages: pushedPageObserver.pushedPages,
               onOpenVoice: (session) {
                 final path = CircleChannelThreadScreen.pathFor(
                   session.circleId,
@@ -81,15 +96,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   context.push(path);
                 }
               },
-              onDestinationSelected: (index) {
-                switch (index) {
-                  case 0:
+              onTabSelected: (tab) {
+                switch (tab) {
+                  case WeCordTab.home:
+                    context.go(homeTabMemory.location);
+                  case WeCordTab.messages:
                     context.go(ChatsScreen.path);
-                  case 1:
-                    context.go(ContactsScreen.path);
-                  case 2:
-                    context.go(CirclesScreen.path);
-                  case 3:
+                  case WeCordTab.notifications:
+                    context.go(InboxScreen.path);
+                  case WeCordTab.you:
                     context.go(SettingsScreen.path);
                 }
               },
@@ -99,8 +114,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
         routes: [
           GoRoute(
+            path: HomeScreen.path,
+            builder: (context, state) => const HomeScreen(),
+          ),
+          GoRoute(
             path: ChatsScreen.path,
-            builder: (context, state) => const ChatsScreen(),
+            // Wide layouts list direct messages in the Home sidebar, so the
+            // page beside it shows the friends.
+            builder: (context, state) =>
+                const _WideOr(wide: ContactsScreen(), narrow: ChatsScreen()),
+          ),
+          GoRoute(
+            path: InboxScreen.path,
+            builder: (context, state) => const InboxScreen(),
           ),
           GoRoute(
             path: GlobalMessageSearchScreen.path,
@@ -133,11 +159,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       : ConversationType.channel,
                 );
               }
+              final wide = isWideLayout(MediaQuery.sizeOf(context).width);
               return ChatThreadScreen(
                 conversationId: state.pathParameters['conversationId']!,
                 title: title,
                 avatarUrl: avatarUrl,
                 conversationType: conversationType,
+                // Phones hide the tabs here, so offer the way back.
+                onBack: wide
+                    ? null
+                    : () => context.canPop()
+                          ? context.pop()
+                          : context.go(ChatsScreen.path),
               );
             },
           ),
@@ -160,14 +193,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
-            path: CirclesScreen.path,
-            builder: (context, state) => const CirclesScreen(),
-          ),
-          GoRoute(
-            path: '${CirclesScreen.path}/:circleId',
+            path: '${CircleRoutes.path}/:circleId',
             builder: (context, state) {
               return CircleDetailScreen(
                 circleId: state.pathParameters['circleId']!,
+                initialConversationId: state.uri.queryParameters['c'],
               );
             },
             routes: [
@@ -272,22 +302,80 @@ String _withPendingLocation(String path, String? pendingLocation) {
   return Uri(path: path, queryParameters: {'from': pendingLocation}).toString();
 }
 
-int _selectedIndexForLocation(String location) {
-  if (location.startsWith(ContactsScreen.path)) {
-    return 1;
-  }
-  if (location.startsWith(CirclesScreen.path) ||
-      location.startsWith('${CircleInviteScreen.path}/')) {
-    return 2;
-  }
-  if (location.startsWith(SettingsScreen.path)) {
-    return 3;
-  }
-  return 0;
+/// Remembers where the phone Home tab was left (Home or a circle), so
+/// switching back to the tab returns there.
+final homeTabMemory = _HomeTabMemory();
+
+class _HomeTabMemory {
+  String location = HomeScreen.path;
 }
 
-/// Whether [location] is a circle's home, whose channel sidebar shows the
-/// voice panel itself on wide screens.
-bool _showsCircleSidebar(String location) {
-  return RegExp('^${CirclesScreen.path}/[^/]+/?\$').hasMatch(location);
+/// Where [state]'s page sits in the navigation: which tab it is the root
+/// of, what the rail highlights and whether Home's sidebar shows.
+ShellPlacement _placementFor(GoRouterState state) {
+  final segments = state.uri.pathSegments;
+  final first = segments.isEmpty ? '' : segments.first;
+  final rest = segments.length;
+  final circles = CircleRoutes.path.substring(1);
+
+  switch ('/$first') {
+    case HomeScreen.path:
+      return const ShellPlacement(
+        tab: WeCordTab.home,
+        homeSelected: true,
+        homeSection: HomeSection.friends,
+      );
+    case ChatsScreen.path:
+      if (rest == 1) {
+        return const ShellPlacement(
+          tab: WeCordTab.messages,
+          homeSelected: true,
+          homeSection: HomeSection.friends,
+        );
+      }
+      // A circle channel opened by conversation id belongs to its circle.
+      if (state.extra case ChatThreadRouteExtra(:final circleId?)) {
+        return ShellPlacement(selectedCircleId: circleId);
+      }
+      return ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.conversation,
+        selectedConversationId: segments[1],
+      );
+    case ContactsScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.friends,
+      );
+    case InboxScreen.path:
+      return const ShellPlacement(
+        tab: WeCordTab.notifications,
+        homeSelected: true,
+        homeSection: HomeSection.inbox,
+      );
+    case SettingsScreen.path:
+      return const ShellPlacement(tab: WeCordTab.you);
+  }
+  if (first == circles && rest >= 2) {
+    final circleHome = rest == 2;
+    return ShellPlacement(
+      tab: circleHome ? WeCordTab.home : null,
+      selectedCircleId: segments[1],
+      pageHasSidebar: circleHome,
+    );
+  }
+  return const ShellPlacement();
+}
+
+/// Picks [wide] or [narrow] for the current screen width.
+class _WideOr extends StatelessWidget {
+  const _WideOr({required this.wide, required this.narrow});
+
+  final Widget wide;
+  final Widget narrow;
+
+  @override
+  Widget build(BuildContext context) {
+    return isWideLayout(MediaQuery.sizeOf(context).width) ? wide : narrow;
+  }
 }

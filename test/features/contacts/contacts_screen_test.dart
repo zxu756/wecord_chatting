@@ -121,7 +121,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Friends'), findsOneWidget);
+    // The page title and the list heading.
+    expect(find.text('Friends'), findsNWidgets(2));
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('@grace'), findsOneWidget);
     final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));

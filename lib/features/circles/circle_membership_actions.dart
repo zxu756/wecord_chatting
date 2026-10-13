@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 /// Asks to confirm, then leaves the circle and goes back to the circle
@@ -57,7 +57,7 @@ Future<void> leaveCircle(
   container
     ..invalidate(circleSummariesProvider)
     ..invalidate(conversationsProvider);
-  router.go(CirclesScreen.path);
+  router.go(HomeScreen.path);
   messenger?.showSnackBar(SnackBar(content: Text('Left $name.')));
 }
 
@@ -270,8 +270,8 @@ class _CircleMembershipLostViewState
                       ),
                       const SizedBox(height: 24),
                       FilledButton(
-                        onPressed: () => context.go(CirclesScreen.path),
-                        child: const Text('Back to Circles'),
+                        onPressed: () => context.go(HomeScreen.path),
+                        child: const Text('Back to home'),
                       ),
                     ],
                   ),

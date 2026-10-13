@@ -7,7 +7,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -31,7 +31,7 @@ class CircleChannelThreadScreen extends ConsumerStatefulWidget {
 
   /// Where a circle channel opens full screen, under its circle.
   static String pathFor(String circleId, String conversationId) {
-    return '${CirclesScreen.path}/$circleId/channels/$conversationId';
+    return '${CircleRoutes.path}/$circleId/channels/$conversationId';
   }
 
   final String circleId;
@@ -128,7 +128,7 @@ class _CircleChannelThreadScreenState
                 FilledButton(
                   onPressed: () => context.canPop()
                       ? context.pop()
-                      : context.go('${CirclesScreen.path}/$circleId'),
+                      : context.go('${CircleRoutes.path}/$circleId'),
                   child: const Text('Back to channels'),
                 ),
               ],

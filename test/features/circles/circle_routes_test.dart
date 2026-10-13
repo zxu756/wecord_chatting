@@ -7,7 +7,8 @@ import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -22,19 +23,19 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
 void main() {
-  testWidgets('circles empty state creates a circle', (tester) async {
+  testWidgets('the rail creates a circle', (tester) async {
     final circlesRepository = FakeCirclesRepository();
     final contactsRepository = FakeContactsRepository()
       ..friends = [_profile(id: 'friend-1', username: 'ada', name: 'Ada')];
     final router = GoRouter(
-      initialLocation: CirclesScreen.path,
+      initialLocation: CircleRoutes.path,
       routes: [
         GoRoute(
-          path: CirclesScreen.path,
-          builder: (context, state) => const CirclesScreen(),
+          path: CircleRoutes.path,
+          builder: (context, state) => const _RailPage(),
         ),
         GoRoute(
-          path: '${CirclesScreen.path}/:circleId',
+          path: '${CircleRoutes.path}/:circleId',
           builder: (context, state) =>
               Text('Circle ${state.pathParameters['circleId']}'),
         ),
@@ -51,7 +52,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Create Circle'));
+    await tester.tap(find.byKey(const ValueKey('circle-rail-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create a circle'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.bySemanticsLabel('Circle name'),
@@ -67,7 +70,7 @@ void main() {
     expect(find.text('Circle circle-1'), findsOneWidget);
   });
 
-  testWidgets('circles list opens detail route', (tester) async {
+  testWidgets('the rail opens a circle', (tester) async {
     final circlesRepository = FakeCirclesRepository()
       ..circles = [
         CircleSummary(
@@ -79,14 +82,14 @@ void main() {
         ),
       ];
     final router = GoRouter(
-      initialLocation: CirclesScreen.path,
+      initialLocation: CircleRoutes.path,
       routes: [
         GoRoute(
-          path: CirclesScreen.path,
-          builder: (context, state) => const CirclesScreen(),
+          path: CircleRoutes.path,
+          builder: (context, state) => const _RailPage(),
         ),
         GoRoute(
-          path: '${CirclesScreen.path}/:circleId',
+          path: '${CircleRoutes.path}/:circleId',
           builder: (context, state) =>
               Text('Circle ${state.pathParameters['circleId']}'),
         ),
@@ -103,91 +106,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Close Friends'));
+    await tester.tap(find.byKey(const ValueKey('circle-rail-circle-1')));
     await tester.pumpAndSettle();
 
     expect(find.text('Circle circle-1'), findsOneWidget);
-  });
-
-  testWidgets('circles list shows unread, mention and muted state', (
-    tester,
-  ) async {
-    CircleSummary circle(
-      String id, {
-      int unread = 0,
-      int mentions = 0,
-      bool muted = false,
-    }) {
-      return CircleSummary(
-        id: id,
-        name: 'Circle $id',
-        memberCount: 2,
-        channelCount: 1,
-        unreadCount: unread,
-        mentionCount: mentions,
-        isMuted: muted,
-      );
-    }
-
-    final circlesRepository = FakeCirclesRepository()
-      ..circles = [
-        circle('quiet'),
-        circle('unread', unread: 3),
-        circle('mentioned', unread: 3, mentions: 2),
-        circle('muted', unread: 3, muted: true),
-        circle('muted-mentioned', unread: 3, mentions: 1, muted: true),
-      ];
-    final router = GoRouter(
-      initialLocation: CirclesScreen.path,
-      routes: [
-        GoRoute(
-          path: CirclesScreen.path,
-          builder: (context, state) => const CirclesScreen(),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-
-    await tester.pumpWidget(
-      _app(
-        circlesRepository: circlesRepository,
-        contactsRepository: FakeContactsRepository(),
-        router: router,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    Finder inTile(String id, Finder matching) {
-      return find.descendant(
-        of: find.widgetWithText(ListTile, 'Circle $id'),
-        matching: matching,
-      );
-    }
-
-    const dot = ValueKey('circle-unread-dot');
-    const badge = ValueKey('circle-mention-badge');
-    const mutedIcon = ValueKey('circle-muted-icon');
-
-    expect(inTile('quiet', find.byKey(dot)), findsNothing);
-    expect(inTile('quiet', find.byKey(badge)), findsNothing);
-    expect(inTile('unread', find.byKey(dot)), findsOneWidget);
-    expect(inTile('mentioned', find.byKey(badge)), findsOneWidget);
-    expect(inTile('mentioned', find.text('2')), findsOneWidget);
-    expect(inTile('muted', find.byKey(mutedIcon)), findsOneWidget);
-    expect(inTile('muted', find.byKey(badge)), findsNothing);
-    expect(inTile('muted', find.byKey(dot)), findsNothing);
-    // Mentions still break through a mute, like on the rail.
-    expect(inTile('muted-mentioned', find.byKey(badge)), findsOneWidget);
-    expect(inTile('muted-mentioned', find.text('1')), findsOneWidget);
-    expect(inTile('muted-mentioned', find.byKey(dot)), findsNothing);
-    double avatarOpacity(String id) => tester
-        .widget<Opacity>(
-          inTile(id, find.byKey(const ValueKey('circle-tile-avatar'))),
-        )
-        .opacity;
-    expect(avatarOpacity('muted'), lessThan(1));
-    expect(avatarOpacity('muted-mentioned'), lessThan(1));
-    expect(avatarOpacity('unread'), 1);
   });
 
   testWidgets('join with invite accepts a pasted link', (tester) async {
@@ -203,7 +125,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Join with invite'));
+    await tester.tap(find.byKey(const ValueKey('circle-rail-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Join with invite'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'not a code');
     await tester.tap(find.widgetWithText(FilledButton, 'Join'));
@@ -284,9 +208,9 @@ void main() {
     expect(find.text('This invite has expired.'), findsOneWidget);
     expect(find.text('Join circle'), findsNothing);
 
-    await tester.tap(find.text('Back to circles'));
+    await tester.tap(find.text('Back to home'));
     await tester.pumpAndSettle();
-    expect(find.text('Circles'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
     expect(repository.acceptedCodes, isEmpty);
   });
 
@@ -428,20 +352,21 @@ void main() {
 
 GoRouter _inviteRouter({
   required Widget Function(String code) inviteBuilder,
-  String initialLocation = CirclesScreen.path,
+  String initialLocation = CircleRoutes.path,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
     routes: [
       GoRoute(
-        path: CirclesScreen.path,
-        builder: (context, state) => const CirclesScreen(),
+        path: CircleRoutes.path,
+        builder: (context, state) => const _RailPage(),
       ),
       GoRoute(
-        path: '${CirclesScreen.path}/:circleId',
+        path: '${CircleRoutes.path}/:circleId',
         builder: (context, state) =>
             Text('Circle ${state.pathParameters['circleId']}'),
       ),
+      GoRoute(path: '/home', builder: (context, state) => const Text('Home')),
       GoRoute(
         path: '${CircleInviteScreen.path}/:code',
         builder: (context, state) =>
@@ -449,6 +374,24 @@ GoRouter _inviteRouter({
       ),
     ],
   );
+}
+
+/// The circle rail on its own, standing in for the shell.
+class _RailPage extends StatelessWidget {
+  const _RailPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CircleRail(),
+          Expanded(child: SizedBox()),
+        ],
+      ),
+    );
+  }
 }
 
 Widget _app({

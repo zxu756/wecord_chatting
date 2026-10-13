@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -27,15 +28,17 @@ final circleDetailProvider = FutureProvider.autoDispose
 class CircleDetailScreen extends ConsumerWidget {
   const CircleDetailScreen({
     required this.circleId,
+    this.initialConversationId,
     this.channelViewBuilder,
     this.threadViewBuilder,
     super.key,
   });
 
-  /// From this width the circle opens as a multi-column workspace.
-  static const workspaceBreakpoint = 1000.0;
-
   final String circleId;
+
+  /// A channel (or channel thread) conversation to open in the wide
+  /// workspace instead of the first channel.
+  final String? initialConversationId;
   final CircleChannelViewBuilder? channelViewBuilder;
   final CircleThreadViewBuilder? threadViewBuilder;
 
@@ -56,10 +59,11 @@ class CircleDetailScreen extends ConsumerWidget {
               body: Center(child: Text(error.toString())),
             ),
       data: (detail) {
-        if (MediaQuery.sizeOf(context).width >= workspaceBreakpoint) {
+        if (isWideLayout(MediaQuery.sizeOf(context).width)) {
           return CircleWorkspace(
             key: ValueKey(detail.circle.id),
             detail: detail,
+            initialConversationId: initialConversationId,
             onChanged: refresh,
             channelViewBuilder: channelViewBuilder,
             threadViewBuilder: threadViewBuilder,

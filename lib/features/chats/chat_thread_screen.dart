@@ -608,48 +608,71 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       ? const CircleAvatar(child: Icon(Icons.forum_outlined))
                       : FallbackAvatar(title: title, avatarUrl: avatarUrl),
                 ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          // With a back button in the leading slot, the avatar moves next to
+          // the title, where there is room for both.
+          title: Row(
             children: [
-              // A notch smaller than a plain app bar title, so long names
-              // keep more of themselves next to the subtitle on phones.
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (topic != null)
-                InkWell(
-                  key: const ValueKey('chat-thread-topic'),
-                  onTap: () => _showTopic(title, topic),
-                  child: Text(
-                    topic,
-                    key: const ValueKey('chat-thread-subtitle'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                )
-              else
-                Text(
-                  isThread
-                      ? _threadSubtitle(conversationSummary)
-                      : [
-                          peerIsOnline ? 'Online' : 'Offline',
-                          if (conversationType == ConversationType.direct)
-                            ?activeCustomStatus(
-                              conversationSummary?.directCustomStatus,
-                            )?.label,
-                        ].join(' · '),
-                  key: const ValueKey('chat-thread-subtitle'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall,
+              if (widget.onBack != null &&
+                  !widget.forumPost &&
+                  !isCompactWidth(constraints.maxWidth)) ...[
+                isThread
+                    ? const CircleAvatar(
+                        radius: 16,
+                        child: Icon(Icons.forum_outlined, size: 18),
+                      )
+                    : FallbackAvatar(
+                        title: title,
+                        avatarUrl: avatarUrl,
+                        radius: 16,
+                      ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // A notch smaller than a plain app bar title, so long names
+                    // keep more of themselves next to the subtitle on phones.
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (topic != null)
+                      InkWell(
+                        key: const ValueKey('chat-thread-topic'),
+                        onTap: () => _showTopic(title, topic),
+                        child: Text(
+                          topic,
+                          key: const ValueKey('chat-thread-subtitle'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      )
+                    else
+                      Text(
+                        isThread
+                            ? _threadSubtitle(conversationSummary)
+                            : [
+                                peerIsOnline ? 'Online' : 'Offline',
+                                if (conversationType == ConversationType.direct)
+                                  ?activeCustomStatus(
+                                    conversationSummary?.directCustomStatus,
+                                  )?.label,
+                              ].join(' · '),
+                        key: const ValueKey('chat-thread-subtitle'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
           actions: _appBarActions(

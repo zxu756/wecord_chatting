@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
-import 'package:wecord/features/circles/circle_creation_sheet.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
+import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/conversation.dart';
 
 final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
   (ref) {
@@ -20,17 +25,49 @@ final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
   },
 );
 
-/// Vertical strip of circle icons, modelled on a server switcher: icons morph
-/// from a circle to a rounded square and grow a left pill when hovered or
-/// selected. Circles with unread messages show a short pill and a red badge
-/// for mentions; muted circles are dimmed without the pill but keep the
-/// mention badge.
+/// Unread messages in direct and group chats that are not muted, for the
+/// rail's Home badge.
+final directUnreadCountProvider = Provider.autoDispose<int>((ref) {
+  final conversations =
+      ref.watch(conversationsProvider).valueOrNull ??
+      const <ConversationSummary>[];
+  var count = 0;
+  for (final conversation in conversations) {
+    if (conversation.isDirectMessage && !conversation.isMuted) {
+      count += conversation.unreadCount;
+    }
+  }
+  return count;
+});
+
+/// The app's main navigation, modelled on a server switcher: Home (direct
+/// messages and friends) on top, then the user's circles, then adding a
+/// circle and exploring. Icons morph from a circle to a rounded square and
+/// grow a left pill when hovered or selected. Circles with unread messages
+/// show a short pill and a red badge for mentions; muted circles are dimmed
+/// without the pill but keep the mention badge.
 class CircleRail extends ConsumerWidget {
-  const CircleRail({required this.selectedCircleId, super.key});
+  const CircleRail({
+    this.selectedCircleId,
+    this.homeSelected = false,
+    this.showVoiceIndicator = false,
+    this.onOpenVoice,
+    super.key,
+  });
 
   static const width = 72.0;
 
-  final String selectedCircleId;
+  final String? selectedCircleId;
+
+  /// Whether Home (direct messages, friends, notifications) is open.
+  final bool homeSelected;
+
+  /// Shows the current call's controls at the bottom, for pages without a
+  /// sidebar (which would show the voice panel instead).
+  final bool showVoiceIndicator;
+
+  /// Opens the voice channel of the current call.
+  final ValueChanged<VoiceSession>? onOpenVoice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,17 +75,22 @@ class CircleRail extends ConsumerWidget {
     final circles =
         ref.watch(circleSummariesProvider).valueOrNull ??
         const <CircleSummary>[];
+    final directUnread = ref.watch(directUnreadCountProvider);
 
     return Container(
+      key: const ValueKey('circle-rail'),
       width: width,
       color: colorScheme.surfaceContainerHigh,
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
           CircleRailItem(
-            tooltip: 'Chats',
-            onTap: () => context.go(ChatsScreen.path),
-            child: const Icon(Icons.chat_bubble_outline),
+            key: const ValueKey('circle-rail-home'),
+            tooltip: 'Direct messages',
+            selected: homeSelected,
+            mentionCount: directUnread,
+            onTap: () => context.go(HomeScreen.path),
+            child: const Icon(Icons.forum_outlined),
           ),
           Center(
             child: Container(
@@ -69,22 +111,26 @@ class CircleRail extends ConsumerWidget {
               unread: circle.unreadCount > 0,
               mentionCount: circle.mentionCount,
               muted: circle.isMuted,
-              onTap: () => context.go('${CirclesScreen.path}/${circle.id}'),
+              onTap: () => context.go('${CircleRoutes.path}/${circle.id}'),
               image: circle.avatarUrl == null
                   ? null
                   : NetworkImage(circle.avatarUrl!),
               child: Text(_initials(circle.name)),
             ),
           CircleRailItem(
-            tooltip: 'Create Circle',
-            onTap: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              builder: (context) => const CircleCreationSheet(),
-            ),
+            key: const ValueKey('circle-rail-add'),
+            tooltip: 'Add a circle',
+            onTap: () => showAddCircleSheet(context),
             child: const Icon(Icons.add),
           ),
+          CircleRailItem(
+            key: const ValueKey('circle-rail-explore'),
+            tooltip: 'Search and explore',
+            onTap: () => openPage(context, GlobalMessageSearchScreen.path),
+            child: const Icon(Icons.explore_outlined),
+          ),
+          if (showVoiceIndicator)
+            Center(child: VoiceRailIndicator(onOpen: onOpenVoice)),
         ],
       ),
     );

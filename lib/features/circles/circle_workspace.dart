@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
@@ -10,7 +11,6 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
-import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
@@ -40,13 +40,14 @@ typedef CircleThreadViewBuilder =
       List<Widget> actions,
     );
 
-/// Wide-screen circle layout: circle rail, channel sidebar, the selected
-/// channel or feed, and a toggleable member list. An open thread takes the
+/// Wide-screen circle layout beside the shell's rail: channel sidebar, the
+/// selected channel or feed, and a toggleable member list. An open thread takes the
 /// member list's place until closed.
 class CircleWorkspace extends ConsumerStatefulWidget {
   const CircleWorkspace({
     required this.detail,
     required this.onChanged,
+    this.initialConversationId,
     this.channelViewBuilder,
     this.threadViewBuilder,
     super.key,
@@ -60,6 +61,10 @@ class CircleWorkspace extends ConsumerStatefulWidget {
 
   final CircleDetail detail;
   final VoidCallback onChanged;
+
+  /// The channel, or channel thread, to open first (e.g. from a
+  /// notification); otherwise the first channel opens.
+  final String? initialConversationId;
   final CircleChannelViewBuilder? channelViewBuilder;
 
   /// Replaces the thread panel's chat, for tests.
@@ -89,11 +94,52 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       channels: widget.detail.channels,
     ).orderedChannels;
     _selectedChannelId = channels.isEmpty ? null : channels.first.id;
+    _openConversation(widget.initialConversationId);
+  }
+
+  /// Selects the channel of [conversationId], opening it in the thread
+  /// panel when it is one of the channel's threads.
+  void _openConversation(String? conversationId) {
+    if (conversationId == null) {
+      return;
+    }
+    for (final channel in widget.detail.channels) {
+      if (channel.conversationId == conversationId) {
+        _selectedChannelId = channel.id;
+        _openThread = null;
+        _openPost = null;
+        return;
+      }
+    }
+    final conversations =
+        ref.read(conversationsProvider).valueOrNull ??
+        const <ConversationSummary>[];
+    for (final conversation in conversations) {
+      if (conversation.id == conversationId && conversation.isThread) {
+        for (final channel in widget.detail.channels) {
+          if (channel.conversationId == conversation.parentConversationId) {
+            final target = ThreadTarget(
+              conversationId: conversation.id,
+              title: conversation.title ?? 'Thread',
+              threadId: conversation.threadId,
+            );
+            // Forum posts open in place of the post list.
+            _selectedChannelId = channel.id;
+            _openThread = channel.isForum ? null : target;
+            _openPost = channel.isForum ? target : null;
+          }
+        }
+        return;
+      }
+    }
   }
 
   @override
   void didUpdateWidget(CircleWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.initialConversationId != oldWidget.initialConversationId) {
+      _openConversation(widget.initialConversationId);
+    }
     final selectedId = _selectedChannelId;
     if (selectedId == null ||
         widget.detail.channels.any((channel) => channel.id == selectedId)) {
@@ -158,7 +204,6 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CircleRail(selectedCircleId: detail.circle.id),
           CircleChannelSidebar(
             detail: detail,
             onChangeNickname: _changeNickname,

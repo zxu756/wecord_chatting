@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -178,8 +179,8 @@ void main() {
         of: find.byType(AppBar),
         matching: find.byType(IconButton),
       );
-      // Search, one context action and More.
-      expect(toolbarButtons, findsNWidgets(3));
+      // Back, search, one context action and More.
+      expect(toolbarButtons, findsNWidgets(4));
     });
 
     phoneTestWidgets('group thread with announcement and thread chip', (
@@ -551,14 +552,145 @@ void main() {
     });
   });
 
-  group('circles', () {
-    phoneTestWidgets('circles list and join dialog', (tester, viewport) async {
+  group('navigation', () {
+    int? selectedTab(WidgetTester tester) =>
+        find.byType(NavigationBar).evaluate().isEmpty
+        ? null
+        : tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex;
+
+    phoneTestWidgets('home tab with rail and direct messages', (
+      tester,
+      viewport,
+    ) async {
       final world = PhoneWorld();
-      await world.open(tester, '/circles');
-      expect(find.text(circleSummaries.first.name), findsOneWidget);
+      await world.open(tester, '/home');
+
+      expect(selectedTab(tester), 0);
+      expect(find.byType(CircleRail), findsOneWidget);
+      expectFullyVisible(tester, find.text('Find or start a conversation'));
+      expect(find.byKey(const ValueKey('home-dm-dm-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-dm-group-1')), findsOneWidget);
+      // Channels stay in their circle.
+      expect(find.byKey(const ValueKey('home-dm-conv-general')), findsNothing);
+      // Notifications have their own tab on phones.
+      expect(find.byKey(const ValueKey('home-inbox')), findsNothing);
+      expectTouchTargets(tester, find.byType(CircleRailItem));
+
+      // Friends open full screen without the tabs; back returns.
+      await tester.tap(find.byKey(const ValueKey('home-friends')));
+      await settle(tester);
+      expect(find.widgetWithText(AppBar, 'Friends'), findsOneWidget);
+      expect(selectedTab(tester), isNull);
+      await tester.tap(find.byType(BackButton));
+      await settle(tester);
+      expect(selectedTab(tester), 0);
+
+      // So do direct messages, with a back button.
+      await tester.tap(find.byKey(const ValueKey('home-dm-dm-1')));
+      await settle(tester);
+      expect(selectedTab(tester), isNull);
+      await tester.tap(find.byTooltip('Back'));
+      await settle(tester);
+      expect(selectedTab(tester), 0);
+    });
+
+    phoneTestWidgets('home tab returns to the last circle', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      expect(selectedTab(tester), 0);
+
+      await tester.tap(find.text('Messages'));
+      await settle(tester);
+      expect(selectedTab(tester), 1);
+      expect(find.widgetWithText(AppBar, 'Messages'), findsOneWidget);
+
+      await tester.tap(find.text('Home'));
+      await settle(tester);
+      expect(
+        world.router.routerDelegate.currentConfiguration.uri.path,
+        '/circles/circle-1',
+      );
+    });
+
+    phoneTestWidgets('pages pushed over a tab hide the tabs', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/circles/circle-1');
+      await tester.tap(find.text('Feed'));
+      await settle(tester);
+      expect(selectedTab(tester), isNull);
+      await tester.tap(find.byType(BackButton));
+      await settle(tester);
+      expect(selectedTab(tester), 0);
+    });
+
+    phoneTestWidgets('notifications tab with mentions, replies and requests', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/notifications');
+
+      expect(selectedTab(tester), 2);
+      expect(
+        find.byKey(const ValueKey('inbox-friend-requests')),
+        findsOneWidget,
+      );
+      expect(find.text('Mentioned you'), findsOneWidget);
+      expect(find.text('Replied to you'), findsOneWidget);
+      expect(find.text('@Ada can you bring the tripod?'), findsOneWidget);
+      expect(find.byKey(const ValueKey('inbox-unread-dot')), findsOneWidget);
+      // The tab counts the unread mention and the pending request.
+      expect(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+
+      // A channel mention opens the channel in its circle.
+      await tester.tap(find.byKey(const ValueKey('inbox-item-inbox-mention')));
+      await settle(tester);
+      final channel = tester.widget<CircleChannelThreadScreen>(
+        find.byType(CircleChannelThreadScreen),
+      );
+      expect(channel.circleId, 'circle-1');
+      expect(channel.conversationId, 'conv-general');
+      expect(selectedTab(tester), isNull);
+    });
+
+    phoneTestWidgets('you tab', (tester, viewport) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/me');
+      expect(selectedTab(tester), 3);
+      expect(find.widgetWithText(AppBar, 'You'), findsOneWidget);
+    });
+  });
+
+  group('circles', () {
+    phoneTestWidgets('rail adds circles with an invite', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      await world.open(tester, '/home');
+      expect(
+        find.byKey(ValueKey('circle-rail-${circleSummaries.first.id}')),
+        findsOneWidget,
+      );
       expect(find.text('99+'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Join with invite'));
+      await tester.tap(find.byKey(const ValueKey('circle-rail-add')));
+      await settle(tester);
+      await tester.tap(find.text('Join with invite'));
       await settle(tester);
       await showKeyboard(tester, viewport);
       expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Join'));
@@ -737,7 +869,7 @@ void main() {
       );
       expectFullyVisible(
         tester,
-        find.widgetWithText(FilledButton, 'Back to Circles'),
+        find.widgetWithText(FilledButton, 'Back to home'),
       );
     });
 
@@ -829,9 +961,11 @@ void main() {
     phoneTestWidgets('create circle sheet', (tester, viewport) async {
       final world = PhoneWorld();
       await world.open(tester, '/circles/circle-1');
-      final create = find.byTooltip('Create Circle');
-      await tester.ensureVisible(create);
-      await tester.tap(create);
+      final add = find.byKey(const ValueKey('circle-rail-add'));
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await settle(tester);
+      await tester.tap(find.text('Create a circle'));
       await settle(tester);
       await showKeyboard(tester, viewport);
       expectFullyVisible(tester, find.byType(EditableText).first);
@@ -1598,14 +1732,10 @@ void main() {
           matching: find.byType(IconButton),
         ),
       );
-      // The panel sits above the navigation bar on every page.
+      // The call view has its own controls; the panel waits for the tabs.
       final panel = find.byKey(const ValueKey('voice-connected-panel'));
-      expect(panel, findsOneWidget);
-      expectFullyVisible(tester, panel);
-      expect(
-        tester.getBottomLeft(panel).dy,
-        lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
-      );
+      expect(panel, findsNothing);
+      expect(find.byType(NavigationBar), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('voice-control-camera')));
       await settle(tester);
@@ -1616,10 +1746,15 @@ void main() {
         findsOneWidget,
       );
 
+      // Back on a tab, the panel sits above the navigation bar.
       world.router.go(ChatsScreen.path);
       await settle(tester);
       expect(panel, findsOneWidget);
       expectFullyVisible(tester, panel);
+      expect(
+        tester.getBottomLeft(panel).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+      );
       expectTouchTargets(
         tester,
         find.descendant(of: panel, matching: find.byType(IconButton)),

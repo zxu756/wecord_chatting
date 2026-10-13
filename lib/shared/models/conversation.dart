@@ -182,6 +182,10 @@ class ConversationSummary {
 
   bool get isThread => type == ConversationType.thread;
 
+  /// A direct or group chat, listed under direct messages.
+  bool get isDirectMessage =>
+      type == ConversationType.direct || type == ConversationType.group;
+
   Map<String, dynamic> toJson() {
     return {'type': type.toJson(), 'title': title, 'avatar_url': avatarUrl};
   }

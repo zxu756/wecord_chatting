@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contact_alias_sheet.dart';
@@ -49,7 +50,7 @@ class ContactsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Contacts')),
+      appBar: AppBar(title: const Text('Friends')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: const [
@@ -296,7 +297,8 @@ class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
       return;
     }
     ref.invalidate(conversationsProvider);
-    context.go(
+    openPage(
+      context,
       '${ChatsScreen.path}/${result.conversationId}',
       extra: ChatThreadRouteExtra(
         title: result.title,
@@ -355,7 +357,8 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
       if (!mounted) {
         return;
       }
-      context.go(
+      openPage(
+        context,
         '${ChatsScreen.path}/$conversationId',
         extra: ChatThreadRouteExtra(
           title: widget.profile.displayLabel,

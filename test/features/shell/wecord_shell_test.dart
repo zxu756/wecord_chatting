@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -21,54 +22,121 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
-  testWidgets('switches between primary tabs', (tester) async {
-    var selectedIndex = 0;
-    final selectedIndexes = <int>[];
-
-    await tester.pumpWidget(
-      StatefulBuilder(
-        builder: (context, setState) {
-          return MaterialApp(
-            home: ProviderScope(
-              overrides: [
-                notificationCoordinatorProvider.overrideWithValue(
-                  _NoopNotificationCoordinator(),
-                ),
-                localNotificationServiceProvider.overrideWithValue(
-                  FakeLocalNotificationService(),
-                ),
-              ],
-              child: WeCordShell(
-                selectedIndex: selectedIndex,
-                onDestinationSelected: (index) {
-                  selectedIndexes.add(index);
-                  setState(() {
-                    selectedIndex = index;
-                  });
-                },
-                child: const Text('Current screen'),
-              ),
+  Widget shell({
+    required Size size,
+    required ShellPlacement placement,
+    ValueChanged<WeCordTab>? onTabSelected,
+  }) {
+    return MediaQuery(
+      data: MediaQueryData(size: size),
+      child: MaterialApp(
+        home: ProviderScope(
+          overrides: [
+            notificationCoordinatorProvider.overrideWithValue(
+              _NoopNotificationCoordinator(),
             ),
-          );
-        },
+            localNotificationServiceProvider.overrideWithValue(
+              FakeLocalNotificationService(),
+            ),
+            chatsRepositoryProvider.overrideWithValue(_FakeChatsRepository()),
+          ],
+          child: WeCordShell(
+            placement: placement,
+            onTabSelected: onTabSelected ?? (_) {},
+            child: const Text('Current screen'),
+          ),
+        ),
       ),
     );
+  }
 
-    expect(find.text('Chats'), findsWidgets);
-    expect(find.text('Contacts'), findsOneWidget);
-    expect(find.text('Circles'), findsOneWidget);
-    expect(find.text('Me'), findsOneWidget);
+  testWidgets('phones switch between the four tabs', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final selected = <WeCordTab>[];
 
-    await tester.tap(find.text('Contacts'));
+    await tester.pumpWidget(
+      shell(
+        size: const Size(390, 844),
+        placement: const ShellPlacement(tab: WeCordTab.home),
+        onTabSelected: selected.add,
+      ),
+    );
     await tester.pump();
 
-    await tester.tap(find.text('Circles'));
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byKey(const ValueKey('circle-rail')), findsNothing);
+    for (final label in ['Home', 'Messages', 'Notifications', 'You']) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    await tester.tap(find.text('Messages'));
+    await tester.tap(find.text('Notifications'));
+    await tester.tap(find.text('You'));
     await tester.pump();
 
-    await tester.tap(find.text('Me'));
+    expect(selected, [
+      WeCordTab.messages,
+      WeCordTab.notifications,
+      WeCordTab.you,
+    ]);
+  });
+
+  testWidgets('phones hide the tabs on pages opened on top', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      shell(size: const Size(390, 844), placement: const ShellPlacement()),
+    );
     await tester.pump();
 
-    expect(selectedIndexes, [1, 2, 3]);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('Current screen'), findsOneWidget);
+  });
+
+  testWidgets('wide layouts keep the rail, and Home its sidebar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      shell(
+        size: const Size(1200, 800),
+        placement: const ShellPlacement(
+          homeSelected: true,
+          homeSection: HomeSection.friends,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byKey(const ValueKey('circle-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('circle-rail-home')), findsOneWidget);
+    expect(find.text('Find or start a conversation'), findsOneWidget);
+    expect(find.text('Friends'), findsOneWidget);
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.byKey(const ValueKey('user-panel')), findsOneWidget);
+
+    // A circle brings its own sidebar.
+    await tester.pumpWidget(
+      shell(
+        size: const Size(1200, 800),
+        placement: const ShellPlacement(
+          selectedCircleId: 'circle-1',
+          pageHasSidebar: true,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Find or start a conversation'), findsNothing);
+    expect(find.byKey(const ValueKey('circle-rail')), findsOneWidget);
   });
 }
 

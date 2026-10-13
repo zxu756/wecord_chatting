@@ -43,7 +43,7 @@ void main() {
     expect(find.text('Create account'), findsOneWidget);
   });
 
-  testWidgets('opens Chats as the default screen when signed in', (
+  testWidgets('opens Home as the default screen when signed in', (
     tester,
   ) async {
     final repository = FakeAuthRepository();
@@ -62,13 +62,17 @@ void main() {
     authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Chats'), findsWidgets);
+    expect(find.text('Find or start a conversation'), findsOneWidget);
     expect(find.text('No conversations yet'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
     expect(repository.ensureProfileCalls, 1);
   });
 
   testWidgets(
-    'signed-in bootstrap failure shows retryable error instead of Chats',
+    'signed-in bootstrap failure shows retryable error instead of Home',
     (tester) async {
       final repository = FakeAuthRepository()
         ..ensureProfileError = StateError('duplicate username');
@@ -89,14 +93,14 @@ void main() {
 
       expect(find.text('Profile setup failed'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
-      expect(find.text('Chats'), findsNothing);
+      expect(find.text('Find or start a conversation'), findsNothing);
       expect(repository.ensureProfileCalls, 1);
 
       repository.ensureProfileError = null;
       await tester.tap(find.text('Try again'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Chats'), findsWidgets);
+      expect(find.text('Find or start a conversation'), findsOneWidget);
       expect(find.text('No conversations yet'), findsOneWidget);
       expect(repository.ensureProfileCalls, 2);
     },
@@ -236,7 +240,7 @@ void main() {
     expect(find.byType(ChatThreadScreen), findsOneWidget);
   });
 
-  testWidgets('circle channel threads keep the Circles tab selected', (
+  testWidgets('circle channels open full screen over the phone tabs', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -263,8 +267,11 @@ void main() {
 
     authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
     await tester.pumpAndSettle();
-    int selectedIndex() =>
-        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex;
+    int? selectedIndex() => find.byType(NavigationBar).evaluate().isEmpty
+        ? null
+        : tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .selectedIndex;
     expect(selectedIndex(), 0);
 
     // Deep link without extras still opens the circle channel.
@@ -277,13 +284,13 @@ void main() {
     expect(screen.circleId, 'circle-1');
     expect(screen.conversationId, 'conversation-1');
     expect(find.byType(ChatThreadScreen), findsOneWidget);
-    expect(selectedIndex(), 2);
+    expect(selectedIndex(), isNull);
 
     router.go('/chats');
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(CircleChannelThreadScreen), findsNothing);
-    expect(selectedIndex(), 0);
+    expect(selectedIndex(), 1);
 
     router.push(
       CircleChannelThreadScreen.pathFor('circle-1', 'conversation-1'),
@@ -303,7 +310,7 @@ void main() {
           .title,
       '# general',
     );
-    expect(selectedIndex(), 2);
+    expect(selectedIndex(), isNull);
 
     // Threads of a circle channel open on the same route, as threads.
     router.push(
@@ -324,7 +331,7 @@ void main() {
           .conversationType,
       ConversationType.thread,
     );
-    expect(selectedIndex(), 2);
+    expect(selectedIndex(), isNull);
   });
 
   testWidgets('routes signed-in users to profile pages', (tester) async {
@@ -464,7 +471,7 @@ void main() {
     authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
     await tester.pumpAndSettle();
 
-    expect(router.routerDelegate.currentConfiguration.uri.path, '/chats');
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/home');
   });
 }
 

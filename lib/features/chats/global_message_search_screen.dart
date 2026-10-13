@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
-import 'package:wecord/features/circles/circles_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/shared/models/discovery.dart';
 
 class GlobalMessageSearchScreen extends ConsumerStatefulWidget {
@@ -211,16 +212,16 @@ void _openResult(BuildContext context, DiscoveryResult result) {
   switch (result.type) {
     case DiscoveryResultType.circle:
       final circleId = result.circleId ?? result.id;
-      context.go('${CirclesScreen.path}/$circleId');
+      context.go('${CircleRoutes.path}/$circleId');
     case DiscoveryResultType.circleChannel:
     case DiscoveryResultType.group:
     case DiscoveryResultType.contact:
     case DiscoveryResultType.message:
       final conversationId = result.conversationId;
       if (conversationId != null) {
-        context.go('${ChatsScreen.path}/$conversationId');
+        openPage(context, '${ChatsScreen.path}/$conversationId');
       } else if (result.circleId != null) {
-        context.go('${CirclesScreen.path}/${result.circleId}');
+        context.go('${CircleRoutes.path}/${result.circleId}');
       }
   }
 }

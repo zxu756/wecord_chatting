@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -58,14 +58,12 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chats'),
+        title: const Text('Messages'),
         actions: [
           IconButton(
             tooltip: 'Search all messages',
             icon: const Icon(Icons.search),
-            onPressed: () {
-              context.go(GlobalMessageSearchScreen.path);
-            },
+            onPressed: () => openPage(context, GlobalMessageSearchScreen.path),
           ),
         ],
       ),
@@ -78,10 +76,11 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
           ),
         ),
         data: (allConversations) {
-          // Threads live under their channel or group, not in this list.
+          // Direct and group chats only: channels and their threads live
+          // in their circle, group threads under their group.
           final conversations = [
             for (final conversation in allConversations)
-              if (!conversation.isThread) conversation,
+              if (conversation.isDirectMessage) conversation,
           ];
           final visibleConversations = ref
               .read(chatsRepositoryProvider)
@@ -161,16 +160,7 @@ class _ConversationTile extends ConsumerWidget {
 
     final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
     final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
-    final actionLabels = {
-      _ConversationAction.pin: conversation.pinnedAt == null
-          ? 'Pin chat'
-          : 'Unpin chat',
-      _ConversationAction.mute: conversation.isMuted ? 'Unmute' : 'Mute',
-      _ConversationAction.markReadState: appearsUnread
-          ? 'Mark read'
-          : 'Mark unread',
-      _ConversationAction.hide: 'Delete conversation',
-    };
+    final actionLabels = _conversationActionLabels(conversation);
 
     return ListTile(
       leading: _ConversationAvatar(
@@ -230,7 +220,7 @@ class _ConversationTile extends ConsumerWidget {
               tooltip: 'Conversation actions',
               icon: const Icon(Icons.more_horiz),
               onSelected: (action) {
-                _handleAction(context, ref, action);
+                _handleConversationAction(context, ref, conversation, action);
               },
               itemBuilder: (context) {
                 return [
@@ -240,108 +230,121 @@ class _ConversationTile extends ConsumerWidget {
                 ];
               },
             ),
-      onTap: () {
-        context.go(
-          '${ChatsScreen.path}/${conversation.id}',
-          extra: ChatThreadRouteExtra(
-            title: title,
-            type: conversation.type,
-            avatarUrl: conversation.avatarUrl,
-          ),
-        );
-      },
-      onLongPress: () => _showActionSheet(context, ref, title, actionLabels),
+      onTap: () => openConversation(context, conversation),
+      onLongPress: () => showConversationActions(context, ref, conversation),
     );
   }
+}
 
-  Future<void> _showActionSheet(
-    BuildContext context,
-    WidgetRef ref,
-    String title,
-    Map<_ConversationAction, String> actionLabels,
-  ) async {
-    final action = await showModalBottomSheet<_ConversationAction>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(sheetContext).textTheme.titleMedium,
-                  ),
-                ),
-                for (final MapEntry(key: action, value: label)
-                    in actionLabels.entries)
-                  ListTile(
-                    leading: Icon(switch (action) {
-                      _ConversationAction.pin => Icons.push_pin_outlined,
-                      _ConversationAction.mute =>
-                        Icons.notifications_off_outlined,
-                      _ConversationAction.markReadState =>
-                        Icons.mark_chat_read_outlined,
-                      _ConversationAction.hide => Icons.delete_outline,
-                    }),
-                    title: Text(label),
-                    onTap: () => Navigator.of(sheetContext).pop(action),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (action != null && context.mounted) {
-      _handleAction(context, ref, action);
-    }
-  }
-
-  void _handleAction(
-    BuildContext context,
-    WidgetRef ref,
-    _ConversationAction action,
-  ) {
-    final repository = ref.read(chatsRepositoryProvider);
-    final Future<void> operation = switch (action) {
-      _ConversationAction.pin => repository.setConversationPinned(
-        conversationId: conversation.id,
-        pinned: conversation.pinnedAt == null,
-      ),
-      _ConversationAction.mute => repository.setConversationMuted(
-        conversationId: conversation.id,
-        muted: !conversation.isMuted,
-      ),
-      _ConversationAction.markReadState =>
+Map<_ConversationAction, String> _conversationActionLabels(
+  ConversationSummary conversation,
+) {
+  return {
+    _ConversationAction.pin: conversation.pinnedAt == null
+        ? 'Pin chat'
+        : 'Unpin chat',
+    _ConversationAction.mute: conversation.isMuted ? 'Unmute' : 'Mute',
+    _ConversationAction.markReadState:
         conversation.unreadCount > 0 || conversation.isMarkedUnread
-            ? repository.markConversationRead(conversation.id)
-            : repository.markConversationUnread(conversation.id),
-      _ConversationAction.hide => repository.hideConversation(conversation.id),
-    };
+        ? 'Mark read'
+        : 'Mark unread',
+    _ConversationAction.hide: 'Delete conversation',
+  };
+}
 
-    unawaited(
-      operation
-          .then((_) {
-            ref.invalidate(conversationsProvider);
-          })
-          .catchError((Object _) {
-            if (!context.mounted) {
-              return;
-            }
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Could not update conversation.')),
-            );
-          }),
-    );
+/// Pin, mute, mark read / unread or delete [conversation], picked from a
+/// bottom sheet.
+Future<void> showConversationActions(
+  BuildContext context,
+  WidgetRef ref,
+  ConversationSummary conversation,
+) async {
+  final title = conversation.title?.trim().isNotEmpty == true
+      ? conversation.title!
+      : 'Conversation';
+  final actionLabels = _conversationActionLabels(conversation);
+  final action = await showModalBottomSheet<_ConversationAction>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheetContext) {
+      return SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+              ),
+              for (final MapEntry(key: action, value: label)
+                  in actionLabels.entries)
+                ListTile(
+                  leading: Icon(switch (action) {
+                    _ConversationAction.pin => Icons.push_pin_outlined,
+                    _ConversationAction.mute =>
+                      Icons.notifications_off_outlined,
+                    _ConversationAction.markReadState =>
+                      Icons.mark_chat_read_outlined,
+                    _ConversationAction.hide => Icons.delete_outline,
+                  }),
+                  title: Text(label),
+                  onTap: () => Navigator.of(sheetContext).pop(action),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  if (action != null && context.mounted) {
+    _handleConversationAction(context, ref, conversation, action);
   }
+}
+
+void _handleConversationAction(
+  BuildContext context,
+  WidgetRef ref,
+  ConversationSummary conversation,
+  _ConversationAction action,
+) {
+  final repository = ref.read(chatsRepositoryProvider);
+  final Future<void> operation = switch (action) {
+    _ConversationAction.pin => repository.setConversationPinned(
+      conversationId: conversation.id,
+      pinned: conversation.pinnedAt == null,
+    ),
+    _ConversationAction.mute => repository.setConversationMuted(
+      conversationId: conversation.id,
+      muted: !conversation.isMuted,
+    ),
+    _ConversationAction.markReadState =>
+      conversation.unreadCount > 0 || conversation.isMarkedUnread
+          ? repository.markConversationRead(conversation.id)
+          : repository.markConversationUnread(conversation.id),
+    _ConversationAction.hide => repository.hideConversation(conversation.id),
+  };
+
+  unawaited(
+    operation
+        .then((_) {
+          ref.invalidate(conversationsProvider);
+        })
+        .catchError((Object _) {
+          if (!context.mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not update conversation.')),
+          );
+        }),
+  );
 }
 
 class _ConversationAvatar extends ConsumerWidget {

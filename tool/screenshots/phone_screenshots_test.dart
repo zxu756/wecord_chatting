@@ -205,8 +205,44 @@ void main() {
     await tester.tap(find.text('Brewing ideas'));
   });
 
-  screen('14-circles-list', (tester, world) async {
-    await world.open(tester, '/circles');
+  screen('14-home', (tester, world) async {
+    await world.open(tester, '/home');
+  });
+
+  screen('14b-messages', (tester, world) async {
+    await world.open(tester, '/chats');
+  });
+
+  screen('14c-notifications', (tester, world) async {
+    await world.open(tester, '/notifications');
+  });
+
+  screen('14d-add-circle', (tester, world) async {
+    await world.open(tester, '/home');
+    await tester.tap(find.byKey(const ValueKey('circle-rail-add')));
+  });
+
+  // The desktop layout, for comparison.
+  const desktop = PhoneViewport(
+    name: 'desktop',
+    size: Size(1280, 800),
+    devicePixelRatio: 1,
+  );
+
+  screen('w1-home', viewport: desktop, (tester, world) async {
+    await world.open(tester, '/home');
+  });
+
+  screen('w2-direct-message', viewport: desktop, (tester, world) async {
+    await world.open(tester, '/chats/dm-1');
+  });
+
+  screen('w3-circle', viewport: desktop, (tester, world) async {
+    await world.open(tester, '/circles/circle-1');
+  });
+
+  screen('w4-notifications', viewport: desktop, (tester, world) async {
+    await world.open(tester, '/notifications');
   });
 
   screen('15-circle-feed', (tester, world) async {

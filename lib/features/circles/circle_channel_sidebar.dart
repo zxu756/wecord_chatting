@@ -12,7 +12,7 @@ import 'package:wecord/features/circles/circle_notification_settings_sheet.dart'
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -426,9 +426,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final voiceStates = detail.channels.any((channel) => channel.isVoice)
         ? watchVoiceStates(ref, _circleId)
         : const <VoiceMemberState>[];
-    final showVoicePanel =
-        ref.watch(voiceSessionProvider) != null &&
-        MediaQuery.sizeOf(context).width >= WeCordShell.railBreakpoint;
+    final wide = isWideLayout(MediaQuery.sizeOf(context).width);
+    final showVoicePanel = ref.watch(voiceSessionProvider) != null && wide;
     final layout = _layout;
     final entries = _entries(layout, unreadCounts, threadsByParent);
     final dragOnLongPress = switch (theme.platform) {
@@ -604,6 +603,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               const Divider(height: 1),
               VoiceConnectedPanel(onOpen: widget.onOpenVoice),
             ],
+            if (wide) ...[const Divider(height: 1), const UserPanel()],
           ],
         ),
       ),

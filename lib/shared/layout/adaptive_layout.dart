@@ -22,3 +22,10 @@ bool usesTouchInput(BuildContext context) {
     TargetPlatform.windows => false,
   };
 }
+
+/// From this width the app uses its desktop layout: the circle rail and a
+/// sidebar stay on the left while pages change beside them.
+const wideLayoutBreakpoint = 840.0;
+
+/// Whether [width] calls for the desktop layout.
+bool isWideLayout(double width) => width >= wideLayoutBreakpoint;

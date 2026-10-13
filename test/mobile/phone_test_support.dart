@@ -13,6 +13,7 @@ import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
@@ -54,6 +55,14 @@ import '../features/contacts/contacts_screen_test.dart' as contact_fakes;
 import '../features/profile/user_profile_screen_test.dart' as profile_fakes;
 import '../features/settings/settings_screen_test.dart' as settings_fakes;
 import '../features/voice/voice_fakes.dart';
+
+/// Inbox with fixed [items].
+class FakeInboxRepository implements InboxRepository {
+  var items = <InboxItem>[];
+
+  @override
+  Future<List<InboxItem>> listInbox({int limit = 50}) async => items;
+}
 
 /// A phone screen to lay the app out on.
 class PhoneViewport {
@@ -1617,6 +1626,31 @@ class PhoneWorld {
   });
   final openedLinks = <Uri>[];
   final voice = FakeVoiceRepository();
+  final inbox = FakeInboxRepository()
+    ..items = [
+      InboxItem(
+        messageId: 'inbox-mention',
+        conversationId: 'conv-general',
+        senderId: bart.id,
+        senderName: bart.displayName,
+        body: '@Ada can you bring the **tripod**?',
+        type: MessageType.text,
+        createdAt: minutesAgo(5),
+        reason: InboxReason.mention,
+        isUnread: true,
+      ),
+      InboxItem(
+        messageId: 'inbox-reply',
+        conversationId: 'dm-1',
+        senderId: bart.id,
+        senderName: bart.displayName,
+        body: 'Sounds good, see you at the trailhead',
+        type: MessageType.text,
+        createdAt: minutesAgo(60),
+        reason: InboxReason.reply,
+        isUnread: false,
+      ),
+    ];
   late final voiceCalls = FakeVoiceCallConnector(
     localUserId: me.id,
     localName: me.displayName,
@@ -1644,6 +1678,7 @@ class PhoneWorld {
         ),
       ),
       contactsRepositoryProvider.overrideWithValue(contacts),
+      inboxRepositoryProvider.overrideWithValue(inbox),
       settingsRepositoryProvider.overrideWithValue(settings),
       profileRepositoryProvider.overrideWithValue(
         ProfileRepository.withDataSource(profileData),

@@ -507,7 +507,8 @@ void main() {
     await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('circle-rail-circle-1')), findsOneWidget);
+    // The rail belongs to the shell, beside the workspace.
+    expect(find.byType(CircleRail), findsNothing);
     expect(find.text('Channel general'), findsOneWidget);
     expect(find.text('ONLINE — 1'), findsOneWidget);
 
@@ -2227,9 +2228,8 @@ void main() {
         initialLocation: '/circles/circle-1',
         routes: [
           GoRoute(
-            path: '/circles',
-            builder: (context, state) =>
-                const Scaffold(body: Text('Circles list')),
+            path: '/home',
+            builder: (context, state) => const Scaffold(body: Text('Home')),
           ),
           GoRoute(
             path: '/circles/:circleId',
@@ -2295,7 +2295,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('members leave after confirming and land on Circles', (
+    testWidgets('members leave after confirming and land on Home', (
       tester,
     ) async {
       final repository = FakeCirclesRepository()..detail = memberDetail();
@@ -2323,7 +2323,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.leftCircleIds, ['circle-1']);
-      expect(find.text('Circles list'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('Left Close Friends.'), findsOneWidget);
     });
 
@@ -2407,9 +2407,9 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Back to Circles'));
+      await tester.tap(find.text('Back to home'));
       await tester.pumpAndSettle();
-      expect(find.text('Circles list'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
     });
   });
 

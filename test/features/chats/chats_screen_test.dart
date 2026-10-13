@@ -76,9 +76,15 @@ void main() {
     expect(find.text('No messages yet'), findsOneWidget);
   });
 
-  testWidgets('keeps threads out of the chat list', (tester) async {
+  testWidgets('lists only direct and group chats', (tester) async {
     final repository = FakeChatsRepository()
       ..conversations = [
+        const ConversationSummary(
+          id: 'group-conversation',
+          type: ConversationType.group,
+          title: 'Hiking crew',
+          unreadCount: 0,
+        ),
         const ConversationSummary(
           id: 'channel-conversation',
           type: ConversationType.channel,
@@ -98,7 +104,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('general'), findsOneWidget);
+    // Channels and their threads live in their circle.
+    expect(find.text('Hiking crew'), findsOneWidget);
+    expect(find.text('general'), findsNothing);
     expect(find.text('Weekend plans'), findsNothing);
     expect(find.text('3'), findsNothing);
   });

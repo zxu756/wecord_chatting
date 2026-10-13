@@ -47,6 +47,7 @@ class ConversationSummary {
     this.lastMessageSenderId,
     this.lastMessageAt,
     this.lastMessageType,
+    this.lastMessageWebhookName,
     this.pinnedAt,
     this.mutedUntil,
     this.isMuted = false,
@@ -82,6 +83,7 @@ class ConversationSummary {
       lastMessageType: json['last_message_type'] == null
           ? null
           : MessageType.fromJson(json['last_message_type'] as String),
+      lastMessageWebhookName: json['last_message_webhook_name'] as String?,
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       pinnedAt: _parseOptionalTimestamp(json['pinned_at']),
       mutedUntil: _parseOptionalTimestamp(json['muted_until']),
@@ -129,6 +131,10 @@ class ConversationSummary {
   final String? lastMessageSenderId;
   final DateTime? lastMessageAt;
   final MessageType? lastMessageType;
+
+  /// The webhook name the latest message was posted under, if a webhook
+  /// posted it (then it is not the sender's own message).
+  final String? lastMessageWebhookName;
   final int unreadCount;
   final DateTime? pinnedAt;
   final DateTime? mutedUntil;
@@ -189,6 +195,7 @@ class ConversationSummary {
     Object? lastMessageSenderId = _sentinel,
     Object? lastMessageAt = _sentinel,
     Object? lastMessageType = _sentinel,
+    Object? lastMessageWebhookName = _sentinel,
     int? unreadCount,
     Object? pinnedAt = _sentinel,
     Object? mutedUntil = _sentinel,
@@ -224,6 +231,9 @@ class ConversationSummary {
       lastMessageType: identical(lastMessageType, _sentinel)
           ? this.lastMessageType
           : lastMessageType as MessageType?,
+      lastMessageWebhookName: identical(lastMessageWebhookName, _sentinel)
+          ? this.lastMessageWebhookName
+          : lastMessageWebhookName as String?,
       unreadCount: unreadCount ?? this.unreadCount,
       pinnedAt: identical(pinnedAt, _sentinel)
           ? this.pinnedAt

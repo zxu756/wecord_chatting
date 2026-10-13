@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/channel_webhooks_section.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -312,6 +313,12 @@ class _CircleChannelSettingsScreenState
           ..._slowmodeSection(channel),
       ],
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
+      if (channel.kind == CircleChannelKind.text &&
+          detail.canInChannel(channel, CirclePermission.manageWebhooks))
+        ChannelWebhooksSection(
+          key: ValueKey('channel-webhooks-${channel.id}'),
+          channel: channel,
+        ),
       if (detail.canManageChannels) ...[
         const Divider(height: 32),
         Padding(

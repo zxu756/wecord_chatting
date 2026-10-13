@@ -18,6 +18,9 @@ import 'package:wecord/features/notifications/notification_preferences_repositor
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/config/app_config.dart';
+import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
@@ -710,6 +713,68 @@ List<ForumPost> forumPosts() {
       createdMinutesAgo: 2000,
       activeMinutesAgo: 1500,
       tags: [forumTags[1], forumTags[3]],
+    ),
+  ];
+}
+
+/// Messages a webhook posted in #general, with a long name, between
+/// members' messages.
+List<ChatMessage> webhookMessages() {
+  ChatMessage fromWebhook(String id, String body, int minutesAgo) {
+    return phoneMessage(
+      id,
+      me,
+      body,
+      minutesAgo: minutesAgo,
+      conversationId: 'conv-general',
+    ).copyWith(
+      webhookId: 'webhook-1',
+      webhookName: 'GitHub Actions deploy notifications for production',
+      webhookAvatarUrl: 'https://example.com/ci.png',
+    );
+  }
+
+  return [
+    phoneMessage(
+      'wh-0',
+      bart,
+      'Is the release out yet?',
+      minutesAgo: 20,
+      conversationId: 'conv-general',
+    ),
+    fromWebhook(
+      'wh-1',
+      '**Deploy** of `main` to production finished in 4m 12s ✅',
+      12,
+    ),
+    fromWebhook('wh-2', 'All 778 tests passed.', 11),
+    phoneMessage(
+      'wh-3',
+      me,
+      'Yes, just shipped it.',
+      minutesAgo: 5,
+      conversationId: 'conv-general',
+    ),
+  ];
+}
+
+/// Two webhooks of #general, one never used.
+List<ChannelWebhook> channelWebhooks() {
+  return [
+    ChannelWebhook(
+      id: 'webhook-1',
+      channelId: 'ch-general',
+      name: 'GitHub Actions deploy notifications for production',
+      creatorName: me.displayName,
+      createdAt: minutesAgo(60 * 24 * 3),
+      lastUsedAt: minutesAgo(11),
+    ),
+    ChannelWebhook(
+      id: 'webhook-2',
+      channelId: 'ch-general',
+      name: 'Alerts',
+      creatorName: grace.displayName,
+      createdAt: minutesAgo(60),
     ),
   ];
 }
@@ -1443,6 +1508,12 @@ class PhoneWorld {
       authStateProvider.overrideWith((ref) => Stream.value(auth.user)),
       chatsRepositoryProvider.overrideWithValue(chats),
       circlesRepositoryProvider.overrideWithValue(circles),
+      appConfigProvider.overrideWithValue(
+        AppConfig(
+          supabaseUrl: Uri.parse('https://wecordproject.supabase.co'),
+          supabaseAnonKey: 'anon',
+        ),
+      ),
       contactsRepositoryProvider.overrideWithValue(contacts),
       settingsRepositoryProvider.overrideWithValue(settings),
       profileRepositoryProvider.overrideWithValue(

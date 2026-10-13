@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
@@ -186,6 +187,25 @@ abstract interface class CirclesRepository {
 
   /// Deletes a channel with its messages and threads.
   Future<void> deleteChannel(String channelId);
+
+  /// The webhooks of a channel, oldest first (without their tokens).
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId);
+
+  /// Creates a webhook; the returned token is never shown again.
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  });
+
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  });
+
+  /// Replaces a webhook's token, so its old URL stops working.
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId);
+
+  Future<void> deleteChannelWebhook(String webhookId);
 
   /// The circle's upcoming and ongoing events by start time; with
   /// [includePast] also ended and cancelled ones. Events in channels the
@@ -719,6 +739,56 @@ class SupabaseCirclesRepository implements CirclesRepository {
   Future<void> deleteChannel(String channelId) async {
     await _dataSource.rpc('delete_circle_channel', {
       'target_channel_id': channelId,
+    });
+  }
+
+  @override
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId) async {
+    final rows = await _dataSource.rpc('list_channel_webhooks', {
+      'target_channel_id': channelId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(ChannelWebhook.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  }) async {
+    final payload = await _dataSource.rpc('create_channel_webhook', {
+      'target_channel_id': channelId,
+      'webhook_name': name.trim(),
+    });
+    return ChannelWebhookSecret.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  }) async {
+    final payload = await _dataSource.rpc('rename_channel_webhook', {
+      'target_webhook_id': webhookId,
+      'webhook_name': name.trim(),
+    });
+    return ChannelWebhook.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId) async {
+    final payload = await _dataSource.rpc('regenerate_webhook_token', {
+      'target_webhook_id': webhookId,
+    });
+    return ChannelWebhookSecret.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteChannelWebhook(String webhookId) async {
+    await _dataSource.rpc('delete_channel_webhook', {
+      'target_webhook_id': webhookId,
     });
   }
 
@@ -1645,6 +1715,37 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<void> deleteChannel(String channelId) {
     throw StateError('Supabase must be initialized before deleting channels.');
+  }
+
+  @override
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId) async {
+    return const [];
+  }
+
+  @override
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  }) {
+    throw StateError('Supabase must be initialized before creating webhooks.');
+  }
+
+  @override
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  }) {
+    throw StateError('Supabase must be initialized before renaming webhooks.');
+  }
+
+  @override
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId) {
+    throw StateError('Supabase must be initialized before changing webhooks.');
+  }
+
+  @override
+  Future<void> deleteChannelWebhook(String webhookId) {
+    throw StateError('Supabase must be initialized before deleting webhooks.');
   }
 
   @override

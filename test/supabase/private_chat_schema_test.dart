@@ -2842,4 +2842,133 @@ void main() {
       );
     }
   });
+
+  test('channel webhooks hide tokens, post only via service role, audited', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    for (final table in ['circle_webhooks', 'webhook_rate']) {
+      expect(sql, contains('create table if not exists public.$table'));
+      expect(
+        sql,
+        contains('alter table public.$table enable row level security'),
+      );
+      expect(
+        rawSql,
+        contains('revoke all on public.$table from authenticated'),
+      );
+      expect(policyBodiesFor(rawSql, table), isEmpty);
+    }
+    expect(sql, contains("token_hash ~ '^[0-9a-f]{64}\$'"));
+    expect(
+      sql,
+      contains(
+        'add column if not exists webhook_id uuid\n'
+        '    references public.circle_webhooks(id) on delete set null',
+      ),
+    );
+    final insertPolicy = policyBody(rawSql, 'messages_insert_member');
+    expect(insertPolicy, contains('webhook_id is null'));
+    expect(insertPolicy, contains('webhook_name is null'));
+    expect(insertPolicy, contains('webhook_avatar_url is null'));
+
+    expect(
+      functionBody(sql, 'channel_webhook_payload'),
+      isNot(contains('token_hash')),
+    );
+    expect(
+      functionBody(sql, 'webhook_token_hash'),
+      contains(
+        "encode(sha256(convert_to(coalesce(token, ''), 'UTF8')), 'hex')",
+      ),
+    );
+    expect(
+      functionBody(sql, 'new_webhook_token'),
+      contains('extensions.gen_random_bytes(32)'),
+    );
+
+    const audited = {
+      'create_channel_webhook': 'webhook_create',
+      'rename_channel_webhook': 'webhook_update',
+      'regenerate_webhook_token': 'webhook_regenerate',
+      'delete_channel_webhook': 'webhook_delete',
+    };
+    for (final MapEntry(key: name, value: action) in audited.entries) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('set search_path = public'), reason: name);
+      expect(body, contains('public.write_circle_audit('), reason: name);
+      expect(body, contains("'$action'"), reason: name);
+    }
+    expect(
+      functionBody(sql, 'channel_webhook_for_management'),
+      contains("'manage_webhooks'"),
+    );
+    expect(
+      functionBody(sql, 'list_channel_webhooks'),
+      contains("'manage_webhooks'"),
+    );
+
+    final post = functionBody(sql, 'post_webhook_message');
+    expect(post, contains('security definer'));
+    expect(post, contains('public.webhook_token_hash(webhook_token)'));
+    expect(post, contains('between 1 and 2000'));
+    expect(post, contains("'send_messages'"));
+    expect(post, contains("'manage_webhooks'"));
+    expect(post, contains("errcode = 'WH429'"));
+    expect(post, contains('sent_this_minute > 30'));
+    expect(post, contains('set last_used_at = now()'));
+    for (final role in ['public', 'anon', 'authenticated']) {
+      expect(
+        rawSql,
+        contains(
+          'revoke execute on function '
+          'public.post_webhook_message(uuid, text, text, text, text) '
+          'from $role',
+        ),
+      );
+    }
+    expect(
+      rawSql,
+      contains(
+        'grant execute on function '
+        'public.post_webhook_message(uuid, text, text, text, text) '
+        'to service_role',
+      ),
+    );
+    expect(
+      rawSql,
+      isNot(
+        contains(
+          'grant execute on function '
+          'public.post_webhook_message(uuid, text, text, text, text) '
+          'to authenticated',
+        ),
+      ),
+    );
+
+    final check = functionBody(sql, 'check_channel_message_send');
+    expect(check, contains('or new.webhook_name is not null'));
+    expect(check, contains('and m.webhook_name is null'));
+    expect(
+      functionBody(sql, 'edit_message'),
+      contains('m.webhook_name is null'),
+    );
+    final summaries = functionBody(sql, 'list_conversation_summaries');
+    expect(summaries, contains('last_message_webhook_name'));
+    expect(summaries, contains('or unread_messages.webhook_name is not null'));
+    expect(
+      functionBody(sql, 'list_circle_summaries'),
+      contains('or unread_message.webhook_name is not null'),
+    );
+
+    final config = File('supabase/config.toml').readAsStringSync();
+    expect(config, contains('[functions.webhook]\nenabled = true\n'));
+    expect(
+      RegExp(
+        r'\[functions\.webhook\][^\[]*verify_jwt = false',
+      ).hasMatch(config),
+      isTrue,
+    );
+  });
 }

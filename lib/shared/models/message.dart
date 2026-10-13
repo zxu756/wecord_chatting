@@ -59,6 +59,9 @@ class ChatMessage {
     this.senderRoleColor,
     this.threadSummary,
     this.pollResults,
+    this.webhookId,
+    this.webhookName,
+    this.webhookAvatarUrl,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -94,6 +97,9 @@ class ChatMessage {
       senderRoleColor: (json['sender_role_color'] as num?)?.toInt(),
       threadSummary: MessageThreadSummary.maybeFromJson(json['thread_summary']),
       pollResults: PollResults.maybeFromJson(json['poll_results']),
+      webhookId: json['webhook_id'] as String?,
+      webhookName: json['webhook_name'] as String?,
+      webhookAvatarUrl: json['webhook_avatar_url'] as String?,
     );
   }
 
@@ -131,6 +137,30 @@ class ChatMessage {
 
   /// Votes on a poll message, when the thread query includes them.
   final PollResults? pollResults;
+
+  /// The webhook that posted this message; null once it is deleted.
+  final String? webhookId;
+
+  /// The name a webhook posted this message under. Set on every webhook
+  /// message (also after the webhook is deleted), so it marks them.
+  final String? webhookName;
+  final String? webhookAvatarUrl;
+
+  /// Posted through a webhook: shown under the webhook's name, not as a
+  /// message of [senderId] (the webhook's creator).
+  bool get isWebhook => webhookName != null;
+
+  /// Whether [userId] wrote this message themselves (webhook messages are
+  /// nobody's own).
+  bool isSentBy(String? userId) {
+    return userId != null && senderId == userId && !isWebhook;
+  }
+
+  /// Who the message reads as being from, for grouping consecutive
+  /// messages.
+  String get authorKey {
+    return isWebhook ? 'webhook:${webhookId ?? ''}:$webhookName' : senderId;
+  }
 
   /// For a "X pinned a message" system notice, the id of the pinned message.
   String? get pinnedMessageId {
@@ -204,6 +234,9 @@ class ChatMessage {
     Object? senderRoleColor = _sentinel,
     Object? threadSummary = _sentinel,
     Object? pollResults = _sentinel,
+    Object? webhookId = _sentinel,
+    Object? webhookName = _sentinel,
+    Object? webhookAvatarUrl = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -247,6 +280,15 @@ class ChatMessage {
       pollResults: identical(pollResults, _sentinel)
           ? this.pollResults
           : pollResults as PollResults?,
+      webhookId: identical(webhookId, _sentinel)
+          ? this.webhookId
+          : webhookId as String?,
+      webhookName: identical(webhookName, _sentinel)
+          ? this.webhookName
+          : webhookName as String?,
+      webhookAvatarUrl: identical(webhookAvatarUrl, _sentinel)
+          ? this.webhookAvatarUrl
+          : webhookAvatarUrl as String?,
     );
   }
 }

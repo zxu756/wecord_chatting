@@ -365,7 +365,10 @@ class NotificationCoordinator {
     if (currentUserId == null) {
       return false;
     }
-    if (conversation.lastMessageSenderId == currentUserId) {
+    // Webhook messages are sent as the webhook's creator but are not
+    // theirs, so they alert the creator too.
+    if (conversation.lastMessageSenderId == currentUserId &&
+        conversation.lastMessageWebhookName == null) {
       return false;
     }
     // System notices such as "X pinned a message." do not alert.

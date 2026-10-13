@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
@@ -224,6 +225,34 @@ class FakeImagePickerService implements ImagePickerService {
 }
 
 class FakeCirclesRepository implements CirclesRepository {
+  @override
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId) async =>
+      const [];
+
+  @override
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteChannelWebhook(String webhookId) async {}
+
   late CircleDetail detail;
   var createdPostCircleId = '';
   var createdPostBody = '';

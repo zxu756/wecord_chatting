@@ -107,6 +107,7 @@ enum CircleAuditActionGroup {
   post('post', 'Posts'),
   forum('forum', 'Forums'),
   event('event', 'Events'),
+  webhook('webhook', 'Webhooks'),
   other('', 'Other');
 
   const CircleAuditActionGroup(this.filter, this.label);
@@ -138,5 +139,6 @@ enum CircleAuditActionGroup {
     post,
     forum,
     event,
+    webhook,
   ];
 }

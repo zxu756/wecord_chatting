@@ -935,6 +935,77 @@ void main() {
       expect(find.text('Linus'), findsOneWidget);
     });
 
+    phoneTestWidgets('webhook messages with a BOT tag', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.chats.messages = webhookMessages();
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+      final tag = find.byKey(const ValueKey('message-bot-tag'));
+      expect(tag, findsOneWidget);
+      expectFullyVisible(tester, tag);
+      expectFullyVisible(
+        tester,
+        find.textContaining('production finished', findRichText: true),
+      );
+    });
+
+    phoneTestWidgets('channel integrations and webhook URL', (
+      tester,
+      viewport,
+    ) async {
+      final world = await openCircleChannel(tester);
+      world.circles.webhooks = channelWebhooks();
+      await openMoreMenu(tester);
+      await tester.tap(find.text('Channel settings'));
+      await settle(tester);
+
+      final create = find.byKey(const ValueKey('webhook-create-button'));
+      await scrollIntoView(tester, create);
+      expectFullyVisible(tester, create);
+      expectTouchTargets(tester, create);
+      final first = find.byKey(const ValueKey('webhook-webhook-1'));
+      await tester.ensureVisible(first);
+      await settle(tester);
+      expectFullyVisible(tester, first);
+      expectTouchTargets(
+        tester,
+        find.byKey(const ValueKey('webhook-menu-webhook-1')),
+      );
+
+      await scrollIntoView(tester, create);
+      await tester.tap(create);
+      await settle(tester);
+      final name = find.byKey(const ValueKey('webhook-name-field'));
+      await tester.enterText(name, 'Release notes');
+      await showKeyboard(tester, viewport);
+      expectCaretVisible(tester, name);
+      await tester.tap(find.byKey(const ValueKey('webhook-name-submit')));
+      await settle(tester);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await settle(tester);
+
+      expect(find.text('Webhook created'), findsOneWidget);
+      final url = find.byKey(const ValueKey('webhook-url'));
+      await tester.ensureVisible(url);
+      await settle(tester);
+      expectFullyVisible(tester, url);
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('webhook-copy-url')),
+      );
+      expectFullyVisible(tester, find.text('Done'));
+    });
+
     phoneTestWidgets('channel overview and delete confirmation', (
       tester,
       viewport,

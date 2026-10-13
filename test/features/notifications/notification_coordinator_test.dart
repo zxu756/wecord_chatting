@@ -131,6 +131,42 @@ void main() {
     expect(harness.notifications, isEmpty);
   });
 
+  test('webhook messages notify their creator too', () async {
+    final harness = NotificationCoordinatorHarness(currentUserId: 'me');
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness
+          .summary(
+            id: 'c1',
+            unreadCount: 1,
+            lastMessageSenderId: 'me',
+            body: 'Deploy finished',
+          )
+          .copyWith(lastMessageWebhookName: 'CI'),
+    ]);
+
+    expect(harness.notifications.single.body, 'Deploy finished');
+  });
+
+  test('poll notifications show the question', () async {
+    final harness = NotificationCoordinatorHarness();
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 1,
+        body: 'Lunch?',
+        lastMessageType: MessageType.poll,
+      ),
+    ]);
+
+    expect(harness.notifications.single.body, '📊 Poll: Lunch?');
+  });
+
   test('does not notify for system notices such as pins', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);

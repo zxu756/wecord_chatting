@@ -392,6 +392,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/link-preview/index.ts"
 
+[functions.webhook]
+enabled = true
+# Public: external services post with the secret token in the URL, which
+# the function checks; there is no user session to verify.
+verify_jwt = false
+entrypoint = "./functions/webhook/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

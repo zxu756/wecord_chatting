@@ -392,6 +392,45 @@ void main() {
     await showKeyboard(tester, notchedPhone);
   });
 
+  screen('32-webhook-messages', (tester, world) async {
+    world.chats.messages = webhookMessages();
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/conv-general',
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+  });
+
+  screen('33-channel-integrations', (tester, world) async {
+    world.circles.webhooks = channelWebhooks();
+    await openChannel(tester, world);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.text('Channel settings'));
+    await settle(tester);
+    await scrollIntoView(
+      tester,
+      find.byKey(const ValueKey('webhook-create-button')),
+    );
+  });
+
+  screen('33b-webhook-url', (tester, world) async {
+    await openChannel(tester, world);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.text('Channel settings'));
+    await settle(tester);
+    final create = find.byKey(const ValueKey('webhook-create-button'));
+    await scrollIntoView(tester, create);
+    await tester.tap(create);
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('webhook-name-submit')));
+  });
+
   screen('31-slash-commands', (tester, world) async {
     await openChannel(tester, world);
     final composer = find.widgetWithText(TextField, 'Message');

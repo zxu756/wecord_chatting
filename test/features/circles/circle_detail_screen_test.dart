@@ -18,6 +18,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
@@ -2794,6 +2795,84 @@ class FakeContactsRepository implements ContactsRepository {
 }
 
 class FakeCirclesRepository implements CirclesRepository {
+  var webhooks = <ChannelWebhook>[];
+  final webhookCalls = <String>[];
+  var _webhookCount = 0;
+
+  ChannelWebhookSecret _webhookSecret(ChannelWebhook webhook) {
+    return ChannelWebhookSecret(
+      webhook: webhook,
+      token: 'tok${'x' * 37}-${webhookCalls.length}',
+    );
+  }
+
+  @override
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId) async {
+    return [
+      for (final webhook in webhooks)
+        if (webhook.channelId == channelId) webhook,
+    ];
+  }
+
+  @override
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  }) async {
+    webhookCalls.add('create:$channelId:$name');
+    _webhookCount += 1;
+    final webhook = ChannelWebhook(
+      id: 'created-webhook-$_webhookCount',
+      channelId: channelId,
+      name: name,
+      createdAt: DateTime.utc(2026, 10, 13),
+      creatorName: 'Ada',
+    );
+    webhooks = [...webhooks, webhook];
+    return _webhookSecret(webhook);
+  }
+
+  @override
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  }) async {
+    webhookCalls.add('rename:$webhookId:$name');
+    late ChannelWebhook renamed;
+    webhooks = [
+      for (final webhook in webhooks)
+        if (webhook.id == webhookId)
+          renamed = ChannelWebhook(
+            id: webhook.id,
+            channelId: webhook.channelId,
+            name: name,
+            createdAt: webhook.createdAt,
+            creatorName: webhook.creatorName,
+            lastUsedAt: webhook.lastUsedAt,
+          )
+        else
+          webhook,
+    ];
+    return renamed;
+  }
+
+  @override
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId) async {
+    webhookCalls.add('regenerate:$webhookId');
+    return _webhookSecret(
+      webhooks.firstWhere((webhook) => webhook.id == webhookId),
+    );
+  }
+
+  @override
+  Future<void> deleteChannelWebhook(String webhookId) async {
+    webhookCalls.add('delete:$webhookId');
+    webhooks = [
+      for (final webhook in webhooks)
+        if (webhook.id != webhookId) webhook,
+    ];
+  }
+
   late CircleDetail detail;
 
   /// Every event; [listEvents] filters them like the server.

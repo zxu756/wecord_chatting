@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
@@ -493,6 +494,34 @@ class FakeContactsRepository implements ContactsRepository {
 }
 
 class FakeCirclesRepository implements CirclesRepository {
+  @override
+  Future<List<ChannelWebhook>> listChannelWebhooks(String channelId) async =>
+      const [];
+
+  @override
+  Future<ChannelWebhookSecret> createChannelWebhook({
+    required String channelId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChannelWebhook> renameChannelWebhook({
+    required String webhookId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChannelWebhookSecret> regenerateWebhookToken(String webhookId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteChannelWebhook(String webhookId) async {}
+
   var circles = <CircleSummary>[];
   var details = <String, CircleDetail>{};
   var createdCircleName = '';

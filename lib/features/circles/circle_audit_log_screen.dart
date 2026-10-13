@@ -352,6 +352,10 @@ IconData circleAuditIcon(String action) {
     'event_create' => Icons.event_outlined,
     'event_update' => Icons.edit_calendar_outlined,
     'event_cancel' => Icons.event_busy_outlined,
+    'webhook_create' => Icons.smart_toy_outlined,
+    'webhook_update' => Icons.drive_file_rename_outline,
+    'webhook_regenerate' => Icons.key_outlined,
+    'webhook_delete' => Icons.delete_outline,
     _ => Icons.history,
   };
 }
@@ -471,6 +475,31 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       ],
     ],
     'event_cancel' => [text(' cancelled event '), name(target)],
+    'webhook_create' => [
+      text(' created webhook '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
+    'webhook_update' => [
+      if (changes['name'] case {'old': final String oldName}) ...[
+        text(' renamed webhook '),
+        name(oldName),
+        text(' to '),
+        name(target),
+      ] else ...[
+        text(' updated webhook '),
+        name(target),
+      ],
+    ],
+    'webhook_regenerate' => [
+      text(' regenerated the URL of webhook '),
+      name(target),
+    ],
+    'webhook_delete' => [
+      text(' deleted webhook '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
     _ => [text(' did ${entry.action.replaceAll('_', ' ')} to '), name(target)],
   };
   return TextSpan(style: style, children: [name(actor), ...rest]);

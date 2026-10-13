@@ -772,7 +772,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         bubble = _MessageBubble(
                           message: message,
                           messagesById: messagesById,
-                          isCurrentUser: message.senderId == currentUserId,
+                          isCurrentUser: message.isSentBy(currentUserId),
                           sender: _senderFor(message, membersById),
                           isOpeningPost: true,
                           postTitle: title,
@@ -802,7 +802,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           pollActions: pollActions,
                         );
                       } else {
-                        final isCurrentUser = message.senderId == currentUserId;
+                        final isCurrentUser = message.isSentBy(currentUserId);
                         final newerIndex = widget.forumPost
                             ? index + 1
                             : index - 1;
@@ -1015,7 +1015,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (widget.forumPost &&
         previousLatestMessageId != null &&
         _latestMessageId != previousLatestMessageId &&
-        (_isAtBottom || oldestToNewest.last.senderId == currentUserId)) {
+        (_isAtBottom || oldestToNewest.last.isSentBy(currentUserId))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           unawaited(_scrollToEnd());
@@ -1036,7 +1036,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
     _unseenMessageCount = oldestToNewest
         .skip(seenIndex + 1)
-        .where((message) => message.senderId != currentUserId)
+        .where((message) => !message.isSentBy(currentUserId))
         .length;
   }
 
@@ -2297,7 +2297,7 @@ Set<String> _followUpMessageIds(
     final message = oldestToNewest[index];
     if (message.type == MessageType.system ||
         previous.type == MessageType.system ||
-        message.senderId != previous.senderId ||
+        message.authorKey != previous.authorKey ||
         message.id == newMessageDividerId) {
       continue;
     }
@@ -2326,6 +2326,14 @@ _MessageSender _senderFor(
   ChatMessage message,
   Map<String, GroupMember> membersById,
 ) {
+  // Webhook messages show the webhook, never its creator's profile.
+  if (message.webhookName case final webhookName?) {
+    return _MessageSender(
+      name: webhookName,
+      avatarUrl: message.webhookAvatarUrl,
+      isBot: true,
+    );
+  }
   final member = membersById[message.senderId];
   final profile = message.sender ?? member?.profile;
   final nickname = (message.senderNickname ?? member?.nickname)?.trim() ?? '';
@@ -2344,13 +2352,48 @@ _MessageSender _senderFor(
 }
 
 class _MessageSender {
-  const _MessageSender({required this.name, this.avatarUrl, this.roleColor});
+  const _MessageSender({
+    required this.name,
+    this.avatarUrl,
+    this.roleColor,
+    this.isBot = false,
+  });
 
   final String name;
   final String? avatarUrl;
 
+  /// A webhook, marked with a BOT tag.
+  final bool isBot;
+
   /// The sender's highest coloured circle role, as 0xRRGGBB.
   final int? roleColor;
+}
+
+/// The small "BOT" label next to a webhook's name.
+class _BotTag extends StatelessWidget {
+  const _BotTag();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('message-bot-tag'),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'BOT',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onPrimary,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+          height: 1.2,
+        ),
+      ),
+    );
+  }
 }
 
 class _NewMessagesDivider extends StatelessWidget {
@@ -2690,17 +2733,27 @@ class _MessageBubble extends StatelessWidget {
         if (sender != null && !isFollowUp)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
-            child: Text(
-              sender.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: switch (sender.roleColor) {
-                  final color? => Color(0xFF000000 | color),
-                  null => colorScheme.onSurface,
-                },
-                fontWeight: FontWeight.w700,
-              ),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    sender.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: switch (sender.roleColor) {
+                        final color? => Color(0xFF000000 | color),
+                        null => colorScheme.onSurface,
+                      },
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (sender.isBot) ...[
+                  const SizedBox(width: 6),
+                  const _BotTag(),
+                ],
+              ],
             ),
           ),
         Align(
@@ -3722,7 +3775,7 @@ DateTime? _slowmodeEnd({
 }) {
   DateTime? lastSentAt;
   for (final message in messages) {
-    if (message.senderId == currentUserId &&
+    if (message.isSentBy(currentUserId) &&
         message.type != MessageType.system &&
         (lastSentAt == null || message.createdAt.isAfter(lastSentAt))) {
       lastSentAt = message.createdAt;
@@ -3882,8 +3935,7 @@ _LatestOutgoingReadState _latestOutgoingReadState({
 
   ChatMessage? latestOutgoing;
   for (final message in messages) {
-    if (message.senderId == currentUserId &&
-        message.type != MessageType.system) {
+    if (message.isSentBy(currentUserId) && message.type != MessageType.system) {
       latestOutgoing = message;
     }
   }
@@ -3939,7 +3991,7 @@ String? _firstUnreadMessageId({
     startIndex = lastReadIndex + 1;
   }
   for (final message in messages.skip(startIndex)) {
-    if (message.senderId != currentUserId) {
+    if (!message.isSentBy(currentUserId)) {
       return message.id;
     }
   }

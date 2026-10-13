@@ -170,8 +170,11 @@ class CircleDetail {
   }
 
   /// Whether the current user may open channel settings: permissions need
-  /// manage roles, the rest manage channels.
-  bool get canOpenChannelSettings => canManageRoles || canManageChannels;
+  /// manage roles, integrations manage webhooks, the rest manage channels.
+  bool get canOpenChannelSettings =>
+      canManageRoles ||
+      canManageChannels ||
+      can(CirclePermission.manageWebhooks);
 
   /// Whether the current user may edit the overwrite of [role] in a
   /// channel: like the server, only roles below their highest role.

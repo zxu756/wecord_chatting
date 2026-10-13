@@ -202,6 +202,7 @@ Future<void> showCirclePostCommentSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (_) =>
         _CirclePostCommentSheet(post: post, onCommented: onCommented),
   );
@@ -267,38 +268,43 @@ class _CirclePostCommentSheetState
     final theme = Theme.of(context);
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Comment', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _controller,
-              enabled: !_isSubmitting,
-              maxLines: 4,
-              inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-              decoration: const InputDecoration(
-                labelText: 'Comment',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorText!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Comment', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                enabled: !_isSubmitting,
+                maxLines: 4,
+                inputFormatters: [LengthLimitingTextInputFormatter(1000)],
+                decoration: const InputDecoration(
+                  labelText: 'Comment',
+                  border: OutlineInputBorder(),
                 ),
               ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: Text(_isSubmitting ? 'Commenting...' : 'Comment'),
+              ),
             ],
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _isSubmitting ? null : _submit,
-              child: Text(_isSubmitting ? 'Commenting...' : 'Comment'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -313,6 +319,7 @@ Future<void> showCirclePostReportSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (_) => _CirclePostReportSheet(post: post, onReported: onReported),
   );
 }
@@ -377,60 +384,65 @@ class _CirclePostReportSheetState
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final theme = Theme.of(context);
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Report post', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            RadioGroup<ReportReason>(
-              groupValue: _reason,
-              onChanged: (value) {
-                if (!_isSubmitting && value != null) {
-                  setState(() => _reason = value);
-                }
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final reason in ReportReason.values)
-                    RadioListTile<ReportReason>(
-                      contentPadding: EdgeInsets.zero,
-                      value: reason,
-                      title: Text(reason.label),
-                      enabled: !_isSubmitting,
-                    ),
-                ],
-              ),
-            ),
-            TextField(
-              controller: _detailsController,
-              enabled: !_isSubmitting,
-              maxLength: 1000,
-              maxLines: 3,
-              inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-              decoration: const InputDecoration(
-                labelText: 'Details',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorText!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
+      child: Padding(
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Report post', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 12),
+              RadioGroup<ReportReason>(
+                groupValue: _reason,
+                onChanged: (value) {
+                  if (!_isSubmitting && value != null) {
+                    setState(() => _reason = value);
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final reason in ReportReason.values)
+                      RadioListTile<ReportReason>(
+                        contentPadding: EdgeInsets.zero,
+                        value: reason,
+                        title: Text(reason.label),
+                        enabled: !_isSubmitting,
+                      ),
+                  ],
                 ),
               ),
+              TextField(
+                controller: _detailsController,
+                enabled: !_isSubmitting,
+                maxLength: 1000,
+                maxLines: 3,
+                inputFormatters: [LengthLimitingTextInputFormatter(1000)],
+                decoration: const InputDecoration(
+                  labelText: 'Details',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
+              ),
             ],
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _isSubmitting ? null : _submit,
-              child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -35,6 +35,7 @@ class CirclesScreen extends ConsumerWidget {
                   onCreate: () => showModalBottomSheet<void>(
                     context: context,
                     isScrollControlled: true,
+                    useSafeArea: true,
                     builder: (context) => const CircleCreationSheet(),
                   ),
                 );
@@ -153,6 +154,7 @@ class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('Join with invite'),
       content: TextField(
         controller: _controller,

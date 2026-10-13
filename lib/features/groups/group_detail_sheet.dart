@@ -57,139 +57,147 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     final detail = ref.watch(groupDetailProvider(widget.conversationId));
 
     return SafeArea(
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.86,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return detail.when(
-            loading: () => const _LoadingDetail(),
-            error: (error, stackTrace) => _ErrorDetail(
-              title: widget.title.trim().isEmpty
-                  ? widget.conversationId
-                  : widget.title.trim(),
-              errorText: error.toString(),
-            ),
-            data: (detail) {
-              _syncControllers(detail);
-              return ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _Header(
-                    detail: detail,
-                    avatarUrl: _pendingAvatarUrl.isEmpty
-                        ? detail.avatarUrl
-                        : _pendingAvatarUrl,
-                    onPickAvatar: detail.canManageGroup
-                        ? () => _pickAvatar(detail)
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _titleController,
-                    enabled: detail.canManageGroup && !_isSaving,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Group name',
+      child: Padding(
+        // Keeps the focused field above the keyboard.
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.86,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return detail.when(
+              loading: () => const _LoadingDetail(),
+              error: (error, stackTrace) => _ErrorDetail(
+                title: widget.title.trim().isEmpty
+                    ? widget.conversationId
+                    : widget.title.trim(),
+                errorText: error.toString(),
+              ),
+              data: (detail) {
+                _syncControllers(detail);
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _Header(
+                      detail: detail,
+                      avatarUrl: _pendingAvatarUrl.isEmpty
+                          ? detail.avatarUrl
+                          : _pendingAvatarUrl,
+                      onPickAvatar: detail.canManageGroup
+                          ? () => _pickAvatar(detail)
+                          : null,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _announcementController,
-                    enabled: detail.canManageGroup && !_isSaving,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Announcement',
-                    ),
-                  ),
-                  if (_announcementMetaText(detail) case final metaText?) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      metaText,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _titleController,
+                      enabled: detail.canManageGroup && !_isSaving,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Group name',
                       ),
                     ),
-                  ],
-                  if (_errorText != null) ...[
                     const SizedBox(height: 12),
-                    Text(
-                      _errorText!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                    TextField(
+                      controller: _announcementController,
+                      enabled: detail.canManageGroup && !_isSaving,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Announcement',
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: detail.canManageGroup && !_isSaving
-                            ? () => _save(detail)
-                            : null,
-                        icon: _isSaving
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.save_outlined),
-                        label: const Text('Save'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: detail.canManageGroup && !_isSaving
-                            ? () => _showInviteSheet(detail)
-                            : null,
-                        icon: const Icon(Icons.person_add_alt_1_outlined),
-                        label: const Text('Invite friends'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _isSaving ? null : () => _leaveGroup(detail),
-                        icon: const Icon(Icons.logout_outlined),
-                        label: const Text('Leave group'),
+                    if (_announcementMetaText(detail) case final metaText?) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        metaText,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Group members',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _memberSearchController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Search members',
+                    if (_errorText != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorText!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: detail.canManageGroup && !_isSaving
+                              ? () => _save(detail)
+                              : null,
+                          icon: _isSaving
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: const Text('Save'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: detail.canManageGroup && !_isSaving
+                              ? () => _showInviteSheet(detail)
+                              : null,
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
+                          label: const Text('Invite friends'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () => _leaveGroup(detail),
+                          icon: const Icon(Icons.logout_outlined),
+                          label: const Text('Leave group'),
+                        ),
+                      ],
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _query = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  for (final member in _filteredMembers(detail.members))
-                    _MemberTile(
-                      member: member,
-                      canRemove: _canRemove(detail, member),
-                      onOpenProfile: () {
-                        context.push('/profile/${member.profile.id}');
+                    const SizedBox(height: 20),
+                    Text(
+                      'Group members',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _memberSearchController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Search members',
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _query = value;
+                        });
                       },
-                      onRemove: () => _removeMember(detail, member),
                     ),
-                ],
-              );
-            },
-          );
-        },
+                    const SizedBox(height: 8),
+                    for (final member in _filteredMembers(detail.members))
+                      _MemberTile(
+                        member: member,
+                        canRemove: _canRemove(detail, member),
+                        onOpenProfile: () {
+                          context.push('/profile/${member.profile.id}');
+                        },
+                        onRemove: () => _removeMember(detail, member),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

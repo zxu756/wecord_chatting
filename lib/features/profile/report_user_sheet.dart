@@ -9,6 +9,7 @@ Future<void> showReportUserSheet(BuildContext context, Profile profile) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (_) => ReportUserSheet(profile: profile),
   );
 }
@@ -76,70 +77,75 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + bottomInset),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Report ${widget.profile.displayLabel}',
-              style: theme.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Choose the closest reason. You can add details if helpful.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            RadioGroup<ReportReason>(
-              groupValue: _reason,
-              onChanged: (value) {
-                if (_isSubmitting || value == null) {
-                  return;
-                }
-                setState(() => _reason = value);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final reason in ReportReason.values)
-                    RadioListTile<ReportReason>(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(reason.label),
-                      value: reason,
-                      enabled: !_isSubmitting,
-                    ),
-                ],
+      child: Padding(
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Report ${widget.profile.displayLabel}',
+                style: theme.textTheme.titleLarge,
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _detailsController,
-              enabled: !_isSubmitting,
-              maxLength: 1000,
-              maxLines: 4,
-              inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Details',
-              ),
-            ),
-            if (_errorText != null) ...[
               const SizedBox(height: 8),
               Text(
-                _errorText!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
+                'Choose the closest reason. You can add details if helpful.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              RadioGroup<ReportReason>(
+                groupValue: _reason,
+                onChanged: (value) {
+                  if (_isSubmitting || value == null) {
+                    return;
+                  }
+                  setState(() => _reason = value);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final reason in ReportReason.values)
+                      RadioListTile<ReportReason>(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(reason.label),
+                        value: reason,
+                        enabled: !_isSubmitting,
+                      ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _detailsController,
+                enabled: !_isSubmitting,
+                maxLength: 1000,
+                maxLines: 4,
+                inputFormatters: [LengthLimitingTextInputFormatter(1000)],
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Details',
+                ),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
+              ),
             ],
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _isSubmitting ? null : _submit,
-              child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -33,10 +33,11 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Circle invite')),
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+        // Scrolls on short phones and with large text.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
             child: preview.when(
               loading: () => const CircularProgressIndicator(),
               error: (error, stackTrace) => _InviteMessage(

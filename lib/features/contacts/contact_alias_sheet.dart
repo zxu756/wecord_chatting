@@ -35,53 +35,55 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Edit alias', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _aliasController,
-              enabled: !_isSaving,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Alias',
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Edit alias', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _aliasController,
+                enabled: !_isSaving,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Alias',
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  if (!_isSaving) {
+                    _save();
+                  }
+                },
               ),
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) {
-                if (!_isSaving) {
-                  _save();
-                }
-              },
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorText!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              if (_errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _errorText!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _save,
+                  child: _isSaving
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
               ),
             ],
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

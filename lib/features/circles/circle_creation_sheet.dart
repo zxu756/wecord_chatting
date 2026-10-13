@@ -31,91 +31,93 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
     final friendsFuture = ref.watch(contactsRepositoryProvider).listFriends();
     return SafeArea(
       child: Padding(
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: FutureBuilder<List<Profile>>(
-          future: friendsFuture,
-          builder: (context, snapshot) {
-            final friends = snapshot.data ?? const <Profile>[];
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Create Circle',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Circle name',
-                  ),
-                ),
-                if (friends.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: FutureBuilder<List<Profile>>(
+            future: friendsFuture,
+            builder: (context, snapshot) {
+              final friends = snapshot.data ?? const <Profile>[];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    'Invite friends',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Create Circle',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final friend in friends)
-                          CheckboxListTile(
-                            value: _selectedFriendIds.contains(friend.id),
-                            title: Text(friend.displayLabel),
-                            subtitle: Text('@${friend.username}'),
-                            onChanged: _isSaving
-                                ? null
-                                : (selected) {
-                                    setState(() {
-                                      if (selected == true) {
-                                        _selectedFriendIds.add(friend.id);
-                                      } else {
-                                        _selectedFriendIds.remove(friend.id);
-                                      }
-                                    });
-                                  },
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (_errorText != null) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    _errorText!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  TextField(
+                    controller: _nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Circle name',
+                    ),
+                  ),
+                  if (friends.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Invite friends',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 240),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final friend in friends)
+                            CheckboxListTile(
+                              value: _selectedFriendIds.contains(friend.id),
+                              title: Text(friend.displayLabel),
+                              subtitle: Text('@${friend.username}'),
+                              onChanged: _isSaving
+                                  ? null
+                                  : (selected) {
+                                      setState(() {
+                                        if (selected == true) {
+                                          _selectedFriendIds.add(friend.id);
+                                        } else {
+                                          _selectedFriendIds.remove(friend.id);
+                                        }
+                                      });
+                                    },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_errorText != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorText!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: _isSaving ? null : _createCircle,
+                      child: _isSaving
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Create'),
                     ),
                   ),
                 ],
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton(
-                    onPressed: _isSaving ? null : _createCircle,
-                    child: _isSaving
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Create'),
-                  ),
-                ),
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

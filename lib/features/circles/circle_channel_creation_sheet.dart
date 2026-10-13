@@ -45,66 +45,74 @@ class _CircleChannelCreationSheetState
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Create channel',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Channel name',
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Create channel',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            ),
-            if (widget.categories.isNotEmpty) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                initialValue: _categoryId,
+              TextField(
+                controller: _nameController,
+                autofocus: true,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  labelText: 'Category',
+                  labelText: 'Channel name',
                 ),
-                items: [
-                  const DropdownMenuItem(child: Text('No category')),
-                  for (final category in widget.categories)
-                    DropdownMenuItem(
-                      value: category.id,
-                      child: Text(category.name),
-                    ),
-                ],
-                onChanged: _isSaving
-                    ? null
-                    : (value) => setState(() => _categoryId = value),
+              ),
+              if (widget.categories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String?>(
+                  initialValue: _categoryId,
+                  // Long category names ellipsize instead of overflowing.
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Category',
+                  ),
+                  items: [
+                    const DropdownMenuItem(child: Text('No category')),
+                    for (final category in widget.categories)
+                      DropdownMenuItem(
+                        value: category.id,
+                        child: Text(
+                          category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: _isSaving
+                      ? null
+                      : (value) => setState(() => _categoryId = value),
+                ),
+              ],
+              if (_errorText != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _errorText!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _createChannel,
+                  child: const Text('Create'),
+                ),
               ),
             ],
-            if (_errorText != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorText!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _isSaving ? null : _createChannel,
-                child: const Text('Create'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -20,6 +20,7 @@ void showCircleNotificationSettingsSheet(
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => CircleNotificationSettingsSheet(
       circleId: circleId,
       circleName: circleName,

@@ -13,6 +13,7 @@ Future<bool?> showCustomStatusSheet(
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     showDragHandle: true,
     builder: (context) => CustomStatusSheet(current: current),
   );
@@ -86,106 +87,120 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
     final emoji = _emoji;
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          16 + MediaQuery.viewInsetsOf(context).bottom,
+        // Lifts the sheet above the keyboard, so the content scrolls
+        // within the space left instead of hiding behind it.
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Set a status', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconButton.outlined(
-                  tooltip: emoji == null ? 'Choose emoji' : 'Change emoji',
-                  onPressed: _saving ? null : _pickEmoji,
-                  icon: emoji == null
-                      ? const Icon(Icons.add_reaction_outlined)
-                      : Text(emoji, style: const TextStyle(fontSize: 20)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    enabled: !_saving,
-                    maxLength: CustomStatus.maxTextLength,
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: "What's happening?",
-                      suffixIcon: _isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Remove emoji and text',
-                              icon: const Icon(Icons.close),
-                              onPressed: () => setState(() {
-                                _emoji = null;
-                                _textController.clear();
-                              }),
-                            ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Set a status', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton.outlined(
+                    tooltip: emoji == null ? 'Choose emoji' : 'Change emoji',
+                    onPressed: _saving ? null : _pickEmoji,
+                    icon: emoji == null
+                        ? const Icon(Icons.add_reaction_outlined)
+                        : Text(emoji, style: const TextStyle(fontSize: 20)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      enabled: !_saving,
+                      maxLength: CustomStatus.maxTextLength,
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: "What's happening?",
+                        suffixIcon: _isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Remove emoji and text',
+                                icon: const Icon(Icons.close),
+                                onPressed: () => setState(() {
+                                  _emoji = null;
+                                  _textController.clear();
+                                }),
+                              ),
+                      ),
+                      onChanged: (_) => setState(() {}),
                     ),
-                    onChanged: (_) => setState(() {}),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<CustomStatusDuration>(
+                initialValue: _duration,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Clear after',
+                ),
+                items: [
+                  for (final duration in CustomStatusDuration.values)
+                    DropdownMenuItem(
+                      value: duration,
+                      child: Text(duration.label),
+                    ),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (duration) {
+                        if (duration != null) {
+                          setState(() => _duration = duration);
+                        }
+                      },
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _errorText!,
+                  style: TextStyle(color: theme.colorScheme.error),
                 ),
               ],
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<CustomStatusDuration>(
-              initialValue: _duration,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Clear after',
-              ),
-              items: [
-                for (final duration in CustomStatusDuration.values)
-                  DropdownMenuItem(
-                    value: duration,
-                    child: Text(duration.label),
+              const SizedBox(height: 16),
+              // Stacks the buttons when they do not fit on one line.
+              OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                overflowAlignment: OverflowBarAlignment.end,
+                overflowSpacing: 8,
+                children: [
+                  if (widget.current != null)
+                    TextButton.icon(
+                      onPressed: _saving ? null : () => _save(clear: true),
+                      icon: const Icon(Icons.backspace_outlined),
+                      label: const Text('Clear status'),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _saving || _isEmpty
+                            ? null
+                            : () => _save(clear: false),
+                        child: const Text('Save'),
+                      ),
+                    ],
                   ),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (duration) {
-                      if (duration != null) {
-                        setState(() => _duration = duration);
-                      }
-                    },
-            ),
-            if (_errorText != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorText!,
-                style: TextStyle(color: theme.colorScheme.error),
+                ],
               ),
             ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (widget.current != null)
-                  TextButton.icon(
-                    onPressed: _saving ? null : () => _save(clear: true),
-                    icon: const Icon(Icons.backspace_outlined),
-                    label: const Text('Clear status'),
-                  ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _saving || _isEmpty
-                      ? null
-                      : () => _save(clear: false),
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

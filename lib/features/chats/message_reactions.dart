@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -59,6 +60,7 @@ Future<String?> showEmojiReactionPicker(
   return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheetContext) => EmojiReactionPicker(title: title),
   );
 }
@@ -200,7 +202,8 @@ class MessageReactionChips extends StatelessWidget {
   Widget build(BuildContext context) {
     return Wrap(
       spacing: 4,
-      runSpacing: 4,
+      // Touch chips carry their own spacing in their taller hit area.
+      runSpacing: usesTouchInput(context) ? 0 : 4,
       children: [
         for (final reaction in reactions)
           _ReactionChip(
@@ -233,42 +236,58 @@ class _ReactionChip extends StatelessWidget {
     final foreground = isMine
         ? colorScheme.onPrimaryContainer
         : colorScheme.onSurfaceVariant;
+    final chip = Material(
+      color: isMine
+          ? colorScheme.primaryContainer
+          : colorScheme.surfaceContainerHighest,
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: isMine ? colorScheme.primary : colorScheme.outlineVariant,
+        ),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(reaction.emoji, style: const TextStyle(fontSize: 15)),
+              const SizedBox(width: 4),
+              Text(
+                '${reaction.count}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: isMine ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
     return Semantics(
       button: true,
       selected: isMine,
       label: '${reaction.emoji} ${reaction.count}',
-      child: Material(
-        color: isMine
-            ? colorScheme.primaryContainer
-            : colorScheme.surfaceContainerHighest,
-        shape: StadiumBorder(
-          side: BorderSide(
-            color: isMine ? colorScheme.primary : colorScheme.outlineVariant,
-          ),
-        ),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(reaction.emoji, style: const TextStyle(fontSize: 15)),
-                const SizedBox(width: 4),
-                Text(
-                  '${reaction.count}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: isMine ? FontWeight.w700 : FontWeight.w500,
-                  ),
+      child: usesTouchInput(context)
+          // The chip stays compact, but taps just above or below it still
+          // count, so the target is finger-sized.
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: minTouchTargetSize,
+                  minHeight: minTouchTargetSize,
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
+                child: Center(widthFactor: 1, child: chip),
+              ),
+            )
+          : chip,
     );
   }
 }

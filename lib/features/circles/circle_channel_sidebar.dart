@@ -6,6 +6,7 @@ import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -284,6 +285,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Delete category'),
         content: Text(
           'Delete "${category.name}"? Its channels move to the top of the '
@@ -600,6 +602,7 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
   Widget build(BuildContext context) {
     final renaming = widget.initialName != null;
     return AlertDialog(
+      scrollable: true,
       title: Text(renaming ? 'Rename category' : 'Create category'),
       content: TextField(
         controller: _controller,
@@ -821,6 +824,7 @@ class CircleCategoryHeader extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     final hasMenu = onRename != null || onDelete != null;
+    final touch = usesTouchInput(context);
 
     return GestureDetector(
       onSecondaryTapUp: hasMenu
@@ -832,7 +836,10 @@ class CircleCategoryHeader extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(4),
               onTap: onToggle,
-              child: Padding(
+              child: Container(
+                constraints: BoxConstraints(
+                  minHeight: touch ? minTouchTargetSize : 0,
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
@@ -862,7 +869,7 @@ class CircleCategoryHeader extends StatelessWidget {
           if (onCreate != null)
             IconButton(
               tooltip: 'Create channel',
-              visualDensity: VisualDensity.compact,
+              visualDensity: touch ? null : VisualDensity.compact,
               iconSize: 16,
               icon: const Icon(Icons.add),
               onPressed: onCreate,
@@ -871,7 +878,9 @@ class CircleCategoryHeader extends StatelessWidget {
             PopupMenuButton<_CategoryMenuAction>(
               tooltip: 'Category options',
               iconSize: 16,
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              style: ButtonStyle(
+                visualDensity: touch ? null : VisualDensity.compact,
+              ),
               icon: const Icon(Icons.more_horiz),
               onSelected: _onMenu,
               itemBuilder: (context) => _menuItems(),
@@ -925,7 +934,8 @@ class CircleChannelRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               onTap: onTap,
               child: SizedBox(
-                height: 34,
+                // Discord-dense with a mouse, finger-sized on touch screens.
+                height: usesTouchInput(context) ? minTouchTargetSize : 34,
                 child: Row(
                   children: [
                     const SizedBox(width: 8),

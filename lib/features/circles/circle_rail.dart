@@ -80,6 +80,7 @@ class CircleRail extends ConsumerWidget {
             onTap: () => showModalBottomSheet<void>(
               context: context,
               isScrollControlled: true,
+              useSafeArea: true,
               builder: (context) => const CircleCreationSheet(),
             ),
             child: const Icon(Icons.add),

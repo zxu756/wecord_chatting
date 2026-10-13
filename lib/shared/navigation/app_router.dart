@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
@@ -29,22 +30,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final location = state.uri.path;
       final onAuthRoute = location == AuthScreen.path;
       final onLoadingRoute = location == LoadingScreen.path;
+      final pendingLocation = _pendingLocation(state.uri);
 
       if (authState.isLoading) {
-        return onLoadingRoute ? null : LoadingScreen.path;
+        return onLoadingRoute
+            ? null
+            : _withPendingLocation(LoadingScreen.path, pendingLocation);
       }
 
       if (authState.hasError) {
-        return onAuthRoute ? null : AuthScreen.path;
+        return onAuthRoute
+            ? null
+            : _withPendingLocation(AuthScreen.path, pendingLocation);
       }
 
       final signedIn = authState.valueOrNull != null;
 
       if (!signedIn && !onAuthRoute) {
-        return AuthScreen.path;
+        return _withPendingLocation(AuthScreen.path, pendingLocation);
       }
       if (signedIn && (onAuthRoute || onLoadingRoute)) {
-        return ChatsScreen.path;
+        return pendingLocation ?? ChatsScreen.path;
       }
       return null;
     },
@@ -143,6 +149,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: '${CircleInviteScreen.path}/:code',
+            builder: (context, state) {
+              return CircleInviteScreen(code: state.pathParameters['code']!);
+            },
+          ),
+          GoRoute(
             path: SettingsScreen.path,
             builder: (context, state) => const SettingsScreen(),
           ),
@@ -182,11 +194,33 @@ class AuthRouterNotifier extends ChangeNotifier {
   }
 }
 
+/// Invite links opened while signed out (or before auth resolves) ride along
+/// as `?from=` on /loading and /auth, and are reopened after sign-in.
+String? _pendingLocation(Uri uri) {
+  final candidate =
+      uri.path == AuthScreen.path || uri.path == LoadingScreen.path
+      ? uri.queryParameters['from']
+      : uri.path;
+  if (candidate != null &&
+      candidate.startsWith('${CircleInviteScreen.path}/')) {
+    return candidate;
+  }
+  return null;
+}
+
+String _withPendingLocation(String path, String? pendingLocation) {
+  if (pendingLocation == null) {
+    return path;
+  }
+  return Uri(path: path, queryParameters: {'from': pendingLocation}).toString();
+}
+
 int _selectedIndexForLocation(String location) {
   if (location.startsWith(ContactsScreen.path)) {
     return 1;
   }
-  if (location.startsWith(CirclesScreen.path)) {
+  if (location.startsWith(CirclesScreen.path) ||
+      location.startsWith('${CircleInviteScreen.path}/')) {
     return 2;
   }
   if (location.startsWith(SettingsScreen.path)) {

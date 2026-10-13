@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_creation_sheet.dart';
+import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 
@@ -13,7 +14,16 @@ class CirclesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Circles')),
+      appBar: AppBar(
+        title: const Text('Circles'),
+        actions: [
+          IconButton(
+            tooltip: 'Join with invite',
+            icon: const Icon(Icons.add_link),
+            onPressed: () => _joinWithInvite(context),
+          ),
+        ],
+      ),
       body: FutureBuilder<List<CircleSummary>>(
         future: ref.watch(circlesRepositoryProvider).listCircles(),
         builder: (context, snapshot) {
@@ -57,6 +67,66 @@ class CirclesScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+Future<void> _joinWithInvite(BuildContext context) async {
+  final code = await showDialog<String>(
+    context: context,
+    builder: (context) => const _JoinWithInviteDialog(),
+  );
+  if (code != null && context.mounted) {
+    await context.push(circleInvitePath(code));
+  }
+}
+
+class _JoinWithInviteDialog extends StatefulWidget {
+  const _JoinWithInviteDialog();
+
+  @override
+  State<_JoinWithInviteDialog> createState() => _JoinWithInviteDialogState();
+}
+
+class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final code = parseCircleInviteCode(_controller.text);
+    if (code == null) {
+      setState(() => _errorText = 'Enter an invite code or link');
+      return;
+    }
+    Navigator.of(context).pop(code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Join with invite'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: 'Invite code or link',
+          errorText: _errorText,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Join')),
+      ],
     );
   }
 }

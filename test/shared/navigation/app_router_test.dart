@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
@@ -225,6 +227,98 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Profile'), findsOneWidget);
+  });
+
+  testWidgets('invite links opened signed out return after sign-in', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+          circleInvitePreviewProvider.overrideWith(
+            (ref, code) async => CircleInvitePreview(
+              code: code,
+              alreadyMember: false,
+              circle: const CircleInvitePreviewCircle(
+                id: 'circle-1',
+                name: 'Book Club',
+                memberCount: 2,
+              ),
+            ),
+          ),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    router.go('/invite/abcdefgh23');
+    await tester.pump();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.toString(),
+      '/loading?from=%2Finvite%2Fabcdefgh23',
+    );
+
+    authState.add(null);
+    await tester.pumpAndSettle();
+    expect(find.text('Create account'), findsOneWidget);
+    expect(
+      router.routerDelegate.currentConfiguration.uri.toString(),
+      '/auth?from=%2Finvite%2Fabcdefgh23',
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '/invite/abcdefgh23',
+    );
+    expect(find.byType(CircleInviteScreen), findsOneWidget);
+    expect(find.text('Book Club'), findsOneWidget);
+  });
+
+  testWidgets('signed-out redirects ignore non-invite locations', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    authState.add(null);
+    await tester.pumpAndSettle();
+    router.go('/auth?from=%2Fsettings');
+    await tester.pumpAndSettle();
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/chats');
   });
 }
 

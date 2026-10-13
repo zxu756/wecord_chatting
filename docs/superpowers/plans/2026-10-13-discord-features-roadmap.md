@@ -36,7 +36,7 @@
   - RPC `pin_message` / `unpin_message`：私聊双方都可以；群聊群主可以；圈子频道 owner / admin 可以（第 16 项后改为 `manage_messages` 权限）。`list_pinned_messages(conversation_id)`。
   - 固定时在会话里插入一条系统提示「X 固定了一条消息」（`messages.type = 'system'`）。
   - UI：长按菜单「固定 / 取消固定」，顶栏 📌 按钮打开列表，点击滚动并高亮原消息。
-- [ ] **4. 圈子邀请链接**（S–M）
+- [x] **4. 圈子邀请链接**（S–M）
   - 表 `circle_invites (code text primary key, circle_id, created_by, created_at, expires_at null, max_uses null, use_count, revoked_at null)`，code 为 10 位随机字符。
   - RPC：`create_circle_invite(circle_id, expires_in_hours, max_uses)`（owner / admin）、`list_circle_invites`、`revoke_circle_invite`、`get_circle_invite_preview(code)`（任何登录用户，返回圈子名、头像、成员数，失效时返回原因）、`accept_circle_invite(code)`（校验过期 / 次数 / 撤销 / 被封禁，加入圈子和所有频道会话，use_count + 1）。
   - 路由 `/invite/:code`：预览卡片 +「加入圈子」按钮，加入后跳到该圈子；未登录时登录后回到该页。

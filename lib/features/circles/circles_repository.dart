@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -35,6 +36,23 @@ abstract interface class CirclesRepository {
     required String circleId,
     required List<String> memberIds,
   });
+
+  /// Returns the new invite code. Null [expiresIn] / [maxUses] mean never /
+  /// unlimited.
+  Future<String> createInvite({
+    required String circleId,
+    Duration? expiresIn,
+    int? maxUses,
+  });
+
+  Future<List<CircleInvite>> listInvites(String circleId);
+
+  Future<void> revokeInvite(String code);
+
+  Future<CircleInvitePreview> getInvitePreview(String code);
+
+  /// Joins the circle behind [code] and returns its id.
+  Future<String> acceptInvite(String code);
 
   Future<String> createPost({
     required String circleId,
@@ -152,6 +170,52 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_circle_id': circleId,
       'member_ids': memberIds,
     });
+  }
+
+  @override
+  Future<String> createInvite({
+    required String circleId,
+    Duration? expiresIn,
+    int? maxUses,
+  }) async {
+    final code = await _dataSource.rpc('create_circle_invite', {
+      'target_circle_id': circleId,
+      'expires_in_hours': expiresIn?.inHours,
+      'max_uses': maxUses,
+    });
+    return code as String;
+  }
+
+  @override
+  Future<List<CircleInvite>> listInvites(String circleId) async {
+    final rows = await _dataSource.rpc('list_circle_invites', {
+      'target_circle_id': circleId,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(CircleInvite.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> revokeInvite(String code) async {
+    await _dataSource.rpc('revoke_circle_invite', {'invite_code': code});
+  }
+
+  @override
+  Future<CircleInvitePreview> getInvitePreview(String code) async {
+    final payload = await _dataSource.rpc('get_circle_invite_preview', {
+      'invite_code': code,
+    });
+    return CircleInvitePreview.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<String> acceptInvite(String code) async {
+    final circleId = await _dataSource.rpc('accept_circle_invite', {
+      'invite_code': code,
+    });
+    return circleId as String;
   }
 
   @override
@@ -428,6 +492,35 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required List<String> memberIds,
   }) {
     throw StateError('Supabase must be initialized before inviting members.');
+  }
+
+  @override
+  Future<String> createInvite({
+    required String circleId,
+    Duration? expiresIn,
+    int? maxUses,
+  }) {
+    throw StateError('Supabase must be initialized before creating invites.');
+  }
+
+  @override
+  Future<List<CircleInvite>> listInvites(String circleId) async {
+    return const [];
+  }
+
+  @override
+  Future<void> revokeInvite(String code) {
+    throw StateError('Supabase must be initialized before revoking invites.');
+  }
+
+  @override
+  Future<CircleInvitePreview> getInvitePreview(String code) {
+    throw StateError('Supabase must be initialized before opening invites.');
+  }
+
+  @override
+  Future<String> acceptInvite(String code) {
+    throw StateError('Supabase must be initialized before joining circles.');
   }
 
   @override

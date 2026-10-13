@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -292,6 +293,128 @@ void main() {
       'path': 'circle-1/image.jpg',
       'expiresIn': const Duration(hours: 1),
     });
+  });
+
+  test('createInvite sends expiry hours and max uses', () async {
+    final dataSource = FakeCirclesDataSource()..rpcValue = 'abcdefgh23';
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final code = await repository.createInvite(
+      circleId: 'circle-1',
+      expiresIn: const Duration(days: 7),
+      maxUses: 10,
+    );
+    await repository.createInvite(circleId: 'circle-1');
+
+    expect(code, 'abcdefgh23');
+    expect(dataSource.calls.first.functionName, 'create_circle_invite');
+    expect(dataSource.calls.first.params, {
+      'target_circle_id': 'circle-1',
+      'expires_in_hours': 168,
+      'max_uses': 10,
+    });
+    expect(dataSource.calls.last.params, {
+      'target_circle_id': 'circle-1',
+      'expires_in_hours': null,
+      'max_uses': null,
+    });
+  });
+
+  test('listInvites maps list_circle_invites rows', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['list_circle_invites'] = [
+        {
+          'code': 'abcdefgh23',
+          'circle_id': 'circle-1',
+          'created_by': 'u1',
+          'created_by_name': 'Ada',
+          'created_at': '2026-10-13T00:00:00Z',
+          'expires_at': '2026-10-20T00:00:00Z',
+          'max_uses': 10,
+          'use_count': 3,
+        },
+        {
+          'code': 'zyxwvuts98',
+          'circle_id': 'circle-1',
+          'created_by': null,
+          'created_by_name': null,
+          'created_at': '2026-10-12T00:00:00Z',
+          'expires_at': null,
+          'max_uses': null,
+          'use_count': 0,
+        },
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final invites = await repository.listInvites('circle-1');
+
+    expect(dataSource.calls.single.functionName, 'list_circle_invites');
+    expect(dataSource.calls.single.params, {'target_circle_id': 'circle-1'});
+    expect(invites.first.code, 'abcdefgh23');
+    expect(invites.first.createdByName, 'Ada');
+    expect(invites.first.expiresAt, DateTime.utc(2026, 10, 20));
+    expect(invites.first.maxUses, 10);
+    expect(invites.first.useCount, 3);
+    expect(invites.last.expiresAt, isNull);
+    expect(invites.last.maxUses, isNull);
+  });
+
+  test('revokeInvite calls revoke_circle_invite rpc', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.revokeInvite('abcdefgh23');
+
+    expect(dataSource.calls.single.functionName, 'revoke_circle_invite');
+    expect(dataSource.calls.single.params, {'invite_code': 'abcdefgh23'});
+  });
+
+  test('getInvitePreview maps valid and invalid previews', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcValue = {
+        'code': 'abcdefgh23',
+        'invalid_reason': null,
+        'already_member': false,
+        'expires_at': null,
+        'circle': {
+          'id': 'circle-1',
+          'name': 'Book Club',
+          'avatar_url': null,
+          'member_count': 4,
+        },
+      };
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final preview = await repository.getInvitePreview('abcdefgh23');
+
+    expect(dataSource.calls.single.functionName, 'get_circle_invite_preview');
+    expect(dataSource.calls.single.params, {'invite_code': 'abcdefgh23'});
+    expect(preview.canJoin, isTrue);
+    expect(preview.circle!.name, 'Book Club');
+    expect(preview.circle!.memberCount, 4);
+
+    dataSource.rpcValue = {
+      'code': 'abcdefgh23',
+      'invalid_reason': 'revoked',
+      'already_member': false,
+      'circle': null,
+    };
+    final invalid = await repository.getInvitePreview('abcdefgh23');
+
+    expect(invalid.canJoin, isFalse);
+    expect(invalid.invalidReason, CircleInviteInvalidReason.revoked);
+    expect(invalid.circle, isNull);
+  });
+
+  test('acceptInvite returns the joined circle id', () async {
+    final dataSource = FakeCirclesDataSource()..rpcValue = 'circle-1';
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final circleId = await repository.acceptInvite('abcdefgh23');
+
+    expect(circleId, 'circle-1');
+    expect(dataSource.calls.single.functionName, 'accept_circle_invite');
+    expect(dataSource.calls.single.params, {'invite_code': 'abcdefgh23'});
   });
 }
 

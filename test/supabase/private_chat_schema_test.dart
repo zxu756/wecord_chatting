@@ -1029,4 +1029,117 @@ void main() {
       );
     }
   });
+
+  test('circle invites table is manager scoped and RPC written', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+    final selectPolicy = policyBody(rawSql, 'circle_invites_select_manager');
+
+    expect(sql, contains('create table if not exists public.circle_invites'));
+    expect(sql, contains('code text primary key'));
+    expect(sql, contains('use_count integer not null default 0'));
+    expect(sql, contains('revoked_at timestamptz'));
+    expect(sql, contains("check (code ~ '^[a-z2-9]{10}\$')"));
+    expect(
+      sql,
+      contains('alter table public.circle_invites enable row level security'),
+    );
+    expect(selectPolicy, contains('for select'));
+    expect(
+      selectPolicy,
+      contains(
+        "public.current_user_circle_role(circle_id) in ('owner', 'admin')",
+      ),
+    );
+    expect(
+      policyBodiesFor(rawSql, 'circle_invites').where(
+        (policy) => RegExp(
+          r'for (insert|update|delete|all)',
+          caseSensitive: false,
+        ).hasMatch(policy),
+      ),
+      isEmpty,
+    );
+  });
+
+  test('circle invite RPCs check roles, validity and blocking', () {
+    final sql = effectiveMigrationSql();
+    final codeBody = functionBody(sql, 'generate_circle_invite_code');
+    final reasonBody = functionBody(sql, 'circle_invite_invalid_reason');
+    final createBody = functionBody(sql, 'create_circle_invite');
+    final listBody = functionBody(sql, 'list_circle_invites');
+    final revokeBody = functionBody(sql, 'revoke_circle_invite');
+    final previewBody = functionBody(sql, 'get_circle_invite_preview');
+    final acceptBody = functionBody(sql, 'accept_circle_invite');
+
+    expect(codeBody, contains('extensions.gen_random_bytes(10)'));
+    expect(reasonBody, contains("then 'revoked'"));
+    expect(reasonBody, contains("then 'expired'"));
+    expect(reasonBody, contains("then 'exhausted'"));
+
+    for (final body in [
+      createBody,
+      listBody,
+      revokeBody,
+      previewBody,
+      acceptBody,
+    ]) {
+      expect(body, contains('security definer'));
+      expect(body, contains('set search_path = public'));
+      expect(body, contains('auth.uid()'));
+    }
+    for (final body in [createBody, listBody, revokeBody]) {
+      expect(body, contains("in ('owner', 'admin')"));
+    }
+
+    expect(createBody, contains('make_interval(hours => expires_in_hours)'));
+    expect(createBody, contains('when unique_violation'));
+    expect(
+      listBody,
+      contains('public.circle_invite_invalid_reason(ci) is null'),
+    );
+    expect(revokeBody, contains('for update'));
+    expect(revokeBody, contains('set revoked_at = now()'));
+
+    expect(previewBody, contains('public.are_users_blocked'));
+    expect(previewBody, contains("'invalid_reason', 'not_found'"));
+    expect(previewBody, contains("'already_member'"));
+    expect(previewBody, contains("'member_count'"));
+
+    expect(acceptBody, contains('for update'));
+    expect(acceptBody, contains('public.are_users_blocked'));
+    expect(acceptBody, contains('public.circle_invite_invalid_reason'));
+    expect(acceptBody, contains('insert into public.circle_members'));
+    expect(acceptBody, contains('insert into public.conversation_members'));
+    expect(acceptBody, contains('from public.circle_channels cc'));
+    expect(acceptBody, contains('on conflict do nothing'));
+    expect(acceptBody, contains('set use_count = use_count + 1'));
+    expect(
+      acceptBody.indexOf('return target_invite.circle_id'),
+      lessThan(acceptBody.indexOf('set use_count = use_count + 1')),
+      reason: 'existing members return before a use is spent',
+    );
+
+    for (final signature in [
+      'public.generate_circle_invite_code()',
+      'public.circle_invite_invalid_reason(public.circle_invites)',
+    ]) {
+      expect(
+        sql,
+        contains('revoke execute on function $signature from authenticated'),
+      );
+    }
+    for (final signature in [
+      'public.create_circle_invite(uuid, integer, integer)',
+      'public.list_circle_invites(uuid)',
+      'public.revoke_circle_invite(text)',
+      'public.get_circle_invite_preview(text)',
+      'public.accept_circle_invite(text)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

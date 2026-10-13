@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -303,6 +304,27 @@ class FakeCirclesRepository implements CirclesRepository {
 
   @override
   Future<List<CircleSummary>> listCircles() async => const [];
+
+  @override
+  Future<String> createInvite({
+    required String circleId,
+    Duration? expiresIn,
+    int? maxUses,
+  }) async => 'invite1234';
+
+  @override
+  Future<List<CircleInvite>> listInvites(String circleId) async => const [];
+
+  @override
+  Future<void> revokeInvite(String code) async {}
+
+  @override
+  Future<CircleInvitePreview> getInvitePreview(String code) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> acceptInvite(String code) async => 'circle-1';
 
   @override
   Future<String> createCircle({

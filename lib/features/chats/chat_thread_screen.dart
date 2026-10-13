@@ -167,6 +167,8 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.canSendMessages,
     this.slowmodeSeconds,
     this.topic,
+    this.forumPost = false,
+    this.onBack,
     super.key,
   });
 
@@ -193,6 +195,13 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// A channel's topic, shown under the title instead of the online state;
   /// tapping it shows all of it.
   final String? topic;
+
+  /// A forum post: its first message shows as the opening post, larger and
+  /// with the post's title, and the rest as replies.
+  final bool forumPost;
+
+  /// Shows a back button in place of the avatar.
+  final VoidCallback? onBack;
 
   @override
   ConsumerState<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -478,9 +487,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: () => _showGroupDetails(title),
           )
         : null;
+    final threadNoun = widget.forumPost ? 'post' : 'thread';
     final archiveAction = canManageThread
         ? ChatThreadAction(
-            tooltip: threadArchived ? 'Unarchive thread' : 'Archive thread',
+            tooltip: threadArchived
+                ? 'Unarchive $threadNoun'
+                : 'Archive $threadNoun',
             icon: threadArchived
                 ? Icons.unarchive_outlined
                 : Icons.archive_outlined,
@@ -514,12 +526,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return LayoutBuilder(
       builder: (context, constraints) => Scaffold(
         appBar: AppBar(
-          leading: Padding(
-            padding: const EdgeInsets.all(8),
-            child: isThread
-                ? const CircleAvatar(child: Icon(Icons.forum_outlined))
-                : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
-          ),
+          leading: widget.onBack != null
+              ? IconButton(
+                  tooltip: 'Back',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: widget.onBack,
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: isThread
+                      ? const CircleAvatar(child: Icon(Icons.forum_outlined))
+                      : _ThreadAvatar(title: title, avatarUrl: avatarUrl),
+                ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -669,7 +687,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           visibleOldestToNewest,
                           newMessageDividerId: _newMessageDividerId,
                         )
-                      : const <String>{};
+                      : <String>{};
+                  // A forum post opens with its first message; replies start
+                  // their own group under it.
+                  final openingPostId = widget.forumPost
+                      ? fullOldestToNewest
+                            .where(
+                              (message) => message.type != MessageType.system,
+                            )
+                            .firstOrNull
+                            ?.id
+                      : null;
+                  if (openingPostId != null) {
+                    final index = visibleOldestToNewest.indexWhere(
+                      (message) => message.id == openingPostId,
+                    );
+                    if (index >= 0 &&
+                        index + 1 < visibleOldestToNewest.length) {
+                      followUpIds.remove(visibleOldestToNewest[index + 1].id);
+                    }
+                  }
                   final showSenders = canStartThreads || isThread;
                   final membersById = {
                     for (final member
@@ -690,6 +727,38 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         bubble = _SystemMessageLine(
                           message: message,
                           onOpenPinnedMessage: _scrollToMessage,
+                        );
+                      } else if (message.id == openingPostId) {
+                        bubble = _MessageBubble(
+                          message: message,
+                          messagesById: messagesById,
+                          isCurrentUser: message.senderId == currentUserId,
+                          sender: _senderFor(message, membersById),
+                          isOpeningPost: true,
+                          postTitle: title,
+                          replyCount: messages
+                              .where(
+                                (other) =>
+                                    other.id != message.id &&
+                                    other.type != MessageType.system &&
+                                    other.recalledAt == null,
+                              )
+                              .length,
+                          isFollowUp: false,
+                          hasFollowUp: false,
+                          showReadReceipt: false,
+                          canCompose: canSend,
+                          onReply: _startReply,
+                          onEdit: _startEdit,
+                          onForward: _showForwardSheet,
+                          onDelete: _deleteMessage,
+                          onPreviewImage: _previewImage,
+                          onToggleReaction: _toggleReaction,
+                          onShowReactors: _showReactors,
+                          canPin: canPinMessages,
+                          onTogglePin: _togglePin,
+                          onRemoveEmbed: _removeEmbed,
+                          canStartThread: false,
                         );
                       } else {
                         final isCurrentUser = message.senderId == currentUserId;
@@ -2033,11 +2102,20 @@ class _MessageBubble extends StatelessWidget {
     required this.onRemoveEmbed,
     this.canStartThread = false,
     this.onOpenThread,
+    this.isOpeningPost = false,
+    this.postTitle,
+    this.replyCount = 0,
   });
 
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
   final bool isCurrentUser;
+
+  /// The first message of a forum post, shown full width and larger with
+  /// [postTitle] above it and [replyCount] below.
+  final bool isOpeningPost;
+  final String? postTitle;
+  final int replyCount;
   final bool showReadReceipt;
 
   /// Who sent an incoming message in a group or channel; null hides the
@@ -2082,8 +2160,182 @@ class _MessageBubble extends StatelessWidget {
     return firstLinkInMarkdown(message.body, mentions: message.mentions);
   }
 
+  /// A text post's image, or an image post's.
+  ImageAttachment? get _openingPostImage {
+    final attachment = message.attachment;
+    if (message.recalledAt != null ||
+        attachment == null ||
+        attachment['kind'] != 'image') {
+      return null;
+    }
+    try {
+      return ImageAttachment.fromJson(attachment);
+    } on Object {
+      return null;
+    }
+  }
+
+  Widget _buildOpeningPost(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isRecalled = message.recalledAt != null;
+    final image = _openingPostImage;
+    final sender = this.sender;
+    final previewUrl = _previewUrl;
+    final reactions = isRecalled
+        ? const <MessageReaction>[]
+        : message.reactions;
+    final replies = switch (replyCount) {
+      0 => 'No replies yet',
+      1 => '1 reply',
+      final count => '$count replies',
+    };
+
+    return Padding(
+      key: const ValueKey('forum-opening-post'),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GestureDetector(
+            onLongPress: isRecalled ? null : () => _showActions(context, image),
+            onSecondaryTapDown: isRecalled
+                ? null
+                : (_) => _showActions(context, image),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (postTitle case final title?) ...[
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    children: [
+                      _ThreadAvatar(
+                        title: sender?.name ?? '?',
+                        avatarUrl: sender?.avatarUrl,
+                        radius: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              sender?.name ?? 'Someone',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: switch (sender?.roleColor) {
+                                  final color? => Color(0xFF000000 | color),
+                                  null => colorScheme.onSurface,
+                                },
+                              ),
+                            ),
+                            Text(
+                              formatThreadActivity(message.createdAt),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (isRecalled)
+                    Text(
+                      'Message deleted',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  else if (message.body.trim().isNotEmpty)
+                    DefaultTextStyle.merge(
+                      style: theme.textTheme.bodyLarge,
+                      child: MessageMarkdownText(
+                        body: message.body,
+                        mentions: message.mentions,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  if (image != null) ...[
+                    const SizedBox(height: 12),
+                    _ImageMessageContent(attachment: image),
+                  ],
+                  if (message.editedAt != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'edited',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  if (previewUrl != null)
+                    MessageLinkPreviewCard(url: previewUrl, bottomGap: 0),
+                  if (reactions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    MessageReactionChips(
+                      reactions: reactions,
+                      onToggle: (emoji) =>
+                          unawaited(onToggleReaction(message, emoji)),
+                      onShowReactors: (reaction) =>
+                          onShowReactors(message, reaction),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  size: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  replies,
+                  key: const ValueKey('forum-opening-post-replies'),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(child: Divider()),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isOpeningPost) {
+      return _buildOpeningPost(context);
+    }
     final colorScheme = Theme.of(context).colorScheme;
     final bubbleColor = isCurrentUser
         ? colorScheme.primaryContainer

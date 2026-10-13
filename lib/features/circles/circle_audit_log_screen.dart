@@ -343,6 +343,12 @@ IconData circleAuditIcon(String action) {
     'thread_archive' => Icons.archive_outlined,
     'thread_unarchive' => Icons.unarchive_outlined,
     'post_delete' => Icons.delete_outline,
+    'forum_tag_create' => Icons.new_label_outlined,
+    'forum_tag_update' => Icons.label_outline,
+    'forum_tag_delete' => Icons.label_off_outlined,
+    'forum_tag_reorder' => Icons.swap_vert,
+    'forum_post_pin' => Icons.push_pin_outlined,
+    'forum_post_unpin' => Icons.push_pin,
     _ => Icons.history,
   };
 }
@@ -423,9 +429,48 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     'thread_archive' => [text(' archived thread '), name(target)],
     'thread_unarchive' => [text(' unarchived thread '), name(target)],
     'post_delete' => [text(' deleted a post by '), name(target)],
+    'forum_tag_create' => [
+      text(' created tag '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
+    'forum_tag_update' => [
+      text(' updated tag '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
+    'forum_tag_delete' => [
+      text(' deleted tag '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
+    'forum_tag_reorder' => [text(' reordered the tags of '), name('#$target')],
+    'forum_post_pin' => [
+      text(' pinned post '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
+    'forum_post_unpin' => [
+      text(' unpinned post '),
+      name(target),
+      ..._inChannel(changes, name, text),
+    ],
     _ => [text(' did ${entry.action.replaceAll('_', ' ')} to '), name(target)],
   };
   return TextSpan(style: style, children: [name(actor), ...rest]);
+}
+
+/// " in #channel" when the entry names its channel.
+List<TextSpan> _inChannel(
+  Map<String, dynamic> changes,
+  TextSpan Function(String text) name,
+  TextSpan Function(String text) text,
+) {
+  final channelName = changes['channel_name'];
+  if (channelName is! String) {
+    return const [];
+  }
+  return [text(' in '), name('#$channelName')];
 }
 
 typedef CircleAuditDetail = ({String label, String value});
@@ -437,6 +482,7 @@ List<CircleAuditDetail> circleAuditDetails(CircleAuditEntry entry) {
     if (key == 'id' ||
         key.endsWith('_id') ||
         key == 'created_by' ||
+        (key == 'channel_name' && entry.action.startsWith('forum_')) ||
         (key == 'target_name' &&
             entry.action == 'channel_permissions_update')) {
       continue;

@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/models/forum.dart';
 
 typedef ChannelOverwritesKey = ({String circleId, String channelId});
 
@@ -266,7 +267,7 @@ class _CircleChannelSettingsScreenState
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      '# ${channel.name}',
+                      channel.isForum ? channel.name : '# ${channel.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium,
@@ -305,7 +306,10 @@ class _CircleChannelSettingsScreenState
           onSave: (name, topic) =>
               _saveOverview(channel, name: name, topic: topic),
         ),
-        ..._slowmodeSection(channel),
+        if (channel.isForum)
+          ..._forumTagsSection(channel)
+        else
+          ..._slowmodeSection(channel),
       ],
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
       if (detail.canManageChannels) ...[
@@ -339,6 +343,144 @@ class _CircleChannelSettingsScreenState
       padding: const EdgeInsets.only(bottom: 24),
       children: children,
     );
+  }
+
+  Future<void> _addTag(CircleChannel channel) async {
+    final result = await showForumTagDialog(context);
+    if (result == null || !mounted) {
+      return;
+    }
+    await _run(
+      (repository) => repository.createForumTag(
+        channelId: channel.id,
+        name: result.name,
+        emoji: result.emoji,
+      ),
+      failure: 'Could not add the tag. Try again.',
+    );
+  }
+
+  Future<void> _editTag(ForumTag tag) async {
+    final result = await showForumTagDialog(context, tag: tag);
+    if (result == null || !mounted) {
+      return;
+    }
+    await _run(
+      (repository) => repository.updateForumTag(
+        tagId: tag.id,
+        name: result.name,
+        emoji: result.emoji,
+      ),
+      failure: 'Could not save the tag. Try again.',
+    );
+  }
+
+  Future<void> _deleteTag(ForumTag tag) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: const Text('Delete tag'),
+        content: Text('Delete "${tag.label}"? Posts lose this tag.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    await _run(
+      (repository) => repository.deleteForumTag(tag.id),
+      failure: 'Could not delete the tag. Try again.',
+    );
+  }
+
+  Future<void> _reorderTags(
+    CircleChannel channel,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final tags = [...channel.tags];
+    final moved = tags.removeAt(oldIndex);
+    tags.insert(newIndex.clamp(0, tags.length), moved);
+    await _run(
+      (repository) => repository.reorderForumTags(
+        channelId: channel.id,
+        tagIds: [for (final tag in tags) tag.id],
+      ),
+      failure: 'Could not reorder the tags. Try again.',
+    );
+  }
+
+  List<Widget> _forumTagsSection(CircleChannel channel) {
+    final theme = Theme.of(context);
+    final tags = channel.tags;
+    return [
+      const _SectionHeader('Forum tags'),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        child: Text(
+          'Posts can carry up to ${ForumTag.maxPerPost} tags, and members '
+          'filter the forum by them. ${tags.length}/${ForumTag.maxPerForum} '
+          'tags.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ),
+      ReorderableListView(
+        key: const ValueKey('forum-tags-list'),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        onReorderItem: (oldIndex, newIndex) =>
+            _reorderTags(channel, oldIndex, newIndex),
+        children: [
+          for (final (index, tag) in tags.indexed)
+            ListTile(
+              key: ValueKey('forum-tag-${tag.id}'),
+              leading: ReorderableDragStartListener(
+                index: index,
+                enabled: !_saving,
+                child: const Icon(Icons.drag_indicator),
+              ),
+              title: Text(
+                tag.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit tag',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: _saving ? null : () => _editTag(tag),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete tag',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: _saving ? null : () => _deleteTag(tag),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+      ListTile(
+        key: const ValueKey('forum-add-tag'),
+        leading: const Icon(Icons.add),
+        title: const Text('Add tag'),
+        enabled: !_saving && tags.length < ForumTag.maxPerForum,
+        onTap: () => _addTag(channel),
+      ),
+    ];
   }
 
   List<Widget> _slowmodeSection(CircleChannel channel) {
@@ -615,6 +757,98 @@ class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Asks for a forum tag's name and emoji. Returns them trimmed (a blank
+/// emoji as null), or null when cancelled.
+Future<({String name, String? emoji})?> showForumTagDialog(
+  BuildContext context, {
+  ForumTag? tag,
+}) {
+  return showDialog<({String name, String? emoji})>(
+    context: context,
+    builder: (context) => _ForumTagDialog(tag: tag),
+  );
+}
+
+class _ForumTagDialog extends StatefulWidget {
+  const _ForumTagDialog({this.tag});
+
+  final ForumTag? tag;
+
+  @override
+  State<_ForumTagDialog> createState() => _ForumTagDialogState();
+}
+
+class _ForumTagDialogState extends State<_ForumTagDialog> {
+  late final _nameController = TextEditingController(text: widget.tag?.name);
+  late final _emojiController = TextEditingController(text: widget.tag?.emoji);
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emojiController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = 'Tag name is required.');
+      return;
+    }
+    final emoji = _emojiController.text.trim();
+    Navigator.of(
+      context,
+    ).pop((name: name, emoji: emoji.isEmpty ? null : emoji));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: Text(widget.tag == null ? 'Add tag' : 'Edit tag'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            key: const ValueKey('forum-tag-name-field'),
+            controller: _nameController,
+            autofocus: true,
+            maxLength: ForumTag.maxNameLength,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Name',
+              errorText: _errorText,
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            key: const ValueKey('forum-tag-emoji-field'),
+            controller: _emojiController,
+            maxLength: 8,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Emoji (optional)',
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Text(widget.tag == null ? 'Add' : 'Save'),
+        ),
+      ],
     );
   }
 }

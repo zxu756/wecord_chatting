@@ -837,6 +837,114 @@ void main() {
       expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Delete'));
     });
 
+    phoneTestWidgets('forum post list', (tester, viewport) async {
+      await openCircleChannel(
+        tester,
+        conversationId: 'conv-help',
+        title: 'help-and-questions',
+      );
+      expect(find.byKey(const ValueKey('forum-post-list')), findsOneWidget);
+      expectFullyVisible(tester, find.byKey(const ValueKey('forum-new-post')));
+      expectTouchTargets(tester, find.byKey(const ValueKey('forum-new-post')));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('forum-sort-button')),
+      );
+      expectTouchTargets(
+        tester,
+        find.byKey(const ValueKey('forum-sort-button')),
+      );
+      expectFullyVisible(
+        tester,
+        find.text('Read me first: how this forum works'),
+      );
+      await scrollIntoView(
+        tester,
+        find.text('Bear canister rental'),
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('forum-post-list')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expectFullyVisible(tester, find.text('Bear canister rental'));
+
+      await tester.tap(find.byKey(const ValueKey('forum-sort-button')));
+      await settle(tester);
+      expectFullyVisible(tester, find.text('Newest'));
+    });
+
+    phoneTestWidgets('forum new post sheet above the keyboard', (
+      tester,
+      viewport,
+    ) async {
+      await openCircleChannel(
+        tester,
+        conversationId: 'conv-help',
+        title: 'help-and-questions',
+      );
+      await tester.tap(find.byKey(const ValueKey('forum-new-post')));
+      await settle(tester);
+      final title = find.byKey(const ValueKey('forum-post-title-field'));
+      await showKeyboard(tester, viewport);
+      expectCaretVisible(tester, title);
+
+      final body = find.byKey(const ValueKey('forum-post-body-field'));
+      await tester.ensureVisible(body);
+      await tester.tap(body);
+      await tester.enterText(body, 'Line one\nLine two\nLine three');
+      await settle(tester);
+      expectCaretVisible(tester, body);
+
+      final tag = find.byKey(const ValueKey('forum-tag-choice-tag-trip'));
+      await tester.ensureVisible(tag);
+      await settle(tester);
+      expectFullyVisible(tester, tag);
+      expectTouchTargets(tester, tag);
+
+      final submit = find.byKey(const ValueKey('forum-post-submit'));
+      await tester.ensureVisible(submit);
+      await settle(tester);
+      expectFullyVisible(tester, submit);
+      expectTouchTargets(tester, submit);
+    });
+
+    phoneTestWidgets('forum post with its opening post', (
+      tester,
+      viewport,
+    ) async {
+      final world = PhoneWorld();
+      world.chats.messages = forumPostMessages();
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/post-conv-1',
+        extra: const ChatThreadRouteExtra(
+          title: forumPostTitle,
+          type: ConversationType.thread,
+          circleId: 'circle-1',
+        ),
+      );
+      expect(find.byKey(const ValueKey('forum-opening-post')), findsOneWidget);
+      expectFullyVisible(tester, find.byTooltip('Back'));
+      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+
+      final opening = find.byKey(const ValueKey('forum-opening-post'));
+      await tester.drag(
+        find.byKey(const ValueKey('chat-message-list')),
+        const Offset(0, 2000),
+      );
+      await settle(tester);
+      expect(
+        tester.getRect(opening).width,
+        greaterThan(viewport.size.width - 40),
+      );
+      expectFullyVisible(
+        tester,
+        find.descendant(of: opening, matching: find.text(forumPostTitle)),
+      );
+    });
+
     phoneTestWidgets('read-only channel replaces the composer', (
       tester,
       viewport,
@@ -908,7 +1016,16 @@ void main() {
       final world = PhoneWorld();
       await world.open(tester, '/circles/circle-1');
       final photos = find.text('photo-dump');
-      await scrollIntoView(tester, photos);
+      await scrollIntoView(
+        tester,
+        photos,
+        scrollable: find
+            .descendant(
+              of: find.byType(CircleChannelSidebar),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expectFullyVisible(
         tester,
         find.descendant(

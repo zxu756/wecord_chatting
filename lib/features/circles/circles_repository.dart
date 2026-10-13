@@ -10,6 +10,7 @@ import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -32,11 +33,12 @@ abstract interface class CirclesRepository {
 
   Future<String> createCircle({required String name, List<String> memberIds});
 
-  /// Creates a channel, in [categoryId] when given.
+  /// Creates a channel of [kind], in [categoryId] when given.
   Future<String> createChannel({
     required String circleId,
     required String name,
     String? categoryId,
+    CircleChannelKind kind = CircleChannelKind.text,
   });
 
   /// Returns the new category id.
@@ -184,6 +186,70 @@ abstract interface class CirclesRepository {
   /// Deletes a channel with its messages and threads.
   Future<void> deleteChannel(String channelId);
 
+  /// A page of a forum's posts: pinned posts first (on the first page,
+  /// when [before] is null), then up to [limit] others by [sort], newest
+  /// first, optionally only those tagged [tagId].
+  Future<List<ForumPost>> listForumPosts({
+    required String channelId,
+    ForumPostSort sort = ForumPostSort.activity,
+    String? tagId,
+    ForumPostCursor? before,
+    int limit = 25,
+  });
+
+  /// Creates a post with its body (and [image], uploaded with
+  /// [uploadForumImage]) as the first message.
+  Future<ForumPost> createForumPost({
+    required String channelId,
+    required String title,
+    required String body,
+    List<String> tagIds = const [],
+    ImageAttachment? image,
+  });
+
+  /// Uploads an image for a new post of the forum whose conversation is
+  /// [forumConversationId].
+  Future<ImageAttachment> uploadForumImage({
+    required String forumConversationId,
+    required ChatImageUpload image,
+  });
+
+  /// Replaces a post's tags (at most [ForumTag.maxPerPost]).
+  Future<void> setForumPostTags({
+    required String threadId,
+    required List<String> tagIds,
+  });
+
+  Future<void> pinForumPost({required String threadId, required bool pinned});
+
+  /// Adds a tag at the end of a forum's tags and returns its id.
+  Future<String> createForumTag({
+    required String channelId,
+    required String name,
+    String? emoji,
+  });
+
+  /// Renames a tag; a null or blank [emoji] clears it.
+  Future<void> updateForumTag({
+    required String tagId,
+    required String name,
+    String? emoji,
+  });
+
+  Future<void> deleteForumTag(String tagId);
+
+  /// Stores the order of every tag of a forum.
+  Future<void> reorderForumTags({
+    required String channelId,
+    required List<String> tagIds,
+  });
+
+  /// Fires when a forum's posts or their tags change.
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  });
+
   /// The current user's notification settings for the circle.
   Future<CircleNotificationSettings> getNotificationSettings(String circleId);
 
@@ -251,6 +317,11 @@ abstract interface class CirclesDataSource {
   });
 
   Stream<void> circleChanges(String circleId);
+
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  });
 }
 
 class SupabaseCirclesRepository implements CirclesRepository {
@@ -309,11 +380,13 @@ class SupabaseCirclesRepository implements CirclesRepository {
     required String circleId,
     required String name,
     String? categoryId,
+    CircleChannelKind kind = CircleChannelKind.text,
   }) async {
     final channelId = await _dataSource.rpc('create_circle_channel', {
       'target_circle_id': circleId,
       'channel_name': name.trim(),
       if (categoryId != null) 'target_category_id': categoryId,
+      if (kind != CircleChannelKind.text) 'target_kind': kind.value,
     });
     return channelId as String;
   }
@@ -599,6 +672,155 @@ class SupabaseCirclesRepository implements CirclesRepository {
     await _dataSource.rpc('delete_circle_channel', {
       'target_channel_id': channelId,
     });
+  }
+
+  @override
+  Future<List<ForumPost>> listForumPosts({
+    required String channelId,
+    ForumPostSort sort = ForumPostSort.activity,
+    String? tagId,
+    ForumPostCursor? before,
+    int limit = 25,
+  }) async {
+    final rows = await _dataSource.rpc('list_forum_posts', {
+      'target_channel_id': channelId,
+      'sort_order': sort.value,
+      'filter_tag_id': tagId,
+      'before_at': before?.at.toUtc().toIso8601String(),
+      'before_id': before?.id,
+      'limit_count': limit,
+    });
+    return (rows as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(ForumPost.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<ForumPost> createForumPost({
+    required String channelId,
+    required String title,
+    required String body,
+    List<String> tagIds = const [],
+    ImageAttachment? image,
+  }) async {
+    final payload = await _dataSource.rpc('create_forum_post', {
+      'target_channel_id': channelId,
+      'post_title': title.trim(),
+      'post_body': body.trim(),
+      'tag_ids': tagIds,
+      'post_attachment': image?.toJson(),
+    });
+    return ForumPost.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ImageAttachment> uploadForumImage({
+    required String forumConversationId,
+    required ChatImageUpload image,
+  }) async {
+    // Chat images live under their conversation; a post's image goes under
+    // the forum's, where members who can post may upload.
+    const bucket = 'chat-images';
+    final path =
+        '$forumConversationId/${_nextStoragePathSeed()}-${_safeFileName(image.fileName)}';
+    await _withStorageTimeout(
+      _dataSource.uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
+      ),
+    );
+    return ImageAttachment(
+      bucket: bucket,
+      path: path,
+      mimeType: image.mimeType,
+      size: image.bytes.length,
+      width: image.width,
+      height: image.height,
+    );
+  }
+
+  @override
+  Future<void> setForumPostTags({
+    required String threadId,
+    required List<String> tagIds,
+  }) async {
+    await _dataSource.rpc('set_forum_post_tags', {
+      'target_thread_id': threadId,
+      'tag_ids': tagIds,
+    });
+  }
+
+  @override
+  Future<void> pinForumPost({
+    required String threadId,
+    required bool pinned,
+  }) async {
+    await _dataSource.rpc('pin_forum_post', {
+      'target_thread_id': threadId,
+      'pinned': pinned,
+    });
+  }
+
+  @override
+  Future<String> createForumTag({
+    required String channelId,
+    required String name,
+    String? emoji,
+  }) async {
+    final tagId = await _dataSource.rpc('create_forum_tag', {
+      'target_channel_id': channelId,
+      'tag_name': name.trim(),
+      'tag_emoji': _blankToNull(emoji),
+    });
+    return tagId as String;
+  }
+
+  @override
+  Future<void> updateForumTag({
+    required String tagId,
+    required String name,
+    String? emoji,
+  }) async {
+    await _dataSource.rpc('update_forum_tag', {
+      'target_tag_id': tagId,
+      'tag_name': name.trim(),
+      'tag_emoji': _blankToNull(emoji),
+    });
+  }
+
+  @override
+  Future<void> deleteForumTag(String tagId) async {
+    await _dataSource.rpc('delete_forum_tag', {'target_tag_id': tagId});
+  }
+
+  @override
+  Future<void> reorderForumTags({
+    required String channelId,
+    required List<String> tagIds,
+  }) async {
+    await _dataSource.rpc('reorder_forum_tags', {
+      'target_channel_id': channelId,
+      'tag_ids': tagIds,
+    });
+  }
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) {
+    return _dataSource.forumChanges(
+      channelId: channelId,
+      conversationId: conversationId,
+    );
+  }
+
+  String? _blankToNull(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -894,6 +1116,17 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
+              table: 'forum_tags',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
               table: 'circle_posts',
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
@@ -912,6 +1145,54 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
               event: PostgresChangeEvent.all,
               schema: 'public',
               table: 'circle_post_comments',
+              callback: emit,
+            )
+            .subscribe();
+      },
+      onCancel: () async {
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) {
+    late RealtimeChannel channel;
+    late StreamController<void> controller;
+    controller = StreamController<void>(
+      onListen: () {
+        void emit(PostgresChangePayload payload) {
+          controller.add(null);
+        }
+
+        channel = _client
+            .channel('forum-changes-$channelId')
+            // New posts, pins, archiving and activity (every reply bumps
+            // the post's last_message_at).
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'conversation_threads',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'parent_conversation_id',
+                value: conversationId,
+              ),
+              callback: emit,
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'thread_tags',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'channel_id',
+                value: channelId,
+              ),
               callback: emit,
             )
             .subscribe();
@@ -950,6 +1231,7 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required String circleId,
     required String name,
     String? categoryId,
+    CircleChannelKind kind = CircleChannelKind.text,
   }) {
     throw StateError('Supabase must be initialized before creating channels.');
   }
@@ -1228,6 +1510,88 @@ class UninitializedCirclesRepository implements CirclesRepository {
 
   @override
   Stream<void> circleChanges(String circleId) {
+    return const Stream<void>.empty();
+  }
+
+  @override
+  Future<List<ForumPost>> listForumPosts({
+    required String channelId,
+    ForumPostSort sort = ForumPostSort.activity,
+    String? tagId,
+    ForumPostCursor? before,
+    int limit = 25,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<ForumPost> createForumPost({
+    required String channelId,
+    required String title,
+    required String body,
+    List<String> tagIds = const [],
+    ImageAttachment? image,
+  }) {
+    throw StateError('Supabase must be initialized before posting.');
+  }
+
+  @override
+  Future<ImageAttachment> uploadForumImage({
+    required String forumConversationId,
+    required ChatImageUpload image,
+  }) {
+    throw StateError('Supabase must be initialized before uploading images.');
+  }
+
+  @override
+  Future<void> setForumPostTags({
+    required String threadId,
+    required List<String> tagIds,
+  }) {
+    throw StateError('Supabase must be initialized before tagging posts.');
+  }
+
+  @override
+  Future<void> pinForumPost({required String threadId, required bool pinned}) {
+    throw StateError('Supabase must be initialized before pinning posts.');
+  }
+
+  @override
+  Future<String> createForumTag({
+    required String channelId,
+    required String name,
+    String? emoji,
+  }) {
+    throw StateError('Supabase must be initialized before creating tags.');
+  }
+
+  @override
+  Future<void> updateForumTag({
+    required String tagId,
+    required String name,
+    String? emoji,
+  }) {
+    throw StateError('Supabase must be initialized before editing tags.');
+  }
+
+  @override
+  Future<void> deleteForumTag(String tagId) {
+    throw StateError('Supabase must be initialized before deleting tags.');
+  }
+
+  @override
+  Future<void> reorderForumTags({
+    required String channelId,
+    required List<String> tagIds,
+  }) {
+    throw StateError('Supabase must be initialized before reordering tags.');
+  }
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) {
     return const Stream<void>.empty();
   }
 }

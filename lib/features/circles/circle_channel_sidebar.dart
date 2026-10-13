@@ -143,6 +143,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         thread.unreadCount > 0 ||
         thread.id == widget.selectedThreadConversationId;
     List<ConversationSummary> threads(CircleChannel channel, bool collapsed) {
+      // Forum posts live in the forum, not the sidebar.
+      if (channel.isForum) {
+        return const [];
+      }
       final all = threadsByParent[channel.conversationId] ?? const [];
       return collapsed ? all.where(threadStandsOut).toList() : all;
     }
@@ -385,10 +389,23 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final conversations =
         ref.watch(conversationsProvider).valueOrNull ??
         const <ConversationSummary>[];
-    final unreadCounts = {
+    final unreadCounts = <String, int>{
       for (final conversation in conversations)
         conversation.id: conversation.unreadCount,
     };
+    // A forum is unread while any of its posts is.
+    for (final channel in detail.channels) {
+      if (!channel.isForum) {
+        continue;
+      }
+      var unread = 0;
+      for (final conversation in conversations) {
+        if (conversation.parentConversationId == channel.conversationId) {
+          unread += conversation.unreadCount;
+        }
+      }
+      unreadCounts[channel.conversationId] = unread;
+    }
     final threadsByParent = widget.onSelectThread == null
         ? const <String, List<ConversationSummary>>{}
         : activeThreadsByParent(conversations, now: DateTime.now());
@@ -458,7 +475,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
             );
           case _ChannelEntry(:final channel, :final unread, :final threads):
             final channelRow = CircleChannelRow(
-              icon: Icons.tag,
+              key: ValueKey('circle-channel-row-${channel.id}'),
+              icon: channel.isForum ? Icons.forum_outlined : Icons.tag,
               label: channel.name,
               locked: channel.isPrivate,
               selected:

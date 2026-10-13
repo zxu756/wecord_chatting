@@ -5,10 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
+import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -679,6 +681,71 @@ class FakeCirclesRepository implements CirclesRepository {
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();
 
   @override
+  Future<List<ForumPost>> listForumPosts({
+    required String channelId,
+    ForumPostSort sort = ForumPostSort.activity,
+    String? tagId,
+    ForumPostCursor? before,
+    int limit = 25,
+  }) async => const [];
+
+  @override
+  Future<ForumPost> createForumPost({
+    required String channelId,
+    required String title,
+    required String body,
+    List<String> tagIds = const [],
+    ImageAttachment? image,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ImageAttachment> uploadForumImage({
+    required String forumConversationId,
+    required ChatImageUpload image,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> setForumPostTags({
+    required String threadId,
+    required List<String> tagIds,
+  }) async {}
+
+  @override
+  Future<void> pinForumPost({
+    required String threadId,
+    required bool pinned,
+  }) async {}
+
+  @override
+  Future<String> createForumTag({
+    required String channelId,
+    required String name,
+    String? emoji,
+  }) async => 'tag-1';
+
+  @override
+  Future<void> updateForumTag({
+    required String tagId,
+    required String name,
+    String? emoji,
+  }) async {}
+
+  @override
+  Future<void> deleteForumTag(String tagId) async {}
+
+  @override
+  Future<void> reorderForumTags({
+    required String channelId,
+    required List<String> tagIds,
+  }) async {}
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) => const Stream<void>.empty();
+
+  @override
   Future<void> setNickname({
     required String circleId,
     required String userId,
@@ -711,6 +778,7 @@ class FakeCirclesRepository implements CirclesRepository {
     required String circleId,
     required String name,
     String? categoryId,
+    CircleChannelKind kind = CircleChannelKind.text,
   }) async => 'channel-1';
 
   @override

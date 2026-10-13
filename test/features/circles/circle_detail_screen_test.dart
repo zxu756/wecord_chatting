@@ -14,6 +14,7 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
+import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -25,6 +26,7 @@ import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -2454,6 +2456,36 @@ void main() {
         sentence(entry('channel_delete', {'name': 'lobby'})),
         'Xu deleted channel #lobby',
       );
+      final pinned = CircleAuditEntry(
+        id: 'pin',
+        circleId: 'circle-1',
+        action: 'forum_post_pin',
+        targetType: 'thread',
+        targetLabel: 'How do I start?',
+        changes: const {'channel_id': 'c', 'channel_name': 'help'},
+        createdAt: now,
+      );
+      expect(sentence(pinned), 'Someone pinned post How do I start? in #help');
+      expect(circleAuditDetails(pinned), isEmpty);
+      expect(
+        sentence(
+          CircleAuditEntry(
+            id: 'tag',
+            circleId: 'circle-1',
+            action: 'forum_tag_create',
+            targetType: 'tag',
+            targetLabel: 'Bug',
+            changes: const {'channel_name': 'help', 'name': 'Bug'},
+            createdAt: now,
+          ),
+        ),
+        'Someone created tag Bug in #help',
+      );
+      expect(pinned.group, CircleAuditActionGroup.forum);
+      expect(
+        CircleAuditActionGroup.filters,
+        contains(CircleAuditActionGroup.forum),
+      );
       expect(circleAuditIcon('channel_update'), Icons.edit_note);
       expect(circleAuditIcon('channel_delete'), Icons.delete_sweep_outlined);
     });
@@ -2765,6 +2797,7 @@ class FakeCirclesRepository implements CirclesRepository {
   var circles = <CircleSummary>[];
   var createdChannelName = '';
   String? createdChannelCategoryId;
+  CircleChannelKind? createdChannelKind;
   final categoryCalls = <String>[];
   final reorderedLayouts = <Map<String, dynamic>>[];
   Completer<void>? reorderCompleter;
@@ -2986,6 +3019,159 @@ class FakeCirclesRepository implements CirclesRepository {
   @override
   Stream<void> circleChanges(String circleId) => const Stream<void>.empty();
 
+  /// Every forum post, as listed: pinned first, then by the sort.
+  var forumPosts = <ForumPost>[];
+  final forumCalls = <String>[];
+  final forumListCalls =
+      <
+        ({
+          String channelId,
+          ForumPostSort sort,
+          String? tagId,
+          String? beforeId,
+        })
+      >[];
+  final createdForumPosts =
+      <({String title, String body, List<String> tagIds, bool hasImage})>[];
+  final forumChangeControllers = <StreamController<void>>[];
+
+  @override
+  Future<List<ForumPost>> listForumPosts({
+    required String channelId,
+    ForumPostSort sort = ForumPostSort.activity,
+    String? tagId,
+    ForumPostCursor? before,
+    int limit = 25,
+  }) async {
+    forumListCalls.add((
+      channelId: channelId,
+      sort: sort,
+      tagId: tagId,
+      beforeId: before?.id,
+    ));
+    DateTime key(ForumPost post) =>
+        sort == ForumPostSort.created ? post.createdAt : post.lastActivityAt;
+    final matching = [
+      for (final post in forumPosts)
+        if (post.channelId == channelId &&
+            (tagId == null || post.tags.any((tag) => tag.id == tagId)))
+          post,
+    ]..sort((left, right) => key(right).compareTo(key(left)));
+    final others = [
+      for (final post in matching)
+        if (!post.isPinned) post,
+    ];
+    final start = before == null
+        ? 0
+        : others.indexWhere((post) => post.id == before.id) + 1;
+    return [
+      if (before == null)
+        for (final post in matching)
+          if (post.isPinned) post,
+      ...others.skip(start).take(limit),
+    ];
+  }
+
+  @override
+  Future<ForumPost> createForumPost({
+    required String channelId,
+    required String title,
+    required String body,
+    List<String> tagIds = const [],
+    ImageAttachment? image,
+  }) async {
+    createdForumPosts.add((
+      title: title,
+      body: body,
+      tagIds: tagIds,
+      hasImage: image != null,
+    ));
+    final now = DateTime.utc(2026, 10, 14, 12);
+    final post = ForumPost(
+      id: 'post-new',
+      conversationId: 'post-new-conversation',
+      channelId: channelId,
+      title: title,
+      body: body,
+      createdAt: now,
+      lastActivityAt: now,
+    );
+    forumPosts = [post, ...forumPosts];
+    return post;
+  }
+
+  @override
+  Future<ImageAttachment> uploadForumImage({
+    required String forumConversationId,
+    required ChatImageUpload image,
+  }) async {
+    forumCalls.add('upload $forumConversationId ${image.fileName}');
+    return ImageAttachment(
+      bucket: 'chat-images',
+      path: '$forumConversationId/${image.fileName}',
+      mimeType: image.mimeType,
+      size: image.bytes.length,
+    );
+  }
+
+  @override
+  Future<void> setForumPostTags({
+    required String threadId,
+    required List<String> tagIds,
+  }) async {
+    forumCalls.add('tags $threadId ${tagIds.join(',')}');
+  }
+
+  @override
+  Future<void> pinForumPost({
+    required String threadId,
+    required bool pinned,
+  }) async {
+    forumCalls.add('pin $threadId $pinned');
+  }
+
+  @override
+  Future<String> createForumTag({
+    required String channelId,
+    required String name,
+    String? emoji,
+  }) async {
+    forumCalls.add('create tag $channelId $name ${emoji ?? '-'}');
+    return 'tag-new';
+  }
+
+  @override
+  Future<void> updateForumTag({
+    required String tagId,
+    required String name,
+    String? emoji,
+  }) async {
+    forumCalls.add('update tag $tagId $name ${emoji ?? '-'}');
+  }
+
+  @override
+  Future<void> deleteForumTag(String tagId) async {
+    forumCalls.add('delete tag $tagId');
+  }
+
+  @override
+  Future<void> reorderForumTags({
+    required String channelId,
+    required List<String> tagIds,
+  }) async {
+    forumCalls.add('reorder tags $channelId ${tagIds.join(',')}');
+  }
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) {
+    final controller = StreamController<void>.broadcast();
+    forumChangeControllers.add(controller);
+    return controller.stream;
+  }
+
   @override
   Future<void> setNickname({
     required String circleId,
@@ -3000,9 +3186,11 @@ class FakeCirclesRepository implements CirclesRepository {
     required String circleId,
     required String name,
     String? categoryId,
+    CircleChannelKind kind = CircleChannelKind.text,
   }) async {
     createdChannelName = name;
     createdChannelCategoryId = categoryId;
+    createdChannelKind = kind;
     return 'channel-2';
   }
 

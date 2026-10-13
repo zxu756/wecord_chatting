@@ -32,6 +32,7 @@ class _CircleChannelCreationSheetState
       )
       ? widget.initialCategoryId
       : null;
+  var _kind = CircleChannelKind.text;
   var _isSaving = false;
   String? _errorText;
 
@@ -59,6 +60,37 @@ class _CircleChannelCreationSheetState
               Text(
                 'Create channel',
                 style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              Text('Type', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              // Voice channels arrive with voice support.
+              SegmentedButton<CircleChannelKind>(
+                key: const ValueKey('channel-kind-selector'),
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: CircleChannelKind.text,
+                    icon: Icon(Icons.tag),
+                    label: Text('Text'),
+                  ),
+                  ButtonSegment(
+                    value: CircleChannelKind.forum,
+                    icon: Icon(Icons.forum_outlined),
+                    label: Text('Forum'),
+                  ),
+                ],
+                selected: {_kind},
+                onSelectionChanged: _isSaving
+                    ? null
+                    : (selection) => setState(() => _kind = selection.single),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _kind == CircleChannelKind.forum
+                    ? 'Members start posts, each with its own replies.'
+                    : 'Members chat in one stream of messages.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -135,6 +167,7 @@ class _CircleChannelCreationSheetState
             circleId: widget.circleId,
             name: name,
             categoryId: _categoryId,
+            kind: _kind,
           );
       ref.invalidate(circleDetailProvider(widget.circleId));
       if (mounted) Navigator.of(context).pop();

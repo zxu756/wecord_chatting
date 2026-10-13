@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -64,6 +65,19 @@ class _CircleChannelThreadScreenState
         if (candidate.conversationId == widget.conversationId) {
           channel = candidate;
           break;
+        }
+      }
+    }
+    // A thread of a forum is one of its posts.
+    CircleChannel? forum;
+    if (widget.conversationType == ConversationType.thread && detail != null) {
+      final parentId = ref
+          .watch(chatConversationSummaryProvider(widget.conversationId))
+          .valueOrNull
+          ?.parentConversationId;
+      for (final candidate in detail.channels) {
+        if (candidate.isForum && candidate.conversationId == parentId) {
+          forum = candidate;
         }
       }
     }
@@ -148,6 +162,40 @@ class _CircleChannelThreadScreenState
           widget.threadBuilder?.call(context, [
             for (final action in actions) action.toIconButton(),
           ]) ??
+          (detail != null && channel != null && channel.isForum
+              ? CircleForumView(
+                  key: ValueKey('forum-${channel.id}'),
+                  detail: detail,
+                  channel: channel,
+                  actions: actions,
+                  onOpenPost: (post) => context.push(
+                    CircleChannelThreadScreen.pathFor(
+                      circleId,
+                      post.conversationId,
+                    ),
+                    extra: ChatThreadRouteExtra(
+                      title: post.title,
+                      type: ConversationType.thread,
+                      circleId: circleId,
+                    ),
+                  ),
+                )
+              : null) ??
+          (detail != null && forum != null
+              ? ChatThreadScreen(
+                  conversationId: widget.conversationId,
+                  title: title,
+                  conversationType: ConversationType.thread,
+                  forumPost: true,
+                  onBack: () => Navigator.of(context).maybePop(),
+                  extraActions: actions,
+                  canSendMessages: detail.canInChannel(
+                    forum,
+                    CirclePermission.sendMessages,
+                  ),
+                  slowmodeSeconds: 0,
+                )
+              : null) ??
           ChatThreadScreen(
             conversationId: widget.conversationId,
             title: title,

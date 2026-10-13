@@ -2432,4 +2432,155 @@ void main() {
       );
     }
   });
+
+  test('forum channels hold posts with tags', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      sql,
+      contains(
+        'add column if not exists is_pinned boolean not null default false',
+      ),
+    );
+    for (final table in ['forum_tags', 'thread_tags']) {
+      expect(sql, contains('create table if not exists public.$table'));
+      expect(
+        sql,
+        contains('alter table public.$table enable row level security'),
+      );
+      expect(sql, contains('alter table public.$table replica identity full'));
+      expect(
+        rawSql,
+        contains('alter publication supabase_realtime add table public.$table'),
+      );
+      expect(
+        rawSql,
+        contains(
+          'revoke insert, update, delete, truncate on public.$table '
+          'from authenticated',
+        ),
+      );
+      expect(
+        policyBodiesFor(rawSql, table).where(
+          (policy) => RegExp(
+            r'for (insert|update|delete|all)',
+            caseSensitive: false,
+          ).hasMatch(policy),
+        ),
+        isEmpty,
+      );
+    }
+    expect(sql, contains('char_length(name) between 1 and 20'));
+    expect(sql, contains('on public.forum_tags (channel_id, lower(name))'));
+    expect(
+      policyBody(rawSql, 'forum_tags_select_viewer'),
+      contains(
+        "current_user_has_channel_permission(channel_id, 'view_channel')",
+      ),
+    );
+    expect(
+      policyBody(rawSql, 'thread_tags_select_viewer'),
+      contains(
+        "current_user_has_channel_permission(channel_id, 'view_channel')",
+      ),
+    );
+
+    final normalizeBody = functionBody(sql, 'normalize_forum_tag_ids');
+    expect(normalizeBody, contains('cardinality(normalized) > 5'));
+    final createTagBody = functionBody(sql, 'create_forum_tag');
+    expect(createTagBody, contains('>= 20'));
+
+    final createPostBody = functionBody(sql, 'create_forum_post');
+    expect(createPostBody, contains('can_current_user_send_in_conversation'));
+    expect(createPostBody, contains("channel.kind <> 'forum'"));
+    expect(createPostBody, contains('insert into public.conversation_threads'));
+    expect(createPostBody, contains('insert into public.messages'));
+    expect(createPostBody, contains('insert into public.thread_tags'));
+    expect(createPostBody, contains("'chat-images'"));
+
+    final listBody = functionBody(sql, 'list_forum_posts');
+    expect(listBody, contains('is_current_user_conversation_member'));
+    expect(listBody, contains("sort_order not in ('activity', 'created')"));
+    expect(listBody, contains('order by chosen.grp, chosen.sort_at desc'));
+
+    expect(
+      functionBody(sql, 'pin_forum_post'),
+      contains(
+        "current_user_has_channel_permission(channel.id, 'manage_messages')",
+      ),
+    );
+    expect(
+      functionBody(sql, 'set_forum_post_tags'),
+      contains('can_current_user_manage_thread'),
+    );
+
+    const audited = {
+      'pin_forum_post': 'forum_post_pin',
+      'create_forum_tag': 'forum_tag_create',
+      'update_forum_tag': 'forum_tag_update',
+      'delete_forum_tag': 'forum_tag_delete',
+      'reorder_forum_tags': 'forum_tag_reorder',
+    };
+    for (final MapEntry(key: name, value: action) in audited.entries) {
+      final body = functionBody(sql, name);
+      expect(body, contains('security definer'), reason: name);
+      expect(body, contains('set search_path = public'), reason: name);
+      expect(body, contains('public.write_circle_audit('), reason: name);
+      expect(body, contains("'$action'"), reason: name);
+    }
+    for (final name in ['create_forum_tag', 'reorder_forum_tags']) {
+      expect(
+        functionBody(sql, name),
+        contains(
+          "forum_channel_for_management(target_channel_id, 'manage_channels')",
+        ),
+        reason: name,
+      );
+    }
+
+    // Forums take no direct messages or plain threads.
+    expect(
+      functionBody(sql, 'check_channel_message_send'),
+      contains("channel.kind = 'forum'"),
+    );
+    expect(
+      functionBody(sql, 'create_thread'),
+      contains('Forum channels take posts, not threads'),
+    );
+    expect(
+      functionBody(sql, 'create_circle_channel'),
+      contains("channel_kind not in ('text', 'forum')"),
+    );
+    expect(
+      functionBody(sql, 'get_circle_detail'),
+      contains('from public.forum_tags ft'),
+    );
+
+    for (final signature in [
+      'public.forum_channel_for_management(uuid, text)',
+      'public.normalize_forum_tag_ids(uuid, uuid[])',
+      'public.forum_post_payload(public.conversation_threads, public.circle_channels)',
+    ]) {
+      expect(
+        rawSql,
+        contains('revoke execute on function $signature from authenticated'),
+      );
+    }
+    for (final signature in [
+      'public.create_forum_post(uuid, text, text, uuid[], jsonb)',
+      'public.list_forum_posts(uuid, text, uuid, timestamptz, uuid, integer)',
+      'public.set_forum_post_tags(uuid, uuid[])',
+      'public.pin_forum_post(uuid, boolean)',
+      'public.create_forum_tag(uuid, text, text)',
+      'public.update_forum_tag(uuid, text, text)',
+      'public.delete_forum_tag(uuid)',
+      'public.reorder_forum_tags(uuid, uuid[])',
+    ]) {
+      expect(
+        rawSql,
+        contains('grant execute on function $signature to authenticated'),
+      );
+    }
+  });
 }

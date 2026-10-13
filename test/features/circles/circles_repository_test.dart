@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -423,6 +424,233 @@ void main() {
       overwrites.last.stateOf(CirclePermission.manageMessages),
       OverwriteState.inherit,
     );
+  });
+
+  test('forum posts and tags go through RPCs', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['list_forum_posts'] = [
+        {
+          'id': 'thread-1',
+          'conversation_id': 'conv-t1',
+          'channel_id': 'channel-1',
+          'title': 'Help',
+          'created_by': 'u1',
+          'created_at': '2026-10-14T10:00:00.123456+00:00',
+          'last_activity_at': '2026-10-14T11:00:00+00:00',
+          'archived_at': null,
+          'is_pinned': true,
+          'author': {
+            'id': 'u1',
+            'username': 'ada',
+            'display_name': 'Ada',
+            'avatar_url': null,
+            'bio': '',
+            'created_at': '2026-01-01T00:00:00+00:00',
+            'updated_at': '2026-01-01T00:00:00+00:00',
+            'nickname': 'Countess',
+            'role_color': 0x3498DB,
+          },
+          'tags': [
+            {
+              'id': 'tag-1',
+              'channel_id': 'channel-1',
+              'name': 'Bug',
+              'emoji': '🐛',
+              'position': 0,
+            },
+          ],
+          'opening_message': {
+            'id': 'm1',
+            'type': 'text',
+            'body': '**Hi**',
+            'recalled': false,
+          },
+          'reply_count': 3,
+          'thumbnail': {
+            'kind': 'image',
+            'bucket': 'chat-images',
+            'path': 'conv-forum/a.png',
+            'mime_type': 'image/png',
+            'size': 10,
+          },
+          'unread_count': 2,
+          'can_manage': true,
+        },
+        {
+          'id': 'thread-2',
+          'conversation_id': 'conv-t2',
+          'channel_id': 'channel-1',
+          'title': 'Gone',
+          'created_at': '2026-10-14T09:00:00+00:00',
+          'last_activity_at': '2026-10-14T09:00:00+00:00',
+          'author': null,
+          'tags': const [],
+          'opening_message': null,
+          // Not a usable image: no thumbnail.
+          'thumbnail': {'kind': 'image', 'bucket': 'chat-images'},
+        },
+      ]
+      ..rpcValue = 'tag-new';
+    final repository = SupabaseCirclesRepository(
+      dataSource,
+      storagePathSeed: () => 'seed',
+    );
+
+    final posts = await repository.listForumPosts(
+      channelId: 'channel-1',
+      sort: ForumPostSort.created,
+      tagId: 'tag-1',
+      before: ForumPostCursor(
+        at: DateTime.utc(2026, 10, 14, 12, 0, 0, 0, 5),
+        id: 'thread-0',
+      ),
+      limit: 10,
+    );
+    expect(dataSource.calls.last.params, {
+      'target_channel_id': 'channel-1',
+      'sort_order': 'created',
+      'filter_tag_id': 'tag-1',
+      'before_at': '2026-10-14T12:00:00.000005Z',
+      'before_id': 'thread-0',
+      'limit_count': 10,
+    });
+    final [post, gone] = posts;
+    expect(post.title, 'Help');
+    expect(post.isPinned, isTrue);
+    expect(post.author!.name, 'Countess');
+    expect(post.author!.roleColor, 0x3498DB);
+    expect(post.tags.single.label, '🐛 Bug');
+    expect(post.body, '**Hi**');
+    expect(post.replyCount, 3);
+    expect(post.unreadCount, 2);
+    expect(post.thumbnail!.path, 'conv-forum/a.png');
+    expect(post.canManage, isTrue);
+    expect(post.cursorFor(ForumPostSort.created).at, post.createdAt);
+    expect(post.cursorFor(ForumPostSort.activity).at, post.lastActivityAt);
+    expect(post.createdAt.microsecond, 456);
+    expect(gone.author, isNull);
+    expect(gone.body, isEmpty);
+    expect(gone.thumbnail, isNull);
+
+    dataSource.calls.clear();
+    final image = await repository.uploadForumImage(
+      forumConversationId: 'conv-forum',
+      image: ChatImageUpload(
+        bytes: Uint8List.fromList(const [1, 2]),
+        fileName: 'My Photo.PNG',
+        mimeType: 'image/png',
+      ),
+    );
+    expect(dataSource.uploads.single.bucket, 'chat-images');
+    expect(dataSource.uploads.single.path, 'conv-forum/seed-my-photo.png');
+    expect(image.path, 'conv-forum/seed-my-photo.png');
+
+    dataSource.rpcRows.clear();
+    dataSource.rpcValue = {
+      'id': 'thread-3',
+      'conversation_id': 'conv-t3',
+      'channel_id': 'channel-1',
+      'title': 'New',
+      'created_at': '2026-10-14T12:00:00+00:00',
+    };
+    final created = await repository.createForumPost(
+      channelId: 'channel-1',
+      title: ' New ',
+      body: ' Body ',
+      tagIds: const ['tag-1'],
+      image: image,
+    );
+    expect(created.id, 'thread-3');
+    expect(dataSource.calls.last.functionName, 'create_forum_post');
+    expect(dataSource.calls.last.params, {
+      'target_channel_id': 'channel-1',
+      'post_title': 'New',
+      'post_body': 'Body',
+      'tag_ids': ['tag-1'],
+      'post_attachment': image.toJson(),
+    });
+
+    dataSource.rpcValue = 'tag-new';
+    await repository.setForumPostTags(threadId: 'thread-3', tagIds: const []);
+    await repository.pinForumPost(threadId: 'thread-3', pinned: true);
+    expect(
+      await repository.createForumTag(
+        channelId: 'channel-1',
+        name: ' Bug ',
+        emoji: ' ',
+      ),
+      'tag-new',
+    );
+    await repository.updateForumTag(tagId: 'tag-1', name: 'Bugs', emoji: '🐞');
+    await repository.deleteForumTag('tag-1');
+    await repository.reorderForumTags(
+      channelId: 'channel-1',
+      tagIds: const ['tag-2', 'tag-1'],
+    );
+    await repository.createChannel(
+      circleId: 'circle-1',
+      name: 'qa',
+      kind: CircleChannelKind.forum,
+    );
+    final calls = dataSource.calls.skip(dataSource.calls.length - 7).toList();
+    expect(
+      [for (final call in calls) call.functionName],
+      [
+        'set_forum_post_tags',
+        'pin_forum_post',
+        'create_forum_tag',
+        'update_forum_tag',
+        'delete_forum_tag',
+        'reorder_forum_tags',
+        'create_circle_channel',
+      ],
+    );
+    expect(calls[0].params, {'target_thread_id': 'thread-3', 'tag_ids': []});
+    expect(calls[1].params, {'target_thread_id': 'thread-3', 'pinned': true});
+    expect(calls[2].params, {
+      'target_channel_id': 'channel-1',
+      'tag_name': 'Bug',
+      'tag_emoji': null,
+    });
+    expect(calls[3].params, {
+      'target_tag_id': 'tag-1',
+      'tag_name': 'Bugs',
+      'tag_emoji': '🐞',
+    });
+    expect(calls[4].params, {'target_tag_id': 'tag-1'});
+    expect(calls[5].params, {
+      'target_channel_id': 'channel-1',
+      'tag_ids': ['tag-2', 'tag-1'],
+    });
+    expect(calls[6].params, {
+      'target_circle_id': 'circle-1',
+      'channel_name': 'qa',
+      'target_kind': 'forum',
+    });
+  });
+
+  test('forum channels carry their tags in order', () {
+    final channel = CircleChannel.fromJson({
+      'id': 'channel-1',
+      'circle_id': 'circle-1',
+      'conversation_id': 'conversation-1',
+      'name': 'help',
+      'kind': 'forum',
+      'tags': [
+        {'id': 'b', 'channel_id': 'channel-1', 'name': 'Second', 'position': 1},
+        {
+          'id': 'a',
+          'channel_id': 'channel-1',
+          'name': 'First',
+          'emoji': ' ',
+          'position': 0,
+        },
+      ],
+    });
+    expect(channel.isForum, isTrue);
+    expect(channel.tags.map((tag) => tag.id), ['a', 'b']);
+    expect(channel.tags.first.emoji, isNull);
+    expect(channel.tags.first.label, 'First');
   });
 
   test('channels are renamed and deleted through RPCs', () async {
@@ -1275,6 +1503,12 @@ class FakeCirclesDataSource implements CirclesDataSource {
 
   @override
   Stream<void> circleChanges(String circleId) => changes.stream;
+
+  @override
+  Stream<void> forumChanges({
+    required String channelId,
+    required String conversationId,
+  }) => changes.stream;
 }
 
 class RpcCall {

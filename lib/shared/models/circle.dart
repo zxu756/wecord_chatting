@@ -1,4 +1,5 @@
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -354,6 +355,7 @@ class CircleChannel {
     this.slowmodeSeconds = 0,
     this.topic,
     this.kind = CircleChannelKind.text,
+    this.tags = const [],
   });
 
   factory CircleChannel.fromJson(Map<String, dynamic> json) {
@@ -374,6 +376,10 @@ class CircleChannel {
         _ => null,
       },
       kind: CircleChannelKind.fromJson(json['kind']),
+      tags: [
+        for (final tag in json['tags'] as List<dynamic>? ?? const [])
+          ForumTag.fromJson(tag as Map<String, dynamic>),
+      ]..sort((left, right) => left.position.compareTo(right.position)),
     );
   }
 
@@ -409,6 +415,11 @@ class CircleChannel {
   final String? topic;
 
   final CircleChannelKind kind;
+
+  /// A forum's tags, in order; empty for other channels.
+  final List<ForumTag> tags;
+
+  bool get isForum => kind == CircleChannelKind.forum;
 }
 
 /// What a channel holds: a chat, voice (later) or forum posts.

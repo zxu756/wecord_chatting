@@ -238,6 +238,78 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Notification settings'));
   });
+
+  screen('21-forum-posts', (tester, world) async {
+    await openChannel(
+      tester,
+      world,
+      conversationId: 'conv-help',
+      title: 'help-and-questions',
+    );
+  });
+
+  screen('21b-forum-posts-small', (tester, world) async {
+    await openChannel(
+      tester,
+      world,
+      conversationId: 'conv-help',
+      title: 'help-and-questions',
+    );
+  }, viewport: smallPhone);
+
+  screen('22-forum-new-post-keyboard', (tester, world) async {
+    await openChannel(
+      tester,
+      world,
+      conversationId: 'conv-help',
+      title: 'help-and-questions',
+    );
+    await tester.tap(find.byKey(const ValueKey('forum-new-post')));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('forum-post-title-field')),
+      'Best sunrise spot near Tunnel View?',
+    );
+    await tester.tap(find.byKey(const ValueKey('forum-tag-choice-tag-q')));
+    await tester.tap(find.byKey(const ValueKey('forum-post-body-field')));
+    await showKeyboard(tester, notchedPhone);
+  });
+
+  screen('23-forum-post', (tester, world) async {
+    world.chats.messages = forumPostMessages();
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/post-conv-1',
+      extra: const ChatThreadRouteExtra(
+        title: forumPostTitle,
+        type: ConversationType.thread,
+        circleId: 'circle-1',
+      ),
+    );
+    world.chats.messages = forumPostMessages();
+    await settle(tester);
+  });
+
+  screen('24-forum-settings', (tester, world) async {
+    await openChannel(
+      tester,
+      world,
+      conversationId: 'conv-help',
+      title: 'help-and-questions',
+    );
+    await tester.tap(find.byTooltip('Channel settings'));
+    await settle(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+  });
+
+  screen('25-create-forum-channel', (tester, world) async {
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byTooltip('Circle menu'));
+    await settle(tester);
+    await tester.tap(find.text('Create channel'));
+    await settle(tester);
+    await tester.tap(find.text('Forum'));
+  });
 }
 
 /// Loads Roboto and the Material icons from the Flutter SDK, so text is not

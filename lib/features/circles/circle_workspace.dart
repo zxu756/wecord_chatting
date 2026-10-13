@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
+import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
@@ -73,6 +74,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   /// The thread open in the right-hand panel.
   ThreadTarget? _openThread;
 
+  /// The forum post open in place of the selected forum's post list.
+  ThreadTarget? _openPost;
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +104,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     ).orderedChannels;
     _selectedChannelId = channels.isEmpty ? null : channels.first.id;
     _openThread = null;
+    _openPost = null;
   }
 
   CircleChannel? get _selectedChannel {
@@ -162,11 +167,13 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
               setState(() {
                 _selectedChannelId = channel.id;
                 _openThread = null;
+                _openPost = null;
               });
             },
             onSelectFeed: () => setState(() {
               _selectedChannelId = null;
               _openThread = null;
+              _openPost = null;
             }),
             onSelectThread: _selectThread,
           ),
@@ -247,6 +254,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     CircleChannel channel,
     List<ChatThreadAction> actions,
   ) {
+    if (channel.isForum) {
+      return _forumView(channel, actions);
+    }
     return ChatThreadScreen(
       key: ValueKey(channel.conversationId),
       conversationId: channel.conversationId,
@@ -260,6 +270,41 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
       topic: channel.topic,
       onOpenThread: (thread) => setState(() => _openThread = thread),
+    );
+  }
+
+  /// A forum's posts, or the open post with a way back to them.
+  Widget _forumView(CircleChannel channel, List<ChatThreadAction> actions) {
+    final post = _openPost;
+    if (post != null) {
+      return ChatThreadScreen(
+        key: ValueKey(post.conversationId),
+        conversationId: post.conversationId,
+        title: post.title,
+        conversationType: ConversationType.thread,
+        forumPost: true,
+        onBack: () => setState(() => _openPost = null),
+        extraActions: actions,
+        canSendMessages: widget.detail.canInChannel(
+          channel,
+          CirclePermission.sendMessages,
+        ),
+        // Posts have no slowmode of their own.
+        slowmodeSeconds: 0,
+      );
+    }
+    return CircleForumView(
+      key: ValueKey('forum-${channel.id}'),
+      detail: widget.detail,
+      channel: channel,
+      actions: actions,
+      onOpenPost: (post) async => setState(
+        () => _openPost = ThreadTarget(
+          conversationId: post.conversationId,
+          title: post.title,
+          threadId: post.id,
+        ),
+      ),
     );
   }
 

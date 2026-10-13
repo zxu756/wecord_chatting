@@ -26,6 +26,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/discovery.dart';
+import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/link_preview.dart';
@@ -588,7 +589,163 @@ final phoneConversations = [
     unreadCount: 0,
     title: 'Linus',
   ),
+  ConversationSummary(
+    id: 'post-conv-1',
+    type: ConversationType.thread,
+    unreadCount: 1,
+    title: forumPostTitle,
+    lastMessageAt: minutesAgo(12),
+    parentConversationId: 'conv-help',
+    parentTitle: 'help-and-questions',
+    circleId: 'circle-1',
+    threadId: 'post-1',
+    threadLastActivityAt: minutesAgo(12),
+  ),
 ];
+
+const forumPostTitle =
+    'Which lens should I bring for night sky photos in Yosemite Valley?';
+
+const forumTags = [
+  ForumTag(id: 'tag-q', channelId: 'ch-help', name: 'Question', emoji: '❓'),
+  ForumTag(id: 'tag-gear', channelId: 'ch-help', name: 'Gear', position: 1),
+  ForumTag(
+    id: 'tag-trip',
+    channelId: 'ch-help',
+    name: 'Trip planning',
+    emoji: '🗺️',
+    position: 2,
+  ),
+  ForumTag(id: 'tag-solved', channelId: 'ch-help', name: 'Solved', position: 3),
+];
+
+/// Posts of the forum channel `help-and-questions`.
+List<ForumPost> forumPosts() {
+  ForumPost post(
+    String id,
+    String title,
+    Profile author, {
+    required String body,
+    required int createdMinutesAgo,
+    required int activeMinutesAgo,
+    List<ForumTag> tags = const [],
+    int replies = 0,
+    int unread = 0,
+    bool pinned = false,
+    bool image = false,
+    int? roleColor,
+  }) {
+    return ForumPost(
+      id: id,
+      conversationId: id == 'post-1' ? 'post-conv-1' : '$id-conv',
+      channelId: 'ch-help',
+      title: title,
+      createdBy: author.id,
+      author: ForumPostAuthor(profile: author, roleColor: roleColor),
+      body: body,
+      tags: tags,
+      createdAt: minutesAgo(createdMinutesAgo),
+      lastActivityAt: minutesAgo(activeMinutesAgo),
+      replyCount: replies,
+      unreadCount: unread,
+      isPinned: pinned,
+      canManage: true,
+      thumbnail: image
+          ? const ImageAttachment(
+              bucket: 'chat-images',
+              path: 'conv-help/milky-way.png',
+              mimeType: 'image/png',
+              size: 2048,
+            )
+          : null,
+    );
+  }
+
+  return [
+    post(
+      'post-rules',
+      'Read me first: how this forum works',
+      bart,
+      body:
+          'One question per post, add **tags**, and mark it *Solved* when '
+          'you have an answer.',
+      createdMinutesAgo: 9000,
+      activeMinutesAgo: 9000,
+      pinned: true,
+      roleColor: 0x3498DB,
+    ),
+    post(
+      'post-1',
+      forumPostTitle,
+      grace,
+      body:
+          'Planning a **new moon** trip in November. Is a 14mm f/2.8 enough, '
+          'or should I rent something faster? Tripod suggestions welcome too.',
+      createdMinutesAgo: 300,
+      activeMinutesAgo: 12,
+      tags: [forumTags[0], forumTags[1], forumTags[2]],
+      replies: 14,
+      unread: 1,
+      image: true,
+      roleColor: 0xE67E22,
+    ),
+    post(
+      'post-2',
+      'Carpool from the South Bay?',
+      linus,
+      body: 'Leaving Friday after work, two seats left.',
+      createdMinutesAgo: 600,
+      activeMinutesAgo: 90,
+      tags: [forumTags[2]],
+      replies: 3,
+    ),
+    post(
+      'post-3',
+      'Bear canister rental',
+      extraMembers.first,
+      body: 'Where do people rent these? `REI` was sold out last time.',
+      createdMinutesAgo: 2000,
+      activeMinutesAgo: 1500,
+      tags: [forumTags[1], forumTags[3]],
+    ),
+  ];
+}
+
+/// The opening post and replies of [forumPostTitle].
+List<ChatMessage> forumPostMessages() {
+  return [
+    phoneMessage(
+      'fp-1',
+      grace,
+      forumPosts()[1].body,
+      minutesAgo: 300,
+      conversationId: 'post-conv-1',
+      attachment: const {
+        'kind': 'image',
+        'bucket': 'chat-images',
+        'path': 'conv-help/milky-way.png',
+        'mime_type': 'image/png',
+        'size': 2048,
+      },
+      reactions: const [MessageReaction(emoji: '👍', count: 4)],
+    ),
+    phoneMessage(
+      'fp-2',
+      bart,
+      'The 14mm is plenty. Bring a remote shutter and spare batteries, '
+          'it gets cold at Glacier Point.',
+      minutesAgo: 40,
+      conversationId: 'post-conv-1',
+    ),
+    phoneMessage(
+      'fp-3',
+      me,
+      'Agreed, and check the moon calendar before you go.',
+      minutesAgo: 12,
+      conversationId: 'post-conv-1',
+    ),
+  ];
+}
 
 CircleChannel _channel(
   String id,
@@ -601,6 +758,7 @@ CircleChannel _channel(
   int? permissions,
   String? topic,
   CircleChannelKind kind = CircleChannelKind.text,
+  List<ForumTag> tags = const [],
 }) {
   return CircleChannel(
     id: id,
@@ -614,6 +772,7 @@ CircleChannel _channel(
     currentUserPermissions: permissions,
     topic: topic,
     kind: kind,
+    tags: tags,
   );
 }
 
@@ -730,6 +889,7 @@ CircleDetail circleDetailWith({
                 currentUserPermissions: permissions,
                 topic: channel.topic,
                 kind: channel.kind,
+                tags: channel.tags,
               )
             : channel,
     ],
@@ -795,6 +955,16 @@ CircleDetail circleDetail() {
         'off-topic-random-chatter-and-memes-zone',
         1,
         categoryId: 'cat-1',
+      ),
+      _channel(
+        'ch-help',
+        'conv-help',
+        'help-and-questions',
+        2,
+        categoryId: 'cat-1',
+        kind: CircleChannelKind.forum,
+        topic: 'Ask anything about trips, gear and photos.',
+        tags: forumTags,
       ),
       _channel(
         'ch-yosemite',
@@ -1067,6 +1237,7 @@ class PhoneWorld {
         ),
       ];
     circles
+      ..forumPosts = forumPosts()
       ..detail = circleDetail()
       ..circles = circleSummaries
       ..onlineUserIds = {'user-1', 'user-2', 'user-5', 'user-6'};

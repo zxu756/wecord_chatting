@@ -3303,7 +3303,8 @@ class _MessageContent extends StatelessWidget {
 
   String _displayBodyForReplyPreview(ReplyPreview preview) {
     final referencedMessage = messagesById[preview.messageId];
-    if (referencedMessage?.recalledAt != null) {
+    // The server empties the quote when the original is deleted.
+    if (referencedMessage?.recalledAt != null || preview.body.isEmpty) {
       return 'Message deleted';
     }
     return preview.type == MessageType.text

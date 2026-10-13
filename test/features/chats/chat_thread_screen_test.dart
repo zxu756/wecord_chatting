@@ -2762,6 +2762,34 @@ void main() {
     expect(find.text('Message deleted'), findsWidgets);
   });
 
+  testWidgets('reply preview of an unloaded deleted message reads deleted', (
+    tester,
+  ) async {
+    // The server empties the quote once the original is deleted, even when
+    // the original is not in the loaded page.
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-2',
+          senderId: 'user-1',
+          body: 'Reply body',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 32),
+          replyPreview: const ReplyPreview(
+            messageId: 'message-older',
+            senderName: 'Ada',
+            body: '',
+            type: MessageType.text,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.text('Reply body'), findsOneWidget);
+    expect(find.text('Message deleted'), findsOneWidget);
+  });
+
   testWidgets('reply preview preserves stored body after parent edits', (
     tester,
   ) async {

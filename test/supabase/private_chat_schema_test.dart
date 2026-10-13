@@ -3116,4 +3116,79 @@ void main() {
       ),
     );
   });
+
+  test('deleted messages keep no content', () {
+    final sql = effectiveMigrationSql();
+    expect(
+      sql,
+      contains(
+        "    type <> 'text'\n"
+        '    or recalled_at is not null\n'
+        '    or char_length(trim(body)) > 0',
+      ),
+    );
+    expect(
+      sql,
+      contains('create table if not exists public.recalled_message_media'),
+    );
+    expect(
+      sql,
+      contains(
+        'alter table public.recalled_message_media enable row level security;',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke all on public.recalled_message_media from anon, authenticated;',
+      ),
+    );
+
+    final recall = functionBody(sql, 'recall_message');
+    expect(
+      recall,
+      contains('returns table (bucket_id text, object_path text)'),
+    );
+    expect(recall, contains("body = '',"));
+    expect(recall, contains('attachment = null,'));
+    expect(recall, contains('reply_preview = null,'));
+    expect(recall, contains('forwarded_from = null,'));
+    expect(recall, contains("mentions = '[]'::jsonb"));
+    for (final table in [
+      'message_mentions',
+      'message_reactions',
+      'message_poll_votes',
+      'pinned_messages',
+    ]) {
+      expect(recall, contains('delete from public.$table'));
+    }
+    expect(recall, contains("jsonb_build_object('body', '')"));
+    expect(recall, contains('insert into public.recalled_message_media'));
+    expect(recall, contains("'message_delete'"));
+    expect(recall, isNot(contains('target.body')));
+
+    final canDelete = functionBody(
+      sql,
+      'can_current_user_delete_recalled_media',
+    );
+    expect(canDelete, contains('r.deleted_by = auth.uid()'));
+    expect(canDelete, contains("m.attachment->>'path' = target_object_path"));
+    final policy = policyBody(sql, 'message_media_delete_recalled');
+    expect(policy, contains('on storage.objects for delete'));
+    expect(
+      policy,
+      contains(
+        'public.can_current_user_delete_recalled_media(bucket_id, name)',
+      ),
+    );
+
+    // Messages deleted earlier are wiped too.
+    expect(sql, contains('where m.recalled_at is not null\n  and (\n'));
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.recall_message(uuid) to authenticated;',
+      ),
+    );
+  });
 }

@@ -996,6 +996,48 @@ void main() {
     },
   );
 
+  test(
+    'recallMessage removes the unused image the server returns, best effort',
+    () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['recall_message'] = [
+          {'bucket_id': 'chat-images', 'object_path': 'conversation-1/a.png'},
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      await repository.recallMessage(messageId: 'message-1');
+
+      expect(dataSource.removedObjects, {
+        'chat-images': ['conversation-1/a.png'],
+      });
+
+      dataSource
+        ..removedObjects.clear()
+        ..removeObjectsError = StateError('storage down');
+      await repository.recallMessage(messageId: 'message-1');
+      expect(dataSource.removedObjects, isEmpty);
+    },
+  );
+
+  test(
+    'recallMessage removes nothing when the server returns no files',
+    () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['recall_message'] = <Object?>[];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      await repository.recallMessage(messageId: 'message-1');
+
+      expect(dataSource.removedObjects, isEmpty);
+    },
+  );
+
   test('listMessages maps reaction summaries on each message', () async {
     final dataSource = FakeChatsDataSource()
       ..messageRows = [
@@ -1933,6 +1975,8 @@ class FakeChatsDataSource implements ChatsDataSource {
   final latestMessageCalls = <String>[];
   final insertedMessages = <Map<String, dynamic>>[];
   final uploadedImages = <UploadedImage>[];
+  final removedObjects = <String, List<String>>{};
+  Object? removeObjectsError;
   final signedUrlCalls = <SignedUrlCall>[];
   final rpcCalls = <RpcCall>[];
   final functionCalls = <RpcCall>[];
@@ -2021,6 +2065,18 @@ class FakeChatsDataSource implements ChatsDataSource {
       SignedUrlCall(bucket: bucket, path: path, expiresIn: expiresIn),
     );
     return signedUrlResult;
+  }
+
+  @override
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  }) async {
+    final error = removeObjectsError;
+    if (error != null) {
+      throw error;
+    }
+    removedObjects[bucket] = paths;
   }
 
   @override

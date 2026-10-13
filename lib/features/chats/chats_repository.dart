@@ -259,6 +259,11 @@ abstract interface class ChatsDataSource {
     required Duration expiresIn,
   });
 
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  });
+
   Future<Object?> rpc(String functionName, Map<String, dynamic> params);
 
   Future<Object?> invokeFunction(
@@ -724,7 +729,33 @@ class SupabaseChatsRepository implements ChatsRepository {
 
   @override
   Future<void> recallMessage({required String messageId}) async {
-    await _dataSource.rpc('recall_message', {'target_message_id': messageId});
+    final result = await _dataSource.rpc('recall_message', {
+      'target_message_id': messageId,
+    });
+    // The server erases the message and returns its image / voice object
+    // when nothing else uses it; removing the file is best effort.
+    final pathsByBucket = <String, List<String>>{};
+    if (result is List) {
+      for (final row in result) {
+        if (row is! Map) {
+          continue;
+        }
+        final bucket = row['bucket_id'];
+        final path = row['object_path'];
+        if (bucket is String && path is String) {
+          pathsByBucket.putIfAbsent(bucket, () => []).add(path);
+        }
+      }
+    }
+    for (final entry in pathsByBucket.entries) {
+      try {
+        await _withStorageTimeout(
+          _dataSource.removeObjects(bucket: entry.key, paths: entry.value),
+        );
+      } catch (_) {
+        // The message is already deleted; a leftover file is harmless.
+      }
+    }
   }
 
   @override
@@ -1232,6 +1263,14 @@ class SupabaseChatsDataSource implements ChatsDataSource {
           bytes,
           fileOptions: FileOptions(contentType: mimeType, upsert: false),
         );
+  }
+
+  @override
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  }) async {
+    await _client.storage.from(bucket).remove(paths);
   }
 
   @override

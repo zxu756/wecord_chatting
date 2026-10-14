@@ -157,7 +157,9 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
       if (!mounted) return;
       setState(() {
         _isJoining = false;
-        _errorText = 'Could not join this circle. $error';
+        _errorText = '$error'.contains('Banned from this circle')
+            ? "You're banned from this circle."
+            : 'Could not join this circle. $error';
       });
       ref.invalidate(circleInvitePreviewProvider(widget.code));
     }

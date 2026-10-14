@@ -259,6 +259,99 @@ void main() {
     });
   });
 
+  test('banMember bans and removes the deleted messages\' media', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['ban_circle_member'] = [
+        {'bucket_id': 'chat-images', 'object_path': 'c1/a.png'},
+        {'bucket_id': 'chat-images', 'object_path': 'c1/b.png'},
+        {'bucket_id': 'voice-messages', 'object_path': 'c1/v.m4a'},
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.banMember(
+      circleId: 'circle-1',
+      userId: 'u2',
+      reason: '  spam  ',
+      deleteMessageHours: 24,
+    );
+
+    expect(dataSource.calls.single.functionName, 'ban_circle_member');
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'target_user_id': 'u2',
+      'ban_reason': 'spam',
+      'delete_message_hours': 24,
+    });
+    expect(
+      [
+        for (final removed in dataSource.removedObjects)
+          '${removed.bucket}: ${removed.paths.join(', ')}',
+      ],
+      ['chat-images: c1/a.png, c1/b.png', 'voice-messages: c1/v.m4a'],
+    );
+  });
+
+  test('banMember sends no reason when it is blank', () async {
+    final dataSource = FakeCirclesDataSource();
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.banMember(circleId: 'circle-1', userId: 'u2', reason: ' ');
+
+    expect(dataSource.calls.single.params['ban_reason'], isNull);
+    expect(dataSource.calls.single.params['delete_message_hours'], 0);
+    expect(dataSource.removedObjects, isEmpty);
+  });
+
+  test('listBans, unbanMember and timeoutMember call their RPCs', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['list_circle_bans'] = [
+        {
+          'user_id': 'u2',
+          'username': 'bo',
+          'display_name': '',
+          'avatar_url': null,
+          'reason': 'spam',
+          'banned_by_name': 'Xu',
+          'created_at': '2026-10-14T08:00:00Z',
+        },
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    final bans = await repository.listBans('circle-1');
+    expect(bans.single.userId, 'u2');
+    expect(bans.single.name, 'bo');
+    expect(bans.single.reason, 'spam');
+    expect(bans.single.bannedByName, 'Xu');
+
+    await repository.unbanMember(circleId: 'circle-1', userId: 'u2');
+    expect(dataSource.calls.last.functionName, 'unban_circle_member');
+
+    dataSource.rpcValue = '2026-10-14T09:00:00+00:00';
+    final until = await repository.timeoutMember(
+      circleId: 'circle-1',
+      userId: 'u3',
+      duration: const Duration(hours: 1),
+    );
+    expect(dataSource.calls.last.functionName, 'timeout_circle_member');
+    expect(dataSource.calls.last.params, {
+      'target_circle_id': 'circle-1',
+      'target_user_id': 'u3',
+      'duration_seconds': 3600,
+    });
+    expect(until, DateTime.utc(2026, 10, 14, 9));
+
+    dataSource.rpcValue = null;
+    expect(
+      await repository.timeoutMember(
+        circleId: 'circle-1',
+        userId: 'u3',
+        duration: Duration.zero,
+      ),
+      isNull,
+    );
+    expect(dataSource.calls.last.params['duration_seconds'], 0);
+  });
+
   test('leaveCircle and transferOwnership call their RPCs', () async {
     final dataSource = FakeCirclesDataSource();
     final repository = SupabaseCirclesRepository.withDataSource(dataSource);
@@ -1701,6 +1794,16 @@ class FakeCirclesDataSource implements CirclesDataSource {
       'expiresIn': expiresIn,
     });
     return signedUrl;
+  }
+
+  final removedObjects = <({String bucket, List<String> paths})>[];
+
+  @override
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  }) async {
+    removedObjects.add((bucket: bucket, paths: paths));
   }
 
   @override

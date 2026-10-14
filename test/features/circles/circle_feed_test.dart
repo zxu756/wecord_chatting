@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_ban.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
@@ -509,6 +510,42 @@ class FakeCirclesRepository implements CirclesRepository {
     createdPostBody = body;
     createdPostImage = image;
     return 'post-2';
+  }
+
+  final bannedUserIds = <String>[];
+  final unbannedUserIds = <String>[];
+  final timeouts = <({String userId, Duration duration})>[];
+  List<CircleBan> bans = const [];
+
+  @override
+  Future<void> banMember({
+    required String circleId,
+    required String userId,
+    String? reason,
+    int deleteMessageHours = 0,
+  }) async {
+    bannedUserIds.add(userId);
+  }
+
+  @override
+  Future<void> unbanMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    unbannedUserIds.add(userId);
+  }
+
+  @override
+  Future<List<CircleBan>> listBans(String circleId) async => bans;
+
+  @override
+  Future<DateTime?> timeoutMember({
+    required String circleId,
+    required String userId,
+    required Duration duration,
+  }) async {
+    timeouts.add((userId: userId, duration: duration));
+    return duration == Duration.zero ? null : DateTime.now().add(duration);
   }
 
   @override

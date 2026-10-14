@@ -24,6 +24,7 @@ import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
+import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -182,6 +183,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.extraActions = const [],
     this.onOpenThread,
     this.canSendMessages,
+    this.timedOutUntil,
     this.slowmodeSeconds,
     this.topic,
     this.forumPost = false,
@@ -204,6 +206,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// Whether the current user may send here; false replaces the composer
   /// with a notice. Defaults to what the conversation list says.
   final bool? canSendMessages;
+
+  /// When the current user's circle timeout ends; the read-only notice
+  /// says so instead of blaming permissions.
+  final DateTime? timedOutUntil;
 
   /// Seconds the current user waits between messages here (0 for none).
   /// Defaults to what the conversation list says.
@@ -1008,7 +1014,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ),
               ),
             if (!canSend)
-              const _ReadOnlyComposerNotice()
+              _ReadOnlyComposerNotice(timedOutUntil: widget.timedOutUntil)
             else
               _SlowmodeGate(
                 until: _slowmodeUntil,
@@ -4030,7 +4036,9 @@ DateTime? _slowmodeEnd({
 
 /// Takes the composer's place where the current user may not send.
 class _ReadOnlyComposerNotice extends StatelessWidget {
-  const _ReadOnlyComposerNotice();
+  const _ReadOnlyComposerNotice({this.timedOutUntil});
+
+  final DateTime? timedOutUntil;
 
   @override
   Widget build(BuildContext context) {
@@ -4048,15 +4056,23 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                Icons.lock_outline,
+                timedOutUntil == null
+                    ? Icons.lock_outline
+                    : Icons.timer_outlined,
                 size: 18,
                 color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  "You don't have permission to send messages in this "
-                  'channel',
+                  switch (timedOutUntil) {
+                    final until? =>
+                      "You're timed out until ${formatTimeoutEnd(until)}. "
+                          'You can read, but not send messages or react.',
+                    null =>
+                      "You don't have permission to send messages in this "
+                          'channel',
+                  },
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

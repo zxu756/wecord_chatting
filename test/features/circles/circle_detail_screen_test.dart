@@ -20,6 +20,7 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_ban.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_event.dart';
@@ -664,6 +665,7 @@ void main() {
       WidgetTester tester, {
       required String currentUserId,
       required int permissions,
+      Map<String, DateTime> timeouts = const {},
     }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -681,6 +683,7 @@ void main() {
           role: role,
           roleIds: roleIds,
           isCurrentUser: id == currentUserId,
+          timedOutUntil: timeouts[id],
         );
       }
 
@@ -972,6 +975,124 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.kickedUserIds, ['user-4']);
       expect(find.text('Kicked Bo.'), findsOneWidget);
+    });
+
+    testWidgets('timing out and banning follow the same ranks as kicking', (
+      tester,
+    ) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-3',
+        // @everyone plus ban_members and moderate_members.
+        permissions: 1 | 2 | 64 | 8192 | 32768 | 65536,
+      );
+
+      for (final name in ['Yan', 'Xu', 'Amy']) {
+        await tester.longPress(find.text(name).last);
+        await tester.pumpAndSettle();
+        expect(find.text('Time out'), findsNothing, reason: name);
+        expect(find.text('Ban'), findsNothing, reason: name);
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kick'), findsNothing);
+      await tester.tap(find.text('Time out'));
+      await tester.pumpAndSettle();
+      expect(find.text('Time out Bo'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('timeout-option-3600')));
+      await tester.pumpAndSettle();
+      expect(repository.timeouts, [
+        (userId: 'user-4', duration: const Duration(hours: 1)),
+      ]);
+      expect(find.textContaining('Timed out Bo until'), findsOneWidget);
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ban'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ban Bo'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('ban-reason')), 'spam');
+      await tester.tap(find.byKey(const ValueKey('ban-confirm')));
+      await tester.pumpAndSettle();
+      expect(repository.bannedUserIds, ['user-4']);
+    });
+
+    testWidgets('timed-out members show a badge and can be released', (
+      tester,
+    ) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-1',
+        permissions: CirclePermission.all,
+        timeouts: {'user-4': DateTime.now().add(const Duration(hours: 1))},
+      );
+
+      expect(
+        find.byKey(const ValueKey('member-timed-out-user-4')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('member-timed-out-user-5')),
+        findsNothing,
+      );
+
+      await tester.longPress(find.text('Bo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Time out'), findsNothing);
+      await tester.tap(find.text('Remove timeout'));
+      await tester.pumpAndSettle();
+      expect(repository.timeouts, [
+        (userId: 'user-4', duration: Duration.zero),
+      ]);
+    });
+
+    testWidgets('the bans page lists bans and unbans', (tester) async {
+      final repository = await pumpRoles(
+        tester,
+        currentUserId: 'user-1',
+        permissions: CirclePermission.all,
+      );
+      repository.bans = [
+        CircleBan(
+          userId: 'user-9',
+          username: 'spammer',
+          displayName: 'Spam Bot',
+          reason: 'Links everywhere',
+          bannedByName: 'Xu',
+          createdAt: DateTime.utc(2026, 10, 14),
+        ),
+      ];
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bans'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Spam Bot'), findsOneWidget);
+      expect(find.textContaining('Links everywhere'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('circle-unban-user-9')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Unban'));
+      await tester.pumpAndSettle();
+      expect(repository.unbannedUserIds, ['user-9']);
+      expect(find.text('Unbanned Spam Bot.'), findsOneWidget);
+    });
+
+    testWidgets('members without ban permission get no Bans page', (
+      tester,
+    ) async {
+      await pumpRoles(
+        tester,
+        currentUserId: 'user-3',
+        permissions: 1 | 2 | 64 | 8192 | 32,
+      );
+
+      await tester.tap(find.byTooltip('Circle menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bans'), findsNothing);
     });
 
     testWidgets('plain members get no role management', (tester) async {
@@ -3112,6 +3233,42 @@ class FakeCirclesRepository implements CirclesRepository {
     required String userId,
   }) async {
     kickedUserIds.add(userId);
+  }
+
+  final bannedUserIds = <String>[];
+  final unbannedUserIds = <String>[];
+  final timeouts = <({String userId, Duration duration})>[];
+  List<CircleBan> bans = const [];
+
+  @override
+  Future<void> banMember({
+    required String circleId,
+    required String userId,
+    String? reason,
+    int deleteMessageHours = 0,
+  }) async {
+    bannedUserIds.add(userId);
+  }
+
+  @override
+  Future<void> unbanMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    unbannedUserIds.add(userId);
+  }
+
+  @override
+  Future<List<CircleBan>> listBans(String circleId) async => bans;
+
+  @override
+  Future<DateTime?> timeoutMember({
+    required String circleId,
+    required String userId,
+    required Duration duration,
+  }) async {
+    timeouts.add((userId: userId, duration: duration));
+    return duration == Duration.zero ? null : DateTime.now().add(duration);
   }
 
   final leftCircleIds = <String>[];

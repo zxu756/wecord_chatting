@@ -287,6 +287,39 @@ class CircleDetail {
         rankOf(member) < currentUserRank;
   }
 
+  bool get canBanMembers => can(CirclePermission.banMembers);
+
+  /// Whether the current user may ban [member]: the same rule as kicking.
+  bool canBan(CircleMember member) {
+    return canBanMembers &&
+        !member.isCurrentUser &&
+        member.role != 'owner' &&
+        rankOf(member) < currentUserRank;
+  }
+
+  /// Whether the current user may time [member] out (or end their
+  /// timeout): members ranked below them who aren't administrators.
+  bool canTimeOut(CircleMember member) {
+    return can(CirclePermission.moderateMembers) &&
+        !member.isCurrentUser &&
+        member.role != 'owner' &&
+        rankOf(member) < currentUserRank &&
+        !_isAdministrator(member);
+  }
+
+  bool _isAdministrator(CircleMember member) {
+    final administrator = CirclePermission.administrator.bit;
+    return roles.any(
+      (role) =>
+          role.permissions & administrator != 0 &&
+          (role.isDefault || member.roleIds.contains(role.id)),
+    );
+  }
+
+  /// When the current user's timeout in this circle ends, if they are
+  /// timed out.
+  DateTime? get currentUserTimedOutUntil => currentMember?.activeTimeoutUntil;
+
   /// Everyone may rename themselves; renaming others needs manage
   /// nicknames and a higher rank than theirs.
   bool canChangeNickname(CircleMember member) {
@@ -308,6 +341,7 @@ class CircleMember {
     this.nickname,
     this.isCurrentUser = false,
     this.roleIds = const [],
+    this.timedOutUntil,
   });
 
   factory CircleMember.fromJson(Map<String, dynamic> json) {
@@ -320,11 +354,24 @@ class CircleMember {
         for (final id in json['role_ids'] as List<dynamic>? ?? const [])
           id as String,
       ],
+      timedOutUntil: switch (json['timed_out_until']) {
+        final String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 
   final Profile profile;
   final String role;
+
+  /// When the member's timeout ends; it may already have passed.
+  final DateTime? timedOutUntil;
+
+  /// When the member's timeout ends, while they are timed out.
+  DateTime? get activeTimeoutUntil {
+    final until = timedOutUntil;
+    return until != null && until.isAfter(DateTime.now()) ? until : null;
+  }
 
   /// This circle's nickname for the member, if they have one.
   final String? nickname;

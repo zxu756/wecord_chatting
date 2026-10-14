@@ -8,6 +8,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
@@ -372,6 +373,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         channel,
         CirclePermission.sendMessages,
       ),
+      timedOutUntil: widget.detail.currentUserTimedOutUntil,
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
       topic: channel.topic,
       onOpenThread: (thread) => setState(() => _openThread = thread),
@@ -394,6 +396,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           channel,
           CirclePermission.sendMessages,
         ),
+        timedOutUntil: widget.detail.currentUserTimedOutUntil,
         // Posts have no slowmode of their own.
         slowmodeSeconds: 0,
       );
@@ -428,6 +431,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       canSendMessages: channel == null
           ? null
           : widget.detail.canInChannel(channel, CirclePermission.sendMessages),
+      timedOutUntil: widget.detail.currentUserTimedOutUntil,
       // Threads have no slowmode of their own.
       slowmodeSeconds: 0,
     );
@@ -733,6 +737,34 @@ class CircleMemberList extends ConsumerWidget {
                             member: member,
                           )
                         : null,
+                    onTimeOut:
+                        detail.canTimeOut(member) &&
+                            member.activeTimeoutUntil == null
+                        ? () => timeOutCircleMember(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            member: member,
+                          )
+                        : null,
+                    onRemoveTimeout:
+                        detail.canTimeOut(member) &&
+                            member.activeTimeoutUntil != null
+                        ? () => removeCircleMemberTimeout(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            member: member,
+                          )
+                        : null,
+                    onBan: detail.canBan(member)
+                        ? () => banCircleMember(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            member: member,
+                          )
+                        : null,
                   ),
               ],
           ],
@@ -756,6 +788,9 @@ class _MemberRow extends ConsumerWidget {
     this.onChangeNickname,
     this.onManageRoles,
     this.onKick,
+    this.onTimeOut,
+    this.onRemoveTimeout,
+    this.onBan,
   });
 
   final CircleMember member;
@@ -772,6 +807,9 @@ class _MemberRow extends ConsumerWidget {
 
   /// Null when the current user may not kick this member.
   final VoidCallback? onKick;
+  final VoidCallback? onTimeOut;
+  final VoidCallback? onRemoveTimeout;
+  final VoidCallback? onBan;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -845,12 +883,22 @@ class _MemberRow extends ConsumerWidget {
           subtitle: activeCustomStatus(profile.customStatus) == null
               ? null
               : CustomStatusLabel(status: profile.customStatus),
-          trailing: roleIcon == null
-              ? null
-              : Tooltip(
-                  message: member.role == 'owner' ? 'Owner' : 'Admin',
-                  child: Icon(roleIcon, size: 16),
-                ),
+          trailing: switch ((member.activeTimeoutUntil, roleIcon)) {
+            (final until?, _) => Tooltip(
+              message: 'Timed out until ${formatTimeoutEnd(until)}',
+              child: Icon(
+                Icons.timer_outlined,
+                key: ValueKey('member-timed-out-${profile.id}'),
+                size: 16,
+                color: colorScheme.error,
+              ),
+            ),
+            (null, final icon?) => Tooltip(
+              message: member.role == 'owner' ? 'Owner' : 'Admin',
+              child: Icon(icon, size: 16),
+            ),
+            (null, null) => null,
+          },
           onTap: () => _openProfile(context),
           onLongPress: () => _showActions(context),
         ),
@@ -866,54 +914,92 @@ class _MemberRow extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) {
+        // Scrolls when a moderator's actions don't fit short phones.
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('View profile'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _openProfile(context);
-                },
-              ),
-              if (onChangeNickname != null)
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title: const Text('Change nickname'),
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('View profile'),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    onChangeNickname!();
+                    _openProfile(context);
                   },
                 ),
-              if (onManageRoles != null)
-                ListTile(
-                  leading: const Icon(Icons.shield_outlined),
-                  title: const Text('Manage roles'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onManageRoles!();
-                  },
-                ),
-              if (onKick != null)
-                ListTile(
-                  leading: Icon(
-                    Icons.person_remove_outlined,
-                    color: Theme.of(sheetContext).colorScheme.error,
+                if (onChangeNickname != null)
+                  ListTile(
+                    leading: const Icon(Icons.badge_outlined),
+                    title: const Text('Change nickname'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onChangeNickname!();
+                    },
                   ),
-                  title: Text(
-                    'Kick',
-                    style: TextStyle(
+                if (onManageRoles != null)
+                  ListTile(
+                    leading: const Icon(Icons.shield_outlined),
+                    title: const Text('Manage roles'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onManageRoles!();
+                    },
+                  ),
+                if (onTimeOut != null)
+                  ListTile(
+                    leading: const Icon(Icons.timer_outlined),
+                    title: const Text('Time out'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onTimeOut!();
+                    },
+                  ),
+                if (onRemoveTimeout != null)
+                  ListTile(
+                    leading: const Icon(Icons.timer_off_outlined),
+                    title: const Text('Remove timeout'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onRemoveTimeout!();
+                    },
+                  ),
+                if (onKick != null)
+                  ListTile(
+                    leading: Icon(
+                      Icons.person_remove_outlined,
                       color: Theme.of(sheetContext).colorScheme.error,
                     ),
+                    title: Text(
+                      'Kick',
+                      style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onKick!();
+                    },
                   ),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onKick!();
-                  },
-                ),
-            ],
+                if (onBan != null)
+                  ListTile(
+                    leading: Icon(
+                      Icons.block,
+                      color: Theme.of(sheetContext).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Ban',
+                      style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onBan!();
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

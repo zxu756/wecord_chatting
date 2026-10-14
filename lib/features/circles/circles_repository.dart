@@ -8,6 +8,7 @@ import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
+import 'package:wecord/shared/models/circle_ban.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -127,6 +128,29 @@ abstract interface class CirclesRepository {
 
   /// Removes [userId] from the circle and all of its channels.
   Future<void> kickMember({required String circleId, required String userId});
+
+  /// Bans [userId] (a member or not) from the circle, removing them if they
+  /// are a member, and deletes their circle messages from the last
+  /// [deleteMessageHours] (0 keeps them).
+  Future<void> banMember({
+    required String circleId,
+    required String userId,
+    String? reason,
+    int deleteMessageHours = 0,
+  });
+
+  Future<void> unbanMember({required String circleId, required String userId});
+
+  /// Who is banned, newest first.
+  Future<List<CircleBan>> listBans(String circleId);
+
+  /// Times [userId] out for [duration], or ends their timeout with
+  /// [Duration.zero]. Returns when the timeout ends.
+  Future<DateTime?> timeoutMember({
+    required String circleId,
+    required String userId,
+    required Duration duration,
+  });
 
   /// Leaves the circle and all of its channels. The owner must transfer
   /// ownership first.
@@ -384,6 +408,11 @@ abstract interface class CirclesDataSource {
     required Duration expiresIn,
   });
 
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  });
+
   Stream<void> circleChanges(String circleId);
 
   Stream<void> forumChanges({
@@ -628,6 +657,87 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'target_circle_id': circleId,
       'target_user_id': userId,
     });
+  }
+
+  @override
+  Future<void> banMember({
+    required String circleId,
+    required String userId,
+    String? reason,
+    int deleteMessageHours = 0,
+  }) async {
+    final trimmedReason = reason?.trim();
+    final result = await _dataSource.rpc('ban_circle_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'ban_reason': trimmedReason == null || trimmedReason.isEmpty
+          ? null
+          : trimmedReason,
+      'delete_message_hours': deleteMessageHours,
+    });
+    // Deleted messages' images and voice clips nothing else uses; removing
+    // them is best effort, as when deleting a single message.
+    final pathsByBucket = <String, List<String>>{};
+    if (result is List) {
+      for (final row in result) {
+        if (row is! Map) {
+          continue;
+        }
+        final bucket = row['bucket_id'];
+        final path = row['object_path'];
+        if (bucket is String && path is String) {
+          pathsByBucket.putIfAbsent(bucket, () => []).add(path);
+        }
+      }
+    }
+    for (final entry in pathsByBucket.entries) {
+      try {
+        await _withStorageTimeout(
+          _dataSource.removeObjects(bucket: entry.key, paths: entry.value),
+        );
+      } catch (_) {
+        // The ban is done; a leftover file is harmless.
+      }
+    }
+  }
+
+  @override
+  Future<void> unbanMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    await _dataSource.rpc('unban_circle_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+    });
+  }
+
+  @override
+  Future<List<CircleBan>> listBans(String circleId) async {
+    final result = await _dataSource.rpc('list_circle_bans', {
+      'target_circle_id': circleId,
+    });
+    if (result is! List) {
+      return const [];
+    }
+    return [
+      for (final row in result)
+        if (row is Map<String, dynamic>) CircleBan.fromJson(row),
+    ];
+  }
+
+  @override
+  Future<DateTime?> timeoutMember({
+    required String circleId,
+    required String userId,
+    required Duration duration,
+  }) async {
+    final result = await _dataSource.rpc('timeout_circle_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'duration_seconds': duration.inSeconds,
+    });
+    return result is String ? DateTime.tryParse(result) : null;
   }
 
   @override
@@ -1244,6 +1354,14 @@ class SupabaseCirclesDataSource implements CirclesDataSource {
   final SupabaseClient _client;
 
   @override
+  Future<void> removeObjects({
+    required String bucket,
+    required List<String> paths,
+  }) async {
+    await _client.storage.from(bucket).remove(paths);
+  }
+
+  @override
   Future<Object?> rpc(String functionName, Map<String, dynamic> params) {
     return _client.rpc<Object?>(functionName, params: params);
   }
@@ -1637,6 +1755,35 @@ class UninitializedCirclesRepository implements CirclesRepository {
   @override
   Future<void> kickMember({required String circleId, required String userId}) {
     throw StateError('Supabase must be initialized before kicking members.');
+  }
+
+  @override
+  Future<void> banMember({
+    required String circleId,
+    required String userId,
+    String? reason,
+    int deleteMessageHours = 0,
+  }) {
+    throw StateError('Supabase must be initialized before banning members.');
+  }
+
+  @override
+  Future<void> unbanMember({required String circleId, required String userId}) {
+    throw StateError('Supabase must be initialized before unbanning members.');
+  }
+
+  @override
+  Future<List<CircleBan>> listBans(String circleId) {
+    throw StateError('Supabase must be initialized before listing bans.');
+  }
+
+  @override
+  Future<DateTime?> timeoutMember({
+    required String circleId,
+    required String userId,
+    required Duration duration,
+  }) {
+    throw StateError('Supabase must be initialized before timing out members.');
   }
 
   @override

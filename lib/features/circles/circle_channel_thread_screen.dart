@@ -208,6 +208,7 @@ class _CircleChannelThreadScreenState
                     forum,
                     CirclePermission.sendMessages,
                   ),
+                  timedOutUntil: detail.currentUserTimedOutUntil,
                   slowmodeSeconds: 0,
                 )
               : null) ??
@@ -220,6 +221,7 @@ class _CircleChannelThreadScreenState
             canSendMessages: detail != null && channel != null
                 ? detail.canInChannel(channel, CirclePermission.sendMessages)
                 : null,
+            timedOutUntil: detail?.currentUserTimedOutUntil,
             slowmodeSeconds: detail != null && channel != null
                 ? detail.slowmodeFor(channel)
                 : null,

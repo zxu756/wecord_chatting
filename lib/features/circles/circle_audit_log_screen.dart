@@ -334,6 +334,10 @@ IconData circleAuditIcon(String action) {
     'member_roles_update' => Icons.badge_outlined,
     'member_nickname_update' => Icons.edit_outlined,
     'member_kick' => Icons.person_remove_outlined,
+    'member_ban' => Icons.block,
+    'member_unban' => Icons.lock_open_outlined,
+    'member_timeout' => Icons.timer_outlined,
+    'member_timeout_remove' => Icons.timer_off_outlined,
     'member_leave' => Icons.logout,
     'circle_ownership_transfer' => Icons.swap_horiz,
     'invite_create' => Icons.add_link,
@@ -428,6 +432,10 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       name(target),
     ],
     'member_kick' => [text(' kicked '), name(target)],
+    'member_ban' => [text(' banned '), name(target)],
+    'member_unban' => [text(' unbanned '), name(target)],
+    'member_timeout' => [text(' timed out '), name(target)],
+    'member_timeout_remove' => [text(' removed the timeout of '), name(target)],
     'member_leave' => [text(' left the circle')],
     'circle_ownership_transfer' => [
       text(' transferred ownership to '),
@@ -595,6 +603,9 @@ String _labelFor(String key) {
     'starts_at' => 'Starts',
     'ends_at' => 'Ends',
     'previous_owner_name' => 'Previous owner',
+    'until' => 'Until',
+    'seconds' => 'Duration',
+    'deleted_messages' => 'Messages deleted',
     'allow' => 'Allowed',
     'deny' => 'Denied',
     _ =>
@@ -642,7 +653,16 @@ String _formatValue(String key, Object? value) {
     ];
     return names.isEmpty ? 'none' : names.join(', ');
   }
-  if ((key == 'expires_at' || key == 'starts_at' || key == 'ends_at') &&
+  if (key == 'seconds' && value is num) {
+    final seconds = value.toInt();
+    return seconds >= 86400 && seconds % 86400 == 0
+        ? '${seconds ~/ 86400}d'
+        : _formatSeconds(seconds);
+  }
+  if ((key == 'expires_at' ||
+          key == 'starts_at' ||
+          key == 'ends_at' ||
+          key == 'until') &&
       value is String) {
     final time = DateTime.tryParse(value)?.toLocal();
     if (time != null) {

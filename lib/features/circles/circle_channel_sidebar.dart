@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
+import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/circles/circle_emojis_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
@@ -803,6 +804,8 @@ class _SidebarHeader extends StatelessWidget {
               openCircleRolesScreen(context, detail.circle.id);
             case _CircleMenuAction.auditLog:
               openCircleAuditLogScreen(context, detail.circle.id);
+            case _CircleMenuAction.bans:
+              openCircleBansScreen(context, detail.circle.id);
             case _CircleMenuAction.emojis:
               openCircleEmojisScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
@@ -851,6 +854,11 @@ class _SidebarHeader extends StatelessWidget {
                 leading: Icon(Icons.shield_outlined),
                 title: Text('Roles'),
               ),
+            ),
+          if (detail.canBanMembers)
+            const PopupMenuItem(
+              value: _CircleMenuAction.bans,
+              child: ListTile(leading: Icon(Icons.block), title: Text('Bans')),
             ),
           if (detail.canViewAuditLog)
             const PopupMenuItem(
@@ -926,6 +934,7 @@ enum _CircleMenuAction {
   createCategory,
   roles,
   auditLog,
+  bans,
   emojis,
   notificationSettings,
   changeNickname,

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
@@ -1616,6 +1617,32 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove embed'), findsNothing);
       expect(find.text('Edit'), findsNothing);
+    });
+
+    testWidgets('a timed-out member is told when they can talk again', (
+      tester,
+    ) async {
+      final until = DateTime.now().add(const Duration(minutes: 10));
+      await tester.pumpWidget(
+        _app(
+          FakeChatsRepository(),
+          canSendMessages: false,
+          timedOutUntil: until,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('chat-read-only-notice')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          "You're timed out until ${formatTimeoutEnd(until)}",
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsNothing);
     });
 
     testWidgets('remove embed is not offered on other people\'s messages', (
@@ -3376,6 +3403,7 @@ Widget _app(
   Stream<Set<String>>? onlineUserIds,
   ValueChanged<ThreadTarget>? onOpenThread,
   bool? canSendMessages,
+  DateTime? timedOutUntil,
   int? slowmodeSeconds,
   String? topic,
 }) {
@@ -3404,6 +3432,7 @@ Widget _app(
         conversationType: conversationType,
         onOpenThread: onOpenThread,
         canSendMessages: canSendMessages,
+        timedOutUntil: timedOutUntil,
         slowmodeSeconds: slowmodeSeconds,
         topic: topic,
       ),

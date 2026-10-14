@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,7 +24,19 @@ final circleDetailProvider = FutureProvider.autoDispose
         ref.invalidateSelf();
       });
       ref.onDispose(subscription.cancel);
-      return repository.getCircleDetail(circleId);
+      return repository.getCircleDetail(circleId).then((detail) {
+        // The server lifts a timeout by the clock alone, so reload then to
+        // get the permissions back.
+        final until = detail.currentUserTimedOutUntil;
+        if (until != null) {
+          final timer = Timer(
+            until.difference(DateTime.now()) + const Duration(seconds: 1),
+            ref.invalidateSelf,
+          );
+          ref.onDispose(timer.cancel);
+        }
+        return detail;
+      });
     });
 
 class CircleDetailScreen extends ConsumerWidget {

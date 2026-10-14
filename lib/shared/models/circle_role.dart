@@ -44,6 +44,22 @@ enum CirclePermission {
     'Kick members',
     'Remove members ranked below them from the circle.',
   ),
+  banMembers(
+    1 << 15,
+    'ban_members',
+    CirclePermissionGroup.membership,
+    'Ban members',
+    'Ban members ranked below them, keep them from rejoining and unban '
+        'them.',
+  ),
+  moderateMembers(
+    1 << 16,
+    'moderate_members',
+    CirclePermissionGroup.membership,
+    'Time out members',
+    'Stop members ranked below them from talking, reacting and joining '
+        'voice for a while.',
+  ),
   createInvites(
     1 << 6,
     'create_invites',
@@ -117,7 +133,7 @@ enum CirclePermission {
   );
 
   /// Every permission bit.
-  static const all = (1 << 15) - 1;
+  static const all = (1 << 17) - 1;
 
   /// What `@everyone` gets in a new circle.
   static final defaultRolePermissions = maskOf(const [

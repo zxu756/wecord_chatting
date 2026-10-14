@@ -14,6 +14,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
 void main() {
   testWidgets('edits and saves the current profile', (tester) async {
@@ -44,6 +45,29 @@ void main() {
         avatarUrl: 'avatars/existing.png',
       ),
     ]);
+  });
+
+  testWidgets('switches between system, light and dark', (tester) async {
+    final store = InMemoryThemeModeStore();
+    await tester.pumpWidget(
+      _app(settingsRepository: FakeSettingsRepository(), themeModeStore: store),
+    );
+    await tester.pump();
+
+    await tester.scrollUntilVisible(
+      find.text('Dark'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    SegmentedButton<ThemeMode> picker() =>
+        tester.widget(find.byKey(const ValueKey('theme-mode')));
+    expect(picker().selected, {ThemeMode.system});
+
+    await tester.tap(find.text('Dark'));
+    await tester.pump();
+
+    expect(picker().selected, {ThemeMode.dark});
+    expect(await store.load(), ThemeMode.dark);
   });
 
   testWidgets('sets a custom status from the Me screen', (tester) async {
@@ -373,6 +397,7 @@ void main() {
 
 Widget _app({
   required FakeSettingsRepository settingsRepository,
+  ThemeModeStore? themeModeStore,
   FakeAuthRepository? authRepository,
   FakeImagePickerService? imagePickerService,
   NotificationPreferencesRepository? notificationPreferencesRepository,
@@ -381,6 +406,9 @@ Widget _app({
   return ProviderScope(
     overrides: [
       settingsRepositoryProvider.overrideWithValue(settingsRepository),
+      themeModeStoreProvider.overrideWithValue(
+        themeModeStore ?? InMemoryThemeModeStore(),
+      ),
       authRepositoryProvider.overrideWithValue(
         authRepository ?? FakeAuthRepository(),
       ),

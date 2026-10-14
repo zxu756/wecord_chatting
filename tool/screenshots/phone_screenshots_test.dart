@@ -5,6 +5,7 @@
 //     --dart-define=PHONE_SCREENS_DIR=/some/output/dir
 //
 // Without PHONE_SCREENS_DIR the PNGs go to build/phone-screens.
+// Add --dart-define=PHONE_SCREENS_DARK=true for the dark theme.
 import 'dart:io';
 import 'dart:ui' as ui;
 

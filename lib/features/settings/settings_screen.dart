@@ -8,6 +8,7 @@ import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
 final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
   return ref.watch(settingsRepositoryProvider).currentProfile();
@@ -135,6 +136,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Save'),
+              ),
+              const Divider(height: 32),
+              Text(
+                'Appearance',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<ThemeMode>(
+                key: const ValueKey('theme-mode'),
+                segments: const [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: Icon(Icons.brightness_auto_outlined),
+                    label: Text('System'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: Icon(Icons.light_mode_outlined),
+                    label: Text('Light'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: Icon(Icons.dark_mode_outlined),
+                    label: Text('Dark'),
+                  ),
+                ],
+                selected: {ref.watch(themeModeProvider)},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) =>
+                    ref.read(themeModeProvider.notifier).set(selection.single),
               ),
               const Divider(height: 32),
               Text(

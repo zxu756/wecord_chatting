@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
 Future<void> runWeCordApp() async {
@@ -25,11 +26,14 @@ class WeCordApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'WeCord',
       debugShowCheckedModeBanner: false,
       theme: WeCordTheme.light(),
+      darkTheme: WeCordTheme.dark(),
+      themeMode: themeMode,
       routerConfig: router,
     );
   }

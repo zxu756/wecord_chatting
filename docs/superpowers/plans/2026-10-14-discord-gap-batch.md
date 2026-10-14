@@ -32,9 +32,9 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 2. Dark mode
 
-- [ ] Dark color scheme next to the light one; Settings → Appearance with
+- [x] Dark color scheme next to the light one; Settings → Appearance with
       System / Light / Dark, remembered on the device.
-- [ ] Hard-coded light colors (rail, bubbles, badges) checked in both themes.
+- [x] Hard-coded light colors (rail, bubbles, badges) checked in both themes.
 
 ## 3. Delete account
 

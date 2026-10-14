@@ -46,6 +46,7 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
 import '../features/chats/chat_thread_screen_test.dart' as chat_fakes;
@@ -1713,6 +1714,9 @@ class PhoneWorld {
         (context) async => screenShareSource,
       ),
       voiceScreenShareSupportedProvider.overrideWithValue(true),
+      themeModeStoreProvider.overrideWithValue(
+        InMemoryThemeModeStore(_darkScreens ? ThemeMode.dark : ThemeMode.light),
+      ),
     ];
   }
 
@@ -1761,4 +1765,8 @@ Future<void> pumpStandalone(
   await settle(tester);
 }
 
-ThemeData _theme() => WeCordTheme.light();
+// The screenshot tool renders the dark theme with
+// --dart-define=PHONE_SCREENS_DARK=true.
+const _darkScreens = bool.fromEnvironment('PHONE_SCREENS_DARK');
+
+ThemeData _theme() => _darkScreens ? WeCordTheme.dark() : WeCordTheme.light();

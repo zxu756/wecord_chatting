@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 class ContactAliasSheet extends ConsumerStatefulWidget {
@@ -46,14 +47,17 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit alias', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                tr('Edit alias'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: _aliasController,
                 enabled: !_isSaving,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Alias',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Alias'),
                 ),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) {
@@ -79,7 +83,7 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Save'),
+                      : Text(tr('Save')),
                 ),
               ),
             ],
@@ -93,7 +97,7 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
     final alias = _aliasController.text.trim();
     if (alias.length > _maxAliasLength) {
       setState(() {
-        _errorText = 'Alias must be 48 characters or fewer.';
+        _errorText = tr('Alias must be 48 characters or fewer.');
       });
       return;
     }
@@ -119,7 +123,7 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
         return;
       }
       setState(() {
-        _errorText = 'Unable to save alias: $error';
+        _errorText = tr('Unable to save alias: {error}', {'error': error});
         _isSaving = false;
       });
     }

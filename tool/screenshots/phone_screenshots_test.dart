@@ -6,6 +6,7 @@
 //
 // Without PHONE_SCREENS_DIR the PNGs go to build/phone-screens.
 // Add --dart-define=PHONE_SCREENS_DARK=true for the dark theme.
+// Add --dart-define=PHONE_SCREENS_ZH=true for the Chinese interface.
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -813,10 +814,18 @@ void main() {
 Future<void> _loadFonts() async {
   final fonts = _materialFontsDir();
   final roboto = FontLoader('Roboto');
-  for (final weight in ['Light', 'Regular', 'Medium', 'Bold', 'Black']) {
-    roboto.addFont(_fontData('${fonts.path}/Roboto-$weight.ttf'));
+  // The test engine doesn't fall back to other fonts, so Chinese shots
+  // draw everything with a font that has both Latin and Chinese.
+  const unicodeFont = '/System/Library/Fonts/Supplemental/Arial Unicode.ttf';
+  if (const bool.fromEnvironment('PHONE_SCREENS_ZH') &&
+      File(unicodeFont).existsSync()) {
+    roboto.addFont(_fontData(unicodeFont));
+  } else {
+    for (final weight in ['Light', 'Regular', 'Medium', 'Bold', 'Black']) {
+      roboto.addFont(_fontData('${fonts.path}/Roboto-$weight.ttf'));
+    }
+    roboto.addFont(_fontData('${fonts.path}/Roboto-Italic.ttf'));
   }
-  roboto.addFont(_fontData('${fonts.path}/Roboto-Italic.ttf'));
   await roboto.load();
 
   final icons = FontLoader('MaterialIcons')

@@ -5,6 +5,7 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 
@@ -42,14 +43,14 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Invite friends',
+                  tr('Invite friends'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 12),
                 if (friends.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text('No friends to invite'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text(tr('No friends to invite')),
                   )
                 else
                   ConstrainedBox(
@@ -93,7 +94,7 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
                     onPressed: _isSaving || _selectedFriendIds.isEmpty
                         ? null
                         : _invite,
-                    child: const Text('Invite'),
+                    child: Text(tr('Invite')),
                   ),
                 ),
                 const Divider(height: 32),
@@ -124,7 +125,9 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not invite friends. Try again. $error';
+        _errorText = tr('Could not invite friends. Try again. {error}', {
+          'error': error,
+        });
       });
     }
   }
@@ -145,9 +148,9 @@ const _maxUsesOptions = <int?>[null, 1, 10, 100];
 
 String _maxUsesLabel(int? maxUses) {
   return switch (maxUses) {
-    null => 'No limit',
-    1 => '1 use',
-    _ => '$maxUses uses',
+    null => tr('No limit'),
+    1 => tr('1 use'),
+    _ => tr('{count} uses', {'count': maxUses}),
   };
 }
 
@@ -188,16 +191,16 @@ class _CircleInviteLinksSectionState
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Invite links', style: textTheme.titleMedium),
+        Text(tr('Invite links'), style: textTheme.titleMedium),
         const SizedBox(height: 12),
-        Text('Expire after', style: textTheme.labelLarge),
+        Text(tr('Expire after'), style: textTheme.labelLarge),
         const SizedBox(height: 4),
         Wrap(
           spacing: 8,
           children: [
             for (final expiry in _InviteExpiry.values)
               ChoiceChip(
-                label: Text(expiry.label),
+                label: Text(tr(expiry.label)),
                 selected: _expiry == expiry,
                 onSelected: _isBusy
                     ? null
@@ -206,7 +209,7 @@ class _CircleInviteLinksSectionState
           ],
         ),
         const SizedBox(height: 8),
-        Text('Max uses', style: textTheme.labelLarge),
+        Text(tr('Max uses'), style: textTheme.labelLarge),
         const SizedBox(height: 4),
         Wrap(
           spacing: 8,
@@ -225,7 +228,7 @@ class _CircleInviteLinksSectionState
         FilledButton.tonalIcon(
           onPressed: _isBusy ? null : _createInvite,
           icon: const Icon(Icons.add_link),
-          label: const Text('Create link'),
+          label: Text(tr('Create link')),
         ),
         if (_errorText != null) ...[
           const SizedBox(height: 8),
@@ -245,13 +248,17 @@ class _CircleInviteLinksSectionState
               );
             }
             if (snapshot.hasError) {
-              return Text('Could not load invite links. ${snapshot.error}');
+              return Text(
+                tr('Could not load invite links. {error}', {
+                  'error': snapshot.error,
+                }),
+              );
             }
             final invites = snapshot.data ?? const <CircleInvite>[];
             if (invites.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('No active invite links'),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(tr('No active invite links')),
               );
             }
             return Column(
@@ -273,8 +280,8 @@ class _CircleInviteLinksSectionState
                       children: [
                         IconButton(
                           tooltip: _copiedCode == invite.code
-                              ? 'Copied'
-                              : 'Copy link',
+                              ? tr('Copied')
+                              : tr('Copy link'),
                           icon: Icon(
                             _copiedCode == invite.code
                                 ? Icons.check
@@ -283,7 +290,7 @@ class _CircleInviteLinksSectionState
                           onPressed: () => _copy(invite),
                         ),
                         IconButton(
-                          tooltip: 'Revoke',
+                          tooltip: tr('Revoke'),
                           icon: const Icon(Icons.link_off),
                           onPressed: _isBusy ? null : () => _revoke(invite),
                         ),
@@ -309,13 +316,13 @@ class _CircleInviteLinksSectionState
           );
       await Clipboard.setData(ClipboardData(text: circleInviteLink(code)));
       _copiedCode = code;
-    }, failure: 'Could not create invite link.');
+    }, failure: tr('Could not create invite link.'));
   }
 
   Future<void> _revoke(CircleInvite invite) async {
     await _run(
       () => ref.read(circlesRepositoryProvider).revokeInvite(invite.code),
-      failure: 'Could not revoke invite link.',
+      failure: tr('Could not revoke invite link.'),
     );
   }
 
@@ -351,19 +358,26 @@ class _CircleInviteLinksSectionState
 
 String _inviteDetails(CircleInvite invite) {
   final uses = invite.maxUses == null
-      ? '${invite.useCount} uses'
-      : '${invite.useCount} / ${invite.maxUses} uses';
+      ? tr('{count} uses', {'count': invite.useCount})
+      : tr('{count} / {max} uses', {
+          'count': invite.useCount,
+          'max': invite.maxUses,
+        });
   final expiresAt = invite.expiresAt;
   final String expiry;
   if (expiresAt == null) {
-    expiry = 'never expires';
+    expiry = tr('never expires');
   } else {
     final remaining = expiresAt.difference(DateTime.now().toUtc());
     expiry = remaining.inDays >= 1
-        ? 'expires in ${remaining.inDays} d'
+        ? tr('expires in {days} d', {'days': remaining.inDays})
         : remaining.inHours >= 1
-        ? 'expires in ${remaining.inHours} h'
-        : 'expires in < 1 h';
+        ? tr('expires in {hours} h', {'hours': remaining.inHours})
+        : tr('expires in < 1 h');
   }
-  return 'Code ${invite.code} · $uses · $expiry';
+  return tr('Code {code} · {uses} · {expiry}', {
+    'code': invite.code,
+    'uses': uses,
+    'expiry': expiry,
+  });
 }

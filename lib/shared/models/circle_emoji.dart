@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// A circle's custom emoji or sticker, as `list_circle_emojis` and
 /// `list_my_usable_emojis` return it.
 class CircleEmoji {
@@ -198,5 +200,7 @@ class StickerAttachment {
 /// "[Sticker] name", for previews and notifications.
 String stickerPreviewText(String name) {
   final trimmed = name.trim();
-  return trimmed.isEmpty ? '[Sticker]' : '[Sticker] $trimmed';
+  return trimmed.isEmpty
+      ? tr('[Sticker]')
+      : tr('[Sticker] {name}', {'name': trimmed});
 }

@@ -12,6 +12,7 @@ import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -97,7 +98,7 @@ class HomeSidebar extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              'Find or start a conversation',
+                              tr('Find or start a conversation'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -125,7 +126,7 @@ class HomeSidebar extends ConsumerWidget {
                   CircleChannelRow(
                     key: const ValueKey('home-friends'),
                     icon: Icons.people_alt_outlined,
-                    label: 'Friends',
+                    label: tr('Friends'),
                     selected: section == HomeSection.friends,
                     onTap: () => openPage(context, ContactsScreen.path),
                     trailing: requestCount > 0
@@ -136,7 +137,7 @@ class HomeSidebar extends ConsumerWidget {
                     CircleChannelRow(
                       key: const ValueKey('home-inbox'),
                       icon: Icons.notifications_none,
-                      label: 'Notifications',
+                      label: tr('Notifications'),
                       selected: section == HomeSection.inbox,
                       onTap: () => openPage(context, InboxScreen.path),
                       trailing: unreadInbox > 0
@@ -149,7 +150,7 @@ class HomeSidebar extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            'DIRECT MESSAGES',
+                            tr('DIRECT MESSAGES'),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
@@ -158,7 +159,7 @@ class HomeSidebar extends ConsumerWidget {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'New group',
+                          tooltip: tr('New group'),
                           visualDensity: VisualDensity.compact,
                           iconSize: 18,
                           onPressed: () => _createGroup(context, ref),
@@ -176,7 +177,7 @@ class HomeSidebar extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
                       child: Text(
-                        'No conversations yet',
+                        tr('No conversations yet'),
                         style: theme.textTheme.bodySmall,
                       ),
                     )
@@ -215,8 +216,8 @@ class HomeSidebar extends ConsumerWidget {
     }
     if (friends.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Add at least two friends to start a group.'),
+        SnackBar(
+          content: Text(tr('Add at least two friends to start a group.')),
         ),
       );
       return;
@@ -259,7 +260,7 @@ class _DirectMessageRow extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final title = conversation.title?.trim().isNotEmpty == true
         ? conversation.title!
-        : 'Conversation';
+        : tr('Conversation');
     final unread = conversation.unreadCount > 0 || conversation.isMarkedUnread;
     final emphasized = selected || (unread && !conversation.isMuted);
     final foreground = emphasized
@@ -267,7 +268,7 @@ class _DirectMessageRow extends ConsumerWidget {
         : colorScheme.onSurfaceVariant;
     final status = activeCustomStatus(conversation.directCustomStatus);
     final subtitle = conversation.type == ConversationType.group
-        ? '${conversation.memberCount} members'
+        ? tr('{count} members', {'count': conversation.memberCount})
         : status?.label;
 
     return Padding(

@@ -16,6 +16,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -269,7 +270,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         }
       });
       messenger?.showSnackBar(
-        const SnackBar(content: Text('Could not reorder channels. Try again.')),
+        SnackBar(content: Text(tr('Could not reorder channels. Try again.'))),
       );
     }
   }
@@ -283,7 +284,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       () => ref
           .read(circlesRepositoryProvider)
           .createChannelCategory(circleId: _circleId, name: name),
-      failure: 'Could not create category. Try again.',
+      failure: tr('Could not create category. Try again.'),
     );
   }
 
@@ -299,7 +300,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       () => ref
           .read(circlesRepositoryProvider)
           .renameChannelCategory(categoryId: category.id, name: name),
-      failure: 'Could not rename category. Try again.',
+      failure: tr('Could not rename category. Try again.'),
     );
   }
 
@@ -308,19 +309,22 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: const Text('Delete category'),
+        title: Text(tr('Delete category')),
         content: Text(
-          'Delete "${category.name}"? Its channels move to the top of the '
-          'channel list.',
+          tr(
+            'Delete "{name}"? Its channels move to the top of the channel '
+            'list.',
+            {'name': category.name},
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -332,7 +336,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       () => ref
           .read(circlesRepositoryProvider)
           .deleteChannelCategory(category.id),
-      failure: 'Could not delete category. Try again.',
+      failure: tr('Could not delete category. Try again.'),
     );
     if (deleted && _collapsed.contains(category.id)) {
       _collapsed = {..._collapsed}..remove(category.id);
@@ -367,12 +371,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         globalPosition & Size.zero,
         Offset.zero & overlay.size,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: _ChannelMenuAction.settings,
           child: ListTile(
-            leading: Icon(Icons.settings_outlined),
-            title: Text('Channel settings'),
+            leading: const Icon(Icons.settings_outlined),
+            title: Text(tr('Channel settings')),
           ),
         ),
       ],
@@ -455,7 +459,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           children: [
             CircleChannelRow(
               icon: Icons.dynamic_feed_outlined,
-              label: 'Feed',
+              label: tr('Feed'),
               selected: widget.feedSelected,
               onTap: widget.onSelectFeed,
             ),
@@ -482,7 +486,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       footer: detail.channels.isEmpty
           ? Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-              child: Text('No channels yet', style: theme.textTheme.bodySmall),
+              child: Text(
+                tr('No channels yet'),
+                style: theme.textTheme.bodySmall,
+              ),
             )
           : null,
       itemCount: entries.length,
@@ -566,7 +573,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                             CircleChannelRow(
                               key: ValueKey('circle-thread-${thread.id}'),
                               icon: Icons.forum_outlined,
-                              label: thread.title ?? 'Thread',
+                              label: thread.title ?? tr('Thread'),
                               indent: 20,
                               selected:
                                   thread.id ==
@@ -720,7 +727,7 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
   void _save() {
     final name = _controller.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorText = 'Category name is required.');
+      setState(() => _errorText = tr('Category name is required.'));
       return;
     }
     Navigator.of(context).pop(name);
@@ -731,14 +738,14 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
     final renaming = widget.initialName != null;
     return AlertDialog(
       scrollable: true,
-      title: Text(renaming ? 'Rename category' : 'Create category'),
+      title: Text(renaming ? tr('Rename category') : tr('Create category')),
       content: TextField(
         controller: _controller,
         autofocus: true,
         maxLength: maxCircleCategoryNameLength,
         decoration: InputDecoration(
           border: const OutlineInputBorder(),
-          labelText: 'Category name',
+          labelText: tr('Category name'),
           errorText: _errorText,
         ),
         onSubmitted: (_) => _save(),
@@ -746,11 +753,11 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: _save,
-          child: Text(renaming ? 'Save' : 'Create'),
+          child: Text(renaming ? tr('Save') : tr('Create')),
         ),
       ],
     );
@@ -790,7 +797,7 @@ class _SidebarHeader extends StatelessWidget {
     return SizedBox(
       height: kToolbarHeight,
       child: PopupMenuButton<_CircleMenuAction>(
-        tooltip: 'Circle menu',
+        tooltip: tr('Circle menu'),
         position: PopupMenuPosition.under,
         onSelected: (action) {
           switch (action) {
@@ -824,79 +831,82 @@ class _SidebarHeader extends StatelessWidget {
         },
         itemBuilder: (context) => [
           if (detail.canCreateInvites)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.invite,
               child: ListTile(
-                leading: Icon(Icons.person_add_alt_1_outlined),
-                title: Text('Invite friends'),
+                leading: const Icon(Icons.person_add_alt_1_outlined),
+                title: Text(tr('Invite friends')),
               ),
             ),
-          if (canManageChannels) ...const [
+          if (canManageChannels) ...[
             PopupMenuItem(
               value: _CircleMenuAction.createChannel,
               child: ListTile(
-                leading: Icon(Icons.add_comment_outlined),
-                title: Text('Create channel'),
+                leading: const Icon(Icons.add_comment_outlined),
+                title: Text(tr('Create channel')),
               ),
             ),
             PopupMenuItem(
               value: _CircleMenuAction.createCategory,
               child: ListTile(
-                leading: Icon(Icons.create_new_folder_outlined),
-                title: Text('Create category'),
+                leading: const Icon(Icons.create_new_folder_outlined),
+                title: Text(tr('Create category')),
               ),
             ),
           ],
           if (detail.canManageRoles)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.roles,
               child: ListTile(
-                leading: Icon(Icons.shield_outlined),
-                title: Text('Roles'),
+                leading: const Icon(Icons.shield_outlined),
+                title: Text(tr('Roles')),
               ),
             ),
           if (detail.canBanMembers)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.bans,
-              child: ListTile(leading: Icon(Icons.block), title: Text('Bans')),
+              child: ListTile(
+                leading: const Icon(Icons.block),
+                title: Text(tr('Bans')),
+              ),
             ),
           if (detail.canViewAuditLog)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.auditLog,
               child: ListTile(
-                leading: Icon(Icons.history),
-                title: Text('Audit log'),
+                leading: const Icon(Icons.history),
+                title: Text(tr('Audit log')),
               ),
             ),
           if (currentMember != null)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.emojis,
               child: ListTile(
-                leading: Icon(Icons.emoji_emotions_outlined),
-                title: Text('Emoji & stickers'),
+                leading: const Icon(Icons.emoji_emotions_outlined),
+                title: Text(tr('Emoji & stickers')),
               ),
             ),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: _CircleMenuAction.notificationSettings,
             child: ListTile(
-              leading: Icon(Icons.notifications_outlined),
-              title: Text('Notification settings'),
+              leading: const Icon(Icons.notifications_outlined),
+              title: Text(tr('Notification settings')),
             ),
           ),
           if (currentMember != null)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.changeNickname,
               child: ListTile(
-                leading: Icon(Icons.badge_outlined),
-                title: Text('Change my nickname'),
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(tr('Change my nickname')),
               ),
             ),
           if (detail.isOwner)
-            const PopupMenuItem(
+            PopupMenuItem(
               value: _CircleMenuAction.transferOwnership,
               child: ListTile(
-                leading: Icon(Icons.swap_horiz),
-                title: Text('Transfer ownership'),
+                leading: const Icon(Icons.swap_horiz),
+                title: Text(tr('Transfer ownership')),
               ),
             )
           else if (currentMember != null)
@@ -908,7 +918,7 @@ class _SidebarHeader extends StatelessWidget {
                   color: Theme.of(context).colorScheme.error,
                 ),
                 title: Text(
-                  'Leave circle',
+                  tr('Leave circle'),
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
@@ -976,19 +986,19 @@ class CircleCategoryHeader extends StatelessWidget {
   }
 
   List<PopupMenuEntry<_CategoryMenuAction>> _menuItems() {
-    return const [
+    return [
       PopupMenuItem(
         value: _CategoryMenuAction.rename,
         child: ListTile(
-          leading: Icon(Icons.edit_outlined),
-          title: Text('Rename category'),
+          leading: const Icon(Icons.edit_outlined),
+          title: Text(tr('Rename category')),
         ),
       ),
       PopupMenuItem(
         value: _CategoryMenuAction.delete,
         child: ListTile(
-          leading: Icon(Icons.delete_outline),
-          title: Text('Delete category'),
+          leading: const Icon(Icons.delete_outline),
+          title: Text(tr('Delete category')),
         ),
       ),
     ];
@@ -1066,7 +1076,7 @@ class CircleCategoryHeader extends StatelessWidget {
           ),
           if (onCreate != null)
             IconButton(
-              tooltip: 'Create channel',
+              tooltip: tr('Create channel'),
               visualDensity: touch ? null : VisualDensity.compact,
               iconSize: 16,
               icon: const Icon(Icons.add),
@@ -1074,7 +1084,7 @@ class CircleCategoryHeader extends StatelessWidget {
             ),
           if (hasMenu)
             PopupMenuButton<_CategoryMenuAction>(
-              tooltip: 'Category options',
+              tooltip: tr('Category options'),
               iconSize: 16,
               style: ButtonStyle(
                 visualDensity: touch ? null : VisualDensity.compact,
@@ -1105,7 +1115,7 @@ class _LiveNowPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        'Live now',
+        tr('Live now'),
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onPrimary,
           fontWeight: FontWeight.w700,

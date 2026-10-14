@@ -4,6 +4,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -12,9 +13,9 @@ import 'package:wecord/shared/models/profile.dart';
 const quickReactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 // Space-separated so the built-in picker stays compact; split when rendered.
-const _pickerEmojiGroups = <(String, String)>[
+List<(String, String)> get _pickerEmojiGroups => [
   (
-    'Smileys',
+    tr('Smileys'),
     '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 '
         '😉 😊 😇 🥰 😍 🤩 😘 😋 😛 😜 '
         '🤪 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 '
@@ -25,18 +26,18 @@ const _pickerEmojiGroups = <(String, String)>[
         '😫 🥱 😤 😡 😠 🤬 😈 💀 🤡 👻',
   ),
   (
-    'Gestures',
+    tr('Gestures'),
     '👍 👎 👌 🤌 ✌️ 🤞 🤟 🤘 🤙 👈 '
         '👉 👆 👇 ☝️ 👋 🤚 ✋ 🖖 👏 🙌 '
         '👐 🤲 🤝 🙏 ✍️ 💪 🫡 🫶 👀 🧠',
   ),
   (
-    'Hearts',
+    tr('Hearts'),
     '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 '
         '❣️ 💕 💞 💓 💗 💖 💘 💝 💯 💢',
   ),
   (
-    'Nature & food',
+    tr('Nature & food'),
     '🐶 🐱 🐭 🐰 🦊 🐻 🐼 🐨 🐯 🦁 '
         '🐸 🐵 🐔 🐧 🐦 🦄 🐝 🦋 🐢 🐙 '
         '🌸 🌹 🌻 🌈 ☀️ 🌙 ⭐ 🔥 ❄️ 🌊 '
@@ -44,13 +45,13 @@ const _pickerEmojiGroups = <(String, String)>[
         '🍪 🍫 🍿 ☕ 🍵 🍺 🍻 🥂 🧋 🍦',
   ),
   (
-    'Activities & objects',
+    tr('Activities & objects'),
     '🎉 🎊 🎈 🎁 🏆 🥇 ⚽ 🏀 🎮 🎲 '
         '🎵 🎶 🎤 🎧 🎬 📷 💡 📌 📎 ✏️ '
         '📚 💻 📱 ⏰ 💰 💎 🔔 🚀 ✈️ 🏠',
   ),
   (
-    'Symbols',
+    tr('Symbols'),
     '✅ ❌ ⭕ ❗ ❓ ‼️ ⁉️ ⚠️ 🚫 💤 '
         '✨ 💫 🆗 🆒 🆕 🔝 ➕ ➖ 💬 👑',
   ),
@@ -61,7 +62,7 @@ const _pickerEmojiGroups = <(String, String)>[
 /// circle", the rest under "Your emoji").
 Future<String?> showEmojiReactionPicker(
   BuildContext context, {
-  String title = 'Add reaction',
+  String? title,
   bool includeCustom = false,
   String? circleId,
 }) {
@@ -79,13 +80,14 @@ Future<String?> showEmojiReactionPicker(
 
 class EmojiReactionPicker extends ConsumerWidget {
   const EmojiReactionPicker({
-    this.title = 'Add reaction',
+    this.title,
     this.includeCustom = false,
     this.circleId,
     super.key,
   });
 
-  final String title;
+  /// Defaults to "Add reaction".
+  final String? title;
   final bool includeCustom;
   final String? circleId;
 
@@ -102,14 +104,14 @@ class EmojiReactionPicker extends ConsumerWidget {
         : const <CircleEmoji>[];
     final customGroups = [
       (
-        label: 'This circle',
+        label: tr('This circle'),
         emojis: [
           for (final emoji in custom)
             if (emoji.circleId == circleId) emoji,
         ],
       ),
       (
-        label: 'Your emoji',
+        label: tr('Your emoji'),
         emojis: [
           for (final emoji in custom)
             if (emoji.circleId != circleId) emoji,
@@ -125,7 +127,10 @@ class EmojiReactionPicker extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(title, style: theme.textTheme.titleLarge),
+              child: Text(
+                title ?? tr('Add reaction'),
+                style: theme.textTheme.titleLarge,
+              ),
             ),
             Flexible(
               child: ListView(
@@ -211,7 +216,7 @@ class QuickReactionBar extends StatelessWidget {
               onTap: () => onSelect(emoji),
             ),
           IconButton(
-            tooltip: 'More reactions',
+            tooltip: tr('More reactions'),
             onPressed: onMore,
             icon: const Icon(Icons.add_reaction_outlined),
           ),
@@ -464,7 +469,9 @@ class _MessageReactorsSheetState extends ConsumerState<MessageReactorsSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Reacted with ${widget.label ?? widget.emoji}',
+                tr('Reacted with {emoji}', {
+                  'emoji': widget.label ?? widget.emoji,
+                }),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -476,7 +483,7 @@ class _MessageReactorsSheetState extends ConsumerState<MessageReactorsSheet> {
                     return Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Could not load reactions.',
+                        tr('Could not load reactions.'),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
@@ -491,9 +498,9 @@ class _MessageReactorsSheetState extends ConsumerState<MessageReactorsSheet> {
                     );
                   }
                   if (reactors.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No one has reacted with this yet.'),
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(tr('No one has reacted with this yet.')),
                     );
                   }
                   return ListView(

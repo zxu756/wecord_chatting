@@ -20,6 +20,7 @@ import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -120,7 +121,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           if (channel.conversationId == conversation.parentConversationId) {
             final target = ThreadTarget(
               conversationId: conversation.id,
-              title: conversation.title ?? 'Thread',
+              title: conversation.title ?? tr('Thread'),
               threadId: conversation.threadId,
             );
             // Forum posts open in place of the post list.
@@ -173,14 +174,14 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         MediaQuery.sizeOf(context).width >=
             CircleWorkspace.memberListBreakpoint;
     final memberToggle = ChatThreadAction(
-      tooltip: showMembers ? 'Hide member list' : 'Show member list',
+      tooltip: showMembers ? tr('Hide member list') : tr('Show member list'),
       isSelected: showMembers,
       icon: Icons.people_outline,
       selectedIcon: Icons.people,
       onPressed: () => setState(() => _showMembers = !showMembers),
     );
     final closeThread = ChatThreadAction(
-      tooltip: 'Close thread',
+      tooltip: tr('Close thread'),
       icon: Icons.close,
       onPressed: () => setState(() => _openThread = null),
     );
@@ -188,7 +189,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     final channelSettings =
         selectedChannel != null && detail.canOpenChannelSettings
         ? ChatThreadAction(
-            tooltip: 'Channel settings',
+            tooltip: tr('Channel settings'),
             icon: Icons.settings_outlined,
             onPressed: () => openCircleChannelSettings(
               context,
@@ -235,7 +236,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
             child: selectedChannel == null
                 ? Scaffold(
                     appBar: AppBar(
-                      title: const Text('Feed'),
+                      title: Text(tr('Feed')),
                       actions: [memberToggle.toIconButton()],
                     ),
                     body: CircleFeedView(
@@ -320,7 +321,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       }
       _openThread = ThreadTarget(
         conversationId: thread.id,
-        title: thread.title ?? 'Thread',
+        title: thread.title ?? tr('Thread'),
         threadId: thread.threadId,
       );
     });
@@ -463,7 +464,7 @@ Future<void> changeCircleNickname(
     ref.invalidate(groupDetailProvider);
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not change nickname. Try again.')),
+      SnackBar(content: Text(tr('Could not change nickname. Try again.'))),
     );
   }
 }
@@ -480,19 +481,22 @@ Future<void> kickCircleMember(
     context: context,
     builder: (context) => AlertDialog(
       scrollable: true,
-      title: Text('Kick $name'),
+      title: Text(tr('Kick {name}', {'name': name})),
       content: Text(
-        'Remove $name from this circle and all of its channels? They can '
-        'rejoin with an invite.',
+        tr(
+          'Remove {name} from this circle and all of its channels? They can '
+          'rejoin with an invite.',
+          {'name': name},
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Kick'),
+          child: Text(tr('Kick')),
         ),
       ],
     ),
@@ -506,10 +510,14 @@ Future<void> kickCircleMember(
         .read(circlesRepositoryProvider)
         .kickMember(circleId: circleId, userId: member.profile.id);
     ref.invalidate(circleDetailProvider(circleId));
-    messenger?.showSnackBar(SnackBar(content: Text('Kicked $name.')));
+    messenger?.showSnackBar(
+      SnackBar(content: Text(tr('Kicked {name}.', {'name': name}))),
+    );
   } catch (_) {
     messenger?.showSnackBar(
-      SnackBar(content: Text('Could not kick $name. Try again.')),
+      SnackBar(
+        content: Text(tr('Could not kick {name}. Try again.', {'name': name})),
+      ),
     );
   }
 }
@@ -558,15 +566,19 @@ class _NicknameDialogState extends State<_NicknameDialog> {
         : profile.displayName;
     return AlertDialog(
       scrollable: true,
-      title: Text(widget.isSelf ? 'Change my nickname' : 'Change nickname'),
+      title: Text(
+        widget.isSelf ? tr('Change my nickname') : tr('Change nickname'),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             widget.isSelf
-                ? 'Only shown in this circle.'
-                : 'Only shown in this circle for $fallbackName.',
+                ? tr('Only shown in this circle.')
+                : tr('Only shown in this circle for {name}.', {
+                    'name': fallbackName,
+                  }),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -575,7 +587,7 @@ class _NicknameDialogState extends State<_NicknameDialog> {
             maxLength: maxCircleNicknameLength,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Nickname',
+              labelText: tr('Nickname'),
               hintText: fallbackName,
             ),
             onSubmitted: (_) => _save(),
@@ -585,14 +597,14 @@ class _NicknameDialogState extends State<_NicknameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         if (widget.member.nickname != null)
           TextButton(
             onPressed: () => Navigator.of(context).pop(''),
-            child: const Text('Reset'),
+            child: Text(tr('Reset')),
           ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        FilledButton(onPressed: _save, child: Text(tr('Save'))),
       ],
     );
   }
@@ -682,8 +694,8 @@ class CircleMemberList extends ConsumerWidget {
     final groups = [
       for (final role in detail.roles)
         if (hoisted[role.id] case final members?) (role.name, members, true),
-      ('Online', online, true),
-      ('Offline', offline, false),
+      (tr('Online'), online, true),
+      (tr('Offline'), offline, false),
     ];
 
     return Material(
@@ -879,7 +891,9 @@ class _MemberRow extends ConsumerWidget {
               : CustomStatusLabel(status: profile.customStatus),
           trailing: switch ((member.activeTimeoutUntil, roleIcon)) {
             (final until?, _) => Tooltip(
-              message: 'Timed out until ${formatTimeoutEnd(until)}',
+              message: tr('Timed out until {time}', {
+                'time': formatTimeoutEnd(until),
+              }),
               child: Icon(
                 Icons.timer_outlined,
                 key: ValueKey('member-timed-out-${profile.id}'),
@@ -888,7 +902,7 @@ class _MemberRow extends ConsumerWidget {
               ),
             ),
             (null, final icon?) => Tooltip(
-              message: member.role == 'owner' ? 'Owner' : 'Admin',
+              message: member.role == 'owner' ? tr('Owner') : tr('Admin'),
               child: Icon(icon, size: 16),
             ),
             (null, null) => null,
@@ -916,7 +930,7 @@ class _MemberRow extends ConsumerWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.person_outline),
-                  title: const Text('View profile'),
+                  title: Text(tr('View profile')),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _openProfile(context);
@@ -925,7 +939,7 @@ class _MemberRow extends ConsumerWidget {
                 if (onChangeNickname != null)
                   ListTile(
                     leading: const Icon(Icons.badge_outlined),
-                    title: const Text('Change nickname'),
+                    title: Text(tr('Change nickname')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onChangeNickname!();
@@ -934,7 +948,7 @@ class _MemberRow extends ConsumerWidget {
                 if (onManageRoles != null)
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
-                    title: const Text('Manage roles'),
+                    title: Text(tr('Manage roles')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onManageRoles!();
@@ -943,7 +957,7 @@ class _MemberRow extends ConsumerWidget {
                 if (onTimeOut != null)
                   ListTile(
                     leading: const Icon(Icons.timer_outlined),
-                    title: const Text('Time out'),
+                    title: Text(tr('Time out')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onTimeOut!();
@@ -952,7 +966,7 @@ class _MemberRow extends ConsumerWidget {
                 if (onRemoveTimeout != null)
                   ListTile(
                     leading: const Icon(Icons.timer_off_outlined),
-                    title: const Text('Remove timeout'),
+                    title: Text(tr('Remove timeout')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onRemoveTimeout!();
@@ -965,7 +979,7 @@ class _MemberRow extends ConsumerWidget {
                       color: Theme.of(sheetContext).colorScheme.error,
                     ),
                     title: Text(
-                      'Kick',
+                      tr('Kick'),
                       style: TextStyle(
                         color: Theme.of(sheetContext).colorScheme.error,
                       ),
@@ -982,7 +996,7 @@ class _MemberRow extends ConsumerWidget {
                       color: Theme.of(sheetContext).colorScheme.error,
                     ),
                     title: Text(
-                      'Ban',
+                      tr('Ban'),
                       style: TextStyle(
                         color: Theme.of(sheetContext).colorScheme.error,
                       ),

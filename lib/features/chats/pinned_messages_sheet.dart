@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -55,7 +56,7 @@ class PinnedMessagesSheet extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Pinned messages',
+                tr('Pinned messages'),
                 style: theme.textTheme.titleMedium,
               ),
             ),
@@ -68,15 +69,15 @@ class PinnedMessagesSheet extends ConsumerWidget {
                 error: (error, stackTrace) => Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    'Could not load pinned messages.',
+                    tr('Could not load pinned messages.'),
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                 ),
                 data: (items) {
                   if (items.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text('No pinned messages yet'),
+                    return Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(tr('No pinned messages yet')),
                     );
                   }
                   return ListView.builder(
@@ -157,7 +158,7 @@ class _PinnedMessageTile extends StatelessWidget {
           ),
           if (pinnedByName != null && pinnedByName.isNotEmpty)
             Text(
-              'Pinned by $pinnedByName',
+              tr('Pinned by {name}', {'name': pinnedByName}),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -166,7 +167,7 @@ class _PinnedMessageTile extends StatelessWidget {
       ),
       trailing: canManagePins
           ? IconButton(
-              tooltip: 'Unpin',
+              tooltip: tr('Unpin'),
               icon: const Icon(Icons.close),
               onPressed: onUnpin,
             )
@@ -179,11 +180,12 @@ class _PinnedMessageTile extends StatelessWidget {
 String pinnedMessagePreview(ChatMessage message) {
   final body = message.body.trim();
   return switch (message.type) {
-    MessageType.text => body.isEmpty ? 'Message' : plainTextFromMarkdown(body),
-    MessageType.system => body.isEmpty ? 'Message' : body,
-    MessageType.image => 'Image',
-    MessageType.file => 'File',
-    MessageType.voice => 'Voice message',
+    MessageType.text =>
+      body.isEmpty ? tr('Message') : plainTextFromMarkdown(body),
+    MessageType.system => body.isEmpty ? tr('Message') : body,
+    MessageType.image => tr('Image'),
+    MessageType.file => tr('File'),
+    MessageType.voice => tr('Voice message'),
     MessageType.poll => pollPreviewText(body),
     MessageType.sticker => stickerPreviewText(body),
   };

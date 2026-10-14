@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// One entry of a circle's audit log, as `list_circle_audit_log` returns
 /// it.
 class CircleAuditEntry {
@@ -113,11 +115,13 @@ enum CircleAuditActionGroup {
   sticker('sticker', 'Stickers'),
   other('', 'Other');
 
-  const CircleAuditActionGroup(this.filter, this.label);
+  const CircleAuditActionGroup(this.filter, this._label);
 
   /// The value passed as `action_filter`.
   final String filter;
-  final String label;
+  final String _label;
+
+  String get label => trIn('audit', _label);
 
   static CircleAuditActionGroup of(String action) {
     final prefix = action.split('_').first;

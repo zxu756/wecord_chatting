@@ -5,6 +5,7 @@ import 'package:wecord/features/circles/channel_webhooks_section.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -33,15 +34,15 @@ const channelSlowmodeOptions = [
 /// `Off`, `30s`, `5m` or `2h`.
 String channelSlowmodeLabel(int seconds) {
   if (seconds <= 0) {
-    return 'Off';
+    return tr('Off');
   }
   if (seconds % 3600 == 0) {
-    return '${seconds ~/ 3600}h';
+    return tr('{hours}h', {'hours': seconds ~/ 3600});
   }
   if (seconds % 60 == 0) {
-    return '${seconds ~/ 60}m';
+    return tr('{minutes}m', {'minutes': seconds ~/ 60});
   }
-  return '${seconds}s';
+  return tr('{seconds}s', {'seconds': seconds});
 }
 
 /// A channel's permission overwrites. Reloads whenever the circle does, which
@@ -126,7 +127,7 @@ class _CircleChannelSettingsScreenState
         isPrivate: isPrivate,
         isReadOnly: isReadOnly,
       ),
-      failure: 'Could not change channel permissions. Try again.',
+      failure: tr('Could not change channel permissions. Try again.'),
     );
   }
 
@@ -141,7 +142,7 @@ class _CircleChannelSettingsScreenState
         name: name,
         topic: topic,
       ),
-      failure: 'Could not save the channel. Try again.',
+      failure: tr('Could not save the channel. Try again.'),
     );
   }
 
@@ -161,16 +162,14 @@ class _CircleChannelSettingsScreenState
       ref.invalidate(circleDetailProvider(widget.circleId));
       ref.invalidate(conversationsProvider);
       messenger?.showSnackBar(
-        SnackBar(content: Text('Deleted #${channel.name}.')),
+        SnackBar(content: Text(tr('Deleted #{name}.', {'name': channel.name}))),
       );
       if (mounted) {
         navigator.pop();
       }
     } catch (_) {
       messenger?.showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete the channel. Try again.'),
-        ),
+        SnackBar(content: Text(tr('Could not delete the channel. Try again.'))),
       );
       if (mounted) {
         setState(() => _saving = false);
@@ -184,7 +183,7 @@ class _CircleChannelSettingsScreenState
         channelId: channel.id,
         seconds: seconds,
       ),
-      failure: 'Could not change slowmode. Try again.',
+      failure: tr('Could not change slowmode. Try again.'),
     );
   }
 
@@ -211,7 +210,7 @@ class _CircleChannelSettingsScreenState
         allow: result.allow,
         deny: result.deny,
       ),
-      failure: 'Could not save channel permissions. Try again.',
+      failure: tr('Could not save channel permissions. Try again.'),
     );
   }
 
@@ -258,7 +257,7 @@ class _CircleChannelSettingsScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Channel settings'),
+        title: Text(tr('Channel settings')),
         bottom: channel == null
             ? null
             : PreferredSize(
@@ -281,14 +280,14 @@ class _CircleChannelSettingsScreenState
       ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text(error.toString())),
+        error: (error, stackTrace) => Center(child: Text(tr(error.toString()))),
         data: (detail) {
           final found = channel;
           if (found == null) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('This channel is no longer available.'),
+                padding: const EdgeInsets.all(24),
+                child: Text(tr('This channel is no longer available.')),
               ),
             );
           }
@@ -301,7 +300,7 @@ class _CircleChannelSettingsScreenState
   Widget _buildSettings(CircleDetail detail, CircleChannel channel) {
     final children = <Widget>[
       if (detail.canManageChannels) ...[
-        const _SectionHeader('Overview'),
+        _SectionHeader(tr('Overview')),
         ChannelOverviewForm(
           key: ValueKey('channel-overview-${channel.id}'),
           channel: channel,
@@ -334,7 +333,7 @@ class _CircleChannelSettingsScreenState
               ),
               onPressed: _saving ? null : () => _delete(channel),
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Delete channel'),
+              label: Text(tr('Delete channel')),
             ),
           ),
         ),
@@ -342,9 +341,9 @@ class _CircleChannelSettingsScreenState
     ];
     if (children.isEmpty) {
       children.add(
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('You cannot change this channel.'),
+        Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(tr('You cannot change this channel.')),
         ),
       );
     }
@@ -365,7 +364,7 @@ class _CircleChannelSettingsScreenState
         name: result.name,
         emoji: result.emoji,
       ),
-      failure: 'Could not add the tag. Try again.',
+      failure: tr('Could not add the tag. Try again.'),
     );
   }
 
@@ -380,7 +379,7 @@ class _CircleChannelSettingsScreenState
         name: result.name,
         emoji: result.emoji,
       ),
-      failure: 'Could not save the tag. Try again.',
+      failure: tr('Could not save the tag. Try again.'),
     );
   }
 
@@ -389,16 +388,18 @@ class _CircleChannelSettingsScreenState
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: const Text('Delete tag'),
-        content: Text('Delete "${tag.label}"? Posts lose this tag.'),
+        title: Text(tr('Delete tag')),
+        content: Text(
+          tr('Delete "{tag}"? Posts lose this tag.', {'tag': tag.label}),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -408,7 +409,7 @@ class _CircleChannelSettingsScreenState
     }
     await _run(
       (repository) => repository.deleteForumTag(tag.id),
-      failure: 'Could not delete the tag. Try again.',
+      failure: tr('Could not delete the tag. Try again.'),
     );
   }
 
@@ -425,7 +426,7 @@ class _CircleChannelSettingsScreenState
         channelId: channel.id,
         tagIds: [for (final tag in tags) tag.id],
       ),
-      failure: 'Could not reorder the tags. Try again.',
+      failure: tr('Could not reorder the tags. Try again.'),
     );
   }
 
@@ -433,13 +434,19 @@ class _CircleChannelSettingsScreenState
     final theme = Theme.of(context);
     final tags = channel.tags;
     return [
-      const _SectionHeader('Forum tags'),
+      _SectionHeader(tr('Forum tags')),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
         child: Text(
-          'Posts can carry up to ${ForumTag.maxPerPost} tags, and members '
-          'filter the forum by them. ${tags.length}/${ForumTag.maxPerForum} '
-          'tags.',
+          tr(
+            'Posts can carry up to {max} tags, and members filter the forum '
+            'by them. {count}/{limit} tags.',
+            {
+              'max': ForumTag.maxPerPost,
+              'count': tags.length,
+              'limit': ForumTag.maxPerForum,
+            },
+          ),
           style: theme.textTheme.bodySmall,
         ),
       ),
@@ -468,12 +475,12 @@ class _CircleChannelSettingsScreenState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Edit tag',
+                    tooltip: tr('Edit tag'),
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: _saving ? null : () => _editTag(tag),
                   ),
                   IconButton(
-                    tooltip: 'Delete tag',
+                    tooltip: tr('Delete tag'),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: _saving ? null : () => _deleteTag(tag),
                   ),
@@ -485,7 +492,7 @@ class _CircleChannelSettingsScreenState
       ListTile(
         key: const ValueKey('forum-add-tag'),
         leading: const Icon(Icons.add),
-        title: const Text('Add tag'),
+        title: Text(tr('Add tag')),
         enabled: !_saving && tags.length < ForumTag.maxPerForum,
         onTap: () => _addTag(channel),
       ),
@@ -499,12 +506,14 @@ class _CircleChannelSettingsScreenState
       if (!channelSlowmodeOptions.contains(current)) current,
     ]..sort();
     return [
-      const _SectionHeader('Slowmode'),
+      _SectionHeader(tr('Slowmode')),
       ListTile(
-        title: const Text('Slowmode'),
-        subtitle: const Text(
-          'How long members wait between messages. Members who can manage '
-          'messages are exempt.',
+        title: Text(tr('Slowmode')),
+        subtitle: Text(
+          tr(
+            'How long members wait between messages. Members who can manage '
+            'messages are exempt.',
+          ),
         ),
         trailing: DropdownButton<int>(
           key: const ValueKey('channel-slowmode-dropdown'),
@@ -541,12 +550,12 @@ class _CircleChannelSettingsScreenState
     final overwrites = ref.watch(channelOverwritesProvider(_overwritesKey));
 
     return [
-      const _SectionHeader('Permissions'),
+      _SectionHeader(tr('Permissions')),
       SwitchListTile(
         key: const ValueKey('channel-private-switch'),
-        title: const Text('Private channel'),
-        subtitle: const Text(
-          'Only roles and members allowed below can see this channel.',
+        title: Text(tr('Private channel')),
+        subtitle: Text(
+          tr('Only roles and members allowed below can see this channel.'),
         ),
         value: channel.isPrivate,
         onChanged: canEditEveryone
@@ -559,9 +568,9 @@ class _CircleChannelSettingsScreenState
       ),
       SwitchListTile(
         key: const ValueKey('channel-read-only-switch'),
-        title: const Text('Read-only channel'),
-        subtitle: const Text(
-          'Only roles and members allowed below can send messages.',
+        title: Text(tr('Read-only channel')),
+        subtitle: Text(
+          tr('Only roles and members allowed below can send messages.'),
         ),
         value: channel.isReadOnly,
         onChanged:
@@ -578,11 +587,11 @@ class _CircleChannelSettingsScreenState
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            'You need a role to change permissions for @everyone.',
+            tr('You need a role to change permissions for @everyone.'),
             style: theme.textTheme.bodySmall,
           ),
         ),
-      const _SectionHeader('Advanced'),
+      _SectionHeader(tr('Advanced')),
       ...overwrites.when(
         loading: () => const [
           Padding(
@@ -590,10 +599,10 @@ class _CircleChannelSettingsScreenState
             child: Center(child: CircularProgressIndicator()),
           ),
         ],
-        error: (error, stackTrace) => const [
+        error: (error, stackTrace) => [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text('Could not load channel permissions.'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(tr('Could not load channel permissions.')),
           ),
         ],
         data: (overwrites) {
@@ -616,7 +625,7 @@ class _CircleChannelSettingsScreenState
                   vertical: 8,
                 ),
                 child: Text(
-                  'No role or member has its own permissions here yet.',
+                  tr('No role or member has its own permissions here yet.'),
                   style: theme.textTheme.bodySmall,
                 ),
               ),
@@ -627,7 +636,7 @@ class _CircleChannelSettingsScreenState
       ),
       ListTile(
         leading: const Icon(Icons.add),
-        title: const Text('Add role or member'),
+        title: Text(tr('Add role or member')),
         enabled: !_saving && overwrites.valueOrNull != null,
         onTap: () => _addOverwrite(detail, channel, overwrites.valueOrNull!),
       ),
@@ -723,7 +732,7 @@ class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
 
   @override
   Widget build(BuildContext context) {
-    final nameError = _name.isEmpty ? 'Channel name is required.' : null;
+    final nameError = _name.isEmpty ? tr('Channel name is required.') : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
@@ -736,7 +745,7 @@ class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
             maxLength: CircleChannel.maxNameLength,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Channel name',
+              labelText: tr('Channel name'),
               errorText: nameError,
             ),
           ),
@@ -748,10 +757,10 @@ class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
             minLines: 1,
             maxLines: 4,
             maxLength: CircleChannel.maxTopicLength,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Topic',
-              hintText: 'Let everyone know what this channel is about',
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: tr('Topic'),
+              hintText: tr('Let everyone know what this channel is about'),
             ),
           ),
           Align(
@@ -761,7 +770,7 @@ class _ChannelOverviewFormState extends State<ChannelOverviewForm> {
               onPressed: widget.enabled && _dirty && nameError == null
                   ? () => widget.onSave(_name, _topic)
                   : null,
-              child: const Text('Save'),
+              child: Text(tr('Save')),
             ),
           ),
         ],
@@ -806,7 +815,7 @@ class _ForumTagDialogState extends State<_ForumTagDialog> {
   void _save() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorText = 'Tag name is required.');
+      setState(() => _errorText = tr('Tag name is required.'));
       return;
     }
     final emoji = _emojiController.text.trim();
@@ -819,7 +828,7 @@ class _ForumTagDialogState extends State<_ForumTagDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: Text(widget.tag == null ? 'Add tag' : 'Edit tag'),
+      title: Text(widget.tag == null ? tr('Add tag') : tr('Edit tag')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -830,7 +839,7 @@ class _ForumTagDialogState extends State<_ForumTagDialog> {
             maxLength: ForumTag.maxNameLength,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Name',
+              labelText: tr('Name'),
               errorText: _errorText,
             ),
             onSubmitted: (_) => _save(),
@@ -840,9 +849,9 @@ class _ForumTagDialogState extends State<_ForumTagDialog> {
             key: const ValueKey('forum-tag-emoji-field'),
             controller: _emojiController,
             maxLength: 8,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Emoji (optional)',
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: tr('Emoji (optional)'),
             ),
             onSubmitted: (_) => _save(),
           ),
@@ -851,11 +860,11 @@ class _ForumTagDialogState extends State<_ForumTagDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: _save,
-          child: Text(widget.tag == null ? 'Add' : 'Save'),
+          child: Text(widget.tag == null ? tr('Add') : tr('Save')),
         ),
       ],
     );
@@ -889,20 +898,26 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     return AlertDialog(
       scrollable: true,
-      title: const Text('Delete channel'),
+      title: Text(tr('Delete channel')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(switch (widget.channel.kind) {
-            CircleChannelKind.forum =>
-              'Delete #$name with all of its posts? This cannot be undone.',
-            CircleChannelKind.voice =>
-              'Delete the voice channel $name? Everyone in it is '
-                  'disconnected. This cannot be undone.',
-            CircleChannelKind.text =>
-              'Delete #$name with all of its messages and threads? This '
-                  'cannot be undone.',
+            CircleChannelKind.forum => tr(
+              'Delete #{name} with all of its posts? This cannot be undone.',
+              {'name': name},
+            ),
+            CircleChannelKind.voice => tr(
+              'Delete the voice channel {name}? Everyone in it is '
+              'disconnected. This cannot be undone.',
+              {'name': name},
+            ),
+            CircleChannelKind.text => tr(
+              'Delete #{name} with all of its messages and threads? This '
+              'cannot be undone.',
+              {'name': name},
+            ),
           }),
           const SizedBox(height: 12),
           TextField(
@@ -911,7 +926,7 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
             autofocus: true,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Type the channel name',
+              labelText: tr('Type the channel name'),
               hintText: name,
             ),
             onChanged: (_) => setState(() {}),
@@ -926,7 +941,7 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -934,7 +949,7 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
             foregroundColor: colorScheme.onError,
           ),
           onPressed: _matches ? () => Navigator.of(context).pop(true) : null,
-          child: const Text('Delete'),
+          child: Text(tr('Delete')),
         ),
       ],
     );
@@ -1029,8 +1044,10 @@ class _OverwriteTile extends StatelessWidget {
       title: Text(target.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         [
-          if (allowed.isNotEmpty) 'Allowed: $allowed',
-          if (denied.isNotEmpty) 'Denied: $denied',
+          if (allowed.isNotEmpty)
+            tr('Allowed: {permissions}', {'permissions': allowed}),
+          if (denied.isNotEmpty)
+            tr('Denied: {permissions}', {'permissions': denied}),
         ].join(' · '),
       ),
       trailing: onTap == null ? null : const Icon(Icons.chevron_right),
@@ -1064,18 +1081,20 @@ class _OverwriteTargetPicker extends StatelessWidget {
       child: ListView(
         shrinkWrap: true,
         children: [
-          const ListTile(title: Text('Add role or member')),
+          ListTile(title: Text(tr('Add role or member'))),
           if (candidates.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text('Every role and member you can manage is listed.'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                tr('Every role and member you can manage is listed.'),
+              ),
             ),
           if (roles.isNotEmpty) ...[
-            const _SectionHeader('Roles'),
+            _SectionHeader(tr('Roles')),
             for (final target in roles) tile(target),
           ],
           if (members.isNotEmpty) ...[
-            const _SectionHeader('Members'),
+            _SectionHeader(tr('Members')),
             for (final target in members) tile(target),
           ],
         ],
@@ -1178,8 +1197,10 @@ class _ChannelOverwriteEditorSheetState
             ),
             const SizedBox(height: 4),
             Text(
-              'Allow or deny permissions in this channel, or inherit them '
-              'from roles.',
+              tr(
+                'Allow or deny permissions in this channel, or inherit them '
+                'from roles.',
+              ),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -1205,16 +1226,16 @@ class _ChannelOverwriteEditorSheetState
                   TextButton(
                     onPressed: () =>
                         Navigator.of(context).pop((allow: 0, deny: 0)),
-                    child: const Text('Remove'),
+                    child: Text(tr('Remove')),
                   ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(tr('Cancel')),
                 ),
                 FilledButton(
                   onPressed: () =>
                       Navigator.of(context).pop((allow: _allow, deny: _deny)),
-                  child: const Text('Save'),
+                  child: Text(tr('Save')),
                 ),
               ],
             ),
@@ -1250,21 +1271,21 @@ class _OverwritePermissionRow extends StatelessWidget {
     final choice = SegmentedButton<OverwriteState>(
       showSelectedIcon: false,
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
-      segments: const [
+      segments: [
         ButtonSegment(
           value: OverwriteState.deny,
-          icon: Icon(Icons.close),
-          tooltip: 'Deny',
+          icon: const Icon(Icons.close),
+          tooltip: tr('Deny'),
         ),
         ButtonSegment(
           value: OverwriteState.inherit,
-          icon: Icon(Icons.horizontal_rule),
-          tooltip: 'Inherit',
+          icon: const Icon(Icons.horizontal_rule),
+          tooltip: tr('Inherit'),
         ),
         ButtonSegment(
           value: OverwriteState.allow,
-          icon: Icon(Icons.check),
-          tooltip: 'Allow',
+          icon: const Icon(Icons.check),
+          tooltip: tr('Allow'),
         ),
       ],
       selected: {state},

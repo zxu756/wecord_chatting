@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -70,10 +71,10 @@ class InboxScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(tr('Notifications')),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: tr('Refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: refresh,
           ),
@@ -88,7 +89,7 @@ class InboxScreen extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Could not load notifications.',
+                  tr('Could not load notifications.'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
@@ -103,11 +104,13 @@ class InboxScreen extends ConsumerWidget {
                   leading: const CircleAvatar(
                     child: Icon(Icons.person_add_alt_1_outlined),
                   ),
-                  title: const Text('Friend requests'),
+                  title: Text(tr('Friend requests')),
                   subtitle: Text(
                     requestCount == 1
-                        ? '1 pending request'
-                        : '$requestCount pending requests',
+                        ? tr('1 pending request')
+                        : tr('{count} pending requests', {
+                            'count': requestCount,
+                          }),
                   ),
                   trailing: Badge(label: Text('$requestCount')),
                   onTap: () => openPage(context, ContactsScreen.path),
@@ -146,9 +149,9 @@ class _InboxTile extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final place = _placeLabel();
     final reason = switch (item.reason) {
-      InboxReason.mention => 'Mentioned you',
-      InboxReason.mentionAll => 'Mentioned everyone',
-      InboxReason.reply => 'Replied to you',
+      InboxReason.mention => tr('Mentioned you'),
+      InboxReason.mentionAll => tr('Mentioned everyone'),
+      InboxReason.reply => tr('Replied to you'),
     };
 
     return ListTile(
@@ -289,10 +292,10 @@ class _EmptyInbox extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 12),
-          Text('Nothing here yet', style: theme.textTheme.titleMedium),
+          Text(tr('Nothing here yet'), style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Mentions and replies from the last 30 days show up here.',
+            tr('Mentions and replies from the last 30 days show up here.'),
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

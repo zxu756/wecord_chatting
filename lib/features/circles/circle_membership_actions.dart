@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 /// Asks to confirm, then leaves the circle and goes back to the circle
@@ -19,19 +20,21 @@ Future<void> leaveCircle(
     context: context,
     builder: (context) => AlertDialog(
       scrollable: true,
-      title: Text('Leave $name'),
-      content: const Text(
-        'Leave this circle and all of its channels? You can only rejoin with '
-        'an invite.',
+      title: Text(tr('Leave {name}', {'name': name})),
+      content: Text(
+        tr(
+          'Leave this circle and all of its channels? You can only rejoin '
+          'with an invite.',
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Leave'),
+          child: Text(tr('Leave')),
         ),
       ],
     ),
@@ -50,7 +53,9 @@ Future<void> leaveCircle(
         .leaveCircle(detail.circle.id);
   } catch (_) {
     messenger?.showSnackBar(
-      SnackBar(content: Text('Could not leave $name. Try again.')),
+      SnackBar(
+        content: Text(tr('Could not leave {name}. Try again.', {'name': name})),
+      ),
     );
     return;
   }
@@ -58,7 +63,9 @@ Future<void> leaveCircle(
     ..invalidate(circleSummariesProvider)
     ..invalidate(conversationsProvider);
   router.go(HomeScreen.path);
-  messenger?.showSnackBar(SnackBar(content: Text('Left $name.')));
+  messenger?.showSnackBar(
+    SnackBar(content: Text(tr('Left {name}.', {'name': name}))),
+  );
 }
 
 /// Lets the owner pick another member and confirm with the circle's name,
@@ -83,7 +90,7 @@ Future<void> transferCircleOwnership(
         .transferOwnership(circleId: circleId, newOwnerId: newOwner.profile.id);
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not transfer ownership. Try again.')),
+      SnackBar(content: Text(tr('Could not transfer ownership. Try again.'))),
     );
     return;
   }
@@ -91,7 +98,11 @@ Future<void> transferCircleOwnership(
     ..invalidate(circleDetailProvider(circleId))
     ..invalidate(circleSummariesProvider);
   messenger?.showSnackBar(
-    SnackBar(content: Text('${newOwner.displayName} now owns the circle.')),
+    SnackBar(
+      content: Text(
+        tr('{name} now owns the circle.', {'name': newOwner.displayName}),
+      ),
+    ),
   );
 }
 
@@ -136,19 +147,23 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
 
     return AlertDialog(
       scrollable: true,
-      title: const Text('Transfer ownership'),
+      title: Text(tr('Transfer ownership')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'The new owner gets every permission. You stay in the circle as '
-            'a member without roles.',
+          Text(
+            tr(
+              'The new owner gets every permission. You stay in the circle as '
+              'a member without roles.',
+            ),
           ),
           const SizedBox(height: 12),
           if (candidates.isEmpty)
             Text(
-              'Invite someone first: there is nobody to hand the circle to.',
+              tr(
+                'Invite someone first: there is nobody to hand the circle to.',
+              ),
               style: theme.textTheme.bodySmall,
             )
           else
@@ -186,7 +201,7 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
             controller: _nameController,
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Type the circle name to confirm',
+              labelText: tr('Type the circle name to confirm'),
               hintText: circleName,
             ),
           ),
@@ -195,13 +210,13 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: _confirmed
               ? () => Navigator.of(context).pop(_selected)
               : null,
-          child: const Text('Transfer'),
+          child: Text(tr('Transfer')),
         ),
       ],
     );
@@ -257,21 +272,23 @@ class _CircleMembershipLostViewState
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        "You're no longer a member of this circle",
+                        tr("You're no longer a member of this circle"),
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'You left it or were removed. You can rejoin with an '
-                        'invite.',
+                        tr(
+                          'You left it or were removed. You can rejoin with '
+                          'an invite.',
+                        ),
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 24),
                       FilledButton(
                         onPressed: () => context.go(HomeScreen.path),
-                        child: const Text('Back to home'),
+                        child: Text(tr('Back to home')),
                       ),
                     ],
                   ),

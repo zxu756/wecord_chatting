@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -133,7 +134,7 @@ class _PollMessageContentState extends State<PollMessageContent> {
     final voters = results.totalVoters;
     final endsAt = poll.endsAt;
     final status = closed
-        ? 'Closed'
+        ? tr('Closed')
         : endsAt != null
         ? pollEndsInLabel(endsAt, now: now)
         : null;
@@ -148,7 +149,7 @@ class _PollMessageContentState extends State<PollMessageContent> {
             Icon(Icons.poll_outlined, size: 16, color: mutedColor),
             const SizedBox(width: 4),
             Text(
-              'Poll',
+              tr('Poll'),
               style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
           ],
@@ -163,10 +164,10 @@ class _PollMessageContentState extends State<PollMessageContent> {
         ),
         Text(
           closed
-              ? 'Final results'
+              ? tr('Final results')
               : poll.multi
-              ? 'Select one or more answers'
-              : 'Select one answer',
+              ? tr('Select one or more answers')
+              : tr('Select one answer'),
           style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
         ),
         const SizedBox(height: 8),
@@ -191,7 +192,12 @@ class _PollMessageContentState extends State<PollMessageContent> {
           spacing: 4,
           children: [
             Text(
-              [voters == 1 ? '1 vote' : '$voters votes', ?status].join(' · '),
+              [
+                voters == 1
+                    ? tr('1 vote')
+                    : tr('{count} votes', {'count': voters}),
+                ?status,
+              ].join(' · '),
               key: ValueKey('poll-status-${message.id}'),
               style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
@@ -203,7 +209,7 @@ class _PollMessageContentState extends State<PollMessageContent> {
                   visualDensity: VisualDensity.compact,
                 ),
                 onPressed: () => actions.onShowVoters(message),
-                child: const Text('View votes'),
+                child: Text(tr('View votes')),
               ),
             if (actions != null && !closed && actions.canEnd(message))
               TextButton(
@@ -213,7 +219,7 @@ class _PollMessageContentState extends State<PollMessageContent> {
                   visualDensity: VisualDensity.compact,
                 ),
                 onPressed: () => unawaited(actions.onEnd(message)),
-                child: const Text('End poll'),
+                child: Text(tr('End poll')),
               ),
           ],
         ),
@@ -256,7 +262,12 @@ class _PollOptionRow extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: onTap != null,
-      label: '${option.text}, $count ${count == 1 ? 'vote' : 'votes'}',
+      label: count == 1
+          ? tr('{option}, 1 vote', {'option': option.text})
+          : tr('{option}, {count} votes', {
+              'option': option.text,
+              'count': count,
+            }),
       excludeSemantics: true,
       child: Material(
         color: textColor.withValues(alpha: 0.06),
@@ -363,7 +374,7 @@ class _PollVotersSheetState extends ConsumerState<PollVotersSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Votes', style: theme.textTheme.titleLarge),
+            Text(tr('Votes'), style: theme.textTheme.titleLarge),
             if (poll != null)
               Text(
                 poll.question,
@@ -420,15 +431,15 @@ class _PollVoterList extends ConsumerWidget {
         padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),
       ),
-      error: (error, stackTrace) => const Padding(
-        padding: EdgeInsets.all(24),
-        child: Text('Could not load votes.'),
+      error: (error, stackTrace) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(tr('Could not load votes.')),
       ),
       data: (profiles) {
         if (profiles.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(24),
-            child: Text('No votes for this answer yet.'),
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(tr('No votes for this answer yet.')),
           );
         }
         return ListView(

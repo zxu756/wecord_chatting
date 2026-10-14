@@ -1,3 +1,4 @@
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -51,11 +52,13 @@ enum ForumPostSort {
   /// Newest posts first.
   created('created', 'Newest');
 
-  const ForumPostSort(this.value, this.label);
+  const ForumPostSort(this.value, this._label);
 
   /// The `sort_order` value of `list_forum_posts`.
   final String value;
-  final String label;
+  final String _label;
+
+  String get label => tr(_label);
 }
 
 /// Where the next page of a forum's posts starts: after this post.

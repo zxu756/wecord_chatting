@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 final imagePickerServiceProvider = Provider<ImagePickerService>((ref) {
   return SystemImagePickerService(ImagePicker());
@@ -104,9 +105,12 @@ class ImagePickerException implements Exception {
   }) {
     final location = filePath.isEmpty ? fileName : filePath;
     return ImagePickerException(
-      'Could not read the selected image from this Mac. '
-      'Try moving it to a local folder and choosing it again. '
-      'File: $location. Cause: $cause',
+      tr(
+        'Could not read the selected image from this Mac. '
+        'Try moving it to a local folder and choosing it again. '
+        'File: {location}. Cause: {cause}',
+        {'location': location, 'cause': cause},
+      ),
     );
   }
 

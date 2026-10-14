@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_ban.dart';
 
@@ -49,13 +50,15 @@ Future<void> timeOutCircleMember(
   final duration = await showDialog<Duration>(
     context: context,
     builder: (context) => SimpleDialog(
-      title: Text('Time out $name'),
+      title: Text(tr('Time out {name}', {'name': name})),
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: Text(
-            "They can still read, but can't send messages, react, start "
-            'threads or join voice until it ends.',
+            tr(
+              "They can still read, but can't send messages, react, start "
+              'threads or join voice until it ends.',
+            ),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
@@ -63,7 +66,7 @@ Future<void> timeOutCircleMember(
           SimpleDialogOption(
             key: ValueKey('timeout-option-${duration.inSeconds}'),
             onPressed: () => Navigator.of(context).pop(duration),
-            child: Text(label),
+            child: Text(tr(label)),
           ),
       ],
     ),
@@ -85,14 +88,21 @@ Future<void> timeOutCircleMember(
       SnackBar(
         content: Text(
           until == null
-              ? 'Timed out $name.'
-              : 'Timed out $name until ${formatTimeoutEnd(until)}.',
+              ? tr('Timed out {name}.', {'name': name})
+              : tr('Timed out {name} until {time}.', {
+                  'name': name,
+                  'time': formatTimeoutEnd(until),
+                }),
         ),
       ),
     );
   } catch (_) {
     messenger?.showSnackBar(
-      SnackBar(content: Text('Could not time out $name. Try again.')),
+      SnackBar(
+        content: Text(
+          tr('Could not time out {name}. Try again.', {'name': name}),
+        ),
+      ),
     );
   }
 }
@@ -116,11 +126,15 @@ Future<void> removeCircleMemberTimeout(
         );
     ref.invalidate(circleDetailProvider(circleId));
     messenger?.showSnackBar(
-      SnackBar(content: Text("Removed $name's timeout.")),
+      SnackBar(content: Text(tr("Removed {name}'s timeout.", {'name': name}))),
     );
   } catch (_) {
     messenger?.showSnackBar(
-      SnackBar(content: Text("Could not remove $name's timeout. Try again.")),
+      SnackBar(
+        content: Text(
+          tr("Could not remove {name}'s timeout. Try again.", {'name': name}),
+        ),
+      ),
     );
   }
 }
@@ -153,10 +167,14 @@ Future<void> banCircleMember(
     ref
       ..invalidate(circleDetailProvider(circleId))
       ..invalidate(circleBansProvider(circleId));
-    messenger?.showSnackBar(SnackBar(content: Text('Banned $name.')));
+    messenger?.showSnackBar(
+      SnackBar(content: Text(tr('Banned {name}.', {'name': name}))),
+    );
   } catch (_) {
     messenger?.showSnackBar(
-      SnackBar(content: Text('Could not ban $name. Try again.')),
+      SnackBar(
+        content: Text(tr('Could not ban {name}. Try again.', {'name': name})),
+      ),
     );
   }
 }
@@ -184,25 +202,26 @@ class _BanDialogState extends State<_BanDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: Text('Ban ${widget.name}'),
+      title: Text(tr('Ban {name}', {'name': widget.name})),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Remove ${widget.name} from this circle and keep them from '
-            'rejoining, even with an invite.',
+            tr(
+              'Remove {name} from this circle and keep them from '
+              'rejoining, even with an invite.',
+              {'name': widget.name},
+            ),
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<int>(
             key: const ValueKey('ban-delete-messages'),
             initialValue: _deleteHours,
-            decoration: const InputDecoration(
-              labelText: 'Delete their messages',
-            ),
+            decoration: InputDecoration(labelText: tr('Delete their messages')),
             items: [
               for (final (label, hours) in circleBanMessageWindows)
-                DropdownMenuItem(value: hours, child: Text(label)),
+                DropdownMenuItem(value: hours, child: Text(tr(label))),
             ],
             onChanged: (value) => setState(() => _deleteHours = value ?? 0),
           ),
@@ -213,9 +232,9 @@ class _BanDialogState extends State<_BanDialog> {
             maxLength: 512,
             maxLines: 3,
             minLines: 1,
-            decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              helperText: 'Only moderators see it.',
+            decoration: InputDecoration(
+              labelText: tr('Reason (optional)'),
+              helperText: tr('Only moderators see it.'),
             ),
           ),
         ],
@@ -223,7 +242,7 @@ class _BanDialogState extends State<_BanDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('ban-confirm'),
@@ -234,7 +253,7 @@ class _BanDialogState extends State<_BanDialog> {
           onPressed: () => Navigator.of(
             context,
           ).pop((reason: _reason.text.trim(), deleteHours: _deleteHours)),
-          child: const Text('Ban'),
+          child: Text(tr('Ban')),
         ),
       ],
     );
@@ -265,7 +284,7 @@ class CircleBansScreen extends ConsumerWidget {
     final bans = ref.watch(circleBansProvider(circleId));
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Bans')),
+      appBar: AppBar(title: Text(tr('Bans'))),
       body: bans.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
@@ -274,11 +293,11 @@ class CircleBansScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Could not load bans.'),
+                Text(tr('Could not load bans.')),
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: () => ref.invalidate(circleBansProvider(circleId)),
-                  child: const Text('Try again'),
+                  child: Text(tr('Try again')),
                 ),
               ],
             ),
@@ -290,7 +309,7 @@ class CircleBansScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Nobody is banned.',
+                  tr('Nobody is banned.'),
                   key: const ValueKey('circle-bans-empty'),
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
@@ -306,7 +325,8 @@ class CircleBansScreen extends ConsumerWidget {
               final details = [
                 if (ban.reason case final reason? when reason.isNotEmpty)
                   reason,
-                if (ban.bannedByName case final by?) 'Banned by $by',
+                if (ban.bannedByName case final by?)
+                  tr('Banned by {name}', {'name': by}),
               ].join(' · ');
               return ListTile(
                 key: ValueKey('circle-ban-${ban.userId}'),
@@ -325,7 +345,7 @@ class CircleBansScreen extends ConsumerWidget {
                 trailing: TextButton(
                   key: ValueKey('circle-unban-${ban.userId}'),
                   onPressed: () => _unban(context, ref, ban),
-                  child: const Text('Unban'),
+                  child: Text(tr('Unban')),
                 ),
               );
             },
@@ -343,16 +363,20 @@ class CircleBansScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Unban ${ban.name}'),
-        content: Text('${ban.name} will be able to join again with an invite.'),
+        title: Text(tr('Unban {name}', {'name': ban.name})),
+        content: Text(
+          tr('{name} will be able to join again with an invite.', {
+            'name': ban.name,
+          }),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Unban'),
+            child: Text(tr('Unban')),
           ),
         ],
       ),
@@ -366,10 +390,16 @@ class CircleBansScreen extends ConsumerWidget {
           .read(circlesRepositoryProvider)
           .unbanMember(circleId: circleId, userId: ban.userId);
       ref.invalidate(circleBansProvider(circleId));
-      messenger?.showSnackBar(SnackBar(content: Text('Unbanned ${ban.name}.')));
+      messenger?.showSnackBar(
+        SnackBar(content: Text(tr('Unbanned {name}.', {'name': ban.name}))),
+      );
     } catch (_) {
       messenger?.showSnackBar(
-        SnackBar(content: Text('Could not unban ${ban.name}. Try again.')),
+        SnackBar(
+          content: Text(
+            tr('Could not unban {name}. Try again.', {'name': ban.name}),
+          ),
+        ),
       );
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 
@@ -52,8 +53,10 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
     for (final (index, role) in next.indexed) {
       if (!detail.canManageRole(role) && roles[index].id != role.id) {
         messenger?.showSnackBar(
-          const SnackBar(
-            content: Text('You can only move roles below your highest role.'),
+          SnackBar(
+            content: Text(
+              tr('You can only move roles below your highest role.'),
+            ),
           ),
         );
         return;
@@ -77,7 +80,7 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
       }
       setState(() => _pendingOrder = null);
       messenger?.showSnackBar(
-        const SnackBar(content: Text('Could not reorder roles. Try again.')),
+        SnackBar(content: Text(tr('Could not reorder roles. Try again.'))),
       );
     }
   }
@@ -89,13 +92,13 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Roles'),
+        title: Text(tr('Roles')),
         actions: [
           if (loaded != null &&
               loaded.canManageRoles &&
               loaded.currentUserRank > 0)
             IconButton(
-              tooltip: 'Create role',
+              tooltip: tr('Create role'),
               icon: const Icon(Icons.add),
               onPressed: () => showCircleRoleEditorSheet(context, loaded),
             ),
@@ -135,9 +138,11 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
       header: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Text(
-          'Members get the permissions of every role they hold. Roles '
-          'higher in the list rank higher, and names take the color of '
-          'their highest colored role.',
+          tr(
+            'Members get the permissions of every role they hold. Roles '
+            'higher in the list rank higher, and names take the color of '
+            'their highest colored role.',
+          ),
           style: theme.textTheme.bodySmall,
         ),
       ),
@@ -147,7 +152,7 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
               key: ValueKey('circle-role-${everyone.id}'),
               role: everyone,
               detail: detail,
-              subtitle: 'Every member',
+              subtitle: tr('Every member'),
             ),
       itemCount: roles.length,
       onReorderItem: (oldIndex, newIndex) =>
@@ -199,7 +204,12 @@ class _RoleTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(subtitle ?? (count == 1 ? '1 member' : '$count members')),
+      subtitle: Text(
+        subtitle ??
+            (count == 1
+                ? tr('1 member')
+                : tr('{count} members', {'count': count})),
+      ),
       trailing: switch (dragIndex) {
         final index? => ReorderableDragStartListener(
           index: index,
@@ -208,9 +218,9 @@ class _RoleTile extends StatelessWidget {
             child: Icon(Icons.drag_handle),
           ),
         ),
-        null when !canManage => const Tooltip(
-          message: 'Ranked at or above your highest role',
-          child: Icon(Icons.lock_outline, size: 18),
+        null when !canManage => Tooltip(
+          message: tr('Ranked at or above your highest role'),
+          child: const Icon(Icons.lock_outline, size: 18),
         ),
         null => null,
       },
@@ -281,7 +291,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorText = 'Role name is required.');
+      setState(() => _errorText = tr('Role name is required.'));
       return;
     }
     setState(() {
@@ -315,7 +325,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not save the role. Try again.';
+        _errorText = tr('Could not save the role. Try again.');
       });
     }
   }
@@ -326,18 +336,20 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: const Text('Delete role'),
+        title: Text(tr('Delete role')),
         content: Text(
-          'Delete "${role.name}"? Members who have it lose its permissions.',
+          tr('Delete "{name}"? Members who have it lose its permissions.', {
+            'name': role.name,
+          }),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -357,7 +369,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not delete the role. Try again.';
+        _errorText = tr('Could not delete the role. Try again.');
       });
     }
   }
@@ -368,11 +380,11 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
     final role = _role;
     final editable = _editable && !_isSaving;
     final title = role == null
-        ? 'Create role'
+        ? tr('Create role')
         : _isDefault
         ? '@everyone'
         : editable
-        ? 'Edit role'
+        ? tr('Edit role')
         : role.name;
 
     return SafeArea(
@@ -392,13 +404,13 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
               if (_isDefault) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Every member has these permissions.',
+                  tr('Every member has these permissions.'),
                   style: theme.textTheme.bodyMedium,
                 ),
               ] else if (role != null && !_editable) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'This role ranks at or above your highest role.',
+                  tr('This role ranks at or above your highest role.'),
                   style: theme.textTheme.bodyMedium,
                 ),
               ],
@@ -409,13 +421,13 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
                   enabled: editable,
                   autofocus: role == null,
                   maxLength: maxCircleRoleNameLength,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Role name',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Role name'),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text('Color', style: theme.textTheme.titleSmall),
+                Text(tr('Color'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -441,9 +453,11 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Show separately'),
-                  subtitle: const Text(
-                    'List online members with this role in their own group.',
+                  title: Text(tr('Show separately')),
+                  subtitle: Text(
+                    tr(
+                      'List online members with this role in their own group.',
+                    ),
                   ),
                   value: _hoist,
                   onChanged: editable
@@ -497,7 +511,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
                       TextButton.icon(
                         onPressed: _isSaving ? null : _delete,
                         icon: const Icon(Icons.delete_outline),
-                        label: const Text('Delete role'),
+                        label: Text(tr('Delete role')),
                         style: TextButton.styleFrom(
                           foregroundColor: theme.colorScheme.error,
                         ),
@@ -506,7 +520,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
                       const SizedBox.shrink(),
                     FilledButton(
                       onPressed: _isSaving ? null : _save,
-                      child: Text(role == null ? 'Create' : 'Save'),
+                      child: Text(role == null ? tr('Create') : tr('Save')),
                     ),
                   ],
                 ),
@@ -537,7 +551,7 @@ class _ColorSwatch extends StatelessWidget {
     final value = color;
     final hex = value?.toRadixString(16).padLeft(6, '0').toUpperCase();
     return Tooltip(
-      message: hex == null ? 'No color' : '#$hex',
+      message: hex == null ? tr('No color') : '#$hex',
       child: InkResponse(
         onTap: onTap,
         radius: 24,
@@ -623,7 +637,7 @@ class _CircleMemberRolesSheetState
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not save roles. Try again.';
+        _errorText = tr('Could not save roles. Try again.');
       });
     }
   }
@@ -644,14 +658,14 @@ class _CircleMemberRolesSheetState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Manage roles', style: theme.textTheme.titleLarge),
+            Text(tr('Manage roles'), style: theme.textTheme.titleLarge),
             const SizedBox(height: 4),
             Text(widget.member.displayName, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 8),
             if (roles.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('This circle has no roles yet.'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(tr('This circle has no roles yet.')),
               ),
             for (final role in roles)
               CheckboxListTile(
@@ -693,7 +707,7 @@ class _CircleMemberRolesSheetState
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: _isSaving ? null : _save,
-                child: const Text('Save'),
+                child: Text(tr('Save')),
               ),
             ),
           ],

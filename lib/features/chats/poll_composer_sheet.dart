@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/poll.dart';
 
 /// Opens the poll form for [conversationId]. Returns true once the poll is
@@ -63,14 +64,16 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
   /// are left out.
   String? _validate(String question, List<String> options) {
     if (question.isEmpty) {
-      return 'Ask a question.';
+      return tr('Ask a question.');
     }
     if (options.length < PollAttachment.minOptions) {
-      return 'Add at least ${PollAttachment.minOptions} answers.';
+      return tr('Add at least {count} answers.', {
+        'count': PollAttachment.minOptions,
+      });
     }
     final distinct = {for (final option in options) option.toLowerCase()};
     if (distinct.length != options.length) {
-      return 'Answers must be different.';
+      return tr('Answers must be different.');
     }
     return null;
   }
@@ -106,7 +109,7 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
     } on SlowmodeException catch (error) {
       _fail(error.toString());
     } catch (_) {
-      _fail('Could not post the poll. Try again.');
+      _fail(tr('Could not post the poll. Try again.'));
     }
   }
 
@@ -136,7 +139,7 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Create poll', style: theme.textTheme.titleLarge),
+              Text(tr('Create poll'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 12),
               TextField(
                 key: const ValueKey('poll-question-field'),
@@ -147,13 +150,13 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
                 minLines: 1,
                 maxLines: 3,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Question',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Question'),
                 ),
               ),
               const SizedBox(height: 4),
-              Text('Answers', style: theme.textTheme.titleSmall),
+              Text(tr('Answers'), style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               for (final (index, controller) in _optionControllers.indexed)
                 Padding(
@@ -169,13 +172,17 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
                           textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
                             border: const OutlineInputBorder(),
-                            labelText: 'Answer ${index + 1}',
+                            labelText: tr('Answer {number}', {
+                              'number': index + 1,
+                            }),
                             counterText: '',
                           ),
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Remove answer ${index + 1}',
+                        tooltip: tr('Remove answer {number}', {
+                          'number': index + 1,
+                        }),
                         onPressed:
                             _saving ||
                                 _optionControllers.length <=
@@ -197,13 +204,13 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
                       ? null
                       : _addOption,
                   icon: const Icon(Icons.add),
-                  label: const Text('Add answer'),
+                  label: Text(tr('Add answer')),
                 ),
               ),
               SwitchListTile(
                 key: const ValueKey('poll-multi-switch'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Allow multiple answers'),
+                title: Text(tr('Allow multiple answers')),
                 value: _multi,
                 onChanged: _saving
                     ? null
@@ -213,9 +220,9 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
               DropdownButtonFormField<int?>(
                 key: const ValueKey('poll-duration-field'),
                 initialValue: _durationHours,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Duration',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Duration'),
                 ),
                 items: [
                   for (final hours in pollDurationHours)
@@ -245,12 +252,12 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
                     onPressed: _saving
                         ? null
                         : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(tr('Cancel')),
                   ),
                   FilledButton(
                     key: const ValueKey('poll-post-button'),
                     onPressed: _saving ? null : _post,
-                    child: const Text('Post poll'),
+                    child: Text(tr('Post poll')),
                   ),
                 ],
               ),

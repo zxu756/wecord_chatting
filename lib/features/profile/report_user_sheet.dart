@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -60,14 +61,14 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
       if (!mounted) {
         return;
       }
-      const message = 'Could not submit report. Try again.';
+      final message = tr('Could not submit report. Try again.');
       setState(() {
         _isSubmitting = false;
         _errorText = message;
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -88,12 +89,14 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Report ${widget.profile.displayLabel}',
+                tr('Report {name}', {'name': widget.profile.displayLabel}),
                 style: theme.textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Text(
-                'Choose the closest reason. You can add details if helpful.',
+                tr(
+                  'Choose the closest reason. You can add details if helpful.',
+                ),
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
@@ -125,9 +128,9 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
                 maxLength: 1000,
                 maxLines: 4,
                 inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Details',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Details'),
                 ),
               ),
               if (_errorText != null) ...[
@@ -142,7 +145,9 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _isSubmitting ? null : _submit,
-                child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
+                child: Text(
+                  _isSubmitting ? tr('Submitting...') : tr('Submit report'),
+                ),
               ),
             ],
           ),

@@ -21,6 +21,7 @@ import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -262,7 +263,7 @@ class LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: Text('Loading')));
+    return Scaffold(body: Center(child: Text(tr('Loading'))));
   }
 }
 

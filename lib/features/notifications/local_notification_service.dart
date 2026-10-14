@@ -8,6 +8,7 @@ import 'package:wecord/features/notifications/notification_service_base.dart';
 import 'package:wecord/features/notifications/web_local_notification_service.dart';
 import 'package:wecord/features/notifications/web_notification_gateway_stub.dart'
     if (dart.library.html) 'package:wecord/features/notifications/web_notification_gateway_html.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 export 'package:wecord/features/notifications/notification_service_base.dart';
 
@@ -119,22 +120,22 @@ class FlutterLocalNotificationService implements LocalNotificationService {
       id: _notificationIdForConversation(conversationId),
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           'wecord_messages',
-          'Messages',
-          channelDescription: 'Incoming WeCord message notifications',
+          tr('Messages'),
+          channelDescription: tr('Incoming WeCord message notifications'),
           importance: Importance.high,
           priority: Priority.high,
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
           presentBanner: true,
           presentList: true,
         ),
-        macOS: DarwinNotificationDetails(
+        macOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,

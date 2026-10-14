@@ -249,8 +249,11 @@ void main() {
     );
     await tester.pump();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.widgetWithText(OutlinedButton, 'Sign out'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.widgetWithText(OutlinedButton, 'Sign out'));
     await tester.pump();
 
@@ -409,8 +412,11 @@ void main() {
     await tester.pumpWidget(_app(settingsRepository: settingsRepository));
     await tester.pump();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -200));
-    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Blocked users'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Blocked users'));
     await tester.pumpAndSettle();
 
@@ -450,8 +456,11 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.widgetWithText(OutlinedButton, 'Send test notification'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     await tester.tap(
       find.widgetWithText(OutlinedButton, 'Send test notification'),

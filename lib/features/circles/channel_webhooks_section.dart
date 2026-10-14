@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 
@@ -58,9 +59,9 @@ class _ChannelWebhooksSectionState
   Future<void> _create() async {
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => const _WebhookNameDialog(
-        title: 'New webhook',
-        action: 'Create',
+      builder: (context) => _WebhookNameDialog(
+        title: tr('New webhook'),
+        action: tr('Create'),
         initialName: 'Webhook',
       ),
     );
@@ -72,7 +73,7 @@ class _ChannelWebhooksSectionState
         channelId: widget.channel.id,
         name: name,
       ),
-      failure: 'Could not create the webhook. Try again.',
+      failure: tr('Could not create the webhook. Try again.'),
     );
     if (secret != null && mounted) {
       await _showUrl(secret, created: true);
@@ -83,8 +84,8 @@ class _ChannelWebhooksSectionState
     final name = await showDialog<String>(
       context: context,
       builder: (context) => _WebhookNameDialog(
-        title: 'Rename webhook',
-        action: 'Save',
+        title: tr('Rename webhook'),
+        action: tr('Save'),
         initialName: webhook.name,
       ),
     );
@@ -94,24 +95,26 @@ class _ChannelWebhooksSectionState
     await _run(
       (repository) =>
           repository.renameChannelWebhook(webhookId: webhook.id, name: name),
-      failure: 'Could not rename the webhook. Try again.',
+      failure: tr('Could not rename the webhook. Try again.'),
     );
   }
 
   Future<void> _regenerate(ChannelWebhook webhook) async {
     final confirmed = await _confirm(
-      title: 'Regenerate URL',
-      message:
-          'The current URL of "${webhook.name}" stops working right away. '
-          'Services using it need the new one.',
-      action: 'Regenerate',
+      title: tr('Regenerate URL'),
+      message: tr(
+        'The current URL of "{name}" stops working right away. '
+        'Services using it need the new one.',
+        {'name': webhook.name},
+      ),
+      action: tr('Regenerate'),
     );
     if (!confirmed || !mounted) {
       return;
     }
     final secret = await _run(
       (repository) => repository.regenerateWebhookToken(webhook.id),
-      failure: 'Could not regenerate the URL. Try again.',
+      failure: tr('Could not regenerate the URL. Try again.'),
     );
     if (secret != null && mounted) {
       await _showUrl(secret, created: false);
@@ -120,11 +123,13 @@ class _ChannelWebhooksSectionState
 
   Future<void> _delete(ChannelWebhook webhook) async {
     final confirmed = await _confirm(
-      title: 'Delete webhook',
-      message:
-          'Delete "${webhook.name}"? Its URL stops working. Messages it '
-          'posted stay.',
-      action: 'Delete',
+      title: tr('Delete webhook'),
+      message: tr(
+        'Delete "{name}"? Its URL stops working. Messages it '
+        'posted stay.',
+        {'name': webhook.name},
+      ),
+      action: tr('Delete'),
       destructive: true,
     );
     if (!confirmed || !mounted) {
@@ -132,7 +137,7 @@ class _ChannelWebhooksSectionState
     }
     await _run(
       (repository) => repository.deleteChannelWebhook(webhook.id),
-      failure: 'Could not delete the webhook. Try again.',
+      failure: tr('Could not delete the webhook. Try again.'),
     );
   }
 
@@ -151,7 +156,7 @@ class _ChannelWebhooksSectionState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             key: const ValueKey('webhook-confirm'),
@@ -175,7 +180,7 @@ class _ChannelWebhooksSectionState
     return showDialog<void>(
       context: context,
       builder: (context) => _WebhookUrlDialog(
-        title: created ? 'Webhook created' : 'New webhook URL',
+        title: created ? tr('Webhook created') : tr('New webhook URL'),
         url: supabaseUrl == null ? null : secret.urlFor(supabaseUrl),
       ),
     );
@@ -192,7 +197,7 @@ class _ChannelWebhooksSectionState
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
           child: Text(
-            'Integrations',
+            tr('Integrations'),
             style: theme.textTheme.titleSmall?.copyWith(
               color: theme.colorScheme.primary,
             ),
@@ -201,8 +206,10 @@ class _ChannelWebhooksSectionState
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'Webhooks let other services post messages here. Anyone with a '
-            "webhook's URL can post, so keep it secret.",
+            tr(
+              'Webhooks let other services post messages here. Anyone with a '
+              "webhook's URL can post, so keep it secret.",
+            ),
             style: theme.textTheme.bodySmall,
           ),
         ),
@@ -211,15 +218,15 @@ class _ChannelWebhooksSectionState
             padding: EdgeInsets.all(16),
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (error, stackTrace) => const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Could not load webhooks.'),
+          error: (error, stackTrace) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(tr('Could not load webhooks.')),
           ),
           data: (webhooks) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (webhooks.isEmpty)
-                const ListTile(title: Text('No webhooks yet.')),
+                ListTile(title: Text(tr('No webhooks yet.'))),
               for (final webhook in webhooks)
                 ListTile(
                   key: ValueKey('webhook-${webhook.id}'),
@@ -232,25 +239,25 @@ class _ChannelWebhooksSectionState
                   subtitle: Text(_webhookSubtitle(webhook)),
                   trailing: PopupMenuButton<_WebhookAction>(
                     key: ValueKey('webhook-menu-${webhook.id}'),
-                    tooltip: 'Webhook actions',
+                    tooltip: tr('Webhook actions'),
                     enabled: !_busy,
                     onSelected: (action) => unawaited(switch (action) {
                       _WebhookAction.rename => _rename(webhook),
                       _WebhookAction.regenerate => _regenerate(webhook),
                       _WebhookAction.delete => _delete(webhook),
                     }),
-                    itemBuilder: (context) => const [
+                    itemBuilder: (context) => [
                       PopupMenuItem(
                         value: _WebhookAction.rename,
-                        child: Text('Rename'),
+                        child: Text(tr('Rename')),
                       ),
                       PopupMenuItem(
                         value: _WebhookAction.regenerate,
-                        child: Text('Regenerate URL'),
+                        child: Text(tr('Regenerate URL')),
                       ),
                       PopupMenuItem(
                         value: _WebhookAction.delete,
-                        child: Text('Delete'),
+                        child: Text(tr('Delete')),
                       ),
                     ],
                   ),
@@ -263,7 +270,7 @@ class _ChannelWebhooksSectionState
                     key: const ValueKey('webhook-create-button'),
                     onPressed: _busy || webhooks.length >= 10 ? null : _create,
                     icon: const Icon(Icons.add),
-                    label: const Text('New webhook'),
+                    label: Text(tr('New webhook')),
                   ),
                 ),
               ),
@@ -280,10 +287,11 @@ String _webhookSubtitle(ChannelWebhook webhook) {
   final creator = webhook.creatorName?.trim();
   final lastUsedAt = webhook.lastUsedAt;
   return [
-    if (creator != null && creator.isNotEmpty) 'Created by $creator',
+    if (creator != null && creator.isNotEmpty)
+      tr('Created by {name}', {'name': creator}),
     lastUsedAt == null
-        ? 'Never used'
-        : 'Last used ${formatThreadActivity(lastUsedAt)}',
+        ? tr('Never used')
+        : tr('Last used {time}', {'time': formatThreadActivity(lastUsedAt)}),
   ].join(' · ');
 }
 
@@ -315,7 +323,7 @@ class _WebhookNameDialogState extends State<_WebhookNameDialog> {
   void _submit() {
     final name = _controller.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorText = 'Name the webhook.');
+      setState(() => _errorText = tr('Name the webhook.'));
       return;
     }
     Navigator.of(context).pop(name);
@@ -333,7 +341,7 @@ class _WebhookNameDialogState extends State<_WebhookNameDialog> {
         maxLength: ChannelWebhook.maxNameLength,
         decoration: InputDecoration(
           border: const OutlineInputBorder(),
-          labelText: 'Name',
+          labelText: tr('Name'),
           errorText: _errorText,
         ),
         onSubmitted: (_) => _submit(),
@@ -341,7 +349,7 @@ class _WebhookNameDialogState extends State<_WebhookNameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('webhook-name-submit'),
@@ -380,8 +388,10 @@ class _WebhookUrlDialog extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Copy this URL now: it is shown only once. Anyone with it '
-                  'can post in this channel.',
+                  tr(
+                    'Copy this URL now: it is shown only once. Anyone with it '
+                    'can post in this channel.',
+                  ),
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -395,7 +405,7 @@ class _WebhookUrlDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
             ),
             child: SelectableText(
-              url ?? 'The app does not know its server address.',
+              url ?? tr('The app does not know its server address.'),
               key: const ValueKey('webhook-url'),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontFamily: 'monospace',
@@ -404,8 +414,10 @@ class _WebhookUrlDialog extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'POST JSON like {"content": "Hello"} to it; "username" and '
-            '"avatar_url" are optional.',
+            tr(
+              'POST JSON like {"content": "Hello"} to it; "username" and '
+              '"avatar_url" are optional.',
+            ),
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -418,14 +430,14 @@ class _WebhookUrlDialog extends StatelessWidget {
               unawaited(Clipboard.setData(ClipboardData(text: url)));
               ScaffoldMessenger.maybeOf(
                 context,
-              )?.showSnackBar(const SnackBar(content: Text('URL copied.')));
+              )?.showSnackBar(SnackBar(content: Text(tr('URL copied.'))));
             },
             icon: const Icon(Icons.copy),
-            label: const Text('Copy'),
+            label: Text(tr('Copy')),
           ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Done'),
+          child: Text(tr('Done')),
         ),
       ],
     );

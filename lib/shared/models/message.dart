@@ -1,3 +1,4 @@
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -167,8 +168,8 @@ class ChatMessage {
   /// "Message deleted", or "Message deleted by a moderator".
   String get deletedLabel {
     return isDeletedByModerator
-        ? 'Message deleted by a moderator'
-        : 'Message deleted';
+        ? tr('Message deleted by a moderator')
+        : tr('Message deleted');
   }
 
   /// Whether [userId] wrote this message themselves (webhook messages are

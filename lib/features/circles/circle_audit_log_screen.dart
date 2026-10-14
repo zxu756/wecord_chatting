@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 
@@ -133,10 +134,10 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
     final now = widget.now?.call() ?? DateTime.now();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Audit log'),
+        title: Text(tr('Audit log')),
         actions: [
           PopupMenuButton<CircleAuditActionGroup?>(
-            tooltip: 'Filter by action',
+            tooltip: tr('Filter by action'),
             icon: Icon(
               _filter == null ? Icons.filter_list : Icons.filter_list_alt,
             ),
@@ -145,7 +146,7 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
               CheckedPopupMenuItem<CircleAuditActionGroup?>(
                 value: null,
                 checked: _filter == null,
-                child: const Text('All actions'),
+                child: Text(tr('All actions')),
               ),
               for (final group in CircleAuditActionGroup.filters)
                 CheckedPopupMenuItem<CircleAuditActionGroup?>(
@@ -168,7 +169,7 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
                 child: InputChip(
                   label: Text(filter.label),
                   onDeleted: () => _setFilter(null),
-                  deleteButtonTooltipMessage: 'Show all actions',
+                  deleteButtonTooltipMessage: tr('Show all actions'),
                 ),
               ),
             ),
@@ -182,8 +183,8 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
     if (_entries.isEmpty) {
       if (_error != null) {
         return _Message(
-          text: 'Could not load the audit log.',
-          action: TextButton(onPressed: _loadMore, child: const Text('Retry')),
+          text: tr('Could not load the audit log.'),
+          action: TextButton(onPressed: _loadMore, child: Text(tr('Retry'))),
         );
       }
       if (_loading || _hasMore) {
@@ -191,8 +192,10 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
       }
       return _Message(
         text: _filter == null
-            ? 'Nothing has been logged yet.'
-            : 'No ${_filter!.label.toLowerCase()} actions logged yet.',
+            ? tr('Nothing has been logged yet.')
+            : tr('No {group} actions logged yet.', {
+                'group': _filter!.label.toLowerCase(),
+              }),
       );
     }
     return ListView.builder(
@@ -205,7 +208,7 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
             return Center(
               child: TextButton(
                 onPressed: _loadMore,
-                child: const Text('Could not load more. Retry'),
+                child: Text(tr('Could not load more. Retry')),
               ),
             );
           }
@@ -373,182 +376,235 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
   final bold = (style ?? const TextStyle()).copyWith(
     fontWeight: FontWeight.w600,
   );
-  final actor = entry.actor?.name ?? 'Someone';
-  final target = entry.targetLabel ?? 'something';
-  TextSpan name(String text) => TextSpan(text: text, style: bold);
-  TextSpan text(String text) => TextSpan(text: text);
+  final actor = entry.actor?.name ?? tr('Someone');
+  final target = entry.targetLabel ?? tr('something');
+  final channel = '#$target';
   final changes = entry.changes;
-
-  final List<TextSpan> rest = switch (entry.action) {
-    'channel_create' => [text(' created channel '), name('#$target')],
-    'channel_reorder' => [text(' reordered channels')],
-    'channel_permissions_update' => [
-      text(' updated permissions'),
-      if (changes['target_name'] case final String targetName) ...[
-        text(' for '),
-        name(targetName),
-      ],
-      text(' in '),
-      name('#$target'),
-    ],
-    'channel_privacy_update' => [
-      text(' changed the privacy of '),
-      name('#$target'),
-    ],
-    'channel_slowmode_update' => [
-      text(' set slowmode in '),
-      name('#$target'),
-      text(' to '),
-      name(_formatSeconds(_newValue(changes['slowmode_seconds']))),
-    ],
-    'channel_update' => [
-      if (changes['name'] case {'old': final String oldName}) ...[
-        text(' renamed channel '),
-        name('#$oldName'),
-        text(' to '),
-        name('#$target'),
-      ] else ...[
-        text(' updated channel '),
-        name('#$target'),
-      ],
-    ],
-    'channel_delete' => [text(' deleted channel '), name('#$target')],
-    'category_create' => [text(' created category '), name(target)],
-    'category_rename' => [
-      text(' renamed category '),
-      name(_formatValue('name', _oldValue(changes['name']))),
-      text(' to '),
-      name(target),
-    ],
-    'category_delete' => [text(' deleted category '), name(target)],
-    'role_create' => [text(' created role '), name(target)],
-    'role_update' => [text(' updated role '), name(target)],
-    'role_delete' => [text(' deleted role '), name(target)],
-    'role_reorder' => [text(' reordered roles')],
-    'member_add' => [text(' added '), name(target), text(' to the circle')],
-    'member_roles_update' => [text(' updated the roles of '), name(target)],
-    'member_nickname_update' => [
-      text(' changed the nickname of '),
-      name(target),
-    ],
-    'member_kick' => [text(' kicked '), name(target)],
-    'member_ban' => [text(' banned '), name(target)],
-    'member_unban' => [text(' unbanned '), name(target)],
-    'member_timeout' => [text(' timed out '), name(target)],
-    'member_timeout_remove' => [text(' removed the timeout of '), name(target)],
-    'member_leave' => [text(' left the circle')],
-    'circle_ownership_transfer' => [
-      text(' transferred ownership to '),
-      name(target),
-    ],
-    'invite_create' => [text(' created invite '), name(target)],
-    'invite_revoke' => [text(' revoked invite '), name(target)],
-    'message_pin' => [text(' pinned a message in '), name('#$target')],
-    'message_unpin' => [text(' unpinned a message in '), name('#$target')],
-    'message_delete' => [
-      text(' deleted a message by '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'thread_archive' => [text(' archived thread '), name(target)],
-    'thread_unarchive' => [text(' unarchived thread '), name(target)],
-    'post_delete' => [text(' deleted a post by '), name(target)],
-    'forum_tag_create' => [
-      text(' created tag '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'forum_tag_update' => [
-      text(' updated tag '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'forum_tag_delete' => [
-      text(' deleted tag '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'forum_tag_reorder' => [text(' reordered the tags of '), name('#$target')],
-    'forum_post_pin' => [
-      text(' pinned post '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'forum_post_unpin' => [
-      text(' unpinned post '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'event_create' => [text(' scheduled event '), name(target)],
-    'event_update' => [
-      if (changes['title'] case {'old': final String oldTitle}) ...[
-        text(' renamed event '),
-        name(oldTitle),
-        text(' to '),
-        name(target),
-      ] else ...[
-        text(' updated event '),
-        name(target),
-      ],
-    ],
-    'event_cancel' => [text(' cancelled event '), name(target)],
-    'webhook_create' => [
-      text(' created webhook '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'webhook_update' => [
-      if (changes['name'] case {'old': final String oldName}) ...[
-        text(' renamed webhook '),
-        name(oldName),
-        text(' to '),
-        name(target),
-      ] else ...[
-        text(' updated webhook '),
-        name(target),
-      ],
-    ],
-    'webhook_regenerate' => [
-      text(' regenerated the URL of webhook '),
-      name(target),
-    ],
-    'webhook_delete' => [
-      text(' deleted webhook '),
-      name(target),
-      ..._inChannel(changes, name, text),
-    ],
-    'emoji_create' => [text(' added emoji '), name(':$target:')],
-    'emoji_update' => [
-      text(' renamed emoji '),
-      name(':${_formatValue('name', _oldValue(changes['name']))}:'),
-      text(' to '),
-      name(':$target:'),
-    ],
-    'emoji_delete' => [text(' deleted emoji '), name(':$target:')],
-    'sticker_create' => [text(' added sticker '), name(target)],
-    'sticker_update' => [
-      text(' renamed sticker '),
-      name(_formatValue('name', _oldValue(changes['name']))),
-      text(' to '),
-      name(target),
-    ],
-    'sticker_delete' => [text(' deleted sticker '), name(target)],
-    _ => [text(' did ${entry.action.replaceAll('_', ' ')} to '), name(target)],
+  final inChannel = switch (changes['channel_name']) {
+    final String channelName => '#$channelName',
+    _ => null,
   };
-  return TextSpan(style: style, children: [name(actor), ...rest]);
+  final oldName = _formatValue('name', _oldValue(changes['name']));
+
+  final (String template, Map<String, String> names) = switch (entry.action) {
+    'channel_create' => (
+      tr('{actor} created channel {channel}'),
+      {'channel': channel},
+    ),
+    'channel_reorder' => (tr('{actor} reordered channels'), {}),
+    'channel_permissions_update' => switch (changes['target_name']) {
+      final String targetName => (
+        tr('{actor} updated permissions for {name} in {channel}'),
+        {'name': targetName, 'channel': channel},
+      ),
+      _ => (
+        tr('{actor} updated permissions in {channel}'),
+        {'channel': channel},
+      ),
+    },
+    'channel_privacy_update' => (
+      tr('{actor} changed the privacy of {channel}'),
+      {'channel': channel},
+    ),
+    'channel_slowmode_update' => (
+      tr('{actor} set slowmode in {channel} to {duration}'),
+      {
+        'channel': channel,
+        'duration': _formatSeconds(_newValue(changes['slowmode_seconds'])),
+      },
+    ),
+    'channel_update' => switch (changes['name']) {
+      {'old': final String oldName} => (
+        tr('{actor} renamed channel {old} to {channel}'),
+        {'old': '#$oldName', 'channel': channel},
+      ),
+      _ => (tr('{actor} updated channel {channel}'), {'channel': channel}),
+    },
+    'channel_delete' => (
+      tr('{actor} deleted channel {channel}'),
+      {'channel': channel},
+    ),
+    'category_create' => (tr('{actor} created category {target}'), {}),
+    'category_rename' => (
+      tr('{actor} renamed category {old} to {target}'),
+      {'old': oldName},
+    ),
+    'category_delete' => (tr('{actor} deleted category {target}'), {}),
+    'role_create' => (tr('{actor} created role {target}'), {}),
+    'role_update' => (tr('{actor} updated role {target}'), {}),
+    'role_delete' => (tr('{actor} deleted role {target}'), {}),
+    'role_reorder' => (tr('{actor} reordered roles'), {}),
+    'member_add' => (tr('{actor} added {target} to the circle'), {}),
+    'member_roles_update' => (tr('{actor} updated the roles of {target}'), {}),
+    'member_nickname_update' => (
+      tr('{actor} changed the nickname of {target}'),
+      {},
+    ),
+    'member_kick' => (tr('{actor} kicked {target}'), {}),
+    'member_ban' => (tr('{actor} banned {target}'), {}),
+    'member_unban' => (tr('{actor} unbanned {target}'), {}),
+    'member_timeout' => (tr('{actor} timed out {target}'), {}),
+    'member_timeout_remove' => (
+      tr('{actor} removed the timeout of {target}'),
+      {},
+    ),
+    'member_leave' => (tr('{actor} left the circle'), {}),
+    'circle_ownership_transfer' => (
+      tr('{actor} transferred ownership to {target}'),
+      {},
+    ),
+    'invite_create' => (tr('{actor} created invite {target}'), {}),
+    'invite_revoke' => (tr('{actor} revoked invite {target}'), {}),
+    'message_pin' => (
+      tr('{actor} pinned a message in {channel}'),
+      {'channel': channel},
+    ),
+    'message_unpin' => (
+      tr('{actor} unpinned a message in {channel}'),
+      {'channel': channel},
+    ),
+    'message_delete' =>
+      inChannel == null
+          ? (tr('{actor} deleted a message by {target}'), {})
+          : (
+              tr('{actor} deleted a message by {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'thread_archive' => (tr('{actor} archived thread {target}'), {}),
+    'thread_unarchive' => (tr('{actor} unarchived thread {target}'), {}),
+    'post_delete' => (tr('{actor} deleted a post by {target}'), {}),
+    'forum_tag_create' =>
+      inChannel == null
+          ? (tr('{actor} created tag {target}'), {})
+          : (
+              tr('{actor} created tag {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'forum_tag_update' =>
+      inChannel == null
+          ? (tr('{actor} updated tag {target}'), {})
+          : (
+              tr('{actor} updated tag {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'forum_tag_delete' =>
+      inChannel == null
+          ? (tr('{actor} deleted tag {target}'), {})
+          : (
+              tr('{actor} deleted tag {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'forum_tag_reorder' => (
+      tr('{actor} reordered the tags of {channel}'),
+      {'channel': channel},
+    ),
+    'forum_post_pin' =>
+      inChannel == null
+          ? (tr('{actor} pinned post {target}'), {})
+          : (
+              tr('{actor} pinned post {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'forum_post_unpin' =>
+      inChannel == null
+          ? (tr('{actor} unpinned post {target}'), {})
+          : (
+              tr('{actor} unpinned post {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'event_create' => (tr('{actor} scheduled event {target}'), {}),
+    'event_update' => switch (changes['title']) {
+      {'old': final String oldTitle} => (
+        tr('{actor} renamed event {old} to {target}'),
+        {'old': oldTitle},
+      ),
+      _ => (tr('{actor} updated event {target}'), {}),
+    },
+    'event_cancel' => (tr('{actor} cancelled event {target}'), {}),
+    'webhook_create' =>
+      inChannel == null
+          ? (tr('{actor} created webhook {target}'), {})
+          : (
+              tr('{actor} created webhook {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'webhook_update' => switch (changes['name']) {
+      {'old': final String oldName} => (
+        tr('{actor} renamed webhook {old} to {target}'),
+        {'old': oldName},
+      ),
+      _ => (tr('{actor} updated webhook {target}'), {}),
+    },
+    'webhook_regenerate' => (
+      tr('{actor} regenerated the URL of webhook {target}'),
+      {},
+    ),
+    'webhook_delete' =>
+      inChannel == null
+          ? (tr('{actor} deleted webhook {target}'), {})
+          : (
+              tr('{actor} deleted webhook {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'emoji_create' => (
+      tr('{actor} added emoji {emoji}'),
+      {'emoji': ':$target:'},
+    ),
+    'emoji_update' => (
+      tr('{actor} renamed emoji {old} to {emoji}'),
+      {'old': ':$oldName:', 'emoji': ':$target:'},
+    ),
+    'emoji_delete' => (
+      tr('{actor} deleted emoji {emoji}'),
+      {'emoji': ':$target:'},
+    ),
+    'sticker_create' => (tr('{actor} added sticker {target}'), {}),
+    'sticker_update' => (
+      tr('{actor} renamed sticker {old} to {target}'),
+      {'old': oldName},
+    ),
+    'sticker_delete' => (tr('{actor} deleted sticker {target}'), {}),
+    _ => (
+      tr('{actor} did {action} to {target}', {
+        'action': entry.action.replaceAll('_', ' '),
+      }),
+      {},
+    ),
+  };
+  return TextSpan(
+    style: style,
+    children: _fillNames(template, {
+      'actor': actor,
+      'target': target,
+      ...names,
+    }, bold),
+  );
 }
 
-/// " in #channel" when the entry names its channel.
-List<TextSpan> _inChannel(
-  Map<String, dynamic> changes,
-  TextSpan Function(String text) name,
-  TextSpan Function(String text) text,
+/// [template] as spans, with each `{placeholder}` replaced by its bold
+/// value from [names].
+List<TextSpan> _fillNames(
+  String template,
+  Map<String, String> names,
+  TextStyle bold,
 ) {
-  final channelName = changes['channel_name'];
-  if (channelName is! String) {
-    return const [];
+  final spans = <TextSpan>[];
+  var start = 0;
+  for (final match in RegExp(r'\{(\w+)\}').allMatches(template)) {
+    final value = names[match.group(1)];
+    if (value == null) {
+      continue;
+    }
+    if (match.start > start) {
+      spans.add(TextSpan(text: template.substring(start, match.start)));
+    }
+    spans.add(TextSpan(text: value, style: bold));
+    start = match.end;
   }
-  return [text(' in '), name('#$channelName')];
+  if (start < template.length) {
+    spans.add(TextSpan(text: template.substring(start)));
+  }
+  return spans;
 }
 
 typedef CircleAuditDetail = ({String label, String value});
@@ -594,20 +650,20 @@ Object? _newValue(Object? change) =>
 
 String _labelFor(String key) {
   return switch (key) {
-    'slowmode_seconds' => 'Slowmode',
-    'read_only' => 'Read-only',
-    'channels_moved' => 'Channels moved',
-    'member_count' => 'Members',
-    'max_uses' => 'Max uses',
-    'expires_at' => 'Expires',
-    'starts_at' => 'Starts',
-    'ends_at' => 'Ends',
-    'previous_owner_name' => 'Previous owner',
-    'until' => 'Until',
-    'seconds' => 'Duration',
-    'deleted_messages' => 'Messages deleted',
-    'allow' => 'Allowed',
-    'deny' => 'Denied',
+    'slowmode_seconds' => tr('Slowmode'),
+    'read_only' => tr('Read-only'),
+    'channels_moved' => tr('Channels moved'),
+    'member_count' => tr('Members'),
+    'max_uses' => tr('Max uses'),
+    'expires_at' => tr('Expires'),
+    'starts_at' => tr('Starts'),
+    'ends_at' => tr('Ends'),
+    'previous_owner_name' => tr('Previous owner'),
+    'until' => tr('Until'),
+    'seconds' => tr('Duration'),
+    'deleted_messages' => tr('Messages deleted'),
+    'allow' => tr('Allowed'),
+    'deny' => tr('Denied'),
     _ =>
       key.isEmpty
           ? key
@@ -633,10 +689,10 @@ String _formatList(List<dynamic> items) {
 
 String _formatValue(String key, Object? value) {
   if (value == null) {
-    return 'none';
+    return tr('none');
   }
   if (value is bool) {
-    return value ? 'on' : 'off';
+    return value ? tr('on') : tr('off');
   }
   if (key == 'slowmode_seconds' && value is num) {
     return _formatSeconds(value);
@@ -651,12 +707,12 @@ String _formatValue(String key, Object? value) {
       for (final permission in CirclePermission.values)
         if (bits & permission.bit != 0) permission.label,
     ];
-    return names.isEmpty ? 'none' : names.join(', ');
+    return names.isEmpty ? tr('none') : names.join(', ');
   }
   if (key == 'seconds' && value is num) {
     final seconds = value.toInt();
     return seconds >= 86400 && seconds % 86400 == 0
-        ? '${seconds ~/ 86400}d'
+        ? tr('{days}d', {'days': seconds ~/ 86400})
         : _formatSeconds(seconds);
   }
   if ((key == 'expires_at' ||
@@ -676,19 +732,25 @@ String _formatValue(String key, Object? value) {
 String _formatSeconds(Object? value) {
   final seconds = value is num ? value.toInt() : 0;
   if (seconds <= 0) {
-    return 'off';
+    return tr('off');
   }
   if (seconds < 60) {
-    return '${seconds}s';
+    return tr('{seconds}s', {'seconds': seconds});
   }
   if (seconds < 3600) {
     return seconds % 60 == 0
-        ? '${seconds ~/ 60}m'
-        : '${seconds ~/ 60}m ${seconds % 60}s';
+        ? tr('{minutes}m', {'minutes': seconds ~/ 60})
+        : tr('{minutes}m {seconds}s', {
+            'minutes': seconds ~/ 60,
+            'seconds': seconds % 60,
+          });
   }
   return seconds % 3600 == 0
-      ? '${seconds ~/ 3600}h'
-      : '${seconds ~/ 3600}h ${(seconds % 3600) ~/ 60}m';
+      ? tr('{hours}h', {'hours': seconds ~/ 3600})
+      : tr('{hours}h {minutes}m', {
+          'hours': seconds ~/ 3600,
+          'minutes': (seconds % 3600) ~/ 60,
+        });
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
@@ -697,16 +759,16 @@ String _two(int value) => value.toString().padLeft(2, '0');
 String formatAuditTime(DateTime value, {required DateTime now}) {
   final difference = now.difference(value);
   if (difference.inMinutes < 1) {
-    return 'just now';
+    return tr('just now');
   }
   if (difference.inHours < 1) {
-    return '${difference.inMinutes}m ago';
+    return tr('{minutes}m ago', {'minutes': difference.inMinutes});
   }
   if (difference.inDays < 1) {
-    return '${difference.inHours}h ago';
+    return tr('{hours}h ago', {'hours': difference.inHours});
   }
   if (difference.inDays < 7) {
-    return '${difference.inDays}d ago';
+    return tr('{days}d ago', {'days': difference.inDays});
   }
   final local = value.toLocal();
   return '${local.year}-${_two(local.month)}-${_two(local.day)}';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_controller.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
@@ -30,7 +31,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
-    final title = _isCreatingAccount ? 'Create account' : 'Sign in';
+    final title = _isCreatingAccount ? tr('Create account') : tr('Sign in');
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -46,20 +47,20 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               if (_isCreatingAccount) ...[
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
+                  decoration: InputDecoration(labelText: tr('Username')),
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _displayNameController,
-                  decoration: const InputDecoration(labelText: 'Display name'),
+                  decoration: InputDecoration(labelText: tr('Display name')),
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 12),
               ],
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: InputDecoration(labelText: tr('Email')),
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
@@ -67,7 +68,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
+                decoration: InputDecoration(labelText: tr('Password')),
                 obscureText: true,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.password],
@@ -93,7 +94,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               const SizedBox(height: 12),
               TextButton(
                 onPressed: state.isLoading ? null : _toggleMode,
-                child: Text(_isCreatingAccount ? 'Sign in' : 'Create account'),
+                child: Text(
+                  _isCreatingAccount ? tr('Sign in') : tr('Create account'),
+                ),
               ),
             ],
           ),

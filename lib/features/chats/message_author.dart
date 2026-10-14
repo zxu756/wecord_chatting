@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 /// A round avatar for [avatarUrl] (an http(s) URL or a stored avatar path)
 /// that shows [title]'s initials when there is no image or it fails to load.
@@ -63,7 +64,7 @@ class MessageBotTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        'BOT',
+        tr('BOT'),
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onPrimary,
           fontWeight: FontWeight.w700,

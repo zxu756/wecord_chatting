@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -89,7 +90,7 @@ class _CircleChannelThreadScreenState
     }
     final actions = [
       ChatThreadAction(
-        tooltip: 'Show member list',
+        tooltip: tr('Show member list'),
         icon: Icons.people_outline,
         onPressed: detail == null
             ? null
@@ -97,7 +98,7 @@ class _CircleChannelThreadScreenState
       ),
       if (detail != null && channel != null && detail.canOpenChannelSettings)
         ChatThreadAction(
-          tooltip: 'Channel settings',
+          tooltip: tr('Channel settings'),
           icon: Icons.settings_outlined,
           onPressed: () => openCircleChannelSettings(
             context,
@@ -112,16 +113,16 @@ class _CircleChannelThreadScreenState
         channel == null &&
         widget.conversationType == ConversationType.channel) {
       return Scaffold(
-        appBar: AppBar(title: Text(title ?? 'Channel')),
+        appBar: AppBar(title: Text(title ?? tr('Channel'))),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'This channel was deleted or is no longer available.',
-                  key: ValueKey('circle-channel-unavailable'),
+                Text(
+                  tr('This channel was deleted or is no longer available.'),
+                  key: const ValueKey('circle-channel-unavailable'),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
@@ -129,7 +130,7 @@ class _CircleChannelThreadScreenState
                   onPressed: () => context.canPop()
                       ? context.pop()
                       : context.go('${CircleRoutes.path}/$circleId'),
-                  child: const Text('Back to channels'),
+                  child: Text(tr('Back to channels')),
                 ),
               ],
             ),

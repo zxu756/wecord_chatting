@@ -1,3 +1,4 @@
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
 /// A small Discord-flavoured markdown dialect for chat messages.
@@ -145,7 +146,7 @@ String? firstLinkInMarkdown(
   return null;
 }
 
-const spoilerPlaceholder = '[spoiler]';
+String get spoilerPlaceholder => tr('[spoiler]');
 
 /// The text [nodes] display, with spoiler contents included.
 String plainTextOfInlines(List<MarkdownInline> nodes) {

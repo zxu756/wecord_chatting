@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 
 final circleEmojiRepositoryProvider = Provider<CircleEmojiRepository>((ref) {
@@ -147,16 +148,16 @@ class SupabaseCircleEmojiRepository implements CircleEmojiRepository {
   }) async {
     final trimmedName = name.trim();
     if (!circleEmojiNamePattern.hasMatch(trimmedName)) {
-      throw const CircleEmojiException(
-        'Names are 2 to 32 lowercase letters, digits or underscores.',
+      throw CircleEmojiException(
+        tr('Names are 2 to 32 lowercase letters, digits or underscores.'),
       );
     }
     final mimeType = circleEmojiImageMimeType(bytes);
     if (mimeType == null) {
-      throw const CircleEmojiException('Choose a PNG, GIF or WebP image.');
+      throw CircleEmojiException(tr('Choose a PNG, GIF or WebP image.'));
     }
     if (bytes.length > maxCircleEmojiBytes) {
-      throw const CircleEmojiException('Images can be at most 256 KB.');
+      throw CircleEmojiException(tr('Images can be at most 256 KB.'));
     }
     final path = '$circleId/${_newId()}.${circleEmojiExtension(mimeType)}';
     await _dataSource.uploadBinary(
@@ -192,8 +193,8 @@ class SupabaseCircleEmojiRepository implements CircleEmojiRepository {
   }) async {
     final trimmedName = name.trim();
     if (!circleEmojiNamePattern.hasMatch(trimmedName)) {
-      throw const CircleEmojiException(
-        'Names are 2 to 32 lowercase letters, digits or underscores.',
+      throw CircleEmojiException(
+        tr('Names are 2 to 32 lowercase letters, digits or underscores.'),
       );
     }
     try {
@@ -241,11 +242,15 @@ class SupabaseCircleEmojiRepository implements CircleEmojiRepository {
       return error;
     }
     return switch (error.code) {
-      '23505' => const CircleEmojiException('That name is already taken.'),
+      '23505' => CircleEmojiException(tr('That name is already taken.')),
       '54000' => CircleEmojiException(
         kind == CircleEmojiKind.sticker
-            ? 'This circle already has $maxCircleStickers stickers.'
-            : 'This circle already has $maxCircleEmojis emoji.',
+            ? tr('This circle already has {count} stickers.', {
+                'count': maxCircleStickers,
+              })
+            : tr('This circle already has {count} emoji.', {
+                'count': maxCircleEmojis,
+              }),
       ),
       '22023' => CircleEmojiException(error.message),
       _ => error,

@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// Circle permissions. The bits mirror `circle_permission_bit()` in
 /// `supabase/migrations/202610130012_circle_roles.sql`.
 enum CirclePermission {
@@ -128,8 +130,8 @@ enum CirclePermission {
     this.bit,
     this.key,
     this.group,
-    this.label,
-    this.description,
+    this._label,
+    this._description,
   );
 
   /// Every permission bit.
@@ -162,8 +164,12 @@ enum CirclePermission {
   /// The name used by the SQL helpers.
   final String key;
   final CirclePermissionGroup group;
-  final String label;
-  final String description;
+  final String _label;
+  final String _description;
+
+  String get label => tr(_label);
+
+  String get description => tr(_description);
 
   /// Whether [permissions] grants this permission. Administrators have
   /// every permission.
@@ -187,9 +193,11 @@ enum CirclePermissionGroup {
   voice('Voice'),
   advanced('Advanced');
 
-  const CirclePermissionGroup(this.label);
+  const CirclePermissionGroup(this._label);
 
-  final String label;
+  final String _label;
+
+  String get label => tr(_label);
 }
 
 class CircleRole {

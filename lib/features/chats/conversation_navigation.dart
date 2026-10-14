@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -31,8 +32,8 @@ void openConversation(BuildContext context, ConversationSummary conversation) {
   final title = conversation.title?.trim().isNotEmpty == true
       ? conversation.title!
       : conversation.isThread
-      ? 'Thread'
-      : 'Conversation';
+      ? tr('Thread')
+      : tr('Conversation');
   final circleId = conversation.circleId;
   if (circleId != null) {
     if (isWideLayout(MediaQuery.sizeOf(context).width)) {

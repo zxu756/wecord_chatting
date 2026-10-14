@@ -9,6 +9,7 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 final voiceCallConnectorProvider = Provider<VoiceCallConnector>((ref) {
   return const LiveKitVoiceCallConnector();
@@ -575,13 +576,15 @@ Future<bool> joinVoiceChannel(
     }
   } on VoiceAccessDeniedException {
     messenger?.showSnackBar(
-      const SnackBar(
-        content: Text("You don't have permission to join this voice channel."),
+      SnackBar(
+        content: Text(
+          tr("You don't have permission to join this voice channel."),
+        ),
       ),
     );
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not connect to voice. Try again.')),
+      SnackBar(content: Text(tr('Could not connect to voice. Try again.'))),
     );
   }
   return false;
@@ -613,11 +616,11 @@ Future<bool> startDirectCall(
     }
   } on VoiceAccessDeniedException {
     messenger?.showSnackBar(
-      const SnackBar(content: Text("You can't call in this conversation.")),
+      SnackBar(content: Text(tr("You can't call in this conversation."))),
     );
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not start the call. Try again.')),
+      SnackBar(content: Text(tr('Could not start the call. Try again.'))),
     );
   }
   return false;
@@ -630,16 +633,18 @@ Future<void> showVoiceNotConfiguredDialog(BuildContext context) {
       key: const ValueKey('voice-not-configured-dialog'),
       scrollable: true,
       icon: const Icon(Icons.headset_off_outlined),
-      title: const Text("Voice service isn't configured yet"),
-      content: const Text(
-        'Voice and video calls need a LiveKit server, which this WeCord '
-        'server does not have yet. Ask whoever runs it to add the LiveKit '
-        'URL, API key and secret; voice channels work as soon as they do.',
+      title: Text(tr("Voice service isn't configured yet")),
+      content: Text(
+        tr(
+          'Voice and video calls need a LiveKit server, which this WeCord '
+          'server does not have yet. Ask whoever runs it to add the LiveKit '
+          'URL, API key and secret; voice channels work as soon as they do.',
+        ),
       ),
       actions: [
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
+          child: Text(tr('OK')),
         ),
       ],
     ),

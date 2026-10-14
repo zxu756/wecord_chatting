@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// A thread: a side conversation (its own conversation, type `thread`)
 /// branching off a channel or group, usually from a root message.
 class ConversationThread {
@@ -22,7 +24,7 @@ class ConversationThread {
       conversationId: json['conversation_id'] as String,
       parentConversationId: json['parent_conversation_id'] as String,
       rootMessageId: json['root_message_id'] as String?,
-      title: json['title'] as String? ?? 'Thread',
+      title: json['title'] as String? ?? tr('Thread'),
       createdBy: json['created_by'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
       archivedAt: _parseOptionalTimestamp(json['archived_at']),
@@ -79,7 +81,7 @@ class MessageThreadSummary {
     return MessageThreadSummary(
       threadId: json['thread_id'] as String,
       conversationId: json['conversation_id'] as String,
-      title: json['title'] as String? ?? 'Thread',
+      title: json['title'] as String? ?? tr('Thread'),
       replyCount: (json['reply_count'] as num?)?.toInt() ?? 0,
       lastReplyAt: _parseOptionalTimestamp(json['last_reply_at']),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,

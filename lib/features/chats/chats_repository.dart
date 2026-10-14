@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
@@ -31,7 +32,7 @@ class ChatFileTooLargeException implements Exception {
   const ChatFileTooLargeException();
 
   @override
-  String toString() => 'Files can be up to 50 MB.';
+  String toString() => tr('Files can be up to 50 MB.');
 }
 
 abstract interface class ChatsRepository {
@@ -1183,17 +1184,20 @@ class SlowmodeException implements Exception {
   final int remainingSeconds;
 
   @override
-  String toString() =>
-      'Slowmode is enabled. Try again in $remainingSeconds seconds.';
+  String toString() => tr(
+    'Slowmode is enabled. Try again in {seconds} seconds.',
+    {'seconds': remainingSeconds},
+  );
 }
 
 class PinnedMessageLimitException implements Exception {
   const PinnedMessageLimitException();
 
   @override
-  String toString() =>
-      'A conversation can have at most $maxPinnedMessagesPerConversation '
-      'pinned messages.';
+  String toString() => tr(
+    'A conversation can have at most {count} pinned messages.',
+    {'count': maxPinnedMessagesPerConversation},
+  );
 }
 
 class ChatImageUpload {
@@ -1230,9 +1234,9 @@ class MessageSearchResult {
       messageId: json['message_id'] as String,
       conversationId: json['conversation_id'] as String,
       conversationTitle:
-          json['conversation_title'] as String? ?? 'Conversation',
+          json['conversation_title'] as String? ?? tr('Conversation'),
       senderId: json['sender_id'] as String,
-      senderName: json['sender_name'] as String? ?? 'Someone',
+      senderName: json['sender_name'] as String? ?? tr('Someone'),
       body: json['body'] as String? ?? '',
       type: MessageType.fromJson(json['type'] as String? ?? 'text'),
       createdAt: DateTime.parse(json['created_at'] as String).toUtc(),

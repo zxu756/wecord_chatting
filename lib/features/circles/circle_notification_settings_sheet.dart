@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 
 final circleNotificationSettingsProvider = FutureProvider.autoDispose
@@ -96,8 +97,8 @@ class _CircleNotificationSettingsSheetState
       ref.invalidate(circleSummariesProvider);
     } catch (_) {
       messenger?.showSnackBar(
-        const SnackBar(
-          content: Text('Could not save notification settings. Try again.'),
+        SnackBar(
+          content: Text(tr('Could not save notification settings. Try again.')),
         ),
       );
     } finally {
@@ -122,25 +123,28 @@ class _CircleNotificationSettingsSheetState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Notification settings', style: theme.textTheme.titleLarge),
+            Text(
+              tr('Notification settings'),
+              style: theme.textTheme.titleLarge,
+            ),
             const SizedBox(height: 4),
             Text(widget.circleName, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 12),
             if (settings == null)
               loaded.hasError
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Text('Could not load notification settings.'),
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(tr('Could not load notification settings.')),
                     )
                   : const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(child: CircularProgressIndicator()),
                     )
             else ...[
-              _SectionLabel('Mute circle'),
+              _SectionLabel(tr('Mute circle')),
               ..._muteTiles(settings),
               const SizedBox(height: 8),
-              _SectionLabel('Notify me about'),
+              _SectionLabel(tr('Notify me about')),
               RadioGroup<CircleNotificationLevel>(
                 groupValue: settings.level,
                 onChanged: (level) {
@@ -159,7 +163,7 @@ class _CircleNotificationSettingsSheetState
                     ])
                       RadioListTile<CircleNotificationLevel>(
                         contentPadding: EdgeInsets.zero,
-                        title: Text(label),
+                        title: Text(tr(label)),
                         value: level,
                         enabled: !_isSaving,
                       ),
@@ -182,12 +186,14 @@ class _CircleNotificationSettingsSheetState
           leading: const Icon(Icons.notifications_off_outlined),
           title: Text(
             settings.isMutedIndefinitelyAt(now)
-                ? 'Muted until you turn it back on'
-                : 'Muted until ${_formatMuteEnd(settings.mutedUntil!, now)}',
+                ? tr('Muted until you turn it back on')
+                : tr('Muted until {time}', {
+                    'time': _formatMuteEnd(settings.mutedUntil!, now),
+                  }),
           ),
           trailing: TextButton(
             onPressed: _isSaving ? null : () => _save(settings, unmute: true),
-            child: const Text('Unmute'),
+            child: Text(tr('Unmute')),
           ),
         ),
       ];
@@ -198,7 +204,7 @@ class _CircleNotificationSettingsSheetState
           contentPadding: EdgeInsets.zero,
           dense: true,
           leading: const Icon(Icons.notifications_paused_outlined),
-          title: Text(label),
+          title: Text(tr(label)),
           enabled: !_isSaving,
           onTap: () => _save(settings, muteFor: duration),
         ),

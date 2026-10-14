@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/voice.dart';
 
 final voiceRepositoryProvider = Provider<VoiceRepository>((ref) {
@@ -75,7 +76,7 @@ class VoiceNotConfiguredException implements Exception {
   const VoiceNotConfiguredException();
 
   @override
-  String toString() => "Voice service isn't configured yet.";
+  String toString() => tr("Voice service isn't configured yet.");
 }
 
 /// The current user may not connect to the voice channel (any more).
@@ -83,7 +84,7 @@ class VoiceAccessDeniedException implements Exception {
   const VoiceAccessDeniedException();
 
   @override
-  String toString() => 'You cannot connect to this voice channel.';
+  String toString() => tr('You cannot connect to this voice channel.');
 }
 
 abstract interface class VoiceRepository {

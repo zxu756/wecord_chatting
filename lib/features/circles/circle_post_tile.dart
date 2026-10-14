@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
@@ -49,7 +50,7 @@ class CirclePostTile extends ConsumerWidget {
                 ),
               ),
               PopupMenuButton<_PostAction>(
-                tooltip: 'Post actions',
+                tooltip: tr('Post actions'),
                 onSelected: (action) async {
                   switch (action) {
                     case _PostAction.delete:
@@ -64,14 +65,14 @@ class CirclePostTile extends ConsumerWidget {
                 },
                 itemBuilder: (context) => [
                   if (post.isOwnPost || post.canManagePost)
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: _PostAction.delete,
-                      child: Text('Delete'),
+                      child: Text(tr('Delete')),
                     )
                   else
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: _PostAction.report,
-                      child: Text('Report'),
+                      child: Text(tr('Report')),
                     ),
                 ],
               ),
@@ -89,7 +90,9 @@ class CirclePostTile extends ConsumerWidget {
           Row(
             children: [
               Tooltip(
-                message: post.likedByCurrentUser ? 'Unlike post' : 'Like post',
+                message: post.likedByCurrentUser
+                    ? tr('Unlike post')
+                    : tr('Like post'),
                 child: TextButton.icon(
                   onPressed: () => _toggleLike(ref),
                   icon: Icon(
@@ -106,7 +109,7 @@ class CirclePostTile extends ConsumerWidget {
                 ),
               ),
               Tooltip(
-                message: 'Comment',
+                message: tr('Comment'),
                 child: TextButton.icon(
                   onPressed: () => showCirclePostCommentSheet(
                     context,
@@ -156,7 +159,7 @@ class CirclePostTile extends ConsumerWidget {
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete post. Try again.')),
+          SnackBar(content: Text(tr('Could not delete post. Try again.'))),
         );
       }
     }
@@ -256,7 +259,7 @@ class _CirclePostCommentSheetState
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _errorText = 'Could not comment. Try again.';
+          _errorText = tr('Could not comment. Try again.');
         });
       }
     }
@@ -277,16 +280,16 @@ class _CirclePostCommentSheetState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Comment', style: theme.textTheme.titleLarge),
+              Text(tr('Comment'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 12),
               TextField(
                 controller: _controller,
                 enabled: !_isSubmitting,
                 maxLines: 4,
                 inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-                decoration: const InputDecoration(
-                  labelText: 'Comment',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: tr('Comment'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               if (_errorText != null) ...[
@@ -301,7 +304,9 @@ class _CirclePostCommentSheetState
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _isSubmitting ? null : _submit,
-                child: Text(_isSubmitting ? 'Commenting...' : 'Comment'),
+                child: Text(
+                  _isSubmitting ? tr('Commenting...') : tr('Comment'),
+                ),
               ),
             ],
           ),
@@ -373,7 +378,7 @@ class _CirclePostReportSheetState
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _errorText = 'Could not submit report. Try again.';
+          _errorText = tr('Could not submit report. Try again.');
         });
       }
     }
@@ -394,7 +399,7 @@ class _CirclePostReportSheetState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Report post', style: theme.textTheme.titleLarge),
+              Text(tr('Report post'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 12),
               RadioGroup<ReportReason>(
                 groupValue: _reason,
@@ -422,9 +427,9 @@ class _CirclePostReportSheetState
                 maxLength: 1000,
                 maxLines: 3,
                 inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-                decoration: const InputDecoration(
-                  labelText: 'Details',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: tr('Details'),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               if (_errorText != null) ...[
@@ -439,7 +444,9 @@ class _CirclePostReportSheetState
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _isSubmitting ? null : _submit,
-                child: Text(_isSubmitting ? 'Submitting...' : 'Submit report'),
+                child: Text(
+                  _isSubmitting ? tr('Submitting...') : tr('Submit report'),
+                ),
               ),
             ],
           ),

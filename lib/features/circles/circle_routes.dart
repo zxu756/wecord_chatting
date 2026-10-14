@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 /// Circle locations; a circle lives at `/circles/<id>`.
 abstract final class CircleRoutes {
@@ -23,26 +24,26 @@ Future<void> showAddCircleSheet(BuildContext context) async {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
             child: Text(
-              'Add a circle',
+              tr('Add a circle'),
               style: Theme.of(sheetContext).textTheme.titleLarge,
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
             child: Text(
-              'Start your own, or join one you were invited to.',
+              tr('Start your own, or join one you were invited to.'),
               style: Theme.of(sheetContext).textTheme.bodyMedium,
             ),
           ),
           ListTile(
             leading: const Icon(Icons.add_circle_outline),
-            title: const Text('Create a circle'),
+            title: Text(tr('Create a circle')),
             onTap: () =>
                 Navigator.of(sheetContext).pop(_AddCircleChoice.create),
           ),
           ListTile(
             leading: const Icon(Icons.add_link),
-            title: const Text('Join with invite'),
+            title: Text(tr('Join with invite')),
             onTap: () => Navigator.of(sheetContext).pop(_AddCircleChoice.join),
           ),
           const SizedBox(height: 8),
@@ -97,7 +98,7 @@ class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
   void _submit() {
     final code = parseCircleInviteCode(_controller.text);
     if (code == null) {
-      setState(() => _errorText = 'Enter an invite code or link');
+      setState(() => _errorText = tr('Enter an invite code or link'));
       return;
     }
     Navigator.of(context).pop(code);
@@ -107,12 +108,12 @@ class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: const Text('Join with invite'),
+      title: Text(tr('Join with invite')),
       content: TextField(
         controller: _controller,
         autofocus: true,
         decoration: InputDecoration(
-          labelText: 'Invite code or link',
+          labelText: tr('Invite code or link'),
           errorText: _errorText,
         ),
         onSubmitted: (_) => _submit(),
@@ -120,9 +121,9 @@ class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Join')),
+        FilledButton(onPressed: _submit, child: Text(tr('Join'))),
       ],
     );
   }

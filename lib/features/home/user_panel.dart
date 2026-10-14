@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 
 /// The signed-in user at the bottom of the sidebar on wide layouts: avatar
@@ -104,7 +105,7 @@ class UserPanel extends ConsumerWidget {
                             ),
                             Text(
                               status?.label ??
-                                  (online ? 'Online' : 'Invisible'),
+                                  (online ? tr('Online') : tr('Invisible')),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -120,7 +121,7 @@ class UserPanel extends ConsumerWidget {
               ),
             ),
             IconButton(
-              tooltip: 'User settings',
+              tooltip: tr('User settings'),
               visualDensity: VisualDensity.compact,
               onPressed: () => context.go(SettingsScreen.path),
               icon: const Icon(Icons.settings_outlined, size: 20),

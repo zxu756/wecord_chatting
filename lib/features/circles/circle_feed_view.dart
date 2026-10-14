@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/features/circles/circle_feed_composer.dart';
 import 'package:wecord/features/circles/circle_post_tile.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 class CircleFeedView extends StatelessWidget {
@@ -27,9 +28,9 @@ class CircleFeedView extends StatelessWidget {
             children: [
               CircleFeedComposer(circleId: circleId, onPosted: onChanged),
               if (posts.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 28, 16, 40),
-                  child: Center(child: Text('No posts yet')),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 28, 16, 40),
+                  child: Center(child: Text(tr('No posts yet'))),
                 ),
             ],
           );

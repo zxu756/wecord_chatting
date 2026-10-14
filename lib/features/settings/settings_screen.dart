@@ -66,7 +66,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         NotificationPermissionStatus.notRequested;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('You')),
+      appBar: AppBar(title: Text(tr('You'))),
       body: profile.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(child: _ErrorText(error)),
@@ -92,7 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.photo_camera_outlined),
-                  label: const Text('Change avatar'),
+                  label: Text(tr('Change avatar')),
                 ),
               ),
               const SizedBox(height: 16),
@@ -105,9 +105,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _displayNameController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Display name',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Display name'),
                 ),
                 textInputAction: TextInputAction.next,
                 onChanged: (_) => setState(() {}),
@@ -115,9 +115,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _bioController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Bio',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Bio'),
                 ),
                 minLines: 3,
                 maxLines: 5,
@@ -137,31 +137,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Save'),
+                    : Text(tr('Save')),
               ),
               const Divider(height: 32),
               Text(
-                'Appearance',
+                tr('Appearance'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 12),
               SegmentedButton<ThemeMode>(
                 key: const ValueKey('theme-mode'),
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: ThemeMode.system,
-                    icon: Icon(Icons.brightness_auto_outlined),
-                    label: Text('System'),
+                    icon: const Icon(Icons.brightness_auto_outlined),
+                    label: Text(tr('System')),
                   ),
                   ButtonSegment(
                     value: ThemeMode.light,
-                    icon: Icon(Icons.light_mode_outlined),
-                    label: Text('Light'),
+                    icon: const Icon(Icons.light_mode_outlined),
+                    label: Text(tr('Light')),
                   ),
                   ButtonSegment(
                     value: ThemeMode.dark,
-                    icon: Icon(Icons.dark_mode_outlined),
-                    label: Text('Dark'),
+                    icon: const Icon(Icons.dark_mode_outlined),
+                    label: Text(tr('Dark')),
                   ),
                 ],
                 selected: {ref.watch(themeModeProvider)},
@@ -199,20 +199,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const Divider(height: 32),
               Text(
-                'Privacy & Safety',
+                tr('Privacy & Safety'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.shield_outlined),
-                title: const Text('Blocked users'),
-                subtitle: const Text('Manage people you have blocked'),
+                title: Text(tr('Blocked users')),
+                subtitle: Text(tr('Manage people you have blocked')),
                 onTap: () => showBlockedUsersSheet(context, ref),
               ),
               const Divider(height: 32),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Notifications'),
+                title: Text(tr('Notifications')),
                 value: notificationPreferences.enabled,
                 onChanged: (enabled) {
                   _saveNotificationPreferences(
@@ -222,7 +222,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Message previews'),
+                title: Text(tr('Message previews')),
                 value: notificationPreferences.showPreviews,
                 onChanged: notificationPreferences.enabled
                     ? (showPreviews) {
@@ -245,18 +245,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   OutlinedButton(
                     onPressed: _requestNotificationPermission,
-                    child: const Text('Request permission'),
+                    child: Text(tr('Request permission')),
                   ),
                   OutlinedButton(
                     onPressed: _sendTestNotification,
-                    child: const Text('Send test notification'),
+                    child: Text(tr('Send test notification')),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _saving ? null : _signOut,
-                child: const Text('Sign out'),
+                child: Text(tr('Sign out')),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -272,7 +272,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         username: profile.username,
                       ),
                 icon: const Icon(Icons.delete_forever_outlined),
-                label: const Text('Delete account'),
+                label: Text(tr('Delete account')),
               ),
             ],
           );
@@ -309,7 +309,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not save profile. Try again.';
+          _errorText = tr('Could not save profile. Try again.');
         });
       }
     } finally {
@@ -347,7 +347,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not upload avatar. Try again.';
+          _errorText = tr('Could not upload avatar. Try again.');
         });
       }
     } finally {
@@ -392,7 +392,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (status != NotificationPermissionStatus.granted) {
       if (mounted) {
         setState(() {
-          _errorText = 'Notifications are not allowed on this device.';
+          _errorText = tr('Notifications are not allowed on this device.');
         });
       }
       return;
@@ -402,12 +402,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await notificationService.showMessageNotification(
         conversationId: 'settings-test',
         title: 'WeCord',
-        body: 'Notifications are working.',
+        body: tr('Notifications are working.'),
       );
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not send test notification. Try again.';
+          _errorText = tr('Could not send test notification. Try again.');
         });
       }
     }
@@ -432,8 +432,8 @@ class _CustomStatusTile extends StatelessWidget {
             : Text(status!.emoji!, style: const TextStyle(fontSize: 22)),
         title: Text(
           status == null
-              ? 'Set status'
-              : (status.text ?? status.emoji ?? 'Status'),
+              ? tr('Set status')
+              : (status.text ?? status.emoji ?? tr('Status')),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -441,8 +441,8 @@ class _CustomStatusTile extends StatelessWidget {
             ? null
             : Text(
                 expiresAt == null
-                    ? "Doesn't clear"
-                    : 'Clears ${_formatExpiry(expiresAt)}',
+                    ? tr("Doesn't clear")
+                    : _formatExpiry(expiresAt),
               ),
         trailing: const Icon(Icons.edit_outlined),
         onTap: onTap,
@@ -462,9 +462,13 @@ String _formatExpiry(DateTime expiresAt) {
       local.month == now.month &&
       local.day == now.day;
   if (sameDay) {
-    return 'at $time';
+    return tr('Clears at {time}', {'time': time});
   }
-  return 'on ${local.month}/${local.day} at $time';
+  return tr('Clears on {month}/{day} at {time}', {
+    'month': local.month,
+    'day': local.day,
+    'time': time,
+  });
 }
 
 Future<void> showBlockedUsersSheet(BuildContext context, WidgetRef ref) {
@@ -496,7 +500,7 @@ class _BlockedUsersSheetState extends ConsumerState<_BlockedUsersSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Blocked users',
+              tr('Blocked users'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
@@ -512,9 +516,9 @@ class _BlockedUsersSheetState extends ConsumerState<_BlockedUsersSheet> {
                 ),
                 data: (users) {
                   if (users.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Text('You have not blocked anyone.'),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(tr('You have not blocked anyone.')),
                     );
                   }
                   return ListView.separated(
@@ -539,7 +543,7 @@ class _BlockedUsersSheetState extends ConsumerState<_BlockedUsersSheet> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('Unblock'),
+                              : Text(tr('Unblock')),
                         ),
                       );
                     },
@@ -628,9 +632,9 @@ class _ErrorText extends StatelessWidget {
 
 String _permissionStatusLabel(NotificationPermissionStatus status) {
   return switch (status) {
-    NotificationPermissionStatus.notRequested => 'Permission not requested',
-    NotificationPermissionStatus.granted => 'Permission granted',
-    NotificationPermissionStatus.denied => 'Permission denied',
-    NotificationPermissionStatus.unavailable => 'Notifications unavailable',
+    NotificationPermissionStatus.notRequested => tr('Permission not requested'),
+    NotificationPermissionStatus.granted => tr('Permission granted'),
+    NotificationPermissionStatus.denied => tr('Permission denied'),
+    NotificationPermissionStatus.unavailable => tr('Notifications unavailable'),
   };
 }

@@ -9,6 +9,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -86,7 +87,7 @@ class CircleRail extends ConsumerWidget {
         children: [
           CircleRailItem(
             key: const ValueKey('circle-rail-home'),
-            tooltip: 'Direct messages',
+            tooltip: tr('Direct messages'),
             selected: homeSelected,
             mentionCount: directUnread,
             onTap: () => context.go(HomeScreen.path),
@@ -119,13 +120,13 @@ class CircleRail extends ConsumerWidget {
             ),
           CircleRailItem(
             key: const ValueKey('circle-rail-add'),
-            tooltip: 'Add a circle',
+            tooltip: tr('Add a circle'),
             onTap: () => showAddCircleSheet(context),
             child: const Icon(Icons.add),
           ),
           CircleRailItem(
             key: const ValueKey('circle-rail-explore'),
-            tooltip: 'Search and explore',
+            tooltip: tr('Search and explore'),
             onTap: () => openPage(context, GlobalMessageSearchScreen.path),
             child: const Icon(Icons.explore_outlined),
           ),

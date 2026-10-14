@@ -37,6 +37,7 @@ import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -381,7 +382,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       search.toIconButton(),
       primary.toIconButton(),
       PopupMenuButton<ChatThreadAction>(
-        tooltip: 'More',
+        tooltip: tr('More'),
         icon: const Icon(Icons.more_vert),
         onSelected: (action) => action.onPressed?.call(),
         itemBuilder: (context) => [
@@ -424,7 +425,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(tr('Close')),
           ),
         ],
       ),
@@ -458,7 +459,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ? widget.title!.trim()
         : conversationSummary?.title?.trim().isNotEmpty == true
         ? conversationSummary!.title!.trim()
-        : 'Conversation';
+        : tr('Conversation');
     final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
@@ -552,12 +553,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
 
     final searchAction = ChatThreadAction(
-      tooltip: 'Search messages',
+      tooltip: tr('Search messages'),
       icon: Icons.search,
       onPressed: _toggleMessageSearch,
     );
     final pinnedAction = ChatThreadAction(
-      tooltip: 'Pinned messages',
+      tooltip: tr('Pinned messages'),
       icon: Icons.push_pin_outlined,
       onPressed: () => _showPinnedMessages(canPinMessages),
     );
@@ -566,7 +567,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         conversationType == ConversationType.group;
     final callAction = canCall
         ? ChatThreadAction(
-            tooltip: 'Start voice call',
+            tooltip: tr('Start voice call'),
             icon: Icons.call_outlined,
             onPressed: () => startDirectCall(
               context,
@@ -578,7 +579,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         : null;
     final videoCallAction = canCall
         ? ChatThreadAction(
-            tooltip: 'Start video call',
+            tooltip: tr('Start video call'),
             icon: Icons.videocam_outlined,
             onPressed: () => startDirectCall(
               context,
@@ -591,17 +592,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         : null;
     final groupDetailsAction = conversationType == ConversationType.group
         ? ChatThreadAction(
-            tooltip: 'Group details',
+            tooltip: tr('Group details'),
             icon: Icons.group_outlined,
             onPressed: () => _showGroupDetails(title),
           )
         : null;
-    final threadNoun = widget.forumPost ? 'post' : 'thread';
     final archiveAction = canManageThread
         ? ChatThreadAction(
-            tooltip: threadArchived
-                ? 'Unarchive $threadNoun'
-                : 'Archive $threadNoun',
+            tooltip: switch ((threadArchived, widget.forumPost)) {
+              (true, true) => tr('Unarchive post'),
+              (true, false) => tr('Unarchive thread'),
+              (false, true) => tr('Archive post'),
+              (false, false) => tr('Archive thread'),
+            },
             icon: threadArchived
                 ? Icons.unarchive_outlined
                 : Icons.archive_outlined,
@@ -615,7 +618,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ?videoCallAction,
       pinnedAction,
       ChatThreadAction(
-        tooltip: 'Media',
+        tooltip: tr('Media'),
         icon: Icons.photo_library_outlined,
         onPressed: () {
           context.push(ChatMediaScreen.pathFor(widget.conversationId));
@@ -641,7 +644,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         appBar: AppBar(
           leading: widget.onBack != null
               ? IconButton(
-                  tooltip: 'Back',
+                  tooltip: tr('Back'),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: widget.onBack,
                 )
@@ -702,7 +705,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         isThread
                             ? _threadSubtitle(conversationSummary)
                             : [
-                                peerIsOnline ? 'Online' : 'Offline',
+                                peerIsOnline ? tr('Online') : tr('Offline'),
                                 if (conversationType == ConversationType.direct)
                                   ?activeCustomStatus(
                                     conversationSummary?.directCustomStatus,
@@ -744,9 +747,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Search messages',
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: tr('Search messages'),
                         ),
                         onChanged: (value) {
                           setState(() {
@@ -767,7 +770,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               )
                               .length;
                           return Text(
-                            '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
+                            resultCount == 1
+                                ? tr('1 result')
+                                : tr('{count} results', {'count': resultCount}),
                           );
                         },
                         orElse: () => const SizedBox.shrink(),
@@ -805,10 +810,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   _markReadAfterLoad(messages);
                   _reconcileActiveMessageState(messagesById);
                   if (messages.isEmpty) {
-                    return const Center(child: Text('No messages yet'));
+                    return Center(child: Text(tr('No messages yet')));
                   }
                   if (visibleMessages.isEmpty) {
-                    return const Center(child: Text('No matching messages'));
+                    return Center(child: Text(tr('No matching messages')));
                   }
 
                   final visibleOldestToNewest = _messagesOldestToNewest(
@@ -1016,13 +1021,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           child: FloatingActionButton.extended(
                             key: const ValueKey('forum-jump-to-new-replies'),
                             heroTag: null,
-                            tooltip: 'Jump to new replies',
+                            tooltip: tr('Jump to new replies'),
                             onPressed: () {
                               setState(() => _newRepliesDismissed = true);
                               unawaited(_scrollToMessage(newRepliesId));
                             },
                             icon: const Icon(Icons.arrow_downward),
-                            label: const Text('Jump to new replies'),
+                            label: Text(tr('Jump to new replies')),
                           ),
                         ),
                       if (showJumpToLatest)
@@ -1031,13 +1036,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           bottom: 16,
                           child: FloatingActionButton.extended(
                             heroTag: null,
-                            tooltip: 'Jump to latest',
+                            tooltip: tr('Jump to latest'),
                             onPressed: _jumpToLatest,
                             icon: const Icon(Icons.arrow_downward),
                             label: Text(
                               _unseenMessageCount == 1
-                                  ? '1 new message'
-                                  : '$_unseenMessageCount new messages',
+                                  ? tr('1 new message')
+                                  : tr('{count} new messages', {
+                                      'count': _unseenMessageCount,
+                                    }),
                             ),
                           ),
                         ),
@@ -1047,11 +1054,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
             ),
             if (peerIsTyping)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('typing...'),
+                  child: Text(tr('typing...')),
                 ),
               ),
             if (!canSend)
@@ -1077,7 +1084,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onComposerKey: _handleComposerKey,
                   replyPreviewText: _replyingTo == null
                       ? null
-                      : _replyPreviewBody(_replyingTo!),
+                      : _replyPreviewBody(_replyingTo!, localized: true),
                   isEditing: _editingMessage != null,
                   onChanged: _handleComposerChanged,
                   onSend: _sendMessage,
@@ -1377,7 +1384,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not send message. Try again.';
+          _sendError = tr('Could not send message. Try again.');
         });
       }
     } finally {
@@ -1408,7 +1415,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not save edit. Try again.';
+          _sendError = tr('Could not save edit. Try again.');
         });
       }
     } finally {
@@ -1551,7 +1558,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .votePoll(messageId: message.id, optionIds: optionIds);
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
-      _showSnackBar('Could not record your vote. Try again.');
+      _showSnackBar(tr('Could not record your vote. Try again.'));
       rethrow;
     }
   }
@@ -1561,19 +1568,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: const Text('End poll'),
-        content: const Text(
-          'End this poll now? Nobody can vote after it ends.',
-        ),
+        title: Text(tr('End poll')),
+        content: Text(tr('End this poll now? Nobody can vote after it ends.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             key: const ValueKey('poll-end-confirm'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('End poll'),
+            child: Text(tr('End poll')),
           ),
         ],
       ),
@@ -1585,7 +1590,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref.read(chatsRepositoryProvider).endPoll(messageId: message.id);
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
-      _showSnackBar('Could not end the poll. Try again.');
+      _showSnackBar(tr('Could not end the poll. Try again.'));
     }
   }
 
@@ -1622,7 +1627,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not start recording. Check microphone access.';
+          _sendError = tr(
+            'Could not start recording. Check microphone access.',
+          );
         });
       }
     }
@@ -1673,7 +1680,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not send voice message. Try again.';
+          _sendError = tr('Could not send voice message. Try again.');
         });
       }
     } finally {
@@ -1779,7 +1786,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _waitOutSlowmode(error);
     } catch (_) {
       if (mounted) {
-        setState(() => _sendError = 'Could not send sticker. Try again.');
+        setState(() => _sendError = tr('Could not send sticker. Try again.'));
       }
     } finally {
       if (mounted) {
@@ -1895,7 +1902,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .read(circlesRepositoryProvider)
           .setNickname(circleId: circleId, userId: userId, nickname: nickname);
     } catch (_) {
-      _showSnackBar('Could not change nickname. Try again.');
+      _showSnackBar(tr('Could not change nickname. Try again.'));
       return false;
     }
     // Messages, mentions and member lists show nicknames.
@@ -1904,8 +1911,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     ref.invalidate(circleDetailProvider(circleId));
     _showSnackBar(
       nickname == null
-          ? 'Your nickname was reset.'
-          : 'Your nickname is now $nickname.',
+          ? tr('Your nickname was reset.')
+          : tr('Your nickname is now {nickname}.', {'nickname': nickname}),
     );
     return true;
   }
@@ -1918,16 +1925,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       _showSnackBar(
         status.clears
-            ? 'Could not clear status. Try again.'
-            : 'Could not set status. Try again.',
+            ? tr('Could not clear status. Try again.')
+            : tr('Could not set status. Try again.'),
       );
       return false;
     }
     ref.invalidate(currentProfileProvider);
     _showSnackBar(
       status.clears
-          ? 'Status cleared.'
-          : 'Status set to ${CustomStatus(emoji: status.emoji, text: status.text).label}.',
+          ? tr('Status cleared.')
+          : tr('Status set to {status}.', {
+              'status': CustomStatus(
+                emoji: status.emoji,
+                text: status.text,
+              ).label,
+            }),
     );
     return true;
   }
@@ -1978,14 +1990,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         context: context,
         builder: (context) => AlertDialog(
           scrollable: true,
-          title: const Text('Delete message'),
-          content: const Text(
-            'Delete this message for everyone? This cannot be undone.',
+          title: Text(tr('Delete message')),
+          content: Text(
+            tr('Delete this message for everyone? This cannot be undone.'),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(tr('Cancel')),
             ),
             FilledButton(
               key: const ValueKey('message-delete-confirm'),
@@ -1994,7 +2006,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 foregroundColor: Theme.of(context).colorScheme.onError,
               ),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
+              child: Text(tr('Delete')),
             ),
           ],
         ),
@@ -2011,7 +2023,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not delete message. Try again.';
+          _sendError = tr('Could not delete message. Try again.');
         });
       }
     }
@@ -2029,7 +2041,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not update reaction. Try again.';
+          _sendError = tr('Could not update reaction. Try again.');
         });
       }
     }
@@ -2050,14 +2062,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(pinnedMessagesProvider(widget.conversationId));
     } on PinnedMessageLimitException {
       _showSnackBar(
-        'This conversation already has $maxPinnedMessagesPerConversation '
-        'pinned messages.',
+        tr('This conversation already has {count} pinned messages.', {
+          'count': maxPinnedMessagesPerConversation,
+        }),
       );
     } catch (_) {
       _showSnackBar(
         message.isPinned
-            ? 'Could not unpin message. Try again.'
-            : 'Could not pin message. Try again.',
+            ? tr('Could not unpin message. Try again.')
+            : tr('Could not pin message. Try again.'),
       );
     }
   }
@@ -2069,7 +2082,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .setMessageSuppressEmbeds(messageId: message.id, suppress: true);
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
-      _showSnackBar('Could not remove the link preview. Try again.');
+      _showSnackBar(tr('Could not remove the link preview. Try again.'));
     }
   }
 
@@ -2130,7 +2143,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ),
       );
     } catch (_) {
-      _showSnackBar('Could not create thread. Try again.');
+      _showSnackBar(tr('Could not create thread. Try again.'));
     }
   }
 
@@ -2141,12 +2154,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           .setThreadArchived(threadId: threadId, archived: archived);
       ref.invalidate(chatConversationSummaryProvider(widget.conversationId));
       ref.invalidate(conversationsProvider);
-      _showSnackBar(archived ? 'Thread archived.' : 'Thread unarchived.');
+      _showSnackBar(
+        archived ? tr('Thread archived.') : tr('Thread unarchived.'),
+      );
     } catch (_) {
       _showSnackBar(
         archived
-            ? 'Could not archive thread. Try again.'
-            : 'Could not unarchive thread. Try again.',
+            ? tr('Could not archive thread. Try again.')
+            : tr('Could not unarchive thread. Try again.'),
       );
     }
   }
@@ -2159,7 +2174,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
       ref.invalidate(pinnedMessagesProvider(widget.conversationId));
     } catch (_) {
-      _showSnackBar('Could not unpin message. Try again.');
+      _showSnackBar(tr('Could not unpin message. Try again.'));
     }
   }
 
@@ -2192,7 +2207,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ?.messages ??
         const <ChatMessage>[];
     if (!messages.any((message) => message.id == messageId)) {
-      _showSnackBar('That message is not loaded.');
+      _showSnackBar(tr('That message is not loaded.'));
       return;
     }
     if (_messageSearchQuery.trim().isNotEmpty) {
@@ -2231,7 +2246,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
     final targetContext = _messageKeys[messageId]?.currentContext;
     if (targetContext == null || !targetContext.mounted) {
-      _showSnackBar('That message is not loaded.');
+      _showSnackBar(tr('That message is not loaded.'));
       return;
     }
     await Scrollable.ensureVisible(
@@ -2344,7 +2359,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _sendError = 'Could not open image preview. Try again.';
+          _sendError = tr('Could not open image preview. Try again.');
         });
       }
     }
@@ -2355,12 +2370,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 String _threadSubtitle(ConversationSummary? summary) {
   final parentTitle = summary?.parentTitle?.trim();
   if (parentTitle == null || parentTitle.isEmpty) {
-    return 'Thread';
+    return tr('Thread');
   }
-  final archived = summary?.threadArchivedAt != null ? ' · Archived' : '';
-  return summary?.circleId != null
-      ? 'in #$parentTitle$archived'
-      : 'in $parentTitle$archived';
+  final archived = summary?.threadArchivedAt != null;
+  final args = {'parent': parentTitle};
+  return switch ((summary?.circleId != null, archived)) {
+    (true, true) => tr('in #{parent} · Archived', args),
+    (true, false) => tr('in #{parent}', args),
+    (false, true) => tr('in {parent} · Archived', args),
+    (false, false) => tr('in {parent}', args),
+  };
 }
 
 String _suggestedTitleFor(ChatMessage message) {
@@ -2368,12 +2387,12 @@ String _suggestedTitleFor(ChatMessage message) {
     MessageType.text => suggestedThreadTitle(
       plainTextFromMarkdown(message.body),
     ),
-    MessageType.image => 'Image',
-    MessageType.voice => 'Voice message',
-    MessageType.file => 'File',
-    MessageType.system => 'Thread',
+    MessageType.image => tr('Image'),
+    MessageType.voice => tr('Voice message'),
+    MessageType.file => tr('File'),
+    MessageType.system => tr('Thread'),
     MessageType.poll => suggestedThreadTitle(message.body),
-    MessageType.sticker => 'Sticker',
+    MessageType.sticker => tr('Sticker'),
   };
 }
 
@@ -2401,7 +2420,7 @@ class _ThreadTitleDialogState extends State<_ThreadTitleDialog> {
   void _create() {
     final title = _controller.text.trim();
     if (title.isEmpty) {
-      setState(() => _errorText = 'Thread title is required.');
+      setState(() => _errorText = tr('Thread title is required.'));
       return;
     }
     Navigator.of(context).pop(title);
@@ -2411,14 +2430,14 @@ class _ThreadTitleDialogState extends State<_ThreadTitleDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: const Text('Create thread'),
+      title: Text(tr('Create thread')),
       content: TextField(
         controller: _controller,
         autofocus: true,
         maxLength: ConversationThread.maxTitleLength,
         decoration: InputDecoration(
           border: const OutlineInputBorder(),
-          labelText: 'Thread title',
+          labelText: tr('Thread title'),
           errorText: _errorText,
         ),
         onSubmitted: (_) => _create(),
@@ -2426,9 +2445,9 @@ class _ThreadTitleDialogState extends State<_ThreadTitleDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
-        FilledButton(onPressed: _create, child: const Text('Create')),
+        FilledButton(onPressed: _create, child: Text(tr('Create'))),
       ],
     );
   }
@@ -2452,9 +2471,9 @@ class _ThreadChip extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final unread = summary.unreadCount > 0;
     final replies = switch (summary.replyCount) {
-      0 => 'No replies yet',
-      1 => '1 reply',
-      final count => '$count replies',
+      0 => tr('No replies yet'),
+      1 => tr('1 reply'),
+      final count => tr('{count} replies', {'count': count}),
     };
     final lastReplyAt = summary.lastReplyAt;
     final detail = summary.replyCount > 0 && lastReplyAt != null
@@ -2532,13 +2551,13 @@ String formatThreadActivity(DateTime value, {DateTime? now}) {
   final current = (now ?? DateTime.now()).toUtc();
   final difference = current.difference(value.toUtc());
   if (difference.inMinutes < 1) {
-    return 'just now';
+    return tr('just now');
   }
   if (difference.inHours < 1) {
-    return '${difference.inMinutes}m ago';
+    return tr('{minutes}m ago', {'minutes': difference.inMinutes});
   }
   if (difference.inDays < 1) {
-    return '${difference.inHours}h ago';
+    return tr('{hours}h ago', {'hours': difference.inHours});
   }
   final local = value.toLocal();
   return '${local.month}/${local.day}';
@@ -2627,7 +2646,7 @@ _MessageSender _senderFor(
         ? label
         : profile?.username.trim().isNotEmpty == true
         ? profile!.username
-        : 'Unknown member',
+        : tr('Unknown member'),
     avatarUrl: profile?.avatarUrl,
     roleColor: message.senderRoleColor,
   );
@@ -2664,7 +2683,7 @@ class _NewMessagesDivider extends StatelessWidget {
           Expanded(child: Divider(color: color, height: 1)),
           const SizedBox(width: 8),
           Text(
-            'NEW',
+            tr('NEW'),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: color,
               fontWeight: FontWeight.w700,
@@ -2801,9 +2820,9 @@ class _MessageBubble extends StatelessWidget {
         ? const <MessageReaction>[]
         : message.reactions;
     final replies = switch (replyCount) {
-      0 => 'No replies yet',
-      1 => '1 reply',
-      final count => '$count replies',
+      0 => tr('No replies yet'),
+      1 => tr('1 reply'),
+      final count => tr('{count} replies', {'count': count}),
     };
 
     return Padding(
@@ -2849,7 +2868,7 @@ class _MessageBubble extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              sender?.name ?? 'Someone',
+                              sender?.name ?? tr('Someone'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleSmall?.copyWith(
@@ -2897,7 +2916,7 @@ class _MessageBubble extends StatelessWidget {
                   if (message.editedAt != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'edited',
+                      tr('edited'),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -3092,7 +3111,7 @@ class _MessageBubble extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(right: 4, bottom: gap),
             child: Text(
-              'Read',
+              tr('Read'),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -3171,7 +3190,7 @@ class _MessageBubble extends StatelessWidget {
                 if (canCompose)
                   ListTile(
                     leading: const Icon(Icons.reply_outlined),
-                    title: const Text('Reply'),
+                    title: Text(tr('Reply')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onReply(message);
@@ -3184,8 +3203,8 @@ class _MessageBubble extends StatelessWidget {
                     leading: const Icon(Icons.forum_outlined),
                     title: Text(
                       message.threadSummary == null
-                          ? 'Create thread'
-                          : 'Open thread',
+                          ? tr('Create thread')
+                          : tr('Open thread'),
                     ),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
@@ -3199,7 +3218,7 @@ class _MessageBubble extends StatelessWidget {
                     message.type != MessageType.sticker)
                   ListTile(
                     leading: const Icon(Icons.forward_outlined),
-                    title: const Text('Forward'),
+                    title: Text(tr('Forward')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onForward(message);
@@ -3210,7 +3229,7 @@ class _MessageBubble extends StatelessWidget {
                     message.type == MessageType.text)
                   ListTile(
                     leading: const Icon(Icons.edit_outlined),
-                    title: const Text('Edit'),
+                    title: Text(tr('Edit')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       onEdit(message);
@@ -3219,7 +3238,7 @@ class _MessageBubble extends StatelessWidget {
                 if (imageAttachment != null)
                   ListTile(
                     leading: const Icon(Icons.visibility_outlined),
-                    title: const Text('Preview'),
+                    title: Text(tr('Preview')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onPreviewImage(imageAttachment));
@@ -3232,7 +3251,7 @@ class _MessageBubble extends StatelessWidget {
                           ? Icons.push_pin
                           : Icons.push_pin_outlined,
                     ),
-                    title: Text(message.isPinned ? 'Unpin' : 'Pin'),
+                    title: Text(message.isPinned ? tr('Unpin') : tr('Pin')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onTogglePin(message));
@@ -3241,7 +3260,7 @@ class _MessageBubble extends StatelessWidget {
                 if (canCompose && isCurrentUser && _hasVisiblePreview(context))
                   ListTile(
                     leading: const Icon(Icons.link_off),
-                    title: const Text('Remove embed'),
+                    title: Text(tr('Remove embed')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onRemoveEmbed(message));
@@ -3250,7 +3269,7 @@ class _MessageBubble extends StatelessWidget {
                 if (message.type == MessageType.text)
                   ListTile(
                     leading: const Icon(Icons.copy_outlined),
-                    title: const Text('Copy'),
+                    title: Text(tr('Copy')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(
@@ -3263,7 +3282,7 @@ class _MessageBubble extends StatelessWidget {
                     iconColor: colorScheme.error,
                     textColor: colorScheme.error,
                     leading: const Icon(Icons.delete_outline),
-                    title: const Text('Delete'),
+                    title: Text(tr('Delete')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onDelete(message));
@@ -3275,7 +3294,7 @@ class _MessageBubble extends StatelessWidget {
                     iconColor: colorScheme.error,
                     textColor: colorScheme.error,
                     leading: const Icon(Icons.delete_outline),
-                    title: const Text('Delete message'),
+                    title: Text(tr('Delete message')),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       unawaited(onDelete(message));
@@ -3418,7 +3437,7 @@ class _MessageContent extends StatelessWidget {
       content.add(const SizedBox(height: 4));
       content.add(
         Text(
-          'edited',
+          tr('edited'),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: textColor.withValues(alpha: 0.72),
             fontStyle: FontStyle.italic,
@@ -3438,11 +3457,16 @@ class _MessageContent extends StatelessWidget {
     final referencedMessage = messagesById[preview.messageId];
     // The server empties the quote when the original is deleted.
     if (referencedMessage?.recalledAt != null || preview.body.isEmpty) {
-      return 'Message deleted';
+      return tr('Message deleted');
     }
-    return preview.type == MessageType.text
-        ? plainTextFromMarkdown(preview.body)
-        : preview.body;
+    return switch (preview.type) {
+      MessageType.text => plainTextFromMarkdown(preview.body),
+      // These previews hold a fixed English label.
+      MessageType.image ||
+      MessageType.file ||
+      MessageType.voice => tr(preview.body),
+      _ => preview.body,
+    };
   }
 }
 
@@ -3469,7 +3493,7 @@ class _ForwardedPreview extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Forwarded from ${preview.senderName}',
+            tr('Forwarded from {name}', {'name': preview.senderName}),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -3541,11 +3565,12 @@ class _QuotedReplyPreview extends StatelessWidget {
 String _displayBodyForForwardPreview(ForwardPreview preview) {
   final body = preview.body.trim();
   return switch (preview.type) {
-    MessageType.text => body.isEmpty ? 'Message' : plainTextFromMarkdown(body),
-    MessageType.system => body.isEmpty ? 'Message' : body,
-    MessageType.image => 'Image',
-    MessageType.file => 'File',
-    MessageType.voice => 'Voice message',
+    MessageType.text =>
+      body.isEmpty ? tr('Message') : plainTextFromMarkdown(body),
+    MessageType.system => body.isEmpty ? tr('Message') : body,
+    MessageType.image => tr('Image'),
+    MessageType.file => tr('File'),
+    MessageType.voice => tr('Voice message'),
     MessageType.poll => pollPreviewText(body),
     MessageType.sticker => stickerPreviewText(body),
   };
@@ -3649,7 +3674,7 @@ void showImagePreview(BuildContext context, String url) {
     builder: (context) {
       return Dialog.fullscreen(
         child: Scaffold(
-          appBar: AppBar(title: const Text('Image preview')),
+          appBar: AppBar(title: Text(tr('Image preview'))),
           body: Center(
             child: InteractiveViewer(
               minScale: 0.8,
@@ -3782,8 +3807,10 @@ class _Composer extends StatelessWidget {
                   ],
                   if (replyPreviewText != null) ...[
                     _ComposerModeBanner(
-                      text: 'Replying to $replyPreviewText',
-                      tooltip: 'Cancel reply',
+                      text: tr('Replying to {message}', {
+                        'message': replyPreviewText,
+                      }),
+                      tooltip: tr('Cancel reply'),
                       icon: Icons.close,
                       onPressed: onCancelReply,
                     ),
@@ -3791,8 +3818,8 @@ class _Composer extends StatelessWidget {
                   ],
                   if (isEditing) ...[
                     _ComposerModeBanner(
-                      text: 'Editing message',
-                      tooltip: 'Cancel edit',
+                      text: tr('Editing message'),
+                      tooltip: tr('Cancel edit'),
                       icon: Icons.close,
                       onPressed: onCancelEdit,
                     ),
@@ -3830,10 +3857,10 @@ class _Composer extends StatelessWidget {
                   Row(
                     children: [
                       if (isSendingImage)
-                        const IconButton(
-                          tooltip: 'Sending image',
+                        IconButton(
+                          tooltip: tr('Sending image'),
                           onPressed: null,
-                          icon: SizedBox.square(
+                          icon: const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
@@ -3841,7 +3868,7 @@ class _Composer extends StatelessWidget {
                       else
                         PopupMenuButton<_ComposerAttachment>(
                           key: const ValueKey('composer-attach-button'),
-                          tooltip: 'Attach',
+                          tooltip: tr('Attach'),
                           enabled:
                               !isBusy &&
                               !isEditing &&
@@ -3854,37 +3881,39 @@ class _Composer extends StatelessWidget {
                             _ComposerAttachment.poll => onCreatePoll(),
                             _ComposerAttachment.sticker => onPickSticker(),
                           }),
-                          itemBuilder: (context) => const [
+                          itemBuilder: (context) => [
                             PopupMenuItem(
                               value: _ComposerAttachment.image,
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.image_outlined),
-                                title: Text('Send image'),
+                                leading: const Icon(Icons.image_outlined),
+                                title: Text(tr('Send image')),
                               ),
                             ),
                             PopupMenuItem(
                               value: _ComposerAttachment.file,
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.attach_file),
-                                title: Text('Send file or video'),
+                                leading: const Icon(Icons.attach_file),
+                                title: Text(tr('Send file or video')),
                               ),
                             ),
                             PopupMenuItem(
                               value: _ComposerAttachment.poll,
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.poll_outlined),
-                                title: Text('Create poll'),
+                                leading: const Icon(Icons.poll_outlined),
+                                title: Text(tr('Create poll')),
                               ),
                             ),
                             PopupMenuItem(
                               value: _ComposerAttachment.sticker,
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: Icon(Icons.sticky_note_2_outlined),
-                                title: Text('Send sticker'),
+                                leading: const Icon(
+                                  Icons.sticky_note_2_outlined,
+                                ),
+                                title: Text(tr('Send sticker')),
                               ),
                             ),
                           ],
@@ -3899,7 +3928,7 @@ class _Composer extends StatelessWidget {
                                 color: Theme.of(context).colorScheme.error,
                               ),
                               const SizedBox(width: 8),
-                              const Expanded(child: Text('Recording...')),
+                              Expanded(child: Text(tr('Recording...'))),
                             ],
                           ),
                         )
@@ -3915,9 +3944,9 @@ class _Composer extends StatelessWidget {
                               minLines: 1,
                               maxLines: 4,
                               textInputAction: TextInputAction.send,
-                              decoration: const InputDecoration(
-                                hintText: 'Message',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                hintText: tr('Message'),
+                                border: const OutlineInputBorder(),
                               ),
                               onChanged: onChanged,
                               onSubmitted: (_) {
@@ -3929,7 +3958,7 @@ class _Composer extends StatelessWidget {
                       const SizedBox(width: 8),
                       if (isRecordingVoice) ...[
                         IconButton(
-                          tooltip: 'Cancel voice message',
+                          tooltip: tr('Cancel voice message'),
                           onPressed: isSendingVoice
                               ? null
                               : () => unawaited(onCancelVoiceRecording()),
@@ -3937,7 +3966,7 @@ class _Composer extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         IconButton.filled(
-                          tooltip: 'Send voice message',
+                          tooltip: tr('Send voice message'),
                           onPressed: isSendingVoice
                               ? null
                               : () => unawaited(onSendVoiceRecording()),
@@ -3952,7 +3981,7 @@ class _Composer extends StatelessWidget {
                         ),
                       ] else ...[
                         IconButton(
-                          tooltip: 'Record voice message',
+                          tooltip: tr('Record voice message'),
                           onPressed: isBusy || isEditing || isSlowed
                               ? null
                               : () => unawaited(onStartVoiceRecording()),
@@ -3960,7 +3989,7 @@ class _Composer extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         IconButton.filled(
-                          tooltip: isEditing ? 'Save edit' : 'Send',
+                          tooltip: isEditing ? tr('Save edit') : tr('Send'),
                           onPressed: isBusy || isSlowed
                               ? null
                               : () => unawaited(onSend()),
@@ -4072,7 +4101,7 @@ class _SlowmodeBanner extends StatelessWidget {
         const SizedBox(width: 6),
         Expanded(
           child: Text(
-            'Slowmode is enabled',
+            tr('Slowmode is enabled'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(color: color),
@@ -4165,12 +4194,15 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
               Expanded(
                 child: Text(
                   switch (timedOutUntil) {
-                    final until? =>
-                      "You're timed out until ${formatTimeoutEnd(until)}. "
-                          'You can read, but not send messages or react.',
-                    null =>
+                    final until? => tr(
+                      "You're timed out until {time}. "
+                      'You can read, but not send messages or react.',
+                      {'time': formatTimeoutEnd(until)},
+                    ),
+                    null => tr(
                       "You don't have permission to send messages in this "
-                          'channel',
+                      'channel',
+                    ),
                   },
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
@@ -4234,20 +4266,23 @@ ReplyPreview _replyPreviewForMessage(ChatMessage message) {
   );
 }
 
-String _replyPreviewBody(ChatMessage message) {
+/// The quoted text of a reply to [message]. What is sent stays English, as
+/// every reader sees it; the composer shows it [localized].
+String _replyPreviewBody(ChatMessage message, {bool localized = false}) {
+  String label(String english) => localized ? tr(english) : english;
   if (message.recalledAt != null) {
-    return 'Message';
+    return label('Message');
   }
   return switch (message.type) {
     MessageType.text =>
       message.body.trim().isEmpty
-          ? 'Message'
+          ? label('Message')
           : plainTextFromMarkdown(message.body.trim()),
     MessageType.system =>
-      message.body.trim().isEmpty ? 'Message' : message.body.trim(),
-    MessageType.image => 'Image',
-    MessageType.file => 'File',
-    MessageType.voice => 'Voice message',
+      message.body.trim().isEmpty ? label('Message') : message.body.trim(),
+    MessageType.image => label('Image'),
+    MessageType.file => label('File'),
+    MessageType.voice => label('Voice message'),
     MessageType.poll => pollPreviewText(message.body),
     MessageType.sticker => stickerPreviewText(message.body),
   };
@@ -4258,10 +4293,12 @@ String _fileSendErrorText(Object error) {
     return '$error';
   }
   if (error is TimeoutException) {
-    return 'Could not upload the file. The request timed out. Check your '
-        'network and try again.';
+    return tr(
+      'Could not upload the file. The request timed out. Check your '
+      'network and try again.',
+    );
   }
-  return 'Could not send the file. Try again. $error';
+  return tr('Could not send the file. Try again. {error}', {'error': error});
 }
 
 String _imageSendErrorText(Object error) {
@@ -4269,9 +4306,12 @@ String _imageSendErrorText(Object error) {
     return error.message;
   }
   if (error is TimeoutException) {
-    return 'Could not upload image. The request timed out. Try a smaller image or check your network.';
+    return tr(
+      'Could not upload image. The request timed out. Try a smaller image '
+      'or check your network.',
+    );
   }
-  return 'Could not send image. Try again. $error';
+  return tr('Could not send image. Try again. {error}', {'error': error});
 }
 
 _LatestOutgoingReadState _latestOutgoingReadState({

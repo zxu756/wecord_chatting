@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AuthActionState>((ref) {
@@ -90,27 +91,30 @@ String? _validateSignUp({
   required String password,
 }) {
   if (username.trim().isEmpty) {
-    return 'Username is required.';
+    return tr('Username is required.');
   }
   final normalizedUsername = username.trim().toLowerCase();
   if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(normalizedUsername)) {
-    return 'Username must be 3-24 characters using lowercase letters, numbers, or underscores.';
+    return tr(
+      'Username must be 3-24 characters using lowercase letters, numbers, '
+      'or underscores.',
+    );
   }
   if (displayName.trim().isEmpty) {
-    return 'Display name is required.';
+    return tr('Display name is required.');
   }
   if (email.trim().isEmpty) {
-    return 'Email is required.';
+    return tr('Email is required.');
   }
   if (password.isEmpty) {
-    return 'Password is required.';
+    return tr('Password is required.');
   }
   return null;
 }
 
 String _errorMessage(Object error) {
   if (error is AuthException) {
-    return error.message;
+    return tr(error.message);
   }
 
   final message = error.toString();

@@ -46,6 +46,7 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
@@ -1714,6 +1715,11 @@ class PhoneWorld {
         (context) async => screenShareSource,
       ),
       voiceScreenShareSupportedProvider.overrideWithValue(true),
+      appLanguageStoreProvider.overrideWithValue(
+        InMemoryAppLanguageStore(
+          _chineseScreens ? AppLanguage.chinese : AppLanguage.english,
+        ),
+      ),
       themeModeStoreProvider.overrideWithValue(
         InMemoryThemeModeStore(_darkScreens ? ThemeMode.dark : ThemeMode.light),
       ),
@@ -1768,5 +1774,8 @@ Future<void> pumpStandalone(
 // The screenshot tool renders the dark theme with
 // --dart-define=PHONE_SCREENS_DARK=true.
 const _darkScreens = bool.fromEnvironment('PHONE_SCREENS_DARK');
+
+// And Chinese with --dart-define=PHONE_SCREENS_ZH=true.
+const _chineseScreens = bool.fromEnvironment('PHONE_SCREENS_ZH');
 
 ThemeData _theme() => _darkScreens ? WeCordTheme.dark() : WeCordTheme.light();

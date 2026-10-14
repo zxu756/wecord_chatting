@@ -1,3 +1,4 @@
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -8,11 +9,13 @@ enum CircleEventLocationType {
   text('text', 'Text channel'),
   external('external', 'Somewhere else');
 
-  const CircleEventLocationType(this.value, this.label);
+  const CircleEventLocationType(this.value, this._label);
 
   /// The `circle_events.location_type` value.
   final String value;
-  final String label;
+  final String _label;
+
+  String get label => tr(_label);
 
   /// Unknown values (newer servers) read as external.
   static CircleEventLocationType fromJson(Object? value) {
@@ -181,7 +184,7 @@ class CircleEvent {
       return locationText ?? '';
     }
     final name = channelName;
-    return name == null ? 'Deleted channel' : '#$name';
+    return name == null ? tr('Deleted channel') : '#$name';
   }
 
   CircleEvent copyWith({bool? interestedByMe, int? interestedCount}) {

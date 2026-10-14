@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 /// The account still owns a circle with other members in it.
 class AccountOwnsCirclesException implements Exception {
@@ -10,7 +11,7 @@ class AccountOwnsCirclesException implements Exception {
 
   @override
   String toString() =>
-      'Transfer ownership of your circles to another member first.';
+      tr('Transfer ownership of your circles to another member first.');
 }
 
 abstract interface class AccountDeletionService {
@@ -65,9 +66,7 @@ Future<bool> confirmAndDeleteAccount(
     return false;
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(
-        content: Text('Could not delete your account. Try again.'),
-      ),
+      SnackBar(content: Text(tr('Could not delete your account. Try again.'))),
     );
     return false;
   }
@@ -103,20 +102,24 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
     final matches = _controller.text.trim() == widget.username;
     return AlertDialog(
       scrollable: true,
-      title: const Text('Delete account'),
+      title: Text(tr('Delete account')),
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'This deletes your login, profile, friends and avatar and takes '
-            'you out of every circle and group. It cannot be undone.',
+          Text(
+            tr(
+              'This deletes your login, profile, friends and avatar and takes '
+              'you out of every circle and group. It cannot be undone.',
+            ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Messages you sent stay where they are, shown as from '
-            '"Deleted User". Circles you own with other members must be '
-            'transferred first; circles with only you in them are deleted.',
+          Text(
+            tr(
+              'Messages you sent stay where they are, shown as from '
+              '"Deleted User". Circles you own with other members must be '
+              'transferred first; circles with only you in them are deleted.',
+            ),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -124,7 +127,9 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
             controller: _controller,
             autocorrect: false,
             decoration: InputDecoration(
-              labelText: 'Type ${widget.username} to confirm',
+              labelText: tr('Type {username} to confirm', {
+                'username': widget.username,
+              }),
             ),
             onChanged: (_) => setState(() {}),
           ),
@@ -133,7 +138,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('delete-account-confirm'),
@@ -142,7 +147,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
             foregroundColor: colorScheme.onError,
           ),
           onPressed: matches ? () => Navigator.of(context).pop(true) : null,
-          child: const Text('Delete account'),
+          child: Text(tr('Delete account')),
         ),
       ],
     );

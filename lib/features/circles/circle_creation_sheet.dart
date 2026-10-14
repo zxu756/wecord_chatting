@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 class CircleCreationSheet extends ConsumerStatefulWidget {
@@ -47,22 +48,22 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Create Circle',
+                    tr('Create Circle'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _nameController,
                     autofocus: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Circle name',
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      labelText: tr('Circle name'),
                     ),
                   ),
                   if (friends.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text(
-                      'Invite friends',
+                      tr('Invite friends'),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -111,7 +112,7 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
                               dimension: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Create'),
+                          : Text(tr('Create')),
                     ),
                   ),
                 ],
@@ -127,7 +128,7 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() {
-        _errorText = 'Circle name is required.';
+        _errorText = tr('Circle name is required.');
       });
       return;
     }
@@ -150,7 +151,9 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not create Circle. Try again. $error';
+        _errorText = tr('Could not create Circle. Try again. {error}', {
+          'error': error,
+        });
       });
     }
   }

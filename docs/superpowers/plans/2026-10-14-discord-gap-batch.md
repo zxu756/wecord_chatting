@@ -82,11 +82,40 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 6. Chinese interface
 
-- [ ] Localize the UI (English and Simplified Chinese), following the
-      device language with an override in Settings.
+- [x] `tr('English', {placeholders})` looks the English up in per-area
+      Simplified Chinese maps (`lib/shared/l10n/zh/`); `trIn(context, …)`
+      covers the rare English word that needs two Chinese wordings.
+- [x] Settings → Language: System / English / 中文, remembered on the
+      device; Flutter's own widgets follow through `flutter_localizations`,
+      and switching rebuilds the text without losing navigation.
+- [x] Every screen, dialog, menu, error, enum label and notification text
+      wrapped (about 1,000 strings, done per area in parallel); English
+      output unchanged, so existing tests keep passing.
+- [x] `test/shared/l10n/translations_test.dart` fails on any `tr('…')`
+      without Chinese, `$` interpolation in keys, placeholders that differ,
+      or the same English translated two ways.
+- [x] `tool/screenshots` takes `--dart-define=PHONE_SCREENS_ZH=true`.
 
 ## 7. Push notifications
 
-- [ ] Device tokens table, an Edge Function that sends to FCM / APNs / Web
-      Push on new messages for members who are offline, honoring mute and
-      notification settings. Needs Firebase and Apple keys from the owner.
+- [ ] `push_subscriptions (user_id, endpoint, p256dh, auth, user_agent,
+      created_at, last_seen_at)`, written through `register_push_subscription`
+      / `unregister_push_subscription`; `push_deliveries` remembers which
+      messages were pushed so nothing is sent twice.
+- [ ] Edge Function `push-notify`: the sender's app calls it with the new
+      message id right after sending. It checks the caller sent it, works out
+      recipients from the database (members who can see the conversation,
+      not muted, circle notification level, not the sender, not blocked),
+      builds a short title/body (or a generic one when previews are off) and
+      sends Web Push (VAPID, RFC 8291 aes128gcm, WebCrypto only). Expired
+      subscriptions (404/410) are deleted. 503 `push_not_configured` until
+      `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` are set.
+- [ ] `push-config` (GET) returns the VAPID public key so clients need no
+      build-time setting.
+- [ ] Web client: a small service worker (`push_sw.js`) shows notifications
+      when no WeCord tab is focused and opens the chat on click; Settings
+      gets "Push notifications" to subscribe / unsubscribe this browser.
+- [ ] `tool/setup_web_push.sh` generates VAPID keys and sets the secrets
+      (run by the owner; keys never pass through chat).
+- [ ] Native iOS / Android push (FCM / APNs) needs a Firebase project and
+      Apple key from the owner; documented as the next step.

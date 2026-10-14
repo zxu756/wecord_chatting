@@ -8,6 +8,7 @@ import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -50,7 +51,7 @@ class ContactsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Friends')),
+      appBar: AppBar(title: Text(tr('Friends'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: const [
@@ -76,9 +77,9 @@ class _SearchSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'Search profiles',
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            labelText: tr('Search profiles'),
           ),
           textInputAction: TextInputAction.search,
           onChanged: (value) {
@@ -87,16 +88,16 @@ class _SearchSection extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         if (query.isEmpty)
-          const Text('Search by username.')
+          Text(tr('Search by username.'))
         else
           ref
               .watch(contactsSearchResultsProvider)
               .when(
-                loading: () => const _LoadingRow(label: 'Searching'),
+                loading: () => _LoadingRow(label: tr('Searching')),
                 error: (error, stackTrace) => _ErrorText(error),
                 data: (profiles) {
                   if (profiles.isEmpty) {
-                    return const Text('No matching profiles.');
+                    return Text(tr('No matching profiles.'));
                   }
                   return Column(
                     children: [
@@ -138,7 +139,7 @@ class _AddFriendButton extends ConsumerWidget {
               });
               ref.invalidate(contactsSearchResultsProvider);
             },
-      child: Text(requested ? 'Requested' : 'Add'),
+      child: Text(requested ? tr('Requested') : tr('Add')),
     );
   }
 }
@@ -151,13 +152,13 @@ class _IncomingRequestsSection extends ConsumerWidget {
     final requests = ref.watch(incomingFriendRequestsProvider);
 
     return _Section(
-      title: 'Incoming requests',
+      title: tr('Incoming requests'),
       child: requests.when(
-        loading: () => const _LoadingRow(label: 'Loading requests'),
+        loading: () => _LoadingRow(label: tr('Loading requests')),
         error: (error, stackTrace) => _ErrorText(error),
         data: (requests) {
           if (requests.isEmpty) {
-            return const Text('No incoming requests.');
+            return Text(tr('No incoming requests.'));
           }
           return Column(
             children: [
@@ -181,7 +182,7 @@ class _IncomingRequestsSection extends ConsumerWidget {
                           ref.invalidate(incomingFriendRequestsProvider);
                           ref.invalidate(friendsProvider);
                         },
-                        child: const Text('Accept'),
+                        child: Text(tr('Accept')),
                       ),
                       OutlinedButton(
                         onPressed: () async {
@@ -190,7 +191,7 @@ class _IncomingRequestsSection extends ConsumerWidget {
                               .rejectFriendRequest(incomingRequest.request.id);
                           ref.invalidate(incomingFriendRequestsProvider);
                         },
-                        child: const Text('Reject'),
+                        child: Text(tr('Reject')),
                       ),
                     ],
                   ),
@@ -212,17 +213,17 @@ class _FriendsSection extends ConsumerWidget {
     final query = ref.watch(friendsSearchQueryProvider).trim().toLowerCase();
 
     return _Section(
-      title: 'Friends',
+      title: tr('Friends'),
       trailing: friends.maybeWhen(
         data: (friends) => _NewGroupButton(friends: friends),
         orElse: () => const _NewGroupButton(friends: []),
       ),
       child: friends.when(
-        loading: () => const _LoadingRow(label: 'Loading friends'),
+        loading: () => _LoadingRow(label: tr('Loading friends')),
         error: (error, stackTrace) => _ErrorText(error),
         data: (friends) {
           if (friends.isEmpty) {
-            return const Text('No friends yet.');
+            return Text(tr('No friends yet.'));
           }
 
           final visibleFriends = query.isEmpty
@@ -239,9 +240,9 @@ class _FriendsSection extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Search friends',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Search friends'),
                 ),
                 onChanged: (value) {
                   ref.read(friendsSearchQueryProvider.notifier).state = value;
@@ -249,7 +250,7 @@ class _FriendsSection extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               if (visibleFriends.isEmpty)
-                const Text('No matching friends.')
+                Text(tr('No matching friends.'))
               else
                 for (final friend in visibleFriends)
                   _ProfileTile(
@@ -280,7 +281,7 @@ class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
     return FilledButton.icon(
       onPressed: widget.friends.length < 2 ? null : _openGroupCreation,
       icon: const Icon(Icons.group_add_outlined),
-      label: const Text('New Group'),
+      label: Text(tr('New Group')),
     );
   }
 
@@ -332,7 +333,7 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
     // Phones keep the friend's name readable with an icon-only button.
     if (isCompactWidth(MediaQuery.sizeOf(context).width)) {
       return IconButton.filled(
-        tooltip: 'Message',
+        tooltip: tr('Message'),
         onPressed: _opening ? null : _openConversation,
         icon: icon,
       );
@@ -340,7 +341,7 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
     return FilledButton.icon(
       onPressed: _opening ? null : _openConversation,
       icon: icon,
-      label: const Text('Message'),
+      label: Text(tr('Message')),
     );
   }
 
@@ -370,9 +371,11 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Unable to start chat: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(tr('Unable to start chat: {error}', {'error': error})),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -395,7 +398,7 @@ class _FriendActions extends ConsumerWidget {
       spacing: 4,
       children: [
         IconButton(
-          tooltip: 'Edit alias',
+          tooltip: tr('Edit alias'),
           icon: const Icon(Icons.edit_outlined),
           onPressed: () async {
             final saved = await showModalBottomSheet<bool>(

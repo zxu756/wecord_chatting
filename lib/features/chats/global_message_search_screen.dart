@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/discovery.dart';
 
 class GlobalMessageSearchScreen extends ConsumerStatefulWidget {
@@ -40,7 +41,7 @@ class _GlobalMessageSearchScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Search')),
+      appBar: AppBar(title: Text(tr('Search'))),
       body: Column(
         children: [
           Padding(
@@ -48,10 +49,10 @@ class _GlobalMessageSearchScreenState
             child: TextField(
               controller: _controller,
               autofocus: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Search WeCord',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: tr('Search WeCord'),
+                prefixIcon: const Icon(Icons.search),
               ),
               textInputAction: TextInputAction.search,
               onChanged: _scheduleSearch,
@@ -66,7 +67,7 @@ class _GlobalMessageSearchScreenState
   Widget _buildBody(BuildContext context) {
     final normalizedQuery = _query.trim();
     if (normalizedQuery.isEmpty) {
-      return const Center(child: Text('Search messages, groups, and Circles'));
+      return Center(child: Text(tr('Search messages, groups, and Circles')));
     }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -85,7 +86,7 @@ class _GlobalMessageSearchScreenState
     }
     final results = _results ?? const <DiscoveryResult>[];
     if (results.isEmpty) {
-      return const Center(child: Text('No matching results'));
+      return Center(child: Text(tr('No matching results')));
     }
     final grouped = _groupResults(results);
     return ListView(
@@ -190,11 +191,11 @@ Map<String, List<DiscoveryResult>> _groupResults(
 
 String _sectionTitle(DiscoveryResultType type) {
   return switch (type) {
-    DiscoveryResultType.contact => 'Contacts',
-    DiscoveryResultType.group => 'Groups',
-    DiscoveryResultType.circle => 'Circles',
-    DiscoveryResultType.circleChannel => 'Channels',
-    DiscoveryResultType.message => 'Messages',
+    DiscoveryResultType.contact => tr('Contacts'),
+    DiscoveryResultType.group => tr('Groups'),
+    DiscoveryResultType.circle => tr('Circles'),
+    DiscoveryResultType.circleChannel => tr('Channels'),
+    DiscoveryResultType.message => tr('Messages'),
   };
 }
 

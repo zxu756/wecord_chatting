@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -58,10 +59,10 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: Text(tr('Messages')),
         actions: [
           IconButton(
-            tooltip: 'Search all messages',
+            tooltip: tr('Search all messages'),
             icon: const Icon(Icons.search),
             onPressed: () => openPage(context, GlobalMessageSearchScreen.path),
           ),
@@ -91,9 +92,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: TextField(
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Search chats',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Search chats'),
                   ),
                   onChanged: (value) {
                     setState(() {
@@ -104,9 +105,9 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
               ),
               Expanded(
                 child: conversations.isEmpty
-                    ? const Center(child: Text('No conversations yet'))
+                    ? Center(child: Text(tr('No conversations yet')))
                     : visibleConversations.isEmpty
-                    ? const Center(child: Text('No matching conversations'))
+                    ? Center(child: Text(tr('No matching conversations')))
                     : ListView.separated(
                         itemCount: visibleConversations.length,
                         separatorBuilder: (context, index) =>
@@ -137,9 +138,9 @@ class _ConversationTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final title = conversation.title?.trim().isNotEmpty == true
         ? conversation.title!
-        : 'Conversation';
+        : tr('Conversation');
     final lastMessage = conversation.lastMessageType == MessageType.voice
-        ? '[Voice]'
+        ? tr('[Voice]')
         : conversation.lastMessageType == MessageType.poll
         ? pollPreviewText(conversation.lastMessageBody ?? '')
         : conversation.lastMessageType == MessageType.sticker
@@ -148,14 +149,14 @@ class _ConversationTile extends ConsumerWidget {
         ? (conversation.lastMessageType ?? MessageType.text) == MessageType.text
               ? plainTextFromMarkdown(conversation.lastMessageBody!)
               : conversation.lastMessageBody!
-        : 'No messages yet';
+        : tr('No messages yet');
 
     final hasUnread = conversation.unreadCount > 0;
     final appearsUnread = hasUnread || conversation.isMarkedUnread;
     final groupMeta =
         conversation.type == ConversationType.group &&
             conversation.memberCount > 0
-        ? '${conversation.memberCount} members'
+        ? tr('{count} members', {'count': conversation.memberCount})
         : null;
 
     final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
@@ -217,7 +218,7 @@ class _ConversationTile extends ConsumerWidget {
       trailing: compact
           ? null
           : PopupMenuButton<_ConversationAction>(
-              tooltip: 'Conversation actions',
+              tooltip: tr('Conversation actions'),
               icon: const Icon(Icons.more_horiz),
               onSelected: (action) {
                 _handleConversationAction(context, ref, conversation, action);
@@ -241,14 +242,14 @@ Map<_ConversationAction, String> _conversationActionLabels(
 ) {
   return {
     _ConversationAction.pin: conversation.pinnedAt == null
-        ? 'Pin chat'
-        : 'Unpin chat',
-    _ConversationAction.mute: conversation.isMuted ? 'Unmute' : 'Mute',
+        ? tr('Pin chat')
+        : tr('Unpin chat'),
+    _ConversationAction.mute: conversation.isMuted ? tr('Unmute') : tr('Mute'),
     _ConversationAction.markReadState:
         conversation.unreadCount > 0 || conversation.isMarkedUnread
-        ? 'Mark read'
-        : 'Mark unread',
-    _ConversationAction.hide: 'Delete conversation',
+        ? tr('Mark read')
+        : tr('Mark unread'),
+    _ConversationAction.hide: tr('Delete conversation'),
   };
 }
 
@@ -261,7 +262,7 @@ Future<void> showConversationActions(
 ) async {
   final title = conversation.title?.trim().isNotEmpty == true
       ? conversation.title!
-      : 'Conversation';
+      : tr('Conversation');
   final actionLabels = _conversationActionLabels(conversation);
   final action = await showModalBottomSheet<_ConversationAction>(
     context: context,
@@ -341,7 +342,7 @@ void _handleConversationAction(
             return;
           }
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not update conversation.')),
+            SnackBar(content: Text(tr('Could not update conversation.'))),
           );
         }),
   );

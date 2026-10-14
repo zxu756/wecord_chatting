@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 class GroupCreationResult {
@@ -54,13 +55,16 @@ class _GroupCreationSheetState extends ConsumerState<GroupCreationSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('New group', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              tr('New group'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Group name',
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: tr('Group name'),
               ),
               textInputAction: TextInputAction.done,
               onChanged: (_) {
@@ -110,7 +114,7 @@ class _GroupCreationSheetState extends ConsumerState<GroupCreationSheet> {
                         dimension: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Create'),
+                    : Text(tr('Create')),
               ),
             ),
           ],
@@ -147,7 +151,7 @@ class _GroupCreationSheetState extends ConsumerState<GroupCreationSheet> {
         return;
       }
       setState(() {
-        _errorText = 'Unable to create group: $error';
+        _errorText = tr('Unable to create group: {error}', {'error': error});
         _isCreating = false;
       });
     }

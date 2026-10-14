@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
@@ -389,7 +390,7 @@ class CircleMembershipLostException implements Exception {
   final String circleId;
 
   @override
-  String toString() => 'You are no longer a member of this circle.';
+  String toString() => tr('You are no longer a member of this circle.');
 }
 
 abstract interface class CirclesDataSource {

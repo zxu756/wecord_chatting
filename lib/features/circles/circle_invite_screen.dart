@@ -6,6 +6,7 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 
 final circleInvitePreviewProvider = FutureProvider.autoDispose
@@ -32,7 +33,7 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
   Widget build(BuildContext context) {
     final preview = ref.watch(circleInvitePreviewProvider(widget.code));
     return Scaffold(
-      appBar: AppBar(title: const Text('Circle invite')),
+      appBar: AppBar(title: Text(tr('Circle invite'))),
       body: Center(
         // Scrolls on short phones and with large text.
         child: SingleChildScrollView(
@@ -43,12 +44,12 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
               loading: () => const CircularProgressIndicator(),
               error: (error, stackTrace) => _InviteMessage(
                 icon: Icons.error_outline,
-                title: 'Could not load invite',
+                title: tr('Could not load invite'),
                 message: error.toString(),
                 action: FilledButton(
                   onPressed: () =>
                       ref.invalidate(circleInvitePreviewProvider(widget.code)),
-                  child: const Text('Try again'),
+                  child: Text(tr('Try again')),
                 ),
               ),
               data: (preview) {
@@ -56,11 +57,11 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                 if (circle == null || !preview.canJoin) {
                   return _InviteMessage(
                     icon: Icons.link_off,
-                    title: 'Invite invalid',
+                    title: tr('Invite invalid'),
                     message: _invalidMessage(preview.invalidReason),
                     action: OutlinedButton(
                       onPressed: () => context.go(HomeScreen.path),
-                      child: const Text('Back to home'),
+                      child: Text(tr('Back to home')),
                     ),
                   );
                 }
@@ -87,8 +88,8 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                         const SizedBox(height: 16),
                         Text(
                           preview.alreadyMember
-                              ? 'You are already a member of'
-                              : 'You have been invited to join',
+                              ? tr('You are already a member of')
+                              : tr('You have been invited to join'),
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 4),
@@ -100,8 +101,10 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                         const SizedBox(height: 4),
                         Text(
                           circle.memberCount == 1
-                              ? '1 member'
-                              : '${circle.memberCount} members',
+                              ? tr('1 member')
+                              : tr('{count} members', {
+                                  'count': circle.memberCount,
+                                }),
                         ),
                         if (_errorText != null) ...[
                           const SizedBox(height: 12),
@@ -121,12 +124,14 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                                   onPressed: () => context.go(
                                     '${CircleRoutes.path}/${circle.id}',
                                   ),
-                                  child: const Text('Open circle'),
+                                  child: Text(tr('Open circle')),
                                 )
                               : FilledButton(
                                   onPressed: _isJoining ? null : _join,
                                   child: Text(
-                                    _isJoining ? 'Joining…' : 'Join circle',
+                                    _isJoining
+                                        ? tr('Joining…')
+                                        : tr('Join circle'),
                                   ),
                                 ),
                         ),
@@ -158,8 +163,8 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
       setState(() {
         _isJoining = false;
         _errorText = '$error'.contains('Banned from this circle')
-            ? "You're banned from this circle."
-            : 'Could not join this circle. $error';
+            ? tr("You're banned from this circle.")
+            : tr('Could not join this circle. {error}', {'error': error});
       });
       ref.invalidate(circleInvitePreviewProvider(widget.code));
     }
@@ -198,12 +203,13 @@ class _InviteMessage extends StatelessWidget {
 
 String _invalidMessage(CircleInviteInvalidReason? reason) {
   return switch (reason) {
-    CircleInviteInvalidReason.expired => 'This invite has expired.',
-    CircleInviteInvalidReason.revoked => 'This invite was revoked.',
-    CircleInviteInvalidReason.exhausted =>
+    CircleInviteInvalidReason.expired => tr('This invite has expired.'),
+    CircleInviteInvalidReason.revoked => tr('This invite was revoked.'),
+    CircleInviteInvalidReason.exhausted => tr(
       'This invite has reached its usage limit.',
+    ),
     CircleInviteInvalidReason.notFound ||
-    null => 'This invite does not exist or is no longer available.',
+    null => tr('This invite does not exist or is no longer available.'),
   };
 }
 

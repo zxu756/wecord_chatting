@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 
 class CircleChannelCreationSheet extends ConsumerStatefulWidget {
@@ -58,30 +59,30 @@ class _CircleChannelCreationSheetState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Create channel',
+                tr('Create channel'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
-              Text('Type', style: Theme.of(context).textTheme.titleSmall),
+              Text(tr('Type'), style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 6),
               SegmentedButton<CircleChannelKind>(
                 key: const ValueKey('channel-kind-selector'),
                 showSelectedIcon: false,
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: CircleChannelKind.text,
-                    icon: Icon(Icons.tag),
-                    label: Text('Text'),
+                    icon: const Icon(Icons.tag),
+                    label: Text(tr('Text')),
                   ),
                   ButtonSegment(
                     value: CircleChannelKind.voice,
-                    icon: Icon(Icons.volume_up_outlined),
-                    label: Text('Voice'),
+                    icon: const Icon(Icons.volume_up_outlined),
+                    label: Text(tr('Voice')),
                   ),
                   ButtonSegment(
                     value: CircleChannelKind.forum,
-                    icon: Icon(Icons.forum_outlined),
-                    label: Text('Forum'),
+                    icon: const Icon(Icons.forum_outlined),
+                    label: Text(tr('Forum')),
                   ),
                 ],
                 selected: {_kind},
@@ -91,20 +92,23 @@ class _CircleChannelCreationSheetState
               ),
               const SizedBox(height: 4),
               Text(switch (_kind) {
-                CircleChannelKind.forum =>
+                CircleChannelKind.forum => tr(
                   'Members start posts, each with its own replies.',
-                CircleChannelKind.voice =>
+                ),
+                CircleChannelKind.voice => tr(
                   'Members talk, turn on video and share screens.',
-                CircleChannelKind.text =>
+                ),
+                CircleChannelKind.text => tr(
                   'Members chat in one stream of messages.',
+                ),
               }, style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
                 autofocus: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Channel name',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Channel name'),
                 ),
               ),
               if (widget.categories.isNotEmpty) ...[
@@ -113,12 +117,12 @@ class _CircleChannelCreationSheetState
                   initialValue: _categoryId,
                   // Long category names ellipsize instead of overflowing.
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Category',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Category'),
                   ),
                   items: [
-                    const DropdownMenuItem(child: Text('No category')),
+                    DropdownMenuItem(child: Text(tr('No category'))),
                     for (final category in widget.categories)
                       DropdownMenuItem(
                         value: category.id,
@@ -146,7 +150,7 @@ class _CircleChannelCreationSheetState
                 alignment: Alignment.centerRight,
                 child: FilledButton(
                   onPressed: _isSaving ? null : _createChannel,
-                  child: const Text('Create'),
+                  child: Text(tr('Create')),
                 ),
               ),
             ],
@@ -159,7 +163,7 @@ class _CircleChannelCreationSheetState
   Future<void> _createChannel() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorText = 'Channel name is required.');
+      setState(() => _errorText = tr('Channel name is required.'));
       return;
     }
     setState(() {
@@ -181,7 +185,9 @@ class _CircleChannelCreationSheetState
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorText = 'Could not create channel. Try again. $error';
+        _errorText = tr('Could not create channel. Try again. {error}', {
+          'error': error,
+        });
       });
     }
   }

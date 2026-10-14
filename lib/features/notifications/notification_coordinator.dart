@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -203,7 +204,9 @@ class NotificationCoordinator {
     final seconds = reminder.startsAt.difference(now).inSeconds;
     final minutes = (seconds / 60).ceil().clamp(1, 24 * 60);
     return [
-      minutes == 1 ? 'Starts in 1 minute' : 'Starts in $minutes minutes',
+      minutes == 1
+          ? tr('Starts in 1 minute')
+          : tr('Starts in {minutes} minutes', {'minutes': minutes}),
       if (reminder.circleName.trim().isNotEmpty) reminder.circleName.trim(),
       if (reminder.location case final location? when location.isNotEmpty)
         location,
@@ -430,7 +433,7 @@ class NotificationCoordinator {
   String _notificationTitle(ConversationSummary conversation) {
     final title = conversation.title?.trim();
     if (title == null || title.isEmpty) {
-      return 'Conversation';
+      return tr('Conversation');
     }
     return title;
   }
@@ -453,7 +456,7 @@ class NotificationCoordinator {
         return preview;
       }
     }
-    return 'New message';
+    return tr('New message');
   }
 
   Map<String, ConversationSummary> _indexById(

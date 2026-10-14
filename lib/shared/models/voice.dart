@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// Someone connected to one of a circle's voice channels, as the server
 /// tracks it (`list_voice_states`).
 class VoiceMemberState {
@@ -66,7 +68,7 @@ class VoiceMemberState {
         return value;
       }
     }
-    return 'Member';
+    return tr('Member');
   }
 }
 
@@ -122,7 +124,7 @@ class DirectCallParticipant {
     if (displayName.isNotEmpty) {
       return displayName;
     }
-    return username.trim().isEmpty ? 'Someone' : username;
+    return username.trim().isEmpty ? tr('Someone') : username;
   }
 }
 

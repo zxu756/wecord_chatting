@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
 class VoiceMessagePlayer extends ConsumerStatefulWidget {
@@ -101,8 +102,8 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
       builder: (context, snapshot) {
         final isPlaying = snapshot.data?.playing ?? false;
         final tooltip = isPlaying
-            ? 'Pause voice message'
-            : 'Play voice message';
+            ? tr('Pause voice message')
+            : tr('Play voice message');
         final icon = _hasError
             ? Icons.error_outline
             : isPlaying

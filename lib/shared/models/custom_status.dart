@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// A user's custom status: an emoji and/or short text shown under their
 /// name, until [expiresAt] when set.
 class CustomStatus {
@@ -65,9 +67,11 @@ enum CustomStatusDuration {
   today('Today'),
   never("Don't clear");
 
-  const CustomStatusDuration(this.label);
+  const CustomStatusDuration(this._label);
 
-  final String label;
+  final String _label;
+
+  String get label => tr(_label);
 
   /// When a status set at [now] expires, or null to keep it. "Today" ends
   /// at the next local midnight.

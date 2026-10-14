@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return SupabaseAuthRepository(ref.watch(supabaseClientProvider));
@@ -108,8 +109,10 @@ class SupabaseAuthRepository implements AuthRepository {
         username.isEmpty ||
         displayName.isEmpty) {
       throw StateError(
-        'Profile setup is incomplete. Please sign out and sign up again, '
-        'or try again after your profile metadata is fixed.',
+        tr(
+          'Profile setup is incomplete. Please sign out and sign up again, '
+          'or try again after your profile metadata is fixed.',
+        ),
       );
     }
 

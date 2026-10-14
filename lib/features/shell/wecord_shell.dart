@@ -10,6 +10,7 @@ import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 
 /// The phone navigation bar's tabs.
@@ -187,25 +188,25 @@ class WeCordShell extends ConsumerWidget {
             onDestinationSelected: (index) =>
                 onTabSelected(WeCordTab.values[index]),
             destinations: [
-              const NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: 'Home',
+              NavigationDestination(
+                icon: const Icon(Icons.home_outlined),
+                selectedIcon: const Icon(Icons.home),
+                label: tr('Home'),
               ),
               NavigationDestination(
                 icon: _badged(directUnread, Icons.chat_bubble_outline),
                 selectedIcon: _badged(directUnread, Icons.chat_bubble),
-                label: 'Messages',
+                label: tr('Messages'),
               ),
               NavigationDestination(
                 icon: _badged(inboxCount, Icons.notifications_none),
                 selectedIcon: _badged(inboxCount, Icons.notifications),
-                label: 'Notifications',
+                label: tr('Notifications'),
               ),
-              const NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'You',
+              NavigationDestination(
+                icon: const Icon(Icons.person_outline),
+                selectedIcon: const Icon(Icons.person),
+                label: tr('You'),
               ),
             ],
           ),

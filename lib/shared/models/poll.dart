@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 /// A poll message's question and options (`messages.attachment` of a
 /// `poll` message).
 class PollAttachment {
@@ -118,7 +120,9 @@ class PollResults {
 /// How a poll reads in one-line previews and notifications.
 String pollPreviewText(String question) {
   final trimmed = question.trim();
-  return trimmed.isEmpty ? '📊 Poll' : '📊 Poll: $trimmed';
+  return trimmed.isEmpty
+      ? tr('📊 Poll')
+      : tr('📊 Poll: {question}', {'question': trimmed});
 }
 
 /// The poll durations offered when creating a poll, in hours (null for no
@@ -128,13 +132,13 @@ const pollDurationHours = <int?>[null, 1, 4, 8, 24, 72, 168];
 /// `No end`, `1 hour`, `3 days`, ...
 String pollDurationLabel(int? hours) {
   if (hours == null) {
-    return 'No end';
+    return tr('No end');
   }
   if (hours % 24 == 0) {
     final days = hours ~/ 24;
-    return days == 1 ? '1 day' : '$days days';
+    return days == 1 ? tr('1 day') : tr('{count} days', {'count': days});
   }
-  return hours == 1 ? '1 hour' : '$hours hours';
+  return hours == 1 ? tr('1 hour') : tr('{count} hours', {'count': hours});
 }
 
 /// "Ends in 5m", "Ends in 3h", "Ends in 2d", or "Ending" in its last
@@ -142,13 +146,13 @@ String pollDurationLabel(int? hours) {
 String pollEndsInLabel(DateTime endsAt, {DateTime? now}) {
   final left = endsAt.difference((now ?? DateTime.now()).toUtc());
   if (left.inMinutes < 1) {
-    return 'Ending';
+    return tr('Ending');
   }
   if (left.inHours < 1) {
-    return 'Ends in ${left.inMinutes}m';
+    return tr('Ends in {minutes}m', {'minutes': left.inMinutes});
   }
   if (left.inDays < 1) {
-    return 'Ends in ${left.inHours}h';
+    return tr('Ends in {hours}h', {'hours': left.inHours});
   }
-  return 'Ends in ${left.inDays}d';
+  return tr('Ends in {days}d', {'days': left.inDays});
 }

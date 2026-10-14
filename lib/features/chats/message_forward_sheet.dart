@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -38,7 +39,7 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
-                  'Forward to',
+                  tr('Forward to'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -46,9 +47,9 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: TextField(
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Search chats',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Search chats'),
                   ),
                   onChanged: (value) {
                     setState(() {
@@ -109,10 +110,10 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
         .toList(growable: false);
 
     if (visibleConversations.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No matching conversations'),
+          padding: const EdgeInsets.all(24),
+          child: Text(tr('No matching conversations')),
         ),
       );
     }
@@ -125,7 +126,7 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
         final conversation = visibleConversations[index];
         final title = conversation.title?.trim().isNotEmpty == true
             ? conversation.title!.trim()
-            : 'Conversation';
+            : tr('Conversation');
         return ListTile(
           enabled: !_isForwarding,
           leading: Icon(
@@ -135,7 +136,9 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
           ),
           title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
-            conversation.type == ConversationType.group ? 'Group' : 'Direct',
+            conversation.type == ConversationType.group
+                ? tr('Group')
+                : tr('Direct'),
           ),
           onTap: _isForwarding
               ? null
@@ -163,16 +166,14 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
         return;
       }
       navigator.pop();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Message forwarded')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(tr('Message forwarded'))));
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
         _isForwarding = false;
-        _errorText = 'Could not forward message. Try again.';
+        _errorText = tr('Could not forward message. Try again.');
       });
     }
   }

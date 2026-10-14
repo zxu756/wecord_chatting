@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 class ProfileBootstrapGate extends ConsumerWidget {
   const ProfileBootstrapGate({required this.child, super.key});
@@ -37,12 +38,16 @@ class _ProfileBootstrapError extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Profile setup failed',
+                tr('Profile setup failed'),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Text(
-                error.toString(),
+                error is StateError
+                    ? tr('Bad state: {message}', {
+                        'message': (error as StateError).message,
+                      })
+                    : error.toString(),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colorScheme.error),
               ),
@@ -51,7 +56,7 @@ class _ProfileBootstrapError extends ConsumerWidget {
                 onPressed: () {
                   ref.invalidate(authProfileBootstrapProvider);
                 },
-                child: const Text('Try again'),
+                child: Text(tr('Try again')),
               ),
             ],
           ),

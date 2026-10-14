@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/forum_post_composer_sheet.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -272,7 +273,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                 threadId: post.id,
                 pinned: action == ForumPostAction.pin,
               ),
-          failure: 'Could not change the pin. Try again.',
+          failure: tr('Could not change the pin. Try again.'),
         );
       case ForumPostAction.editTags:
         final tagIds = await showForumTagPicker(
@@ -287,7 +288,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
           () => ref
               .read(circlesRepositoryProvider)
               .setForumPostTags(threadId: post.id, tagIds: tagIds),
-          failure: 'Could not change the tags. Try again.',
+          failure: tr('Could not change the tags. Try again.'),
         );
       case ForumPostAction.archive:
       case ForumPostAction.unarchive:
@@ -298,7 +299,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                 threadId: post.id,
                 archived: action == ForumPostAction.archive,
               ),
-          failure: 'Could not archive the post. Try again.',
+          failure: tr('Could not archive the post. Try again.'),
         );
     }
   }
@@ -313,7 +314,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(tr('Close')),
           ),
         ],
       ),
@@ -364,7 +365,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                 ),
               )
             else
-              Text('Forum', style: theme.textTheme.labelSmall),
+              Text(tr('Forum'), style: theme.textTheme.labelSmall),
           ],
         ),
         actions: [for (final action in widget.actions) action.toIconButton()],
@@ -386,8 +387,8 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                           key: const ValueKey('forum-new-post'),
                           onPressed: _newPost,
                           icon: const Icon(Icons.add),
-                          label: const Text(
-                            'New post',
+                          label: Text(
+                            tr('New post'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -396,7 +397,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                     else
                       Expanded(
                         child: Text(
-                          'You cannot post in this forum.',
+                          tr('You cannot post in this forum.'),
                           key: const ValueKey('forum-read-only'),
                           style: theme.textTheme.bodySmall,
                         ),
@@ -405,7 +406,9 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                     const SizedBox(width: 8),
                     PopupMenuButton<ForumPostSort>(
                       key: const ValueKey('forum-sort-button'),
-                      tooltip: 'Sort posts: ${_sort.label}',
+                      tooltip: tr('Sort posts: {sort}', {
+                        'sort': tr(_sort.label),
+                      }),
                       initialValue: _sort,
                       onSelected: _setSort,
                       itemBuilder: (context) => [
@@ -413,7 +416,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                           CheckedPopupMenuItem(
                             value: sort,
                             checked: sort == _sort,
-                            child: Text(sort.label),
+                            child: Text(tr(sort.label)),
                           ),
                       ],
                       child: ConstrainedBox(
@@ -433,7 +436,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                             if (!compact) ...[
                               const SizedBox(width: 4),
                               Text(
-                                _sort.label,
+                                tr(_sort.label),
                                 style: theme.textTheme.labelLarge,
                               ),
                             ],
@@ -486,8 +489,8 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Could not load posts.'),
-              TextButton(onPressed: _loadMore, child: const Text('Retry')),
+              Text(tr('Could not load posts.')),
+              TextButton(onPressed: _loadMore, child: Text(tr('Retry'))),
             ],
           ),
         );
@@ -508,12 +511,14 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
               ),
               const SizedBox(height: 8),
               Text(
-                _tagId == null ? 'No posts yet' : 'No posts with this tag',
+                _tagId == null
+                    ? tr('No posts yet')
+                    : tr('No posts with this tag'),
                 style: theme.textTheme.titleMedium,
               ),
               if (canPost && _tagId == null)
                 Text(
-                  'Start the first conversation with New post.',
+                  tr('Start the first conversation with New post.'),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall,
                 ),
@@ -533,7 +538,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
             return Center(
               child: TextButton(
                 onPressed: _loadMore,
-                child: const Text('Could not load more. Retry'),
+                child: Text(tr('Could not load more. Retry')),
               ),
             );
           }
@@ -614,9 +619,9 @@ class ForumPostCard extends StatelessWidget {
     ).replaceAll(RegExp(r'\s+'), ' ').trim();
     final author = post.author;
     final replies = switch (post.replyCount) {
-      0 => 'No replies',
-      1 => '1 reply',
-      final count => '$count replies',
+      0 => tr('No replies'),
+      1 => tr('1 reply'),
+      final count => tr('{count} replies', {'count': count}),
     };
     final thumbnail = post.thumbnail;
 
@@ -649,13 +654,13 @@ class ForumPostCard extends StatelessWidget {
                               _Badge(
                                 key: const ValueKey('forum-post-pinned'),
                                 icon: Icons.push_pin,
-                                label: 'Pinned',
+                                label: tr('Pinned'),
                                 color: colorScheme.primary,
                               ),
                             if (post.isArchived)
                               _Badge(
                                 icon: Icons.archive_outlined,
-                                label: 'Archived',
+                                label: tr('Archived'),
                                 color: colorScheme.onSurfaceVariant,
                               ),
                           ],
@@ -693,7 +698,7 @@ class ForumPostCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      author?.name ?? 'Deleted user',
+                      author?.name ?? tr('Deleted user'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelMedium?.copyWith(
@@ -759,7 +764,7 @@ class ForumPostCard extends StatelessWidget {
               ],
               if (actions.isNotEmpty && onAction != null)
                 PopupMenuButton<ForumPostAction>(
-                  tooltip: 'Post options',
+                  tooltip: tr('Post options'),
                   icon: const Icon(Icons.more_vert),
                   onSelected: onAction,
                   itemBuilder: (context) => [
@@ -769,7 +774,7 @@ class ForumPostCard extends StatelessWidget {
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(action.icon),
-                          title: Text(action.label),
+                          title: Text(tr(action.label)),
                         ),
                       ),
                   ],
@@ -956,7 +961,7 @@ class _ForumTagPickerDialogState extends State<_ForumTagPickerDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       scrollable: true,
-      title: const Text('Edit tags'),
+      title: Text(tr('Edit tags')),
       content: ForumTagSelector(
         tags: widget.tags,
         selected: _selected,
@@ -969,14 +974,14 @@ class _ForumTagPickerDialogState extends State<_ForumTagPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop([
             for (final tag in widget.tags)
               if (_selected.contains(tag.id)) tag.id,
           ]),
-          child: const Text('Save'),
+          child: Text(tr('Save')),
         ),
       ],
     );
@@ -1026,7 +1031,10 @@ class ForumTagSelector extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Up to ${ForumTag.maxPerPost} tags · ${selected.length} chosen',
+          tr('Up to {max} tags · {count} chosen', {
+            'max': ForumTag.maxPerPost,
+            'count': selected.length,
+          }),
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],

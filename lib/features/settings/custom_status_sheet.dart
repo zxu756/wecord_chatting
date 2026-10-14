@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 
 /// Opens the sheet to set, change or clear the current user's status.
@@ -47,7 +48,10 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
       (_emoji?.trim().isEmpty ?? true) && _textController.text.trim().isEmpty;
 
   Future<void> _pickEmoji() async {
-    final emoji = await showEmojiReactionPicker(context, title: 'Status emoji');
+    final emoji = await showEmojiReactionPicker(
+      context,
+      title: tr('Status emoji'),
+    );
     if (emoji != null && mounted) {
       setState(() => _emoji = emoji);
     }
@@ -74,8 +78,8 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
         setState(() {
           _saving = false;
           _errorText = clear
-              ? 'Could not clear status. Try again.'
-              : 'Could not save status. Try again.';
+              ? tr('Could not clear status. Try again.')
+              : tr('Could not save status. Try again.');
         });
       }
     }
@@ -98,13 +102,15 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Set a status', style: theme.textTheme.titleLarge),
+              Text(tr('Set a status'), style: theme.textTheme.titleLarge),
               const SizedBox(height: 16),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   IconButton.outlined(
-                    tooltip: emoji == null ? 'Choose emoji' : 'Change emoji',
+                    tooltip: emoji == null
+                        ? tr('Choose emoji')
+                        : tr('Change emoji'),
                     onPressed: _saving ? null : _pickEmoji,
                     icon: emoji == null
                         ? const Icon(Icons.add_reaction_outlined)
@@ -118,11 +124,11 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
                       maxLength: CustomStatus.maxTextLength,
                       decoration: InputDecoration(
                         border: const OutlineInputBorder(),
-                        labelText: "What's happening?",
+                        labelText: tr("What's happening?"),
                         suffixIcon: _isEmpty
                             ? null
                             : IconButton(
-                                tooltip: 'Remove emoji and text',
+                                tooltip: tr('Remove emoji and text'),
                                 icon: const Icon(Icons.close),
                                 onPressed: () => setState(() {
                                   _emoji = null;
@@ -138,9 +144,9 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
               const SizedBox(height: 8),
               DropdownButtonFormField<CustomStatusDuration>(
                 initialValue: _duration,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Clear after',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Clear after'),
                 ),
                 items: [
                   for (final duration in CustomStatusDuration.values)
@@ -175,7 +181,7 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
                     TextButton.icon(
                       onPressed: _saving ? null : () => _save(clear: true),
                       icon: const Icon(Icons.backspace_outlined),
-                      label: const Text('Clear status'),
+                      label: Text(tr('Clear status')),
                     )
                   else
                     const SizedBox.shrink(),
@@ -186,14 +192,14 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
                         onPressed: _saving
                             ? null
                             : () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
+                        child: Text(tr('Cancel')),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
                         onPressed: _saving || _isEmpty
                             ? null
                             : () => _save(clear: false),
-                        child: const Text('Save'),
+                        child: Text(tr('Save')),
                       ),
                     ],
                   ),

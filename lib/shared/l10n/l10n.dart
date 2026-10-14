@@ -29,6 +29,23 @@ String tr(String english, [Map<String, Object?> args = const {}]) {
   return text;
 }
 
+/// [english] where the same English means something else elsewhere: looks
+/// up `'[context]|[english]'` first, so one screen can word it differently
+/// (the audit log's "Messages" filter is 消息, the Messages tab 私信).
+String trIn(
+  String context,
+  String english, [
+  Map<String, Object?> args = const {},
+]) {
+  if (AppStrings.isChinese) {
+    final specific = zhStrings['$context|$english'];
+    if (specific != null) {
+      return tr(specific, args);
+    }
+  }
+  return tr(english, args);
+}
+
 /// Whether [language] means Chinese on this device.
 bool resolvesToChinese(AppLanguage language, {Locale? deviceLocale}) {
   return switch (language) {

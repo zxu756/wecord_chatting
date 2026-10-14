@@ -9,6 +9,7 @@ import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
 
@@ -55,17 +56,17 @@ class DirectCallBar extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (!session.isConnected)
-              const Padding(
-                padding: EdgeInsets.all(16),
+              Padding(
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox.square(
+                    const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    SizedBox(width: 12),
-                    Text('Connecting…'),
+                    const SizedBox(width: 12),
+                    Text(tr('Connecting…')),
                   ],
                 ),
               )
@@ -80,7 +81,7 @@ class DirectCallBar extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
-                    'Calling…',
+                    tr('Calling…'),
                     key: const ValueKey('direct-call-waiting'),
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -125,15 +126,17 @@ class DirectCallBar extends ConsumerWidget {
             Expanded(
               child: Text(
                 count == 1
-                    ? '${call.participants.single.name} is in a call'
-                    : '$count people are in a call',
+                    ? tr('{name} is in a call', {
+                        'name': call.participants.single.name,
+                      })
+                    : tr('{count} people are in a call', {'count': count}),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             IconButton(
               key: const ValueKey('direct-call-join-video'),
-              tooltip: 'Join with video',
+              tooltip: tr('Join with video'),
               onPressed: () => startDirectCall(
                 context,
                 ref,
@@ -156,7 +159,7 @@ class DirectCallBar extends ConsumerWidget {
                 name: title,
               ),
               icon: const Icon(Icons.call, size: 18),
-              label: const Text('Join'),
+              label: Text(tr('Join')),
             ),
           ],
         ),
@@ -248,7 +251,7 @@ class _IncomingCallCard extends ConsumerWidget {
       }
     }
     final caller = call.caller;
-    final callerName = caller?.name ?? 'Someone';
+    final callerName = caller?.name ?? tr('Someone');
     final isGroup = conversation?.type == ConversationType.group;
     final title = conversation?.title?.trim().isNotEmpty == true
         ? conversation!.title!.trim()
@@ -291,7 +294,9 @@ class _IncomingCallCard extends ConsumerWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                   Text(
-                    isGroup ? '$callerName started a call' : 'Incoming call',
+                    isGroup
+                        ? tr('{name} started a call', {'name': callerName})
+                        : tr('Incoming call'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -303,7 +308,7 @@ class _IncomingCallCard extends ConsumerWidget {
             ),
             IconButton.filled(
               key: const ValueKey('incoming-call-decline'),
-              tooltip: 'Decline',
+              tooltip: tr('Decline'),
               style: IconButton.styleFrom(
                 backgroundColor: theme.colorScheme.error,
                 foregroundColor: theme.colorScheme.onError,
@@ -322,14 +327,14 @@ class _IncomingCallCard extends ConsumerWidget {
             const SizedBox(width: 4),
             IconButton.filledTonal(
               key: const ValueKey('incoming-call-join-video'),
-              tooltip: 'Join with video',
+              tooltip: tr('Join with video'),
               onPressed: () => join(video: true),
               icon: const Icon(Icons.videocam),
             ),
             const SizedBox(width: 4),
             IconButton.filled(
               key: const ValueKey('incoming-call-join'),
-              tooltip: 'Join',
+              tooltip: tr('Join'),
               style: IconButton.styleFrom(
                 backgroundColor: voiceConnectedColor,
                 foregroundColor: Colors.white,

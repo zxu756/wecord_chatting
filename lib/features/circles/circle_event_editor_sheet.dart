@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 
@@ -171,23 +172,23 @@ class _CircleEventEditorSheetState
   String? _validate() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      return 'Give the event a title.';
+      return tr('Give the event a title.');
     }
     final endsAt = _endsAt;
     if (endsAt != null && !endsAt.isAfter(_startsAt)) {
-      return 'The event must end after it starts.';
+      return tr('The event must end after it starts.');
     }
     final effectiveEnd = endsAt ?? _startsAt.add(CircleEvent.defaultDuration);
     if (!effectiveEnd.isAfter(_now)) {
-      return 'Pick a time that has not passed yet.';
+      return tr('Pick a time that has not passed yet.');
     }
     if (_locationType == CircleEventLocationType.external) {
       if (_locationController.text.trim().isEmpty) {
-        return 'Say where the event takes place.';
+        return tr('Say where the event takes place.');
       }
     } else if (_channelId == null ||
         !_channelsFor(_locationType).any((c) => c.id == _channelId)) {
-      return 'Choose a channel.';
+      return tr('Choose a channel.');
     }
     return null;
   }
@@ -235,8 +236,8 @@ class _CircleEventEditorSheetState
         setState(() {
           _saving = false;
           _errorText = widget.event == null
-              ? 'Could not create the event. Try again.'
-              : 'Could not save the event. Try again.';
+              ? tr('Could not create the event. Try again.')
+              : tr('Could not save the event. Try again.');
         });
       }
     }
@@ -268,7 +269,7 @@ class _CircleEventEditorSheetState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                editing ? 'Edit event' : 'New event',
+                editing ? tr('Edit event') : tr('New event'),
                 style: theme.textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -279,13 +280,13 @@ class _CircleEventEditorSheetState
                 enabled: !_saving,
                 maxLength: CircleEvent.maxTitleLength,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Title',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Title'),
                 ),
               ),
               const SizedBox(height: 8),
-              Text('Starts', style: theme.textTheme.titleSmall),
+              Text(tr('Starts'), style: theme.textTheme.titleSmall),
               const SizedBox(height: 6),
               OutlinedButton.icon(
                 key: const ValueKey('event-start-button'),
@@ -297,9 +298,9 @@ class _CircleEventEditorSheetState
               SwitchListTile(
                 key: const ValueKey('event-end-switch'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('End time'),
+                title: Text(tr('End time')),
                 subtitle: endsAt == null
-                    ? const Text('Without one, the event lasts 2 hours.')
+                    ? Text(tr('Without one, the event lasts 2 hours.'))
                     : null,
                 value: endsAt != null,
                 onChanged: _saving
@@ -318,7 +319,7 @@ class _CircleEventEditorSheetState
                   label: Text(dateTime(endsAt)),
                 ),
               const SizedBox(height: 12),
-              Text('Where', style: theme.textTheme.titleSmall),
+              Text(tr('Where'), style: theme.textTheme.titleSmall),
               const SizedBox(height: 6),
               SegmentedButton<CircleEventLocationType>(
                 key: const ValueKey('event-location-type'),
@@ -335,9 +336,9 @@ class _CircleEventEditorSheetState
                           Icons.place_outlined,
                       }),
                       label: Text(switch (type) {
-                        CircleEventLocationType.voice => 'Voice',
-                        CircleEventLocationType.text => 'Text',
-                        CircleEventLocationType.external => 'Elsewhere',
+                        CircleEventLocationType.voice => tr('Voice'),
+                        CircleEventLocationType.text => tr('Text'),
+                        CircleEventLocationType.external => tr('Elsewhere'),
                       }),
                     ),
                 ],
@@ -353,10 +354,10 @@ class _CircleEventEditorSheetState
                   controller: _locationController,
                   enabled: !_saving,
                   maxLength: CircleEvent.maxLocationLength,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Location',
-                    hintText: 'An address, a park, a link…',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Location'),
+                    hintText: tr('An address, a park, a link…'),
                   ),
                 )
               else
@@ -367,9 +368,9 @@ class _CircleEventEditorSheetState
                       ? _channelId
                       : null,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Channel',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: tr('Channel'),
                   ),
                   items: [
                     for (final channel in channels)
@@ -394,9 +395,9 @@ class _CircleEventEditorSheetState
                 maxLines: 6,
                 maxLength: CircleEvent.maxDescriptionLength,
                 keyboardType: TextInputType.multiline,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Description (optional)',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Description (optional)'),
                   alignLabelWithHint: true,
                 ),
               ),
@@ -416,12 +417,12 @@ class _CircleEventEditorSheetState
                     onPressed: _saving
                         ? null
                         : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(tr('Cancel')),
                   ),
                   FilledButton(
                     key: const ValueKey('event-save'),
                     onPressed: _saving ? null : _save,
-                    child: Text(editing ? 'Save' : 'Create'),
+                    child: Text(editing ? tr('Save') : tr('Create')),
                   ),
                 ],
               ),

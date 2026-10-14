@@ -13,6 +13,7 @@ import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -162,12 +163,12 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Events'),
+        title: Text(tr('Events')),
         actions: [
           if (canCreate)
             IconButton(
               key: const ValueKey('circle-events-create'),
-              tooltip: 'Create event',
+              tooltip: tr('Create event'),
               onPressed: () => _create(detail),
               icon: const Icon(Icons.add),
             ),
@@ -179,10 +180,10 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Could not load events.'),
+              Text(tr('Could not load events.')),
               TextButton(
                 onPressed: () => ref.invalidate(circleEventsProvider(_query)),
-                child: const Text('Retry'),
+                child: Text(tr('Retry')),
               ),
             ],
           ),
@@ -221,8 +222,8 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
                     ),
                     label: Text(
                       _includePast
-                          ? 'Hide past and cancelled events'
-                          : 'Show past and cancelled events',
+                          ? tr('Hide past and cancelled events')
+                          : tr('Show past and cancelled events'),
                     ),
                   ),
                 ),
@@ -255,14 +256,14 @@ class _EmptyEvents extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            includePast ? 'No events yet' : 'No upcoming events',
+            includePast ? tr('No events yet') : tr('No upcoming events'),
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
           Text(
             onCreate == null
-                ? 'Events scheduled in this circle show up here.'
-                : 'Schedule a meetup, a voice hangout or a game night.',
+                ? tr('Events scheduled in this circle show up here.')
+                : tr('Schedule a meetup, a voice hangout or a game night.'),
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall,
           ),
@@ -271,7 +272,7 @@ class _EmptyEvents extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCreate,
               icon: const Icon(Icons.add),
-              label: const Text('Create event'),
+              label: Text(tr('Create event')),
             ),
           ],
         ],
@@ -293,7 +294,7 @@ Future<void> toggleCircleEventInterest(
     refreshCircleEvents(ref);
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not update your interest.')),
+      SnackBar(content: Text(tr('Could not update your interest.'))),
     );
   }
 }
@@ -326,8 +327,8 @@ class CircleEventCard extends StatelessWidget {
     final status = event.statusAt(now);
     final creator = event.creator;
     final interested = switch (event.interestedCount) {
-      0 => 'No one interested yet',
-      final count => '$count interested',
+      0 => tr('No one interested yet'),
+      final count => tr('{count} interested', {'count': count}),
     };
 
     return Material(
@@ -388,7 +389,8 @@ class CircleEventCard extends StatelessWidget {
                     child: Text(
                       [
                         interested,
-                        if (creator != null) 'by ${creator.name}',
+                        if (creator != null)
+                          tr('by {name}', {'name': creator.name}),
                       ].join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -479,7 +481,7 @@ class CircleEventJoinVoiceButton extends ConsumerWidget {
         key: ValueKey('circle-event-join-voice-${event.id}'),
         onPressed: connected || canConnect ? join : null,
         icon: const Icon(Icons.volume_up, size: 18),
-        label: Text(connected ? 'Open' : 'Join'),
+        label: Text(connected ? tr('Open') : tr('Join')),
       ),
     );
   }
@@ -512,7 +514,7 @@ class CircleEventInterestButton extends StatelessWidget {
           : Icons.notifications_none,
       size: 18,
     );
-    const label = Text('Interested');
+    final label = Text(tr('Interested'));
     return event.interestedByMe
         ? FilledButton.tonalIcon(
             onPressed: enabled ? onPressed : null,
@@ -532,17 +534,17 @@ Widget? circleEventStatusBadge(BuildContext context, CircleEventStatus status) {
   final colorScheme = Theme.of(context).colorScheme;
   final (label, background, foreground) = switch (status) {
     CircleEventStatus.ongoing => (
-      'Live now',
+      tr('Live now'),
       colorScheme.primary,
       colorScheme.onPrimary,
     ),
     CircleEventStatus.cancelled => (
-      'Cancelled',
+      tr('Cancelled'),
       colorScheme.errorContainer,
       colorScheme.onErrorContainer,
     ),
     CircleEventStatus.over => (
-      'Ended',
+      tr('Ended'),
       colorScheme.surfaceContainerHighest,
       colorScheme.onSurfaceVariant,
     ),
@@ -585,7 +587,7 @@ class CircleEventLocationChip extends StatelessWidget {
     };
     final label = switch (event.locationType) {
       CircleEventLocationType.external => event.locationLabel,
-      _ => event.channelName ?? 'Deleted channel',
+      _ => event.channelName ?? tr('Deleted channel'),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -683,20 +685,23 @@ class _CircleEventDetailScreenState
           context: context,
           builder: (context) => AlertDialog(
             scrollable: true,
-            title: const Text('Cancel event?'),
+            title: Text(tr('Cancel event?')),
             content: Text(
-              '"${_event.title}" will be marked as cancelled and no one will '
-              'be reminded of it.',
+              tr(
+                '"{title}" will be marked as cancelled and no one will be '
+                'reminded of it.',
+                {'title': _event.title},
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Keep event'),
+                child: Text(tr('Keep event')),
               ),
               FilledButton(
                 key: const ValueKey('circle-event-confirm-cancel'),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Cancel event'),
+                child: Text(tr('Cancel event')),
               ),
             ],
           ),
@@ -715,7 +720,7 @@ class _CircleEventDetailScreenState
           refreshCircleEvents(ref);
         } catch (_) {
           messenger?.showSnackBar(
-            const SnackBar(content: Text('Could not cancel the event.')),
+            SnackBar(content: Text(tr('Could not cancel the event.'))),
           );
         }
     }
@@ -736,8 +741,8 @@ class _CircleEventDetailScreenState
       SnackBar(
         content: Text(
           downloaded
-              ? 'Calendar file downloaded and details copied.'
-              : 'Event details copied. Paste them into your calendar.',
+              ? tr('Calendar file downloaded and details copied.')
+              : tr('Event details copied. Paste them into your calendar.'),
         ),
       ),
     );
@@ -767,29 +772,29 @@ class _CircleEventDetailScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Event'),
+        title: Text(tr('Event')),
         actions: [
           if (canManage)
             PopupMenuButton<_EventMenuAction>(
-              tooltip: 'Event options',
+              tooltip: tr('Event options'),
               icon: const Icon(Icons.more_vert),
               onSelected: (action) => _onMenu(action, detail),
               itemBuilder: (context) => [
                 if (status != CircleEventStatus.over)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _EventMenuAction.edit,
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Edit event'),
+                      leading: const Icon(Icons.edit_outlined),
+                      title: Text(tr('Edit event')),
                     ),
                   ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _EventMenuAction.cancel,
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.event_busy_outlined),
-                    title: Text('Cancel event'),
+                    leading: const Icon(Icons.event_busy_outlined),
+                    title: Text(tr('Cancel event')),
                   ),
                 ),
               ],
@@ -821,12 +826,12 @@ class _CircleEventDetailScreenState
               CircleEventLocationType.text => Icons.tag,
               CircleEventLocationType.external => Icons.place_outlined,
             },
-            text: event.locationLabel,
+            text: _locationText(event),
           ),
           if (creator != null)
             _DetailLine(
               icon: Icons.person_outline,
-              text: 'Created by ${creator.name}',
+              text: tr('Created by {name}', {'name': creator.name}),
             ),
           const SizedBox(height: 12),
           Wrap(
@@ -845,13 +850,13 @@ class _CircleEventDetailScreenState
                 key: const ValueKey('circle-event-add-to-calendar'),
                 onPressed: event.isCancelled ? null : _addToCalendar,
                 icon: const Icon(Icons.event_available_outlined, size: 18),
-                label: const Text('Add to calendar'),
+                label: Text(tr('Add to calendar')),
               ),
             ],
           ),
           if (description != null) ...[
             const SizedBox(height: 20),
-            Text('About', style: theme.textTheme.titleSmall),
+            Text(tr('About'), style: theme.textTheme.titleSmall),
             const SizedBox(height: 6),
             MessageMarkdownText(
               key: const ValueKey('circle-event-description'),
@@ -861,7 +866,7 @@ class _CircleEventDetailScreenState
           ],
           const SizedBox(height: 20),
           Text(
-            'Interested · ${event.interestedCount}',
+            tr('Interested · {count}', {'count': event.interestedCount}),
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: 4),
@@ -871,14 +876,17 @@ class _CircleEventDetailScreenState
               final people = snapshot.data;
               if (people == null) {
                 return snapshot.hasError
-                    ? const Text('Could not load who is interested.')
+                    ? Text(tr('Could not load who is interested.'))
                     : const Padding(
                         padding: EdgeInsets.all(12),
                         child: Center(child: CircularProgressIndicator()),
                       );
               }
               if (people.isEmpty) {
-                return Text('No one yet.', style: theme.textTheme.bodySmall);
+                return Text(
+                  tr('No one yet.'),
+                  style: theme.textTheme.bodySmall,
+                );
               }
               return Column(
                 key: const ValueKey('circle-event-interested-list'),
@@ -959,7 +967,9 @@ class CircleEventsEntry extends ConsumerWidget {
     final live = active.any(
       (event) => event.statusAt(now) == CircleEventStatus.ongoing,
     );
-    final label = active.isEmpty ? 'Events' : 'Events (${active.length})';
+    final label = active.isEmpty
+        ? tr('Events')
+        : tr('Events ({count})', {'count': active.length});
     return builder(context, label, live);
   }
 }
@@ -982,10 +992,10 @@ String formatCircleEventTime(
       final date = DateUtils.dateOnly(time);
       final difference = date.difference(DateUtils.dateOnly(today)).inDays;
       if (difference == 0) {
-        return 'Today';
+        return tr('Today');
       }
       if (difference == 1) {
-        return 'Tomorrow';
+        return tr('Tomorrow');
       }
     }
     final medium = localizations.formatMediumDate(time);
@@ -1015,7 +1025,7 @@ String circleEventSummaryText(CircleEvent event, {required String time}) {
   return [
     event.title,
     time,
-    'Where: ${event.locationLabel}',
+    tr('Where: {location}', {'location': _locationText(event)}),
     if (description != null) ...['', plainTextFromMarkdown(description).trim()],
   ].join('\n');
 }
@@ -1054,6 +1064,14 @@ String circleEventCalendarFile(CircleEvent event, {required DateTime now}) {
     'END:VCALENDAR',
     '',
   ].join('\r\n');
+}
+
+String _locationText(CircleEvent event) {
+  if (event.locationType != CircleEventLocationType.external &&
+      event.channelName == null) {
+    return tr('Deleted channel');
+  }
+  return event.locationLabel;
 }
 
 String _safeFileName(String title) {

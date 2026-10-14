@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/mention_picker.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -81,7 +82,7 @@ class _ForumPostComposerSheetState
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _errorText = 'Could not open the image. Try again.');
+        setState(() => _errorText = tr('Could not open the image. Try again.'));
       }
     } finally {
       if (mounted) {
@@ -94,11 +95,11 @@ class _ForumPostComposerSheetState
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
     if (title.isEmpty) {
-      setState(() => _errorText = 'Give your post a title.');
+      setState(() => _errorText = tr('Give your post a title.'));
       return;
     }
     if (body.isEmpty && _image == null) {
-      setState(() => _errorText = 'Write something or add an image.');
+      setState(() => _errorText = tr('Write something or add an image.'));
       return;
     }
     setState(() {
@@ -131,7 +132,7 @@ class _ForumPostComposerSheetState
       if (mounted) {
         setState(() {
           _saving = false;
-          _errorText = 'Could not create the post. Try again.';
+          _errorText = tr('Could not create the post. Try again.');
         });
       }
     }
@@ -167,7 +168,7 @@ class _ForumPostComposerSheetState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'New post in ${widget.channel.name}',
+                tr('New post in {channel}', {'channel': widget.channel.name}),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleLarge,
@@ -180,9 +181,9 @@ class _ForumPostComposerSheetState
                 enabled: !_saving,
                 maxLength: ForumPost.maxTitleLength,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Title',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Title'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -194,9 +195,9 @@ class _ForumPostComposerSheetState
                 maxLines: 8,
                 maxLength: ForumPost.maxBodyLength,
                 keyboardType: TextInputType.multiline,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Message',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Message'),
                   alignLabelWithHint: true,
                 ),
               ),
@@ -211,7 +212,7 @@ class _ForumPostComposerSheetState
               ],
               if (widget.channel.tags.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text('Tags', style: theme.textTheme.titleSmall),
+                Text(tr('Tags'), style: theme.textTheme.titleSmall),
                 const SizedBox(height: 6),
                 ForumTagSelector(
                   tags: widget.channel.tags,
@@ -232,7 +233,7 @@ class _ForumPostComposerSheetState
                       key: const ValueKey('forum-post-add-image'),
                       onPressed: _saving || _picking ? null : _pickImage,
                       icon: const Icon(Icons.image_outlined),
-                      label: const Text('Add image'),
+                      label: Text(tr('Add image')),
                     )
                   else
                     Expanded(
@@ -246,7 +247,7 @@ class _ForumPostComposerSheetState
                         onDeleted: _saving
                             ? null
                             : () => setState(() => _image = null),
-                        deleteButtonTooltipMessage: 'Remove image',
+                        deleteButtonTooltipMessage: tr('Remove image'),
                       ),
                     ),
                 ],
@@ -267,12 +268,12 @@ class _ForumPostComposerSheetState
                     onPressed: _saving
                         ? null
                         : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(tr('Cancel')),
                   ),
                   FilledButton(
                     key: const ValueKey('forum-post-submit'),
                     onPressed: _saving ? null : _post,
-                    child: const Text('Post'),
+                    child: Text(tr('Post')),
                   ),
                 ],
               ),

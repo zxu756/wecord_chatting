@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 
 /// Picks `/roll` results; tests override it with a seeded generator.
@@ -26,24 +27,42 @@ class SlashCommandContext {
 }
 
 enum SlashCommand {
-  shrug('shrug', '[message]', r'Appends ¯\_(ツ)_/¯ to your message'),
-  tableflip('tableflip', '[message]', 'Appends (╯°□°)╯︵ ┻━┻ to your message'),
-  unflip('unflip', '[message]', 'Appends ┬─┬ノ( º _ ºノ) to your message'),
-  me('me', '<message>', 'Sends your message in italics'),
-  spoiler('spoiler', '<message>', 'Hides your message behind a spoiler'),
-  roll('roll', '[sides]', 'Rolls a die (6 sides unless you say otherwise)'),
-  poll('poll', '', 'Creates a poll'),
-  nick('nick', '<name>', 'Changes your nickname in this circle'),
-  status('status', '<emoji> <text>', 'Sets your status, or /status clear');
+  shrug('shrug'),
+  tableflip('tableflip'),
+  unflip('unflip'),
+  me('me'),
+  spoiler('spoiler'),
+  roll('roll'),
+  poll('poll'),
+  nick('nick'),
+  status('status');
 
-  const SlashCommand(this.name, this.arguments, this.description);
+  const SlashCommand(this.name);
 
   /// Typed after the slash.
   final String name;
 
   /// The arguments shown next to the name in the command list.
-  final String arguments;
-  final String description;
+  String get arguments => switch (this) {
+    shrug || tableflip || unflip => tr('[message]'),
+    me || spoiler => tr('<message>'),
+    roll => tr('[sides]'),
+    poll => '',
+    nick => tr('<name>'),
+    status => tr('<emoji> <text>'),
+  };
+
+  String get description => switch (this) {
+    shrug => tr(r'Appends ¯\_(ツ)_/¯ to your message'),
+    tableflip => tr('Appends (╯°□°)╯︵ ┻━┻ to your message'),
+    unflip => tr('Appends ┬─┬ノ( º _ ºノ) to your message'),
+    me => tr('Sends your message in italics'),
+    spoiler => tr('Hides your message behind a spoiler'),
+    roll => tr('Rolls a die (6 sides unless you say otherwise)'),
+    poll => tr('Creates a poll'),
+    nick => tr('Changes your nickname in this circle'),
+    status => tr('Sets your status, or /status clear'),
+  };
 
   /// Whether the command is offered (and run) in [context].
   bool isAvailableIn(SlashCommandContext context) {
@@ -182,12 +201,12 @@ SlashCommandAction? parseSlashCommand(
       return SlashSendText(withSuffix(unflipText));
     case SlashCommand.me:
       if (argument.isEmpty) {
-        return const SlashCommandError('Usage: /me <message>');
+        return SlashCommandError(tr('Usage: /me <message>'));
       }
       return SlashSendText('*$argument*');
     case SlashCommand.spoiler:
       if (argument.isEmpty) {
-        return const SlashCommandError('Usage: /spoiler <message>');
+        return SlashCommandError(tr('Usage: /spoiler <message>'));
       }
       return SlashSendText('||$argument||');
     case SlashCommand.roll:
@@ -195,8 +214,11 @@ SlashCommandAction? parseSlashCommand(
           ? defaultRollSides
           : int.tryParse(argument);
       if (sides == null || sides < minRollSides || sides > maxRollSides) {
-        return const SlashCommandError(
-          'Choose between $minRollSides and $maxRollSides sides.',
+        return SlashCommandError(
+          tr('Choose between {min} and {max} sides.', {
+            'min': minRollSides,
+            'max': maxRollSides,
+          }),
         );
       }
       final rolled = (random ?? math.Random()).nextInt(sides) + 1;
@@ -205,8 +227,10 @@ SlashCommandAction? parseSlashCommand(
       return const SlashOpenPoll();
     case SlashCommand.nick:
       if (argument.characters.length > maxSlashNicknameLength) {
-        return const SlashCommandError(
-          'Nicknames can be at most $maxSlashNicknameLength characters.',
+        return SlashCommandError(
+          tr('Nicknames can be at most {count} characters.', {
+            'count': maxSlashNicknameLength,
+          }),
         );
       }
       return SlashSetNickname(argument.isEmpty ? null : argument);
@@ -217,7 +241,7 @@ SlashCommandAction? parseSlashCommand(
 
 SlashCommandAction _parseStatus(String argument) {
   if (argument.isEmpty) {
-    return const SlashCommandError('Usage: /status <emoji> <text>');
+    return SlashCommandError(tr('Usage: /status <emoji> <text>'));
   }
   if (argument.toLowerCase() == 'clear') {
     return const SlashSetStatus();
@@ -234,8 +258,10 @@ SlashCommandAction _parseStatus(String argument) {
     text = argument;
   }
   if (text.characters.length > CustomStatus.maxTextLength) {
-    return const SlashCommandError(
-      'Status text can be at most ${CustomStatus.maxTextLength} characters.',
+    return SlashCommandError(
+      tr('Status text can be at most {count} characters.', {
+        'count': CustomStatus.maxTextLength,
+      }),
     );
   }
   return SlashSetStatus(emoji: emoji, text: text.isEmpty ? null : text);

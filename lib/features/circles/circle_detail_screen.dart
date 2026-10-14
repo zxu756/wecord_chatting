@@ -12,6 +12,7 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -62,14 +63,14 @@ class CircleDetailScreen extends ConsumerWidget {
     void refresh() => ref.invalidate(circleDetailProvider(circleId));
 
     return detail.when(
-      loading: () => const Scaffold(
-        appBar: _CircleAppBar(title: 'Circle'),
-        body: Center(child: CircularProgressIndicator()),
+      loading: () => Scaffold(
+        appBar: _CircleAppBar(title: tr('Circle')),
+        body: const Center(child: CircularProgressIndicator()),
       ),
       error: (error, stackTrace) => error is CircleMembershipLostException
           ? CircleMembershipLostView(circleId: circleId)
           : Scaffold(
-              appBar: const _CircleAppBar(title: 'Circle'),
+              appBar: _CircleAppBar(title: tr('Circle')),
               body: Center(child: Text(error.toString())),
             ),
       data: (detail) {
@@ -177,7 +178,7 @@ class CircleMobileHome extends ConsumerWidget {
                 onSelectThread: (thread) => context.push(
                   CircleChannelThreadScreen.pathFor(circleId, thread.id),
                   extra: ChatThreadRouteExtra(
-                    title: thread.title ?? 'Thread',
+                    title: thread.title ?? tr('Thread'),
                     type: ConversationType.thread,
                     circleId: circleId,
                   ),
@@ -204,7 +205,7 @@ class _CircleFeedPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Feed')),
+      appBar: AppBar(title: Text(tr('Feed'))),
       body: ref
           .watch(circleDetailProvider(circleId))
           .when(

@@ -1,2 +1,206 @@
 // Chinese for home, contacts, inbox, groups, shell, presence, browser, bootstrap and lib/shared/.
-const zhAppShell = <String, String>{};
+const zhAppShell = <String, String>{
+  // Home sidebar and user panel.
+  'Online': '在线',
+  'Invisible': '隐身',
+  'User settings': '用户设置',
+  'Find or start a conversation': '查找或开始对话',
+  'Friends': '好友',
+  'Notifications': '通知',
+  'DIRECT MESSAGES': '私信',
+  'New group': '新建群聊',
+  'No conversations yet': '还没有会话',
+  'Add at least two friends to start a group.': '至少添加两位好友才能创建群聊。',
+  'Conversation': '会话',
+  '{count} members': '{count} 位成员',
+
+  // Contacts.
+  'Search profiles': '搜索用户',
+  'Search by username.': '按用户名搜索。',
+  'Searching': '正在搜索',
+  'No matching profiles.': '没有匹配的用户。',
+  'Requested': '已发送',
+  'Add': '添加',
+  'Incoming requests': '收到的请求',
+  'Loading requests': '正在加载请求',
+  'No incoming requests.': '没有收到的请求。',
+  'Accept': '接受',
+  'Reject': '拒绝',
+  'Loading friends': '正在加载好友',
+  'No friends yet.': '还没有好友。',
+  'Search friends': '搜索好友',
+  'No matching friends.': '没有匹配的好友。',
+  'New Group': '新建群聊',
+  'Message': '消息',
+  'Unable to start chat: {error}': '无法开始聊天：{error}',
+  'Edit alias': '编辑备注',
+  'Alias': '备注',
+  'Save': '保存',
+  'Alias must be 48 characters or fewer.': '备注不能超过 48 个字符。',
+  'Unable to save alias: {error}': '无法保存备注：{error}',
+
+  // Notifications inbox.
+  'Refresh': '刷新',
+  'Could not load notifications.': '无法加载通知。',
+  'Friend requests': '好友请求',
+  '1 pending request': '1 个待处理的请求',
+  '{count} pending requests': '{count} 个待处理的请求',
+  'Mentioned you': '提到了你',
+  'Mentioned everyone': '提到了所有人',
+  'Replied to you': '回复了你',
+  'Nothing here yet': '暂无内容',
+  'Mentions and replies from the last 30 days show up here.':
+      '最近 30 天内提及你和回复你的消息会显示在这里。',
+
+  // Groups.
+  'Group name': '群聊名称',
+  'Create': '创建',
+  'Unable to create group: {error}': '无法创建群聊：{error}',
+  'Announcement': '群公告',
+  'Invite friends': '邀请好友',
+  'Leave group': '退出群聊',
+  'Group members': '群成员',
+  'Search members': '搜索成员',
+  'Updated {time}': '更新于 {time}',
+  'Updated by {name}': '由 {name} 更新',
+  'Could not update group avatar.': '无法更新群头像。',
+  'Could not save group details.': '无法保存群聊详情。',
+  'No friends available to invite.': '没有可邀请的好友。',
+  'Add selected': '添加所选',
+  'Could not invite members.': '无法邀请成员。',
+  'Could not leave group.': '无法退出群聊。',
+  'Could not remove member.': '无法移除成员。',
+  'Change group avatar': '更换群头像',
+  'Group details': '群聊详情',
+  'Remove member': '移除成员',
+  'owner': '群主',
+  'admin': '管理员',
+  'member': '成员',
+
+  // Navigation tabs and routes.
+  'Home': '主页',
+  'Messages': '私信',
+  'You': '我',
+  'Loading': '加载中',
+
+  // In-app browser.
+  'Link copied': '链接已复制',
+  'Close': '关闭',
+  'More': '更多',
+  'Copy link': '复制链接',
+  'Open in browser': '在浏览器中打开',
+  'Back': '返回',
+  'Go forward': '前进',
+  'Reload': '刷新',
+  'Could not load this page': '无法加载此页面',
+  'Try again': '重试',
+
+  // Messages, polls, stickers, threads and voice (lib/shared/models/).
+  'Message deleted by a moderator': '消息已被管理员删除',
+  'Message deleted': '消息已删除',
+  '📊 Poll': '📊 投票',
+  '📊 Poll: {question}': '📊 投票：{question}',
+  'No end': '不限时',
+  '1 day': '1 天',
+  '{count} days': '{count} 天',
+  '1 hour': '1 小时',
+  '{count} hours': '{count} 小时',
+  'Ending': '即将结束',
+  'Ends in {minutes}m': '{minutes} 分钟后结束',
+  'Ends in {hours}h': '{hours} 小时后结束',
+  'Ends in {days}d': '{days} 天后结束',
+  'Member': '成员',
+  'Someone': '某人',
+  'Deleted channel': '已删除的频道',
+  '[Sticker]': '[贴纸]',
+  '[Sticker] {name}': '[贴纸] {name}',
+  'Thread': '子话题',
+
+  // CirclePermission labels and descriptions.
+  'View channels': '查看频道',
+  'See channels and read their messages.': '查看频道并阅读其中的消息。',
+  'Send messages': '发送消息',
+  'Post messages in channels and threads.': '在频道和子话题中发送消息。',
+  'Manage messages': '管理消息',
+  "Pin messages, archive threads and delete other members' posts.":
+      '置顶消息、归档子话题，并删除其他成员的消息。',
+  'Manage channels': '管理频道',
+  "Create, sort and organize channels and categories, and manage "
+          "everyone's invite links.":
+      '创建、排序和整理频道与分类，并管理所有人的邀请链接。',
+  'Manage roles': '管理角色',
+  'Create and edit roles below their highest role, and assign them.':
+      '创建和编辑低于自己最高角色的角色，并分配这些角色。',
+  'Kick members': '踢出成员',
+  'Remove members ranked below them from the circle.': '将级别低于自己的成员移出圈子。',
+  'Ban members': '封禁成员',
+  'Ban members ranked below them, keep them from rejoining and unban '
+          'them.':
+      '封禁级别低于自己的成员，阻止其重新加入，也可以解除封禁。',
+  'Time out members': '禁言成员',
+  'Stop members ranked below them from talking, reacting and joining '
+          'voice for a while.':
+      '暂时禁止级别低于自己的成员发言、添加回应和加入语音。',
+  'Create invites': '创建邀请',
+  'Invite friends and create invite links.': '邀请好友并创建邀请链接。',
+  'Manage nicknames': '管理昵称',
+  'Change the nicknames of members ranked below them.': '修改级别低于自己的成员的昵称。',
+  'Mention everyone': '提及所有人',
+  'Notify every member of a channel at once.': '一次性通知频道中的所有成员。',
+  'Manage events': '管理活动',
+  'Create, edit and cancel circle events.': '创建、编辑和取消圈子活动。',
+  'Manage emojis': '管理表情',
+  'Upload, rename and delete custom emojis and stickers.': '上传、重命名和删除自定义表情与贴纸。',
+  'Manage webhooks': '管理 Webhook',
+  'Create, reset and delete channel webhooks.': '创建、重置和删除频道 Webhook。',
+  'View audit log': '查看操作日志',
+  'See who changed what in the circle.': '查看谁在圈子中做了哪些更改。',
+  'Connect': '连接',
+  'Join voice channels.': '加入语音频道。',
+  'Administrator': '管理员权限',
+  'Every permission. Grant with care.': '拥有所有权限。请谨慎授予。',
+
+  // CirclePermissionGroup labels.
+  'General': '常规',
+  'Membership': '成员管理',
+  'Text': '文字',
+  'Voice': '语音',
+  'Advanced': '高级',
+
+  // CircleAuditActionGroup labels ('Messages' is above).
+  'Channels': '频道',
+  'Categories': '分类',
+  'Roles': '角色',
+  'Members': '成员',
+  'Ownership': '所有权',
+  'Invites': '邀请',
+  'Threads': '子话题',
+  'Posts': '帖子',
+  'Forums': '论坛',
+  'Events': '活动',
+  'Webhooks': 'Webhook',
+  'Emoji': '表情',
+  'Stickers': '贴纸',
+  'Other': '其他',
+
+  // CircleEventLocationType labels.
+  'Voice channel': '语音频道',
+  'Text channel': '文字频道',
+  'Somewhere else': '其他地点',
+
+  // ReportReason labels ('Other' is above).
+  'Spam': '垃圾信息',
+  'Harassment': '骚扰',
+  'Impersonation': '冒充他人',
+  'Unsafe content': '不安全内容',
+
+  // CustomStatusDuration labels.
+  '30 minutes': '30 分钟',
+  '4 hours': '4 小时',
+  'Today': '今天',
+  "Don't clear": '不清除',
+
+  // ForumPostSort labels.
+  'Latest activity': '最新动态',
+  'Newest': '最新发布',
+};

@@ -7,6 +7,7 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/profile/report_user_sheet.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -57,8 +58,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not update profile action. Try again.'),
+        SnackBar(
+          content: Text(tr('Could not update profile action. Try again.')),
         ),
       );
     }
@@ -86,7 +87,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not start chat. Try again.')),
+        SnackBar(content: Text(tr('Could not start chat. Try again.'))),
       );
     }
   }
@@ -94,7 +95,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: Text(tr('Profile'))),
       body: FutureBuilder<ProfileSummary>(
         future: _summaryFuture,
         builder: (context, snapshot) {
@@ -105,7 +106,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             return Center(
               child: FilledButton(
                 onPressed: () => setState(_reload),
-                child: const Text('Try again'),
+                child: Text(tr('Try again')),
               ),
             );
           }
@@ -200,37 +201,37 @@ class _ProfileActions extends StatelessWidget {
           FilledButton.icon(
             onPressed: onMessage,
             icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Message'),
+            label: Text(tr('Message')),
           ),
         if (summary.canSendFriendRequest)
           FilledButton.icon(
             onPressed: onAddFriend,
             icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('Add Friend'),
+            label: Text(tr('Add Friend')),
           ),
         if (summary.canAcceptRequest)
           FilledButton.icon(
             onPressed: onAcceptRequest,
             icon: const Icon(Icons.check_circle_outline),
-            label: const Text('Accept Request'),
+            label: Text(tr('Accept Request')),
           ),
         if (summary.relationshipStatus == ProfileRelationshipStatus.blocked)
           OutlinedButton.icon(
             onPressed: onUnblock,
             icon: const Icon(Icons.lock_open_outlined),
-            label: const Text('Unblock'),
+            label: Text(tr('Unblock')),
           )
         else if (!isSelf)
           OutlinedButton.icon(
             onPressed: onBlock,
             icon: const Icon(Icons.block_outlined),
-            label: const Text('Block'),
+            label: Text(tr('Block')),
           ),
         if (!isSelf)
           TextButton.icon(
             onPressed: onReport,
             icon: const Icon(Icons.flag_outlined),
-            label: const Text('Report'),
+            label: Text(tr('Report')),
           ),
       ],
     );

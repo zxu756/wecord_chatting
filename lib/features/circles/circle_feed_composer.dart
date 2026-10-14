@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
 class CircleFeedComposer extends ConsumerStatefulWidget {
@@ -51,7 +52,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _errorText = 'Could not choose image. Try again.');
+        setState(() => _errorText = tr('Could not choose image. Try again.'));
       }
     } finally {
       if (mounted) {
@@ -101,7 +102,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
       }
       setState(() {
         _isPosting = false;
-        _errorText = 'Could not post. Try again.';
+        _errorText = tr('Could not post. Try again.');
       });
     }
   }
@@ -122,10 +123,10 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
             minLines: 1,
             maxLines: 4,
             decoration: InputDecoration(
-              labelText: 'Share with this Circle',
+              labelText: tr('Share with this Circle'),
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
-                tooltip: 'Add image',
+                tooltip: tr('Add image'),
                 icon: _isPickingImage
                     ? const SizedBox.square(
                         dimension: 20,
@@ -151,7 +152,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Remove image',
+                  tooltip: tr('Remove image'),
                   icon: const Icon(Icons.close),
                   onPressed: _isPosting
                       ? null
@@ -173,7 +174,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
           Align(
             alignment: Alignment.centerRight,
             child: Tooltip(
-              message: 'Post',
+              message: tr('Post'),
               child: FilledButton.icon(
                 icon: _isPosting
                     ? const SizedBox.square(
@@ -181,7 +182,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.send_outlined),
-                label: Text(_isPosting ? 'Posting...' : 'Post'),
+                label: Text(_isPosting ? tr('Posting...') : tr('Post')),
                 onPressed: _isPosting ? null : _post,
               ),
             ),

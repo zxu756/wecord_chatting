@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/file_message.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -29,12 +30,12 @@ class ChatMediaScreen extends ConsumerWidget {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Media'),
-          bottom: const TabBar(
+          title: Text(tr('Media')),
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'Images'),
-              Tab(text: 'Voice'),
-              Tab(text: 'Files'),
+              Tab(text: tr('Images')),
+              Tab(text: tr('Voice')),
+              Tab(text: tr('Files')),
             ],
           ),
         ),
@@ -45,15 +46,15 @@ class ChatMediaScreen extends ConsumerWidget {
             children: [
               _MediaList(
                 items: _filter(items, MessageType.image),
-                emptyText: 'No images yet',
+                emptyText: tr('No images yet'),
               ),
               _MediaList(
                 items: _filter(items, MessageType.voice),
-                emptyText: 'No voice messages yet',
+                emptyText: tr('No voice messages yet'),
               ),
               _MediaList(
                 items: _filter(items, MessageType.file),
-                emptyText: 'No files yet',
+                emptyText: tr('No files yet'),
               ),
             ],
           ),
@@ -185,9 +186,9 @@ String _titleFor(ConversationMediaItem item) {
     return body;
   }
   return switch (item.type) {
-    MessageType.image => '[Image]',
-    MessageType.voice => '[Voice]',
-    MessageType.file => '[File]',
+    MessageType.image => tr('[Image]'),
+    MessageType.voice => tr('[Voice]'),
+    MessageType.file => tr('[File]'),
     MessageType.poll => pollPreviewText(item.body),
     MessageType.sticker => stickerPreviewText(item.body),
     MessageType.text || MessageType.system => item.body,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -334,7 +335,7 @@ class StickerPicker extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Stickers', style: theme.textTheme.titleLarge),
+              child: Text(tr('Stickers'), style: theme.textTheme.titleLarge),
             ),
             if (usable.isLoading && stickers.isEmpty)
               const Padding(
@@ -342,10 +343,12 @@ class StickerPicker extends ConsumerWidget {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (stickers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 child: Text(
-                  'No stickers yet. Circles add them under Emoji & stickers.',
+                  tr(
+                    'No stickers yet. Circles add them under Emoji & stickers.',
+                  ),
                 ),
               )
             else
@@ -421,7 +424,7 @@ List<CircleEmojiGroup> groupEmojisByCircle(
   final groups = <CircleEmojiGroup>[];
   final own = byCircle.remove(circleId);
   if (own != null) {
-    groups.add((label: 'This circle', emojis: own));
+    groups.add((label: tr('This circle'), emojis: own));
   }
   final others = byCircle.values.toList()
     ..sort(
@@ -431,7 +434,7 @@ List<CircleEmojiGroup> groupEmojisByCircle(
     );
   for (final group in others) {
     groups.add((
-      label: group.first.circleName ?? 'Other circle',
+      label: group.first.circleName ?? tr('Other circle'),
       emojis: group,
     ));
   }

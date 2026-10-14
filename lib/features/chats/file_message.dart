@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
 /// Opens a sent file in the browser or the app that handles it; tests
@@ -86,7 +87,7 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
       }
     } catch (_) {
       messenger?.showSnackBar(
-        const SnackBar(content: Text('Could not open the file. Try again.')),
+        SnackBar(content: Text(tr('Could not open the file. Try again.'))),
       );
     } finally {
       if (mounted) {
@@ -243,10 +244,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ),
       body: SafeArea(
         child: _error != null
-            ? const Center(
+            ? Center(
                 child: Text(
-                  "This video can't be played here.",
-                  style: TextStyle(color: Colors.white70),
+                  tr("This video can't be played here."),
+                  style: const TextStyle(color: Colors.white70),
                 ),
               )
             : !value.isInitialized
@@ -278,7 +279,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       children: [
                         IconButton(
                           key: const ValueKey('video-play-pause'),
-                          tooltip: value.isPlaying ? 'Pause' : 'Play',
+                          tooltip: value.isPlaying ? tr('Pause') : tr('Play'),
                           color: Colors.white,
                           onPressed: _togglePlay,
                           icon: Icon(

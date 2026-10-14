@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -95,9 +96,9 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                     TextField(
                       controller: _titleController,
                       enabled: detail.canManageGroup && !_isSaving,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Group name',
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: tr('Group name'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -106,9 +107,9 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                       enabled: detail.canManageGroup && !_isSaving,
                       minLines: 2,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Announcement',
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: tr('Announcement'),
                       ),
                     ),
                     if (_announcementMetaText(detail) case final metaText?) ...[
@@ -146,35 +147,35 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                                   ),
                                 )
                               : const Icon(Icons.save_outlined),
-                          label: const Text('Save'),
+                          label: Text(tr('Save')),
                         ),
                         OutlinedButton.icon(
                           onPressed: detail.canManageGroup && !_isSaving
                               ? () => _showInviteSheet(detail)
                               : null,
                           icon: const Icon(Icons.person_add_alt_1_outlined),
-                          label: const Text('Invite friends'),
+                          label: Text(tr('Invite friends')),
                         ),
                         OutlinedButton.icon(
                           onPressed: _isSaving
                               ? null
                               : () => _leaveGroup(detail),
                           icon: const Icon(Icons.logout_outlined),
-                          label: const Text('Leave group'),
+                          label: Text(tr('Leave group')),
                         ),
                       ],
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Group members',
+                      tr('Group members'),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _memberSearchController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Search members',
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        labelText: tr('Search members'),
                       ),
                       onChanged: (value) {
                         setState(() {
@@ -249,9 +250,11 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
       }
     }
     if (updater == null) {
-      return 'Updated ${_formatAnnouncementTime(detail.announcementUpdatedAt!)}';
+      return tr('Updated {time}', {
+        'time': _formatAnnouncementTime(detail.announcementUpdatedAt!),
+      });
     }
-    return 'Updated by ${updater.profile.displayLabel}';
+    return tr('Updated by {name}', {'name': updater.profile.displayLabel});
   }
 
   Future<void> _pickAvatar(GroupDetail detail) async {
@@ -278,7 +281,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not update group avatar.';
+          _errorText = tr('Could not update group avatar.');
         });
       }
     }
@@ -302,7 +305,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not save group details.';
+          _errorText = tr('Could not save group details.');
         });
       }
     } finally {
@@ -342,12 +345,12 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Invite friends',
+                          tr('Invite friends'),
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 12),
                         if (friends.isEmpty)
-                          const Text('No friends available to invite.')
+                          Text(tr('No friends available to invite.'))
                         else
                           Flexible(
                             child: ListView(
@@ -379,7 +382,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                                   Navigator.of(context).pop();
                                 },
                           icon: const Icon(Icons.person_add_alt_1_outlined),
-                          label: const Text('Add selected'),
+                          label: Text(tr('Add selected')),
                         ),
                       ],
                     ),
@@ -405,7 +408,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not invite members.';
+          _errorText = tr('Could not invite members.');
         });
       }
     }
@@ -422,7 +425,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not leave group.';
+          _errorText = tr('Could not leave group.');
         });
       }
     }
@@ -440,7 +443,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorText = 'Could not remove member.';
+          _errorText = tr('Could not remove member.');
         });
       }
     }
@@ -513,7 +516,7 @@ class _Header extends ConsumerWidget {
               child: image == null ? Text(_initials(detail.title)) : null,
             ),
             IconButton.filledTonal(
-              tooltip: 'Change group avatar',
+              tooltip: tr('Change group avatar'),
               onPressed: onPickAvatar,
               icon: const Icon(Icons.photo_camera_outlined, size: 18),
             ),
@@ -525,13 +528,14 @@ class _Header extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Group details',
+                tr('Group details'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              Text('${detail.memberCount} members'),
-              if (detail.currentUserRole != null) Text(detail.currentUserRole!),
+              Text(tr('{count} members', {'count': detail.memberCount})),
+              if (detail.currentUserRole != null)
+                Text(_roleLabel(detail.currentUserRole!)),
             ],
           ),
         ),
@@ -566,11 +570,11 @@ class _MemberTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(member.role),
+          Text(_roleLabel(member.role)),
           if (canRemove) ...[
             const SizedBox(width: 8),
             IconButton(
-              tooltip: 'Remove member',
+              tooltip: tr('Remove member'),
               icon: const Icon(Icons.person_remove_outlined),
               onPressed: onRemove,
             ),
@@ -600,4 +604,13 @@ String _formatAnnouncementTime(DateTime value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '${local.month}/${local.day} $hour:$minute';
+}
+
+String _roleLabel(String role) {
+  return switch (role) {
+    'owner' => tr('owner'),
+    'admin' => tr('admin'),
+    'member' => tr('member'),
+    _ => role,
+  };
 }

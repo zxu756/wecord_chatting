@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 
 void openCircleEmojisScreen(BuildContext context, String circleId) {
@@ -54,26 +55,28 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
     try {
       image = await ref.read(imagePickerServiceProvider).pickImage();
     } catch (error) {
-      _showSnackBar('Could not open the image. $error');
+      _showSnackBar(tr('Could not open the image. {error}', {'error': error}));
       return;
     }
     if (image == null || !mounted) {
       return;
     }
     if (circleEmojiImageMimeType(image.bytes) == null) {
-      _showSnackBar('Choose a PNG, GIF or WebP image.');
+      _showSnackBar(tr('Choose a PNG, GIF or WebP image.'));
       return;
     }
     if (image.bytes.length > maxCircleEmojiBytes) {
-      _showSnackBar('Images can be at most 256 KB.');
+      _showSnackBar(tr('Images can be at most 256 KB.'));
       return;
     }
     final name = await showDialog<String>(
       context: context,
       builder: (context) => _EmojiNameDialog(
-        title: kind == CircleEmojiKind.sticker ? 'Name sticker' : 'Name emoji',
+        title: kind == CircleEmojiKind.sticker
+            ? tr('Name sticker')
+            : tr('Name emoji'),
         initialName: suggestedCircleEmojiName(image!.fileName),
-        submitLabel: 'Upload',
+        submitLabel: tr('Upload'),
       ),
     );
     if (name == null || !mounted) {
@@ -92,13 +95,13 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
       _refresh();
       _showSnackBar(
         kind == CircleEmojiKind.sticker
-            ? 'Sticker $name added.'
-            : 'Emoji :$name: added.',
+            ? tr('Sticker {name} added.', {'name': name})
+            : tr('Emoji :{name}: added.', {'name': name}),
       );
     } on CircleEmojiException catch (error) {
       _showSnackBar(error.message);
     } catch (_) {
-      _showSnackBar('Could not upload. Try again.');
+      _showSnackBar(tr('Could not upload. Try again.'));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -110,9 +113,9 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => _EmojiNameDialog(
-        title: emoji.isSticker ? 'Rename sticker' : 'Rename emoji',
+        title: emoji.isSticker ? tr('Rename sticker') : tr('Rename emoji'),
         initialName: emoji.name,
-        submitLabel: 'Save',
+        submitLabel: tr('Save'),
       ),
     );
     if (name == null || name == emoji.name || !mounted) {
@@ -126,28 +129,35 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
     } on CircleEmojiException catch (error) {
       _showSnackBar(error.message);
     } catch (_) {
-      _showSnackBar('Could not rename. Try again.');
+      _showSnackBar(tr('Could not rename. Try again.'));
     }
   }
 
   Future<void> _delete(CircleEmoji emoji) async {
-    final noun = emoji.isSticker ? 'sticker' : 'emoji';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: Text('Delete $noun'),
+        title: Text(
+          emoji.isSticker ? tr('Delete sticker') : tr('Delete emoji'),
+        ),
         content: Text(
           emoji.isSticker
-              ? 'Delete the sticker ${emoji.name}? Messages that sent it '
-                    'will no longer show it.'
-              : 'Delete :${emoji.name}:? Messages show its name instead, '
-                    'and reactions with it are removed.',
+              ? tr(
+                  'Delete the sticker {name}? Messages that sent it '
+                  'will no longer show it.',
+                  {'name': emoji.name},
+                )
+              : tr(
+                  'Delete :{name}:? Messages show its name instead, '
+                  'and reactions with it are removed.',
+                  {'name': emoji.name},
+                ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             key: const ValueKey('circle-emoji-delete-confirm'),
@@ -156,7 +166,7 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
               foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -168,7 +178,7 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
       await ref.read(circleEmojiRepositoryProvider).deleteCircleEmoji(emoji.id);
       _refresh();
     } catch (_) {
-      _showSnackBar('Could not delete. Try again.');
+      _showSnackBar(tr('Could not delete. Try again.'));
     }
   }
 
@@ -185,13 +195,16 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Emoji & stickers'),
-          bottom: const TabBar(
+          title: Text(tr('Emoji & stickers')),
+          bottom: TabBar(
             tabs: [
-              Tab(key: ValueKey('circle-emojis-tab-emoji'), text: 'Emoji'),
               Tab(
-                key: ValueKey('circle-emojis-tab-stickers'),
-                text: 'Stickers',
+                key: const ValueKey('circle-emojis-tab-emoji'),
+                text: tr('Emoji'),
+              ),
+              Tab(
+                key: const ValueKey('circle-emojis-tab-stickers'),
+                text: tr('Stickers'),
               ),
             ],
           ),
@@ -202,7 +215,7 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                'Could not load emoji.',
+                tr('Could not load emoji.'),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
@@ -254,7 +267,6 @@ class _EmojiKindTab extends StatelessWidget {
     final theme = Theme.of(context);
     final isSticker = kind == CircleEmojiKind.sticker;
     final full = emojis.length >= kind.limit;
-    final noun = isSticker ? 'stickers' : 'emoji';
     return ListView(
       key: ValueKey('circle-emojis-list-${kind.name}'),
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -263,10 +275,14 @@ class _EmojiKindTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Text(
             isSticker
-                ? 'Stickers are sent on their own from the composer\'s '
-                      'attach menu. PNG, GIF or WebP, up to 256 KB.'
-                : 'Use emoji in messages by typing :name:, and as '
-                      'reactions. PNG, GIF or WebP, up to 256 KB.',
+                ? tr(
+                    'Stickers are sent on their own from the composer\'s '
+                    'attach menu. PNG, GIF or WebP, up to 256 KB.',
+                  )
+                : tr(
+                    'Use emoji in messages by typing :name:, and as '
+                    'reactions. PNG, GIF or WebP, up to 256 KB.',
+                  ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -278,7 +294,15 @@ class _EmojiKindTab extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${emojis.length} of ${kind.limit} $noun',
+                  isSticker
+                      ? tr('{count} of {limit} stickers', {
+                          'count': emojis.length,
+                          'limit': kind.limit,
+                        })
+                      : tr('{count} of {limit} emoji', {
+                          'count': emojis.length,
+                          'limit': kind.limit,
+                        }),
                   key: ValueKey('circle-emojis-count-${kind.name}'),
                   style: theme.textTheme.titleSmall,
                 ),
@@ -293,7 +317,9 @@ class _EmojiKindTab extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.upload_outlined),
-                  label: Text(isSticker ? 'Upload sticker' : 'Upload emoji'),
+                  label: Text(
+                    isSticker ? tr('Upload sticker') : tr('Upload emoji'),
+                  ),
                 ),
             ],
           ),
@@ -303,7 +329,7 @@ class _EmojiKindTab extends StatelessWidget {
             padding: const EdgeInsets.all(24),
             child: Center(
               child: Text(
-                isSticker ? 'No stickers yet' : 'No emoji yet',
+                isSticker ? tr('No stickers yet') : tr('No emoji yet'),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -332,25 +358,25 @@ class _EmojiKindTab extends StatelessWidget {
             subtitle: emoji.creatorName == null
                 ? null
                 : Text(
-                    'Added by ${emoji.creatorName}',
+                    tr('Added by {name}', {'name': emoji.creatorName}),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
             trailing: canManage
                 ? PopupMenuButton<_EmojiAction>(
                     key: ValueKey('circle-emoji-menu-${emoji.id}'),
-                    tooltip: 'More',
+                    tooltip: tr('More'),
                     onSelected: (action) => switch (action) {
                       _EmojiAction.rename => onRename(emoji),
                       _EmojiAction.delete => onDelete(emoji),
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: _EmojiAction.rename,
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.drive_file_rename_outline),
-                          title: Text('Rename'),
+                          leading: const Icon(Icons.drive_file_rename_outline),
+                          title: Text(tr('Rename')),
                         ),
                       ),
                       PopupMenuItem(
@@ -362,7 +388,7 @@ class _EmojiKindTab extends StatelessWidget {
                             color: theme.colorScheme.error,
                           ),
                           title: Text(
-                            'Delete',
+                            tr('Delete'),
                             style: TextStyle(color: theme.colorScheme.error),
                           ),
                         ),
@@ -409,7 +435,9 @@ class _EmojiNameDialogState extends State<_EmojiNameDialog> {
     final name = _controller.text.trim().toLowerCase();
     if (!circleEmojiNamePattern.hasMatch(name)) {
       setState(() {
-        _errorText = 'Use 2 to 32 lowercase letters, digits or underscores.';
+        _errorText = tr(
+          'Use 2 to 32 lowercase letters, digits or underscores.',
+        );
       });
       return;
     }
@@ -428,7 +456,7 @@ class _EmojiNameDialogState extends State<_EmojiNameDialog> {
         maxLength: 32,
         decoration: InputDecoration(
           border: const OutlineInputBorder(),
-          labelText: 'Name',
+          labelText: tr('Name'),
           prefixText: ':',
           suffixText: ':',
           errorText: _errorText,
@@ -439,7 +467,7 @@ class _EmojiNameDialogState extends State<_EmojiNameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('Cancel')),
         ),
         FilledButton(
           key: const ValueKey('circle-emoji-name-submit'),

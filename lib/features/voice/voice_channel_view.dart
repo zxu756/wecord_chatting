@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/voice.dart';
 
 /// A voice channel: while the current user is connected to it, everyone in
@@ -54,14 +55,14 @@ class VoiceChannelView extends ConsumerWidget {
         },
       );
     } else if (here) {
-      body = const Center(
-        key: ValueKey('voice-connecting'),
+      body = Center(
+        key: const ValueKey('voice-connecting'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Connecting…'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(tr('Connecting…')),
           ],
         ),
       );
@@ -87,7 +88,7 @@ class VoiceChannelView extends ConsumerWidget {
         leading: onBack == null
             ? null
             : IconButton(
-                tooltip: 'Back',
+                tooltip: tr('Back'),
                 icon: const Icon(Icons.arrow_back),
                 onPressed: onBack,
               ),
@@ -149,10 +150,10 @@ class _NotConnected extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               members.isEmpty
-                  ? 'No one is here yet.'
+                  ? tr('No one is here yet.')
                   : members.length == 1
-                  ? '1 person is here'
-                  : '${members.length} people are here',
+                  ? tr('1 person is here')
+                  : tr('{count} people are here', {'count': members.length}),
               style: theme.textTheme.titleMedium,
             ),
             if (members.isNotEmpty) ...[
@@ -197,11 +198,11 @@ class _NotConnected extends StatelessWidget {
                 ),
                 onPressed: onJoin,
                 icon: const Icon(Icons.call),
-                label: const Text('Join voice'),
+                label: Text(tr('Join voice')),
               )
             else
               Text(
-                "You don't have permission to join this voice channel.",
+                tr("You don't have permission to join this voice channel."),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
               ),
@@ -256,9 +257,10 @@ class VoiceCallGrid extends StatelessWidget {
                   aspectRatio: 16 / 9,
                   child: _Tile(
                     key: ValueKey('voice-screen-tile-${participant.userId}'),
-                    label:
-                        '${people[participant.userId]?.name ?? participant.name}'
-                        "'s screen",
+                    label: tr("{name}'s screen", {
+                      'name':
+                          people[participant.userId]?.name ?? participant.name,
+                    }),
                     speaking: false,
                     child: ColoredBox(
                       color: Colors.black,
@@ -315,7 +317,7 @@ class _ParticipantTile extends StatelessWidget {
     final camera = participant.cameraView;
     return _Tile(
       key: ValueKey('voice-tile-${participant.userId}'),
-      label: participant.isLocal ? '$name (you)' : name,
+      label: participant.isLocal ? tr('{name} (you)', {'name': name}) : name,
       speaking: participant.isSpeaking,
       trailing: deafened
           ? Icons.headset_off
@@ -507,50 +509,56 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
             children: [
               toggle(
                 key: const ValueKey('voice-control-mic'),
-                tooltip: session.selfMute ? 'Unmute' : 'Mute',
+                tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
                 icon: session.selfMute ? Icons.mic_off : Icons.mic_none,
                 on: session.selfMute,
                 onPressed: () => _run(
                   controller.toggleMute,
-                  'Could not change the microphone.',
+                  tr('Could not change the microphone.'),
                 ),
               ),
               toggle(
                 key: const ValueKey('voice-control-deafen'),
-                tooltip: session.selfDeaf ? 'Undeafen' : 'Deafen',
+                tooltip: session.selfDeaf ? tr('Undeafen') : tr('Deafen'),
                 icon: session.selfDeaf
                     ? Icons.headset_off
                     : Icons.headset_outlined,
                 on: session.selfDeaf,
                 onPressed: () =>
-                    _run(controller.toggleDeafen, 'Could not deafen.'),
+                    _run(controller.toggleDeafen, tr('Could not deafen.')),
               ),
               toggle(
                 key: const ValueKey('voice-control-camera'),
-                tooltip: session.video ? 'Turn off camera' : 'Turn on camera',
+                tooltip: session.video
+                    ? tr('Turn off camera')
+                    : tr('Turn on camera'),
                 icon: session.video
                     ? Icons.videocam_outlined
                     : Icons.videocam_off_outlined,
                 on: session.video,
                 onPressed: () => _run(
                   controller.toggleCamera,
-                  'Could not use the camera. Check the camera permission.',
+                  tr('Could not use the camera. Check the camera permission.'),
                 ),
               ),
               if (canShareScreen)
                 toggle(
                   key: const ValueKey('voice-control-screen'),
-                  tooltip: session.screen ? 'Stop sharing' : 'Share screen',
+                  tooltip: session.screen
+                      ? tr('Stop sharing')
+                      : tr('Share screen'),
                   icon: session.screen
                       ? Icons.stop_screen_share_outlined
                       : Icons.screen_share_outlined,
                   on: session.screen,
-                  onPressed: () =>
-                      _run(_toggleScreenShare, 'Could not share the screen.'),
+                  onPressed: () => _run(
+                    _toggleScreenShare,
+                    tr('Could not share the screen.'),
+                  ),
                 ),
               IconButton.filled(
                 key: const ValueKey('voice-control-leave'),
-                tooltip: 'Disconnect',
+                tooltip: tr('Disconnect'),
                 style: IconButton.styleFrom(
                   minimumSize: const Size.square(48),
                   backgroundColor: colorScheme.error,

@@ -4,6 +4,7 @@ import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/voice.dart';
 
@@ -97,13 +98,17 @@ class _VoiceMemberRow extends StatelessWidget {
               ),
             ),
             if (member.screen)
-              _StateIcon(Icons.screen_share_outlined, 'Sharing screen', muted),
+              _StateIcon(
+                Icons.screen_share_outlined,
+                tr('Sharing screen'),
+                muted,
+              ),
             if (member.video)
-              _StateIcon(Icons.videocam_outlined, 'Camera on', muted),
+              _StateIcon(Icons.videocam_outlined, tr('Camera on'), muted),
             if (member.selfDeaf)
-              _StateIcon(Icons.headset_off_outlined, 'Deafened', muted)
+              _StateIcon(Icons.headset_off_outlined, tr('Deafened'), muted)
             else if (member.selfMute)
-              _StateIcon(Icons.mic_off_outlined, 'Muted', muted),
+              _StateIcon(Icons.mic_off_outlined, tr('Muted'), muted),
           ],
         ),
       ),
@@ -165,7 +170,7 @@ Future<void> runVoiceAction(
     await action();
   } catch (_) {
     messenger?.showSnackBar(
-      const SnackBar(content: Text('Could not change the call. Try again.')),
+      SnackBar(content: Text(tr('Could not change the call. Try again.'))),
     );
   }
 }
@@ -183,11 +188,11 @@ IconData voiceQualityIcon(VoiceConnectionQuality quality) {
 
 String voiceQualityLabel(VoiceConnectionQuality quality) {
   return switch (quality) {
-    VoiceConnectionQuality.excellent => 'Excellent connection',
-    VoiceConnectionQuality.good => 'Good connection',
-    VoiceConnectionQuality.poor => 'Poor connection',
-    VoiceConnectionQuality.lost => 'Connection lost',
-    VoiceConnectionQuality.unknown => 'Connection quality unknown',
+    VoiceConnectionQuality.excellent => tr('Excellent connection'),
+    VoiceConnectionQuality.good => tr('Good connection'),
+    VoiceConnectionQuality.poor => tr('Poor connection'),
+    VoiceConnectionQuality.lost => tr('Connection lost'),
+    VoiceConnectionQuality.unknown => tr('Connection quality unknown'),
   };
 }
 
@@ -243,7 +248,7 @@ class VoiceConnectedPanel extends ConsumerWidget {
                             Tooltip(
                               message: connected
                                   ? voiceQualityLabel(session.quality)
-                                  : 'Connecting',
+                                  : tr('Connecting'),
                               child: Icon(
                                 voiceQualityIcon(session.quality),
                                 key: const ValueKey('voice-quality-icon'),
@@ -254,7 +259,9 @@ class VoiceConnectedPanel extends ConsumerWidget {
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                connected ? 'Voice connected' : 'Connecting…',
+                                connected
+                                    ? tr('Voice connected')
+                                    : tr('Connecting…'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelMedium?.copyWith(
@@ -279,7 +286,7 @@ class VoiceConnectedPanel extends ConsumerWidget {
                 ),
               ),
               _PanelButton(
-                tooltip: session.selfMute ? 'Unmute' : 'Mute',
+                tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
                 icon: session.selfMute ? Icons.mic_off : Icons.mic_none,
                 active: session.selfMute,
                 onPressed: connected
@@ -287,7 +294,7 @@ class VoiceConnectedPanel extends ConsumerWidget {
                     : null,
               ),
               _PanelButton(
-                tooltip: session.selfDeaf ? 'Undeafen' : 'Deafen',
+                tooltip: session.selfDeaf ? tr('Undeafen') : tr('Deafen'),
                 icon: session.selfDeaf
                     ? Icons.headset_off
                     : Icons.headset_outlined,
@@ -297,7 +304,7 @@ class VoiceConnectedPanel extends ConsumerWidget {
                     : null,
               ),
               _PanelButton(
-                tooltip: 'Disconnect',
+                tooltip: tr('Disconnect'),
                 icon: Icons.call_end,
                 onPressed: controller.leave,
               ),
@@ -357,13 +364,15 @@ class VoiceRailIndicator extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton.filledTonal(
-            tooltip: 'Voice connected: ${session.channelName}',
+            tooltip: tr('Voice connected: {channel}', {
+              'channel': session.channelName,
+            }),
             style: IconButton.styleFrom(foregroundColor: voiceConnectedColor),
             onPressed: onOpen == null ? null : () => onOpen!(session),
             icon: const Icon(Icons.volume_up),
           ),
           IconButton(
-            tooltip: session.selfMute ? 'Unmute' : 'Mute',
+            tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
             color: session.selfMute
                 ? Theme.of(context).colorScheme.error
                 : null,
@@ -373,7 +382,7 @@ class VoiceRailIndicator extends ConsumerWidget {
             icon: Icon(session.selfMute ? Icons.mic_off : Icons.mic_none),
           ),
           IconButton(
-            tooltip: 'Disconnect',
+            tooltip: tr('Disconnect'),
             onPressed: controller.leave,
             icon: const Icon(Icons.call_end),
           ),

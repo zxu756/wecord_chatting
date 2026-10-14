@@ -1,3 +1,5 @@
+import 'package:wecord/shared/l10n/l10n.dart';
+
 enum ReportReason {
   spam('spam', 'Spam'),
   harassment('harassment', 'Harassment'),
@@ -5,8 +7,10 @@ enum ReportReason {
   unsafeContent('unsafe_content', 'Unsafe content'),
   other('other', 'Other');
 
-  const ReportReason(this.value, this.label);
+  const ReportReason(this.value, this._label);
 
   final String value;
-  final String label;
+  final String _label;
+
+  String get label => tr(_label);
 }

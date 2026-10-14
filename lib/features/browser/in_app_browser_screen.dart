@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 
 /// Whether links open in WeCord's own browser here. Web pages can't embed
 /// most sites (they forbid framing), so the web app opens a new tab, as do
@@ -150,7 +151,7 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Link copied')));
+    ).showSnackBar(SnackBar(content: Text(tr('Link copied'))));
   }
 
   void _reload() {
@@ -178,7 +179,7 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
         appBar: AppBar(
           leading: IconButton(
             key: const ValueKey('browser-close'),
-            tooltip: 'Close',
+            tooltip: tr('Close'),
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
@@ -222,26 +223,26 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
           actions: [
             PopupMenuButton<_BrowserMenuAction>(
               key: const ValueKey('browser-menu'),
-              tooltip: 'More',
+              tooltip: tr('More'),
               onSelected: (action) => switch (action) {
                 _BrowserMenuAction.copyLink => unawaited(_copyLink()),
                 _BrowserMenuAction.openExternally => unawaited(
                   _openExternally(_currentUri),
                 ),
               },
-              itemBuilder: (context) => const [
+              itemBuilder: (context) => [
                 PopupMenuItem(
                   value: _BrowserMenuAction.copyLink,
                   child: ListTile(
-                    leading: Icon(Icons.copy_outlined),
-                    title: Text('Copy link'),
+                    leading: const Icon(Icons.copy_outlined),
+                    title: Text(tr('Copy link')),
                   ),
                 ),
                 PopupMenuItem(
                   value: _BrowserMenuAction.openExternally,
                   child: ListTile(
-                    leading: Icon(Icons.open_in_browser),
-                    title: Text('Open in browser'),
+                    leading: const Icon(Icons.open_in_browser),
+                    title: Text(tr('Open in browser')),
                   ),
                 ),
               ],
@@ -283,7 +284,7 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
             children: [
               IconButton(
                 key: const ValueKey('browser-back'),
-                tooltip: 'Back',
+                tooltip: tr('Back'),
                 icon: const Icon(Icons.arrow_back_ios_new),
                 onPressed: _canGoBack
                     ? () => unawaited(_controller.goBack())
@@ -291,7 +292,7 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
               ),
               IconButton(
                 key: const ValueKey('browser-forward'),
-                tooltip: 'Forward',
+                tooltip: tr('Go forward'),
                 icon: const Icon(Icons.arrow_forward_ios),
                 onPressed: _canGoForward
                     ? () => unawaited(_controller.goForward())
@@ -299,13 +300,13 @@ class _InAppBrowserScreenState extends State<InAppBrowserScreen> {
               ),
               IconButton(
                 key: const ValueKey('browser-reload'),
-                tooltip: 'Reload',
+                tooltip: tr('Reload'),
                 icon: const Icon(Icons.refresh),
                 onPressed: _reload,
               ),
               IconButton(
                 key: const ValueKey('browser-open-externally'),
-                tooltip: 'Open in browser',
+                tooltip: tr('Open in browser'),
                 icon: const Icon(Icons.open_in_browser),
                 onPressed: () => unawaited(_openExternally(_currentUri)),
               ),
@@ -347,7 +348,7 @@ class _BrowserError extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Could not load this page',
+              tr('Could not load this page'),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
@@ -364,13 +365,10 @@ class _BrowserError extends StatelessWidget {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
-                FilledButton(
-                  onPressed: onRetry,
-                  child: const Text('Try again'),
-                ),
+                FilledButton(onPressed: onRetry, child: Text(tr('Try again'))),
                 OutlinedButton(
                   onPressed: onOpenExternally,
-                  child: const Text('Open in browser'),
+                  child: Text(tr('Open in browser')),
                 ),
               ],
             ),

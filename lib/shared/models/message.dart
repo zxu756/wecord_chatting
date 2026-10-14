@@ -217,6 +217,14 @@ class ChatMessage {
     return StickerAttachment.maybeFromJson(attachment);
   }
 
+  /// A file or video; null for other messages and malformed attachments.
+  FileAttachment? get fileAttachment {
+    if (type != MessageType.file) {
+      return null;
+    }
+    return FileAttachment.maybeFromJson(attachment);
+  }
+
   VoiceAttachment? get voiceAttachment {
     final value = attachment;
     if (type != MessageType.voice || value == null) {
@@ -536,6 +544,75 @@ class VoiceAttachment {
       'duration_ms': durationMs,
     };
   }
+}
+
+/// A file (or video) sent in a chat, stored in the chat-files bucket.
+class FileAttachment {
+  const FileAttachment({
+    required this.bucket,
+    required this.path,
+    required this.name,
+    required this.mimeType,
+    required this.size,
+  });
+
+  static FileAttachment? maybeFromJson(Map<String, dynamic>? json) {
+    if (json == null || (json['kind'] != 'file' && json['kind'] != 'video')) {
+      return null;
+    }
+    final bucket = json['bucket'];
+    final path = json['path'];
+    if (bucket is! String || path is! String) {
+      return null;
+    }
+    final name = json['name'];
+    return FileAttachment(
+      bucket: bucket,
+      path: path,
+      name: name is String && name.trim().isNotEmpty
+          ? name
+          : path.split('/').last,
+      mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
+      size: (json['size'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final String bucket;
+  final String path;
+
+  /// The name it had on the sender's device.
+  final String name;
+  final String mimeType;
+  final int size;
+
+  /// Plays inline instead of showing as a download.
+  bool get isVideo => mimeType.startsWith('video/');
+
+  Map<String, dynamic> toJson() {
+    return {
+      'kind': isVideo ? 'video' : 'file',
+      'bucket': bucket,
+      'path': path,
+      'name': name,
+      'mime_type': mimeType,
+      'size': size,
+    };
+  }
+}
+
+/// "512 B", "14 KB", "3.2 MB".
+String formatFileSize(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
+  }
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).round()} KB';
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    final megabytes = bytes / (1024 * 1024);
+    return '${megabytes.toStringAsFixed(megabytes < 10 ? 1 : 0)} MB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }
 
 DateTime _parseTimestamp(Object? value) {

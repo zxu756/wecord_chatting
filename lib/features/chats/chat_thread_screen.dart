@@ -10,6 +10,8 @@ import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
+import 'package:wecord/features/chats/file_message.dart';
+import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -1080,6 +1082,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onChanged: _handleComposerChanged,
                   onSend: _sendMessage,
                   onPickImage: _pickAndSendImage,
+                  onPickFile: _pickAndSendFile,
                   onCreatePoll: _openPollComposer,
                   onPickSticker: _pickAndSendSticker,
                   isRecordingVoice: _isRecordingVoice,
@@ -1472,6 +1475,50 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (mounted) {
         setState(() {
           _sendError = _imageSendErrorText(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickingImage = false;
+          _isSendingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickAndSendFile() async {
+    if (_isPickingImage || _isSendingImage || _isSending || _isSlowedDown) {
+      return;
+    }
+    setState(() {
+      _isPickingImage = true;
+      _sendError = null;
+    });
+    try {
+      final file = await ref.read(chatFilePickerServiceProvider).pickFile();
+      if (file == null || !mounted) {
+        return;
+      }
+      setState(() {
+        _isPickingImage = false;
+        _isSendingImage = true;
+      });
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendFileMessage(
+            conversationId: widget.conversationId,
+            fileName: file.name,
+            mimeType: file.mimeType,
+            bytes: file.bytes,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _sendError = _fileSendErrorText(error);
         });
       }
     } finally {
@@ -3346,6 +3393,8 @@ class _MessageContent extends StatelessWidget {
       content.add(_ImageMessageContent(attachment: attachment));
     } else if (voiceAttachment != null) {
       content.add(VoiceMessagePlayer(attachment: voiceAttachment!));
+    } else if (message.fileAttachment case final file?) {
+      content.add(FileMessageContent(attachment: file, textColor: textColor));
     } else if (message.type == MessageType.poll) {
       content.add(
         PollMessageContent(
@@ -3642,6 +3691,7 @@ class _Composer extends StatelessWidget {
     required this.onChanged,
     required this.onSend,
     required this.onPickImage,
+    required this.onPickFile,
     required this.onCreatePoll,
     required this.onPickSticker,
     required this.isRecordingVoice,
@@ -3679,6 +3729,7 @@ class _Composer extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final Future<void> Function() onSend;
   final Future<void> Function() onPickImage;
+  final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
   final Future<void> Function() onPickSticker;
   final bool isRecordingVoice;
@@ -3799,6 +3850,7 @@ class _Composer extends StatelessWidget {
                           icon: const Icon(Icons.add_circle_outline),
                           onSelected: (choice) => unawaited(switch (choice) {
                             _ComposerAttachment.image => onPickImage(),
+                            _ComposerAttachment.file => onPickFile(),
                             _ComposerAttachment.poll => onCreatePoll(),
                             _ComposerAttachment.sticker => onPickSticker(),
                           }),
@@ -3809,6 +3861,14 @@ class _Composer extends StatelessWidget {
                                 contentPadding: EdgeInsets.zero,
                                 leading: Icon(Icons.image_outlined),
                                 title: Text('Send image'),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: _ComposerAttachment.file,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(Icons.attach_file),
+                                title: Text('Send file or video'),
                               ),
                             ),
                             PopupMenuItem(
@@ -3926,7 +3986,7 @@ class _Composer extends StatelessWidget {
   }
 }
 
-enum _ComposerAttachment { image, poll, sticker }
+enum _ComposerAttachment { image, file, poll, sticker }
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).
@@ -4191,6 +4251,17 @@ String _replyPreviewBody(ChatMessage message) {
     MessageType.poll => pollPreviewText(message.body),
     MessageType.sticker => stickerPreviewText(message.body),
   };
+}
+
+String _fileSendErrorText(Object error) {
+  if (error is ChatFileTooLargeException) {
+    return '$error';
+  }
+  if (error is TimeoutException) {
+    return 'Could not upload the file. The request timed out. Check your '
+        'network and try again.';
+  }
+  return 'Could not send the file. Try again. $error';
 }
 
 String _imageSendErrorText(Object error) {

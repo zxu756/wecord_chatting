@@ -17,6 +17,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/voice.dart';
 
 import '../../test/features/voice/voice_fakes.dart';
@@ -738,6 +739,64 @@ void main() {
   screen('37c-incoming-call', (tester, world) async {
     world.voice.calls = [bartCall(ringing: true)];
     await world.open(tester, ChatsScreen.path);
+  });
+
+  screen('38-file-messages', (tester, world) async {
+    world.chats.messages = [
+      phoneMessage(
+        'f1',
+        bart,
+        '',
+        minutesAgo: 30,
+        type: MessageType.file,
+        attachment: const {
+          'kind': 'file',
+          'bucket': 'chat-files',
+          'path': 'dm-1/seed-yosemite-permit-application-2026.pdf',
+          'name': 'Yosemite permit application 2026.pdf',
+          'mime_type': 'application/pdf',
+          'size': 1843200,
+        },
+      ),
+      phoneMessage(
+        'f2',
+        me,
+        '',
+        minutesAgo: 20,
+        type: MessageType.file,
+        attachment: const {
+          'kind': 'video',
+          'bucket': 'chat-files',
+          'path': 'dm-1/seed-trailhead.mp4',
+          'name': 'trailhead.mp4',
+          'mime_type': 'video/mp4',
+          'size': 24117248,
+        },
+      ),
+      phoneMessage(
+        'f3',
+        bart,
+        '',
+        minutesAgo: 10,
+        type: MessageType.file,
+        attachment: const {
+          'kind': 'file',
+          'bucket': 'chat-files',
+          'path': 'dm-1/seed-gear.zip',
+          'name': 'gear-list.zip',
+          'mime_type': 'application/zip',
+          'size': 88064,
+        },
+      ),
+    ];
+    await world.open(
+      tester,
+      '${ChatsScreen.path}/dm-1',
+      extra: ChatThreadRouteExtra(
+        title: bart.displayName,
+        type: ConversationType.direct,
+      ),
+    );
   });
 
   screen('31-slash-commands', (tester, world) async {

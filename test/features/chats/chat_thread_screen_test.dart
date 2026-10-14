@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/file_message.dart';
+import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -1617,6 +1619,85 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove embed'), findsNothing);
       expect(find.text('Edit'), findsNothing);
+    });
+
+    testWidgets('sends a picked file from the attach menu', (tester) async {
+      final repository = FakeChatsRepository();
+      final picker = FakeChatFilePicker(
+        PickedChatFile(
+          name: 'Trip Plan.pdf',
+          mimeType: 'application/pdf',
+          bytes: Uint8List.fromList([1, 2, 3]),
+        ),
+      );
+      await tester.pumpWidget(_app(repository, filePicker: picker));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send file or video'));
+      await tester.pumpAndSettle();
+
+      expect(repository.sentFiles, [
+        (
+          conversationId: 'conversation-1',
+          fileName: 'Trip Plan.pdf',
+          mimeType: 'application/pdf',
+          size: 3,
+        ),
+      ]);
+    });
+
+    testWidgets('a file over 50 MB is explained, not sent', (tester) async {
+      final repository = FakeChatsRepository();
+      final picker = FakeChatFilePicker(null)
+        ..error = const ChatFileTooLargeException();
+      await tester.pumpWidget(_app(repository, filePicker: picker));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send file or video'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Files can be up to 50 MB.'), findsOneWidget);
+      expect(repository.sentFiles, isEmpty);
+    });
+
+    testWidgets('file messages show their name and size and open on tap', (
+      tester,
+    ) async {
+      final opened = <Uri>[];
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            type: MessageType.file,
+            body: '',
+            attachment: const {
+              'kind': 'file',
+              'bucket': 'chat-files',
+              'path': 'conversation-1/seed-notes.pdf',
+              'name': 'notes.pdf',
+              'mime_type': 'application/pdf',
+              'size': 2048,
+            },
+            createdAt: DateTime.utc(2026, 10, 14, 9),
+          ),
+        ];
+      await tester.pumpWidget(
+        _app(repository, fileOpener: (url) async => opened.add(url)),
+      );
+      await tester.pump();
+
+      expect(find.text('notes.pdf'), findsOneWidget);
+      expect(find.text('2 KB'), findsOneWidget);
+      await tester.tap(find.text('notes.pdf'));
+      await tester.pumpAndSettle();
+      expect(opened, [
+        Uri.parse('https://files.test/conversation-1/seed-notes.pdf'),
+      ]);
     });
 
     testWidgets('a timed-out member is told when they can talk again', (
@@ -3404,6 +3485,8 @@ Widget _app(
   ValueChanged<ThreadTarget>? onOpenThread,
   bool? canSendMessages,
   DateTime? timedOutUntil,
+  ChatFilePickerService? filePicker,
+  Future<void> Function(Uri url)? fileOpener,
   int? slowmodeSeconds,
   String? topic,
 }) {
@@ -3416,6 +3499,9 @@ Widget _app(
       if (linkLauncher != null)
         linkLauncherProvider.overrideWithValue(linkLauncher),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      if (filePicker != null)
+        chatFilePickerServiceProvider.overrideWithValue(filePicker),
+      if (fileOpener != null) fileOpenerProvider.overrideWithValue(fileOpener),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
       if (voiceMessageRecorder != null)
@@ -3697,6 +3783,29 @@ class FakeChatsRepository implements ChatsRepository {
         durationMs: durationMs,
       ),
     );
+  }
+
+  final sentFiles =
+      <({String conversationId, String fileName, String mimeType, int size})>[];
+
+  @override
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    sentFiles.add((
+      conversationId: conversationId,
+      fileName: fileName,
+      mimeType: mimeType,
+      size: bytes.length,
+    ));
+  }
+
+  @override
+  Future<String> createFileUrl(FileAttachment attachment) async {
+    return 'https://files.test/${attachment.path}';
   }
 
   @override
@@ -4262,4 +4371,19 @@ class FakeAuthRepository implements AuthRepository {
     String username,
     String displayName,
   ) async {}
+}
+
+class FakeChatFilePicker implements ChatFilePickerService {
+  FakeChatFilePicker(this.file);
+
+  final PickedChatFile? file;
+  Object? error;
+
+  @override
+  Future<PickedChatFile?> pickFile() async {
+    if (error case final error?) {
+      throw error;
+    }
+    return file;
+  }
 }

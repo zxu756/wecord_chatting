@@ -23,6 +23,17 @@ final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
   }
 });
 
+/// The largest file a chat accepts (the chat-files bucket's limit).
+const maxChatFileBytes = 50 * 1024 * 1024;
+
+/// A file over [maxChatFileBytes].
+class ChatFileTooLargeException implements Exception {
+  const ChatFileTooLargeException();
+
+  @override
+  String toString() => 'Files can be up to 50 MB.';
+}
+
 abstract interface class ChatsRepository {
   Future<List<ConversationSummary>> listConversations();
 
@@ -55,6 +66,18 @@ abstract interface class ChatsRepository {
     required String mimeType,
     required int durationMs,
   });
+
+  /// Uploads any file (up to [maxChatFileBytes]) and sends it; videos play
+  /// in the chat, everything else downloads.
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  });
+
+  /// A short-lived link to a sent file.
+  Future<String> createFileUrl(FileAttachment attachment);
 
   Future<void> forwardMessage({
     required String sourceMessageId,
@@ -489,6 +512,56 @@ class SupabaseChatsRepository implements ChatsRepository {
         'body': '',
         'attachment': attachment.toJson(),
       }),
+    );
+  }
+
+  @override
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.length > maxChatFileBytes) {
+      throw const ChatFileTooLargeException();
+    }
+    const bucket = 'chat-files';
+    final path =
+        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(fileName)}';
+    await _withStorageTimeout(
+      _dataSource.uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        mimeType: mimeType,
+      ),
+    );
+    final attachment = FileAttachment(
+      bucket: bucket,
+      path: path,
+      name: fileName,
+      mimeType: mimeType,
+      size: bytes.length,
+    );
+    await _send(
+      () => _dataSource.insertMessage({
+        'conversation_id': conversationId,
+        'sender_id': _requireCurrentUserId(),
+        'type': MessageType.file.toJson(),
+        'body': '',
+        'attachment': attachment.toJson(),
+      }),
+    );
+  }
+
+  @override
+  Future<String> createFileUrl(FileAttachment attachment) {
+    return _withStorageTimeout(
+      _dataSource.createSignedUrl(
+        bucket: attachment.bucket,
+        path: attachment.path,
+        expiresIn: const Duration(hours: 1),
+      ),
     );
   }
 
@@ -1646,6 +1719,21 @@ class _UninitializedChatsRepository implements ChatsRepository {
     required int durationMs,
   }) {
     throw StateError('Supabase must be initialized before sending audio.');
+  }
+
+  @override
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) {
+    throw StateError('Supabase must be initialized before sending files.');
+  }
+
+  @override
+  Future<String> createFileUrl(FileAttachment attachment) {
+    throw StateError('Supabase must be initialized before loading files.');
   }
 
   @override

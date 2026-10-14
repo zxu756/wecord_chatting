@@ -771,6 +771,75 @@ void main() {
     );
   });
 
+  test(
+    'sendFileMessage uploads to chat-files and sends a file message',
+    () async {
+      final dataSource = FakeChatsDataSource();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+        storagePathSeed: () => 'seed-1',
+      );
+
+      await repository.sendFileMessage(
+        conversationId: 'conversation-1',
+        fileName: 'Trip Plan.pdf',
+        mimeType: 'application/pdf',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      );
+      await repository.sendFileMessage(
+        conversationId: 'conversation-1',
+        fileName: 'clip.mp4',
+        mimeType: 'video/mp4',
+        bytes: Uint8List.fromList([5]),
+      );
+
+      expect(dataSource.uploadedImages.first.bucket, 'chat-files');
+      expect(
+        dataSource.uploadedImages.first.path,
+        'conversation-1/seed-1-trip-plan.pdf',
+      );
+      expect(dataSource.insertedMessages.first, {
+        'conversation_id': 'conversation-1',
+        'sender_id': 'user-1',
+        'type': 'file',
+        'body': '',
+        'attachment': {
+          'kind': 'file',
+          'bucket': 'chat-files',
+          'path': 'conversation-1/seed-1-trip-plan.pdf',
+          'name': 'Trip Plan.pdf',
+          'mime_type': 'application/pdf',
+          'size': 4,
+        },
+      });
+      expect(
+        (dataSource.insertedMessages.last['attachment'] as Map)['kind'],
+        'video',
+      );
+    },
+  );
+
+  test('sendFileMessage refuses files over 50 MB before uploading', () async {
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    await expectLater(
+      repository.sendFileMessage(
+        conversationId: 'conversation-1',
+        fileName: 'huge.bin',
+        mimeType: 'application/octet-stream',
+        bytes: Uint8List(maxChatFileBytes + 1),
+      ),
+      throwsA(isA<ChatFileTooLargeException>()),
+    );
+    expect(dataSource.uploadedImages, isEmpty);
+    expect(dataSource.insertedMessages, isEmpty);
+  });
+
   test('sendImageMessage times out stalled image uploads', () async {
     final dataSource = FakeChatsDataSource()
       ..uploadCompleter = Completer<void>();

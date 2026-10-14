@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -89,6 +90,32 @@ class _MediaTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final file = item.type == MessageType.file
+        ? FileAttachment.maybeFromJson(item.attachment)
+        : null;
+    if (file != null) {
+      // The same card as in the chat, so files open and videos play here.
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: FileMessageContent(
+                attachment: file,
+                textColor: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${item.senderName} · ${_formatMediaTime(item.createdAt)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      );
+    }
     return ListTile(
       leading: _MediaLeading(item: item),
       title: Text(_titleFor(item)),

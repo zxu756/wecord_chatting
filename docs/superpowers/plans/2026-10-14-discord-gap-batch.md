@@ -69,8 +69,16 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 5. Files and videos
 
-- [ ] Send any file (size limit) and videos from the attach menu; file
-      cards with name, size and download; video player in the thread.
+- [x] Bucket `chat-files` (private, 50 MB per file) with the same read and
+      upload rules as chat images, forwarded copies included; deleting a
+      message (or a ban that deletes messages) removes its file too.
+- [x] Messages of type `file` carry `{kind: file | video, bucket, path,
+      name, size, mime_type}`.
+- [x] Attach menu → "Send file or video" (`file_selector`, type from the
+      picker or `mime`); files over 50 MB are refused before upload.
+- [x] File cards with an icon for the type, name and size that open the
+      file; videos show a player card and open a full-screen player
+      (`video_player`). The Media page's Files tab uses the same cards.
 
 ## 6. Chinese interface
 

@@ -667,6 +667,29 @@ class FakeChatsRepository implements ChatsRepository {
     return 'https://example.com/${attachment.path}';
   }
 
+  final sentFiles =
+      <({String conversationId, String fileName, String mimeType, int size})>[];
+
+  @override
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    sentFiles.add((
+      conversationId: conversationId,
+      fileName: fileName,
+      mimeType: mimeType,
+      size: bytes.length,
+    ));
+  }
+
+  @override
+  Future<String> createFileUrl(FileAttachment attachment) async {
+    return 'https://files.test/${attachment.path}';
+  }
+
   @override
   Future<String> createVoiceUrl(VoiceAttachment attachment) async {
     return 'https://example.com/${attachment.path}';

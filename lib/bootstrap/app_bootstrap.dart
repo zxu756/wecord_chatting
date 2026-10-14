@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/config/app_config.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
@@ -27,6 +29,16 @@ class WeCordApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final chinese = resolvesToChinese(ref.watch(appLanguageProvider));
+    // Set before anything below builds, so every tr() sees it.
+    AppStrings.isChinese = chinese;
+    ref.listen(appLanguageProvider, (previous, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          rebuildAllText(context);
+        }
+      });
+    });
 
     return MaterialApp.router(
       title: 'WeCord',
@@ -34,6 +46,9 @@ class WeCordApp extends ConsumerWidget {
       theme: WeCordTheme.light(),
       darkTheme: WeCordTheme.dark(),
       themeMode: themeMode,
+      locale: chinese ? const Locale('zh') : const Locale('en'),
+      supportedLocales: const [Locale('en'), Locale('zh')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
     );
   }

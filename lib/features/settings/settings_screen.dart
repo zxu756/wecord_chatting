@@ -8,6 +8,7 @@ import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
@@ -167,6 +168,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 showSelectedIcon: false,
                 onSelectionChanged: (selection) =>
                     ref.read(themeModeProvider.notifier).set(selection.single),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                tr('Language'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<AppLanguage>(
+                key: const ValueKey('app-language'),
+                segments: [
+                  ButtonSegment(
+                    value: AppLanguage.system,
+                    label: Text(tr('System')),
+                  ),
+                  const ButtonSegment(
+                    value: AppLanguage.english,
+                    label: Text('English'),
+                  ),
+                  const ButtonSegment(
+                    value: AppLanguage.chinese,
+                    label: Text('中文'),
+                  ),
+                ],
+                selected: {ref.watch(appLanguageProvider)},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) => ref
+                    .read(appLanguageProvider.notifier)
+                    .set(selection.single),
               ),
               const Divider(height: 32),
               Text(

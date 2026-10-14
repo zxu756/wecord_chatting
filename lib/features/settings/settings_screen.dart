@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
+import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -227,6 +228,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               OutlinedButton(
                 onPressed: _saving ? null : _signOut,
                 child: const Text('Sign out'),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const ValueKey('delete-account'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: _saving
+                    ? null
+                    : () => confirmAndDeleteAccount(
+                        context,
+                        ref,
+                        username: profile.username,
+                      ),
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Delete account'),
               ),
             ],
           );

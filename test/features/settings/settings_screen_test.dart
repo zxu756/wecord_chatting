@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
@@ -68,6 +69,84 @@ void main() {
 
     expect(picker().selected, {ThemeMode.dark});
     expect(await store.load(), ThemeMode.dark);
+  });
+
+  group('delete account', () {
+    Future<void> openDialog(WidgetTester tester) async {
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('delete-account')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byKey(const ValueKey('delete-account')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('needs the username typed, then deletes and signs out', (
+      tester,
+    ) async {
+      final service = FakeAccountDeletionService();
+      final authRepository = FakeAuthRepository();
+      await tester.pumpWidget(
+        _app(
+          settingsRepository: FakeSettingsRepository(),
+          authRepository: authRepository,
+          accountDeletionService: service,
+        ),
+      );
+      await tester.pump();
+      await openDialog(tester);
+
+      FilledButton confirm() =>
+          tester.widget(find.byKey(const ValueKey('delete-account-confirm')));
+      expect(confirm().onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('delete-account-username')),
+        'adx',
+      );
+      await tester.pump();
+      expect(confirm().onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('delete-account-username')),
+        'ada',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('delete-account-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(service.calls, 1);
+      expect(authRepository.signOutCalls, 1);
+    });
+
+    testWidgets('explains when owned circles block it', (tester) async {
+      final service = FakeAccountDeletionService()
+        ..error = const AccountOwnsCirclesException();
+      final authRepository = FakeAuthRepository();
+      await tester.pumpWidget(
+        _app(
+          settingsRepository: FakeSettingsRepository(),
+          authRepository: authRepository,
+          accountDeletionService: service,
+        ),
+      );
+      await tester.pump();
+      await openDialog(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('delete-account-username')),
+        'ada',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('delete-account-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Transfer ownership of your circles to another member first.',
+        ),
+        findsOneWidget,
+      );
+      expect(authRepository.signOutCalls, 0);
+    });
   });
 
   testWidgets('sets a custom status from the Me screen', (tester) async {
@@ -398,6 +477,7 @@ void main() {
 Widget _app({
   required FakeSettingsRepository settingsRepository,
   ThemeModeStore? themeModeStore,
+  AccountDeletionService? accountDeletionService,
   FakeAuthRepository? authRepository,
   FakeImagePickerService? imagePickerService,
   NotificationPreferencesRepository? notificationPreferencesRepository,
@@ -409,6 +489,10 @@ Widget _app({
       themeModeStoreProvider.overrideWithValue(
         themeModeStore ?? InMemoryThemeModeStore(),
       ),
+      if (accountDeletionService != null)
+        accountDeletionServiceProvider.overrideWithValue(
+          accountDeletionService,
+        ),
       authRepositoryProvider.overrideWithValue(
         authRepository ?? FakeAuthRepository(),
       ),
@@ -616,4 +700,17 @@ bool _listEquals(Uint8List left, Uint8List right) {
     }
   }
   return true;
+}
+
+class FakeAccountDeletionService implements AccountDeletionService {
+  var calls = 0;
+  Object? error;
+
+  @override
+  Future<void> deleteAccount() async {
+    calls++;
+    if (error case final error?) {
+      throw error;
+    }
+  }
 }

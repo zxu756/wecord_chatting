@@ -166,6 +166,8 @@ class SupabaseContactsDataSource implements ContactsDataSource {
         .select()
         .ilike('username', '%$query%')
         .neq('id', excludedUserId)
+        // Deleted accounts can't be found or befriended.
+        .isFilter('deleted_at', null)
         .order('username')
         .limit(20);
     return rows.cast<Map<String, dynamic>>();

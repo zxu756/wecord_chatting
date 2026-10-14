@@ -405,6 +405,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/livekit-token/index.ts"
 
+[functions.delete-account]
+enabled = true
+# Signed-in users delete their own account; the function acts as the caller
+# before using the service role for the login and avatar files.
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

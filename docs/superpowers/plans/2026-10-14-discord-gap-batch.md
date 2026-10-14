@@ -38,9 +38,16 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 3. Delete account
 
-- [ ] Settings → Delete account: confirm by typing the username, then an
-      Edge Function deletes the auth user with the service role. Owned
-      circles must be transferred or deleted first.
+- [x] Settings → Delete account: confirm by typing the username, then the
+      `delete-account` Edge Function runs `prepare_account_deletion()` as the
+      user and removes their avatar files and login with the service role.
+- [x] Like Discord, messages stay under a "Deleted User" profile:
+      `profiles.deleted_at`, the profile no longer cascades from
+      `auth.users`, and nobody can message or befriend a deleted account;
+      search leaves them out.
+- [x] Owned circles with other members must be transferred first (409
+      `owns_circles`); owned circles with nobody else are deleted. Groups
+      they solely own pass to the member who joined first.
 
 ## 4. Direct message calls
 

@@ -3,6 +3,8 @@ import {
   base64UrlDecode,
   base64UrlEncode,
   buildClaims,
+  callRoomName,
+  parseCallId,
   parseChannelId,
   readLiveKitConfig,
   signJwt,
@@ -125,4 +127,12 @@ Deno.test("matches a token signed independently", async () => {
     nowSeconds: 0,
   });
   assertEquals(await signJwt(claims, "secret"), expected);
+});
+
+Deno.test("call ids parse on their own and name their room", () => {
+  assertEquals(parseCallId({ call_id: channelId }), channelId);
+  assertEquals(parseCallId({ channel_id: channelId }), null);
+  assertEquals(parseChannelId({ call_id: channelId }), null);
+  assertEquals(parseCallId({ call_id: "nope" }), null);
+  assertEquals(callRoomName(channelId), `call-${channelId}`);
 });

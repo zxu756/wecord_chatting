@@ -17,6 +17,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/voice.dart';
 
 import '../../test/features/voice/voice_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
@@ -170,7 +171,9 @@ void main() {
 
   screen('07-pinned-sheet', (tester, world) async {
     await openThread(tester, world);
-    await tester.tap(find.byTooltip('Pinned messages'));
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.text('Pinned messages'));
   });
 
   screen('08-circle-mobile-home', (tester, world) async {
@@ -695,6 +698,47 @@ void main() {
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('voice-control-camera')));
   }, viewport: smallPhone);
+
+  DirectCall bartCall({bool ringing = false}) => DirectCall(
+    callId: 'call-1',
+    conversationId: 'dm-1',
+    startedBy: bart.id,
+    createdAt: DateTime.now().toUtc(),
+    ringing: ringing,
+    participants: [
+      DirectCallParticipant(
+        userId: bart.id,
+        username: bart.username,
+        displayName: bart.displayName,
+      ),
+    ],
+  );
+
+  screen('37-direct-call', (tester, world) async {
+    world.voice.calls = [bartCall()];
+    world.voiceCalls.prepare = (call) {
+      call.remotes = [
+        VoiceCallParticipant(
+          userId: bart.id,
+          name: bart.displayName,
+          isSpeaking: true,
+          microphoneEnabled: true,
+        ),
+      ];
+    };
+    await openThread(tester, world);
+    await tester.tap(find.byTooltip('Start voice call'));
+  });
+
+  screen('37b-direct-call-join-bar', (tester, world) async {
+    world.voice.calls = [bartCall()];
+    await openThread(tester, world);
+  });
+
+  screen('37c-incoming-call', (tester, world) async {
+    world.voice.calls = [bartCall(ringing: true)];
+    await world.open(tester, ChatsScreen.path);
+  });
 
   screen('31-slash-commands', (tester, world) async {
     await openChannel(tester, world);

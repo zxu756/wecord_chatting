@@ -42,7 +42,17 @@ class VoiceChannelView extends ConsumerWidget {
 
     final Widget body;
     if (here && session.isConnected) {
-      body = _CallGrid(session: session, members: members);
+      body = VoiceCallGrid(
+        session: session,
+        people: {
+          for (final member in members)
+            member.userId: (
+              name: member.name,
+              avatarUrl: member.avatarUrl,
+              selfDeaf: member.selfDeaf,
+            ),
+        },
+      );
     } else if (here) {
       body = const Center(
         key: ValueKey('voice-connecting'),
@@ -202,21 +212,22 @@ class _NotConnected extends StatelessWidget {
   }
 }
 
+/// What the server knows about someone in a call: the name and avatar to
+/// show, and whether they deafened themselves.
+typedef VoiceCallPerson = ({String name, String? avatarUrl, bool selfDeaf});
+
 /// Everyone in the call: shared screens first and wide, then a tile per
 /// person (their camera, or their avatar), outlined while they speak.
-class _CallGrid extends StatelessWidget {
-  const _CallGrid({required this.session, required this.members});
+class VoiceCallGrid extends StatelessWidget {
+  const VoiceCallGrid({required this.session, required this.people, super.key});
 
   final VoiceSession session;
-  final List<VoiceMemberState> members;
+
+  /// The server's view of each participant, by user id.
+  final Map<String, VoiceCallPerson> people;
 
   @override
   Widget build(BuildContext context) {
-    final avatars = {
-      for (final member in members) member.userId: member.avatarUrl,
-    };
-    final names = {for (final member in members) member.userId: member.name};
-    final flags = {for (final member in members) member.userId: member};
     final participants = session.participants;
     final screens = [
       for (final participant in participants)
@@ -246,7 +257,7 @@ class _CallGrid extends StatelessWidget {
                   child: _Tile(
                     key: ValueKey('voice-screen-tile-${participant.userId}'),
                     label:
-                        '${names[participant.userId] ?? participant.name}'
+                        '${people[participant.userId]?.name ?? participant.name}'
                         "'s screen",
                     speaking: false,
                     child: ColoredBox(
@@ -267,11 +278,13 @@ class _CallGrid extends StatelessWidget {
                       height: tileWidth * 10 / 16,
                       child: _ParticipantTile(
                         participant: participant,
-                        name: names[participant.userId] ?? participant.name,
-                        avatarUrl: avatars[participant.userId],
+                        name:
+                            people[participant.userId]?.name ??
+                            participant.name,
+                        avatarUrl: people[participant.userId]?.avatarUrl,
                         deafened:
                             (participant.isLocal && session.selfDeaf) ||
-                            (flags[participant.userId]?.selfDeaf ?? false),
+                            (people[participant.userId]?.selfDeaf ?? false),
                       ),
                     ),
                 ],

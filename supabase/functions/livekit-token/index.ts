@@ -1,10 +1,13 @@
 // Mints a LiveKit access token for a voice channel the caller may connect
-// to. The room is the channel id and the participant identity is the user
-// id. Returns 503 voice_not_configured until LIVEKIT_URL, LIVEKIT_API_KEY
+// to ({channel_id}), or for a call in one of their direct or group chats
+// ({call_id}). The room is the channel id, or "call-<call id>"; the
+// participant identity is the user id. Returns 503 voice_not_configured until LIVEKIT_URL, LIVEKIT_API_KEY
 // and LIVEKIT_API_SECRET are set as function secrets.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   buildClaims,
+  callRoomName,
+  parseCallId,
   parseChannelId,
   readLiveKitConfig,
   signJwt,
@@ -28,6 +31,11 @@ interface VoiceAccess {
   channel_id: string;
   channel_name: string;
   circle_id: string;
+  display_name: string | null;
+}
+
+interface CallAccess {
+  call_id: string;
   display_name: string | null;
 }
 
@@ -70,14 +78,18 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_body" }, 400);
   }
   const channelId = parseChannelId(body);
-  if (!channelId) {
+  const callId = channelId ? null : parseCallId(body);
+  if (!channelId && !callId) {
     return json({ error: "invalid_channel" }, 400);
   }
 
-  const { data: access, error: accessError } = await userClient.rpc(
-    "can_current_user_connect_voice",
-    { target_channel_id: channelId },
-  );
+  const { data: access, error: accessError } = channelId
+    ? await userClient.rpc("can_current_user_connect_voice", {
+      target_channel_id: channelId,
+    })
+    : await userClient.rpc("can_current_user_join_direct_call", {
+      target_call_id: callId,
+    });
   if (accessError) {
     return json({ error: "lookup_failed" }, 500);
   }
@@ -90,12 +102,14 @@ Deno.serve(async (request) => {
     return json({ error: "voice_not_configured" }, 503);
   }
 
-  const voice = access as VoiceAccess;
+  const voice = access as VoiceAccess | CallAccess;
   const claims = buildClaims({
     apiKey: config.apiKey,
     identity: user.id,
     name: voice.display_name?.trim() || user.id,
-    room: voice.channel_id,
+    room: "channel_id" in voice
+      ? voice.channel_id
+      : callRoomName(voice.call_id),
     nowSeconds: Math.floor(Date.now() / 1000),
   });
   return json({

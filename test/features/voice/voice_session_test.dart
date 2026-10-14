@@ -19,7 +19,8 @@ void main() {
     controller = VoiceSessionController(
       repository: repository,
       connector: connector,
-      onMembersChanged: changedCircles.add,
+      onMembersChanged: (session) =>
+          changedCircles.add(session.circleId ?? 'call'),
     );
   }
 
@@ -222,6 +223,116 @@ void main() {
     expect(controller.state!.quality, VoiceConnectionQuality.poor);
     // Stops the heartbeat before the test ends.
     await controller.leave();
+  });
+
+  group('direct calls', () {
+    Future<void> callBob({bool video = false}) {
+      return controller.startCall(
+        conversationId: 'dm-bob',
+        name: 'Bob',
+        video: video,
+      );
+    }
+
+    testWidgets('starting a call joins it, connects and heartbeats', (
+      tester,
+    ) async {
+      setUpController();
+
+      await callBob();
+
+      final session = controller.state!;
+      expect(session.isDirectCall, isTrue);
+      expect(session.isConnected, isTrue);
+      expect(session.callId, 'call-dm-bob');
+      expect(session.conversationId, 'dm-bob');
+      expect(session.channelName, 'Bob');
+      expect(voiceSessionPath(session), '/chats/dm-bob');
+      expect(repository.startedCalls, ['dm-bob']);
+      expect(repository.callTokenRequests, ['call-dm-bob']);
+      expect(repository.tokenRequests, isEmpty);
+      expect(repository.joined, isEmpty);
+      expect(changedCircles, ['call']);
+
+      await tester.pump(voiceHeartbeatInterval);
+      expect(repository.callUpdates, ['call-dm-bob']);
+
+      await controller.leave();
+      expect(controller.state, isNull);
+      expect(repository.leftCalls, ['call-dm-bob']);
+      expect(repository.leaves, 0);
+    });
+
+    testWidgets('a video call turns the camera on', (tester) async {
+      setUpController();
+
+      await callBob(video: true);
+
+      expect(controller.state!.video, isTrue);
+      expect(connector.last.camera, isTrue);
+      await controller.leave();
+    });
+
+    testWidgets('calling leaves a voice channel, and joining one the call', (
+      tester,
+    ) async {
+      setUpController();
+      await joinLounge();
+
+      await callBob();
+      expect(repository.leaves, 1);
+      expect(controller.state!.isDirectCall, isTrue);
+
+      await joinLounge();
+      expect(repository.leftCalls, ['call-dm-bob']);
+      expect(controller.state!.channelId, 'ch-lounge');
+      await controller.leave();
+    });
+
+    testWidgets('a refused call leaves no session', (tester) async {
+      setUpController();
+      repository.startCallError = const VoiceAccessDeniedException();
+
+      await expectLater(callBob(), throwsA(isA<VoiceAccessDeniedException>()));
+
+      expect(controller.state, isNull);
+      expect(connector.calls, isEmpty);
+      await controller.leave();
+    });
+
+    testWidgets('an ended call ends the session on the next heartbeat', (
+      tester,
+    ) async {
+      setUpController();
+      await callBob();
+
+      repository
+        ..updateResult = false
+        ..rejoinResult = false;
+      await tester.pump(voiceHeartbeatInterval);
+      await tester.pump();
+
+      expect(repository.rejoinedCalls, ['call-dm-bob']);
+      expect(controller.state, isNull);
+      expect(connector.last.disconnects, 1);
+      await controller.leave();
+    });
+
+    testWidgets('a missed heartbeat rejoins a call still going', (
+      tester,
+    ) async {
+      setUpController();
+      await callBob();
+
+      repository.updateResult = false;
+      await tester.pump(voiceHeartbeatInterval);
+      await tester.pump();
+
+      expect(repository.rejoinedCalls, ['call-dm-bob']);
+      expect(controller.state, isNotNull);
+      repository.updateResult = true;
+      await controller.leave();
+    });
   });
 
   test('screen sharing is offered on the web and macOS only', () {

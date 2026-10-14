@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -26,16 +28,21 @@ final voiceScreenShareSupportedProvider = Provider<bool>((ref) {
   );
 });
 
-/// The voice channel the current user is connected to, if any. It lives
-/// for the whole app, so moving between channels and circles keeps the
-/// call; signing out ends it.
+/// The voice channel or direct / group call the current user is connected
+/// to, if any. It lives for the whole app, so moving between channels,
+/// circles and chats keeps the call; signing out ends it.
 final voiceSessionProvider =
     StateNotifierProvider<VoiceSessionController, VoiceSession?>((ref) {
       final controller = VoiceSessionController(
         repository: ref.watch(voiceRepositoryProvider),
         connector: ref.watch(voiceCallConnectorProvider),
-        onMembersChanged: (circleId) =>
-            ref.invalidate(voiceStatesProvider(circleId)),
+        onMembersChanged: (session) {
+          if (session.circleId case final circleId?) {
+            ref.invalidate(voiceStatesProvider(circleId));
+          } else {
+            ref.invalidate(activeDirectCallsProvider);
+          }
+        },
       );
       ref.listen(authStateProvider.select((state) => state.valueOrNull?.id), (
         previous,
@@ -48,6 +55,16 @@ final voiceSessionProvider =
       return controller;
     });
 
+/// Where [session] is shown: its voice channel's page, or the chat the call
+/// is in.
+String voiceSessionPath(VoiceSession session) {
+  final circleId = session.circleId;
+  if (circleId == null) {
+    return '${ChatsScreen.path}/${session.conversationId}';
+  }
+  return CircleChannelThreadScreen.pathFor(circleId, session.conversationId);
+}
+
 /// How often a connected client tells the server it is still there.
 const voiceHeartbeatInterval = Duration(seconds: 20);
 
@@ -56,10 +73,11 @@ enum VoiceSessionStatus { connecting, connected }
 @immutable
 class VoiceSession {
   const VoiceSession({
-    required this.circleId,
-    required this.channelId,
     required this.conversationId,
     required this.channelName,
+    this.circleId,
+    this.channelId,
+    this.callId,
     this.status = VoiceSessionStatus.connecting,
     this.selfMute = false,
     this.selfDeaf = false,
@@ -69,11 +87,18 @@ class VoiceSession {
     this.quality = VoiceConnectionQuality.unknown,
   });
 
-  final String circleId;
-  final String channelId;
+  /// The circle and voice channel, for a voice channel; null in a call.
+  final String? circleId;
+  final String? channelId;
 
-  /// The channel's conversation, which names its route.
+  /// The direct or group call, once joined; null in a voice channel.
+  final String? callId;
+
+  /// The channel's conversation, or the chat the call is in, which names
+  /// its route.
   final String conversationId;
+
+  /// The channel's name, or the chat's title for a call.
   final String channelName;
   final VoiceSessionStatus status;
   final bool selfMute;
@@ -88,7 +113,11 @@ class VoiceSession {
 
   bool get isConnected => status == VoiceSessionStatus.connected;
 
+  /// A call in a direct or group chat rather than a circle voice channel.
+  bool get isDirectCall => channelId == null;
+
   VoiceSession copyWith({
+    String? callId,
     VoiceSessionStatus? status,
     bool? selfMute,
     bool? selfDeaf,
@@ -100,6 +129,7 @@ class VoiceSession {
     return VoiceSession(
       circleId: circleId,
       channelId: channelId,
+      callId: callId ?? this.callId,
       conversationId: conversationId,
       channelName: channelName,
       status: status ?? this.status,
@@ -120,7 +150,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   VoiceSessionController({
     required VoiceRepository repository,
     required VoiceCallConnector connector,
-    void Function(String circleId)? onMembersChanged,
+    void Function(VoiceSession session)? onMembersChanged,
   }) : _repository = repository,
        _connector = connector,
        _onMembersChanged = onMembersChanged,
@@ -128,7 +158,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
 
   final VoiceRepository _repository;
   final VoiceCallConnector _connector;
-  final void Function(String circleId)? _onMembersChanged;
+  final void Function(VoiceSession session)? _onMembersChanged;
 
   VoiceCall? _call;
   Timer? _heartbeat;
@@ -144,9 +174,9 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   /// Set once the provider is gone, after which nothing is notified.
   var _disposed = false;
 
-  void _membersChanged(String circleId) {
+  void _membersChanged(VoiceSession session) {
     if (!_disposed) {
-      _onMembersChanged?.call(circleId);
+      _onMembersChanged?.call(session);
     }
   }
 
@@ -200,7 +230,84 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       } catch (_) {}
       rethrow;
     }
+    _connected(call);
+  }
 
+  /// Joins the call in [conversationId] (a direct or group chat), starting
+  /// it when there is none and leaving any other call or voice channel.
+  /// [video] turns the camera on once connected. Throws like [join].
+  Future<void> startCall({
+    required String conversationId,
+    required String name,
+    bool video = false,
+  }) async {
+    final current = state;
+    if (current != null &&
+        current.isDirectCall &&
+        current.conversationId == conversationId) {
+      if (video && !current.video && current.isConnected) {
+        await toggleCamera();
+      }
+      return;
+    }
+    await leave();
+    final attempt = ++_attempt;
+    state = VoiceSession(conversationId: conversationId, channelName: name);
+    VoiceCall? call;
+    String? callId;
+    try {
+      callId = await _repository.startDirectCall(conversationId);
+      if (attempt != _attempt) {
+        unawaited(_leaveCallQuietly(callId));
+        return;
+      }
+      state = state?.copyWith(callId: callId);
+      final details = await _repository.fetchCallConnectionDetails(callId);
+      if (attempt != _attempt) {
+        unawaited(_leaveCallQuietly(callId));
+        return;
+      }
+      call = await _connector.connect(
+        url: details.url,
+        token: details.token,
+        microphoneEnabled: true,
+      );
+      if (attempt != _attempt) {
+        await call.disconnect();
+        unawaited(_leaveCallQuietly(callId));
+        return;
+      }
+    } catch (_) {
+      if (attempt == _attempt) {
+        state = null;
+      }
+      try {
+        await call?.disconnect();
+      } catch (_) {}
+      if (callId != null) {
+        unawaited(_leaveCallQuietly(callId));
+      }
+      rethrow;
+    }
+    _connected(call);
+    if (video) {
+      try {
+        await toggleCamera();
+      } catch (_) {
+        // The call works without the camera; the button tries again.
+      }
+    }
+  }
+
+  Future<void> _leaveCallQuietly(String callId) async {
+    try {
+      await _repository.leaveDirectCall(callId);
+    } catch (_) {
+      // The server drops it after a minute without heartbeats.
+    }
+  }
+
+  void _connected(VoiceCall call) {
     _call = call;
     call.addListener(_syncFromCall);
     unawaited(
@@ -222,7 +329,10 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     if (state?.selfMute == true) {
       unawaited(_pushFlags());
     }
-    _membersChanged(circleId);
+    final session = state;
+    if (session != null) {
+      _membersChanged(session);
+    }
   }
 
   VoiceCallParticipant? _localParticipant(VoiceCall call) {
@@ -267,12 +377,19 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     } catch (_) {
       // Already gone.
     }
-    try {
-      await _repository.leaveVoiceState();
-    } catch (_) {
-      // The server drops it after a minute without heartbeats.
+    final callId = session.callId;
+    if (session.isDirectCall) {
+      if (callId != null) {
+        await _leaveCallQuietly(callId);
+      }
+    } else {
+      try {
+        await _repository.leaveVoiceState();
+      } catch (_) {
+        // The server drops it after a minute without heartbeats.
+      }
     }
-    _membersChanged(session.circleId);
+    _membersChanged(session);
   }
 
   Future<void> toggleMute() async {
@@ -361,15 +478,33 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       return;
     }
     try {
-      await _repository.updateVoiceState(
+      await _sendFlags(session);
+    } catch (_) {
+      // The next heartbeat tries again.
+    }
+  }
+
+  /// Sends the flags and heartbeat; false when the server dropped us.
+  Future<bool> _sendFlags(VoiceSession session) {
+    final callId = session.callId;
+    if (session.isDirectCall) {
+      if (callId == null) {
+        return Future.value(false);
+      }
+      return _repository.updateDirectCallState(
+        callId: callId,
         selfMute: session.selfMute,
         selfDeaf: session.selfDeaf,
         video: session.video,
         screen: session.screen,
       );
-    } catch (_) {
-      // The next heartbeat tries again.
     }
+    return _repository.updateVoiceState(
+      selfMute: session.selfMute,
+      selfDeaf: session.selfDeaf,
+      video: session.video,
+      screen: session.screen,
+    );
   }
 
   Future<void> _beat() async {
@@ -379,18 +514,22 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     }
     final attempt = _attempt;
     try {
-      final alive = await _repository.updateVoiceState(
-        selfMute: session.selfMute,
-        selfDeaf: session.selfDeaf,
-        video: session.video,
-        screen: session.screen,
-      );
+      final alive = await _sendFlags(session);
       if (alive || attempt != _attempt) {
         return;
       }
       // The server dropped us (a missed heartbeat or lost access): join
-      // again, or give up when that is refused.
-      await _repository.joinVoiceState(session.channelId);
+      // again, or give up when that is refused (or the call ended).
+      final channelId = session.channelId;
+      final callId = session.callId;
+      if (channelId != null) {
+        await _repository.joinVoiceState(channelId);
+      } else if (callId == null || !await _repository.joinDirectCall(callId)) {
+        if (attempt == _attempt) {
+          await leave();
+        }
+        return;
+      }
       await _pushFlags();
     } on VoiceAccessDeniedException {
       if (attempt == _attempt) {
@@ -443,6 +582,42 @@ Future<bool> joinVoiceChannel(
   } catch (_) {
     messenger?.showSnackBar(
       const SnackBar(content: Text('Could not connect to voice. Try again.')),
+    );
+  }
+  return false;
+}
+
+/// Calls in [conversationId] (joining the call already going on there);
+/// explains when voice is not set up or calling is not allowed. Returns
+/// whether the user ends up in the call.
+Future<bool> startDirectCall(
+  BuildContext context,
+  WidgetRef ref, {
+  required String conversationId,
+  required String name,
+  bool video = false,
+}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await ref
+        .read(voiceSessionProvider.notifier)
+        .startCall(conversationId: conversationId, name: name, video: video);
+    ref.invalidate(activeDirectCallsProvider);
+    final session = ref.read(voiceSessionProvider);
+    return session != null &&
+        session.isDirectCall &&
+        session.conversationId == conversationId;
+  } on VoiceNotConfiguredException {
+    if (context.mounted) {
+      await showVoiceNotConfiguredDialog(context);
+    }
+  } on VoiceAccessDeniedException {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text("You can't call in this conversation.")),
+    );
+  } catch (_) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Could not start the call. Try again.')),
     );
   }
   return false;

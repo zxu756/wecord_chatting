@@ -25,6 +25,8 @@ import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
+import 'package:wecord/features/voice/direct_call_view.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -557,6 +559,34 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       icon: Icons.push_pin_outlined,
       onPressed: () => _showPinnedMessages(canPinMessages),
     );
+    final canCall =
+        conversationType == ConversationType.direct ||
+        conversationType == ConversationType.group;
+    final callAction = canCall
+        ? ChatThreadAction(
+            tooltip: 'Start voice call',
+            icon: Icons.call_outlined,
+            onPressed: () => startDirectCall(
+              context,
+              ref,
+              conversationId: widget.conversationId,
+              name: title,
+            ),
+          )
+        : null;
+    final videoCallAction = canCall
+        ? ChatThreadAction(
+            tooltip: 'Start video call',
+            icon: Icons.videocam_outlined,
+            onPressed: () => startDirectCall(
+              context,
+              ref,
+              conversationId: widget.conversationId,
+              name: title,
+              video: true,
+            ),
+          )
+        : null;
     final groupDetailsAction = conversationType == ConversationType.group
         ? ChatThreadAction(
             tooltip: 'Group details',
@@ -576,8 +606,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: () => _setThreadArchived(threadId, !threadArchived),
           )
         : null;
+    // Search comes first: phones keep it next to the primary action.
     final appBarActions = [
       searchAction,
+      ?callAction,
+      ?videoCallAction,
       pinnedAction,
       ChatThreadAction(
         tooltip: 'Media',
@@ -590,10 +623,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ?archiveAction,
       ...widget.extraActions,
     ];
-    // Next to search on phones: the circle's member list, the group's
-    // details, or a managed thread's archive toggle.
+    // Next to search on phones: the circle's member list, a direct call,
+    // the group's details, or a managed thread's archive toggle.
     final primaryAction =
         widget.extraActions.firstOrNull ??
+        (conversationType == ConversationType.direct ? callAction : null) ??
         groupDetailsAction ??
         archiveAction ??
         pinnedAction;
@@ -690,6 +724,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ),
         body: Column(
           children: [
+            if (canCall)
+              DirectCallBar(
+                conversationId: widget.conversationId,
+                title: title,
+              ),
             if (conversationType == ConversationType.group &&
                 conversationSummary?.announcement.trim().isNotEmpty == true)
               _AnnouncementStrip(

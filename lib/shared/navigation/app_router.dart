@@ -20,6 +20,7 @@ import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -88,10 +89,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               placement: placement,
               pushedPages: pushedPageObserver.pushedPages,
               onOpenVoice: (session) {
-                final path = CircleChannelThreadScreen.pathFor(
-                  session.circleId,
-                  session.conversationId,
-                );
+                final path = voiceSessionPath(session);
                 if (state.uri.path != path) {
                   context.push(path);
                 }

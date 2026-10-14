@@ -172,12 +172,8 @@ class CircleMobileHome extends ConsumerWidget {
                     );
                   }
                 },
-                onOpenVoice: (session) => context.push(
-                  CircleChannelThreadScreen.pathFor(
-                    session.circleId,
-                    session.conversationId,
-                  ),
-                ),
+                onOpenVoice: (session) =>
+                    context.push(voiceSessionPath(session)),
                 onSelectThread: (thread) => context.push(
                   CircleChannelThreadScreen.pathFor(circleId, thread.id),
                   extra: ChatThreadRouteExtra(

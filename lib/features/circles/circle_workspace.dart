@@ -5,7 +5,6 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
-import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
@@ -308,12 +307,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       });
       return;
     }
-    GoRouter.maybeOf(context)?.push(
-      CircleChannelThreadScreen.pathFor(
-        session.circleId,
-        session.conversationId,
-      ),
-    );
+    GoRouter.maybeOf(context)?.push(voiceSessionPath(session));
   }
 
   /// Opens a thread from the sidebar next to its channel.

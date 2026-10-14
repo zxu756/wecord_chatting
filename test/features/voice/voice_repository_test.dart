@@ -202,6 +202,118 @@ void main() {
       isFalse,
     );
   });
+
+  group('direct calls', () {
+    test('starting a call returns its id; 42501 means no access', () async {
+      final source = _FakeVoiceDataSource()
+        ..rpcResults['start_direct_call'] = 'call-1';
+      final repository = SupabaseVoiceRepository(source);
+
+      expect(await repository.startDirectCall('dm-1'), 'call-1');
+      expect(source.rpcCalls.single, [
+        'start_direct_call',
+        {'target_conversation_id': 'dm-1'},
+      ]);
+
+      source.rpcErrors['start_direct_call'] = const PostgrestException(
+        message: 'You cannot call in this conversation',
+        code: '42501',
+      );
+      await expectLater(
+        repository.startDirectCall('dm-1'),
+        throwsA(isA<VoiceAccessDeniedException>()),
+      );
+    });
+
+    test('call tokens ask for the call, not a channel', () async {
+      final source = _FakeVoiceDataSource()
+        ..functionResult = {'url': 'wss://lk.test', 'token': 'jwt'};
+      final repository = SupabaseVoiceRepository(source);
+
+      final details = await repository.fetchCallConnectionDetails('call-1');
+
+      expect(details.token, 'jwt');
+      expect(source.functionCalls.single, [
+        'livekit-token',
+        {'call_id': 'call-1'},
+      ]);
+    });
+
+    test('heartbeats, rejoins, leaves and declines call their RPCs', () async {
+      final source = _FakeVoiceDataSource()
+        ..rpcResults['update_direct_call_state'] = true
+        ..rpcResults['join_direct_call'] = false;
+      final repository = SupabaseVoiceRepository(source);
+
+      expect(
+        await repository.updateDirectCallState(
+          callId: 'call-1',
+          selfMute: true,
+          selfDeaf: false,
+          video: true,
+          screen: false,
+        ),
+        isTrue,
+      );
+      expect(await repository.joinDirectCall('call-1'), isFalse);
+      await repository.leaveDirectCall('call-1');
+      await repository.declineDirectCall('call-2');
+
+      expect(
+        [for (final call in source.rpcCalls) call.first],
+        [
+          'update_direct_call_state',
+          'join_direct_call',
+          'leave_direct_call',
+          'decline_direct_call',
+        ],
+      );
+      expect(source.rpcCalls.first.last, {
+        'target_call_id': 'call-1',
+        'target_self_mute': true,
+        'target_self_deaf': false,
+        'target_video': true,
+        'target_screen': false,
+      });
+      expect(source.rpcCalls.last.last, {'target_call_id': 'call-2'});
+    });
+
+    test('active calls parse with their participants', () async {
+      final source = _FakeVoiceDataSource()
+        ..rpcResults['list_active_direct_calls'] = [
+          {
+            'call_id': 'call-1',
+            'conversation_id': 'dm-1',
+            'started_by': 'user-2',
+            'created_at': '2026-10-14T09:00:00Z',
+            'ringing': true,
+            'participants': [
+              {
+                'user_id': 'user-2',
+                'username': 'bob',
+                'display_name': 'Bob',
+                'avatar_url': null,
+                'self_mute': true,
+                'video': true,
+              },
+            ],
+          },
+        ];
+
+      final calls = await SupabaseVoiceRepository(
+        source,
+      ).listActiveDirectCalls();
+
+      final call = calls.single;
+      expect(call.callId, 'call-1');
+      expect(call.conversationId, 'dm-1');
+      expect(call.ringing, isTrue);
+      expect(call.caller!.name, 'Bob');
+      expect(call.participants.single.selfMute, isTrue);
+      expect(call.participants.single.video, isTrue);
+      expect(call.createdAt, DateTime.utc(2026, 10, 14, 9));
+    });
+  });
 }
 
 class _FakeVoiceDataSource implements VoiceDataSource {
@@ -238,4 +350,7 @@ class _FakeVoiceDataSource implements VoiceDataSource {
   Stream<void> voiceStateChanges(String circleId) {
     return const Stream<void>.empty();
   }
+
+  @override
+  Stream<void> directCallChanges() => const Stream<void>.empty();
 }

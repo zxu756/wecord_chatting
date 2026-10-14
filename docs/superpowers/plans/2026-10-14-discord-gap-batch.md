@@ -51,8 +51,21 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 4. Direct message calls
 
-- [ ] Voice/video calls in direct and group chats over the same LiveKit
-      setup: ringing for the other members, accept / decline, call panel.
+- [x] `direct_calls` (one active per chat), `direct_call_participants`
+      (heartbeat like voice states; one call per person, never a call and a
+      voice channel at once) and `direct_call_declines`; RPCs to start or
+      join, rejoin, heartbeat, leave and decline, and
+      `list_active_direct_calls` with who rings.
+- [x] Starting a call posts "X started a call."; when it ends the message
+      becomes "X started a call that lasted N minutes."
+- [x] `livekit-token` also takes `{call_id}` (room `call-<id>`), checked by
+      `can_current_user_join_direct_call`; blocked or deleted accounts can't
+      call.
+- [x] Client: one voice session for channels and calls; call and video call
+      buttons in direct and group chats (the call button sits next to search
+      in direct chats on phones), the call above the messages with the usual
+      controls, a Join bar when others are in one, and an incoming call
+      prompt (Decline / Join with video / Join) anywhere in the app.
 
 ## 5. Files and videos
 

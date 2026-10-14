@@ -24,16 +24,30 @@ export function readLiveKitConfig(
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/// The voice channel id from a request body, lowercased, or null.
-export function parseChannelId(body: unknown): string | null {
+function parseUuidField(body: unknown, field: string): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  const value = (body as Record<string, unknown>).channel_id;
+  const value = (body as Record<string, unknown>)[field];
   if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
     return null;
   }
   return value.trim().toLowerCase();
+}
+
+/// The voice channel id from a request body, lowercased, or null.
+export function parseChannelId(body: unknown): string | null {
+  return parseUuidField(body, "channel_id");
+}
+
+/// The direct or group call id from a request body, lowercased, or null.
+export function parseCallId(body: unknown): string | null {
+  return parseUuidField(body, "call_id");
+}
+
+/// The LiveKit room of a direct or group call.
+export function callRoomName(callId: string): string {
+  return `call-${callId}`;
 }
 
 export interface VideoGrant {

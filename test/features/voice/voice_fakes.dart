@@ -72,6 +72,82 @@ class FakeVoiceRepository implements VoiceRepository {
 
   @override
   Stream<void> voiceStateChanges(String circleId) => _changes.stream;
+
+  /// What `list_active_direct_calls` returns.
+  List<DirectCall> calls = const [];
+
+  /// Thrown by [startDirectCall], e.g. [VoiceAccessDeniedException].
+  Object? startCallError;
+
+  /// What [joinDirectCall] answers (false: the call ended).
+  bool rejoinResult = true;
+
+  final startedCalls = <String>[];
+  final callTokenRequests = <String>[];
+  final rejoinedCalls = <String>[];
+  final callUpdates = <String>[];
+  final leftCalls = <String>[];
+  final declinedCalls = <String>[];
+
+  @override
+  Future<String> startDirectCall(String conversationId) async {
+    final error = startCallError;
+    if (error != null) {
+      throw error;
+    }
+    startedCalls.add(conversationId);
+    return 'call-$conversationId';
+  }
+
+  @override
+  Future<bool> joinDirectCall(String callId) async {
+    rejoinedCalls.add(callId);
+    return rejoinResult;
+  }
+
+  @override
+  Future<VoiceConnectionDetails> fetchCallConnectionDetails(
+    String callId,
+  ) async {
+    callTokenRequests.add(callId);
+    final error = tokenError;
+    if (error != null) {
+      throw error;
+    }
+    return const VoiceConnectionDetails(
+      url: 'wss://voice.test',
+      token: 'call-token',
+    );
+  }
+
+  @override
+  Future<bool> updateDirectCallState({
+    required String callId,
+    required bool selfMute,
+    required bool selfDeaf,
+    required bool video,
+    required bool screen,
+  }) async {
+    callUpdates.add(callId);
+    updates.add((mute: selfMute, deaf: selfDeaf, video: video, screen: screen));
+    return updateResult;
+  }
+
+  @override
+  Future<void> leaveDirectCall(String callId) async {
+    leftCalls.add(callId);
+  }
+
+  @override
+  Future<void> declineDirectCall(String callId) async {
+    declinedCalls.add(callId);
+  }
+
+  @override
+  Future<List<DirectCall>> listActiveDirectCalls() async => calls;
+
+  @override
+  Stream<void> directCallChanges() => _changes.stream;
 }
 
 /// A call whose participants and media flags are set by the test.

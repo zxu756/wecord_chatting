@@ -251,7 +251,10 @@ void main() {
 
     phoneTestWidgets('pinned messages sheet', (tester, viewport) async {
       await openChat(tester);
-      await tester.tap(find.byTooltip('Pinned messages'));
+      // Direct chats keep the call button next to search.
+      expect(find.byTooltip('Start voice call'), findsOneWidget);
+      await openMoreMenu(tester);
+      await tester.tap(find.text('Pinned messages'));
       await settle(tester);
       expect(find.text('Pinned messages'), findsWidgets);
       expect(find.text('Pinned by ${me.displayName}'), findsOneWidget);

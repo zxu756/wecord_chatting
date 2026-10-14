@@ -5,6 +5,8 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
+import 'package:wecord/features/push/push_controller.dart';
+import 'package:wecord/features/push/push_settings_tile.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -234,6 +236,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       }
                     : null,
               ),
+              const PushSettingsTile(),
               Text(
                 _permissionStatusLabel(notificationPermissionStatus),
                 style: Theme.of(context).textTheme.bodySmall,
@@ -369,8 +372,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _signOut() {
-    return ref.read(authRepositoryProvider).signOut();
+  Future<void> _signOut() async {
+    await stopPushForSignOut(ref);
+    await ref.read(authRepositoryProvider).signOut();
   }
 
   Future<void> _saveNotificationPreferences(

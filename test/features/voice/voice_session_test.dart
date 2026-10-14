@@ -263,6 +263,24 @@ void main() {
       expect(repository.leaves, 0);
     });
 
+    testWidgets('a joined call is handed on so it rings by push', (
+      tester,
+    ) async {
+      final rung = <String>[];
+      repository = FakeVoiceRepository();
+      connector = FakeVoiceCallConnector();
+      controller = VoiceSessionController(
+        repository: repository,
+        connector: connector,
+        onCallJoined: (callId) async => rung.add(callId),
+      );
+
+      await callBob();
+
+      expect(rung, ['call-dm-bob']);
+      await controller.leave();
+    });
+
     testWidgets('a video call turns the camera on', (tester) async {
       setUpController();
 

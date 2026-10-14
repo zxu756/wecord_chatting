@@ -820,6 +820,26 @@ void main() {
     },
   );
 
+  test('sent messages are handed on for push', () async {
+    final pushed = <String>[];
+    final dataSource = FakeChatsDataSource();
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+      storagePathSeed: () => 'seed-1',
+      onMessageSent: (id) async => pushed.add(id),
+    );
+
+    await repository.sendFileMessage(
+      conversationId: 'conversation-1',
+      fileName: 'a.txt',
+      mimeType: 'text/plain',
+      bytes: Uint8List.fromList([1]),
+    );
+
+    expect(pushed, ['inserted-1']);
+  });
+
   test('sendFileMessage refuses files over 50 MB before uploading', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -2095,11 +2115,12 @@ class FakeChatsDataSource implements ChatsDataSource {
   }
 
   @override
-  Future<void> insertMessage(Map<String, dynamic> values) async {
+  Future<String?> insertMessage(Map<String, dynamic> values) async {
     if (insertError case final error?) {
       throw error;
     }
     insertedMessages.add(values);
+    return 'inserted-${insertedMessages.length}';
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
+import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -37,6 +38,7 @@ final voiceSessionProvider =
       final controller = VoiceSessionController(
         repository: ref.watch(voiceRepositoryProvider),
         connector: ref.watch(voiceCallConnectorProvider),
+        onCallJoined: ref.watch(pushRepositoryProvider).notifyCall,
         onMembersChanged: (session) {
           if (session.circleId case final circleId?) {
             ref.invalidate(voiceStatesProvider(circleId));
@@ -152,7 +154,9 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     required VoiceRepository repository,
     required VoiceCallConnector connector,
     void Function(VoiceSession session)? onMembersChanged,
+    Future<void> Function(String callId)? onCallJoined,
   }) : _repository = repository,
+       _onCallJoined = onCallJoined,
        _connector = connector,
        _onMembersChanged = onMembersChanged,
        super(null);
@@ -160,6 +164,10 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   final VoiceRepository _repository;
   final VoiceCallConnector _connector;
   final void Function(VoiceSession session)? _onMembersChanged;
+
+  /// Called with each call joined, so a newly started one rings by push
+  /// (the server ignores calls someone else started).
+  final Future<void> Function(String callId)? _onCallJoined;
 
   VoiceCall? _call;
   Timer? _heartbeat;
@@ -263,6 +271,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
         return;
       }
       state = state?.copyWith(callId: callId);
+      unawaited(_onCallJoined?.call(callId));
       final details = await _repository.fetchCallConnectionDetails(callId);
       if (attempt != _attempt) {
         unawaited(_leaveCallQuietly(callId));

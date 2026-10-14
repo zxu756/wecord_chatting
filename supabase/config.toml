@@ -412,6 +412,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/delete-account/index.ts"
 
+[functions.push]
+enabled = true
+# Signed-in users only: GET gives the VAPID public key, POST pushes a
+# message the caller sent (checked again inside).
+verify_jwt = true
+entrypoint = "./functions/push/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_status.dart';
@@ -18,7 +19,11 @@ import 'package:wecord/shared/models/profile.dart';
 
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
   try {
-    return SupabaseChatsRepository(ref.watch(supabaseClientProvider));
+    final push = ref.watch(pushRepositoryProvider);
+    return SupabaseChatsRepository(
+      ref.watch(supabaseClientProvider),
+      onMessageSent: push.notifySent,
+    );
   } on AssertionError {
     return const _UninitializedChatsRepository();
   }
@@ -268,7 +273,8 @@ abstract interface class ChatsDataSource {
 
   Future<String?> latestMessageId(String conversationId);
 
-  Future<void> insertMessage(Map<String, dynamic> values);
+  /// Inserts a message and returns its id.
+  Future<String?> insertMessage(Map<String, dynamic> values);
 
   Future<void> uploadBinary({
     required String bucket,
@@ -314,20 +320,28 @@ abstract interface class ChatsDataSource {
 }
 
 class SupabaseChatsRepository implements ChatsRepository {
-  SupabaseChatsRepository(SupabaseClient client)
-    : this.withDataSource(
-        SupabaseChatsDataSource(client),
-        currentUserId: () => client.auth.currentUser?.id,
-      );
+  SupabaseChatsRepository(
+    SupabaseClient client, {
+    Future<void> Function(String messageId)? onMessageSent,
+  }) : this.withDataSource(
+         SupabaseChatsDataSource(client),
+         currentUserId: () => client.auth.currentUser?.id,
+         onMessageSent: onMessageSent,
+       );
 
   const SupabaseChatsRepository.withDataSource(
     this._dataSource, {
     required String? Function() currentUserId,
     String Function()? storagePathSeed,
     Duration storageOperationTimeout = const Duration(seconds: 30),
+    Future<void> Function(String messageId)? onMessageSent,
   }) : _currentUserId = currentUserId,
        _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+       _storageOperationTimeout = storageOperationTimeout,
+       _onMessageSent = onMessageSent;
+
+  /// Called with each message the current user sends (for push).
+  final Future<void> Function(String messageId)? _onMessageSent;
 
   final ChatsDataSource _dataSource;
   final String? Function() _currentUserId;
@@ -435,7 +449,10 @@ class SupabaseChatsRepository implements ChatsRepository {
   /// [SlowmodeException].
   Future<void> _send(Future<Object?> Function() send) async {
     try {
-      await send();
+      final messageId = await send();
+      if (messageId is String) {
+        unawaited(_onMessageSent?.call(messageId));
+      }
     } on PostgrestException catch (error) {
       final slowmode = SlowmodeException.fromPostgrest(error);
       if (slowmode != null) {
@@ -1322,8 +1339,13 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   }
 
   @override
-  Future<void> insertMessage(Map<String, dynamic> values) async {
-    await _client.from('messages').insert(values);
+  Future<String?> insertMessage(Map<String, dynamic> values) async {
+    final row = await _client
+        .from('messages')
+        .insert(values)
+        .select('id')
+        .single();
+    return row['id'] as String?;
   }
 
   @override

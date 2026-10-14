@@ -98,24 +98,23 @@ current user's timeout ends, since the server lifts it by the clock alone.
 
 ## 7. Push notifications
 
-- [ ] `push_subscriptions (user_id, endpoint, p256dh, auth, user_agent,
-      created_at, last_seen_at)`, written through `register_push_subscription`
-      / `unregister_push_subscription`; `push_deliveries` remembers which
-      messages were pushed so nothing is sent twice.
-- [ ] Edge Function `push-notify`: the sender's app calls it with the new
-      message id right after sending. It checks the caller sent it, works out
-      recipients from the database (members who can see the conversation,
-      not muted, circle notification level, not the sender, not blocked),
-      builds a short title/body (or a generic one when previews are off) and
-      sends Web Push (VAPID, RFC 8291 aes128gcm, WebCrypto only). Expired
-      subscriptions (404/410) are deleted. 503 `push_not_configured` until
-      `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` are set.
-- [ ] `push-config` (GET) returns the VAPID public key so clients need no
-      build-time setting.
-- [ ] Web client: a small service worker (`push_sw.js`) shows notifications
-      when no WeCord tab is focused and opens the chat on click; Settings
-      gets "Push notifications" to subscribe / unsubscribe this browser.
-- [ ] `tool/setup_web_push.sh` generates VAPID keys and sets the secrets
+- [x] `push_subscriptions`, written through `register_push_subscription` /
+      `unregister_push_subscription`; `push_deliveries` remembers pushed
+      messages so nothing is sent twice.
+- [x] Edge Function `push`: GET gives the VAPID public key; POST
+      `{message_id}` (or `{call_id}` for a call the caller started) runs
+      `claim_push_delivery` (caller must be the sender; recipients can see
+      the conversation, aren't muted or blocked, and follow their circle
+      notification level) and sends Web Push (VAPID + RFC 8291 aes128gcm on
+      WebCrypto, round-trip tested). Gone subscriptions (404/410) are
+      dropped. 503 `push_not_configured` until the VAPID secrets exist.
+- [x] The app asks for a push after every message it sends and every call
+      it starts; failures never affect sending.
+- [x] Web: `web/push_sw.js` (own scope) shows notifications when no WeCord
+      tab is focused and opens the chat on click; Settings → "Push
+      notifications" subscribes this browser; signing out stops the
+      account's pushes there; signing in takes the subscription over.
+- [x] `tool/setup_web_push.sh` generates VAPID keys and sets the secrets
       (run by the owner; keys never pass through chat).
-- [ ] Native iOS / Android push (FCM / APNs) needs a Firebase project and
-      Apple key from the owner; documented as the next step.
+- [ ] Native iOS / Android push (FCM / APNs) needs a Firebase project and an
+      Apple push key from the owner.

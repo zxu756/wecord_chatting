@@ -41,6 +41,7 @@ import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
+import 'package:wecord/shared/models/profile.dart';
 
 final chatThreadProvider = FutureProvider.autoDispose
     .family<ChatThreadData, String>((ref, conversationId) async {
@@ -803,6 +804,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     }
                   }
                   final showSenders = canStartThreads || isThread;
+                  // Messages without an embedded sender (still sending) fall
+                  // back to the current user's own profile.
+                  final ownProfile = ref
+                      .watch(currentProfileProvider)
+                      .valueOrNull;
                   final membersById = {
                     for (final member
                         in groupDetail?.members ?? const <GroupMember>[])
@@ -871,9 +877,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           message: message,
                           messagesById: messagesById,
                           isCurrentUser: isCurrentUser,
-                          sender: showSenders && !isCurrentUser
-                              ? _senderFor(message, membersById)
-                              : null,
+                          sender: _senderFor(
+                            message,
+                            membersById,
+                            fallbackProfile: isCurrentUser ? ownProfile : null,
+                          ),
+                          // Direct chats name the other person in the title.
+                          showSenderName: showSenders && !isCurrentUser,
                           isFollowUp: followUpIds.contains(message.id),
                           hasFollowUp:
                               newerMessage != null &&
@@ -2503,8 +2513,9 @@ bool _isSameLocalDay(DateTime left, DateTime right) {
 /// Name and avatar shown above a group of incoming messages.
 _MessageSender _senderFor(
   ChatMessage message,
-  Map<String, GroupMember> membersById,
-) {
+  Map<String, GroupMember> membersById, {
+  Profile? fallbackProfile,
+}) {
   // Webhook messages show the webhook, never its creator's profile.
   if (message.webhookName case final webhookName?) {
     return _MessageSender(
@@ -2514,7 +2525,7 @@ _MessageSender _senderFor(
     );
   }
   final member = membersById[message.senderId];
-  final profile = message.sender ?? member?.profile;
+  final profile = message.sender ?? member?.profile ?? fallbackProfile;
   final nickname = (message.senderNickname ?? member?.nickname)?.trim() ?? '';
   final label = nickname.isNotEmpty
       ? nickname
@@ -2582,6 +2593,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onReply,
     this.canCompose = true,
     this.sender,
+    this.showSenderName = true,
     this.isFollowUp = false,
     this.hasFollowUp = false,
     required this.onEdit,
@@ -2625,9 +2637,13 @@ class _MessageBubble extends StatelessWidget {
   final int replyCount;
   final bool showReadReceipt;
 
-  /// Who sent an incoming message in a group or channel; null hides the
-  /// avatar column entirely (own messages, direct chats).
+  /// Who sent the message, shown as an avatar beside the bubble (on the
+  /// right for the current user's own messages); null hides the avatar
+  /// column entirely.
   final _MessageSender? sender;
+
+  /// Shows [sender]'s name above the first message of a group.
+  final bool showSenderName;
 
   /// Continues the previous message's group, so the avatar and name are
   /// left out.
@@ -2868,7 +2884,7 @@ class _MessageBubble extends StatelessWidget {
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        if (sender != null && !isFollowUp)
+        if (sender != null && showSenderName && !isFollowUp)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: Row(
@@ -2995,22 +3011,22 @@ class _MessageBubble extends StatelessWidget {
     if (sender == null) {
       return column;
     }
+    final avatar = SizedBox(
+      width: _senderAvatarSize,
+      child: isFollowUp
+          ? null
+          : FallbackAvatar(
+              key: ValueKey('message-avatar-${message.id}'),
+              title: sender.name,
+              avatarUrl: sender.avatarUrl,
+              radius: _senderAvatarSize / 2,
+            ),
+    );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: _senderAvatarSize,
-          child: isFollowUp
-              ? null
-              : FallbackAvatar(
-                  title: sender.name,
-                  avatarUrl: sender.avatarUrl,
-                  radius: _senderAvatarSize / 2,
-                ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: column),
-      ],
+      children: isCurrentUser
+          ? [Expanded(child: column), const SizedBox(width: 8), avatar]
+          : [avatar, const SizedBox(width: 8), Expanded(child: column)],
     );
   }
 

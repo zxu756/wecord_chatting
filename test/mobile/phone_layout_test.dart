@@ -1121,10 +1121,11 @@ void main() {
         ValueKey('sticker-image-${emoji_fakes.shipItStickerId}'),
       );
       expectFullyVisible(tester, ownSticker);
-      // Own stickers sit on the right, without a bubble.
+      // Own stickers sit on the right, without a bubble, next to the
+      // sender's avatar.
       expect(
         tester.getTopRight(ownSticker).dx,
-        greaterThan(tester.getSize(find.byType(Scaffold).first).width - 40),
+        greaterThan(tester.getSize(find.byType(Scaffold).first).width - 80),
       );
       final placeholder = find.byKey(const ValueKey('sticker-placeholder'));
       await tester.ensureVisible(placeholder);

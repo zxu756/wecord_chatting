@@ -564,7 +564,9 @@ void main() {
       expect(composer.controller!.text, 'hi @grace ');
     });
 
-    testWidgets('direct chats never show sender headers', (tester) async {
+    testWidgets('direct chats show avatars but no sender names', (
+      tester,
+    ) async {
       final repository = FakeChatsRepository()
         ..messages = [
           _message(
@@ -589,7 +591,43 @@ void main() {
       await tester.pump();
 
       expect(find.text('Grace Hopper'), findsNothing);
-      expect(find.text('GH'), findsNothing);
+      // One avatar per group, beside its first message.
+      expect(find.text('GH'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('message-avatar-message-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('message-avatar-message-2')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('own messages show the current user avatar on the right', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-1',
+            sender: _profile(id: 'user-1', username: 'ada'),
+            body: 'Mine',
+            createdAt: DateTime.utc(2026, 5, 18, 10, 0),
+          ),
+        ];
+
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.direct),
+      );
+      await tester.pump();
+
+      final avatar = find.byKey(const ValueKey('message-avatar-message-1'));
+      expect(avatar, findsOneWidget);
+      expect(
+        tester.getTopLeft(avatar).dx,
+        greaterThan(tester.getTopRight(find.text('Mine')).dx),
+      );
     });
 
     testWidgets('follow-up messages keep reactions, receipts and actions', (

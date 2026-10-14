@@ -50,7 +50,7 @@ class MessageLinkPreviewCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(8),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: () => _open(ref),
+            onTap: () => _open(context, ref),
             child: Container(
               decoration: BoxDecoration(
                 border: Border(
@@ -118,11 +118,11 @@ class MessageLinkPreviewCard extends ConsumerWidget {
     );
   }
 
-  void _open(WidgetRef ref) {
+  void _open(BuildContext context, WidgetRef ref) {
     final uri = Uri.tryParse(url);
     if (uri == null) {
       return;
     }
-    ref.read(linkLauncherProvider)(uri).catchError((Object _) {});
+    ref.read(linkLauncherProvider)(context, uri).catchError((Object _) {});
   }
 }

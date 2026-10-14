@@ -1704,7 +1704,7 @@ class PhoneWorld {
       ),
       voiceMessageRecorderProvider.overrideWithValue(recorder),
       imagePickerServiceProvider.overrideWithValue(imagePicker),
-      linkLauncherProvider.overrideWithValue((uri) async {
+      linkLauncherProvider.overrideWithValue((context, uri) async {
         openedLinks.add(uri);
       }),
       voiceRepositoryProvider.overrideWithValue(voice),

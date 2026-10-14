@@ -2,18 +2,24 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wecord/features/browser/in_app_browser_screen.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 
-typedef LinkLauncher = Future<void> Function(Uri uri);
+typedef LinkLauncher = Future<void> Function(BuildContext context, Uri uri);
 
-/// Opens links tapped in messages; tests override it.
+/// Opens links tapped in messages: web pages in the in-app browser where
+/// there is one, everything else with the system; tests override it.
 final linkLauncherProvider = Provider<LinkLauncher>((ref) {
-  return (uri) async {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  return (context, uri) async {
+    if (inAppBrowserSupported && isWebPageUri(uri)) {
+      await openInAppBrowser(context, uri);
+    } else {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   };
 });
 
@@ -279,7 +285,7 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
     if (uri == null) {
       return;
     }
-    ref.read(linkLauncherProvider)(uri).catchError((Object _) {});
+    ref.read(linkLauncherProvider)(context, uri).catchError((Object _) {});
   }
 }
 

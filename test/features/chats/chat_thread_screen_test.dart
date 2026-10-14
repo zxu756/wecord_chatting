@@ -1483,7 +1483,7 @@ void main() {
         ];
 
       await tester.pumpWidget(
-        _app(repository, linkLauncher: (uri) async => opened.add(uri)),
+        _app(repository, linkLauncher: (context, uri) async => opened.add(uri)),
       );
       await tester.pump();
       await tester.pump();

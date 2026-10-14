@@ -15,7 +15,7 @@ Future<List<Uri>> pumpMarkdown(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        linkLauncherProvider.overrideWithValue((uri) async {
+        linkLauncherProvider.overrideWithValue((context, uri) async {
           opened.add(uri);
         }),
       ],

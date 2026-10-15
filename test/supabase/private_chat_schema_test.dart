@@ -3192,6 +3192,70 @@ void main() {
     );
   });
 
+  test('voice moderation: permissions, server mute, moves and limits', () {
+    final sql = effectiveMigrationSql();
+    final bit = functionBody(sql, 'circle_permission_bit');
+    expect(bit, contains("when 'mute_members' then 131072::bigint"));
+    expect(bit, contains("when 'deafen_members' then 262144::bigint"));
+    expect(bit, contains("when 'move_members' then 524288::bigint"));
+    expect(
+      functionBody(sql, 'circle_all_permissions'),
+      contains('select 1048575::bigint;'),
+    );
+    expect(sql, contains('permissions >= 0 and permissions <= 1048575'));
+    expect(sql, contains('check (\n    user_limit between 0 and 99\n  )'));
+
+    final join = functionBody(sql, 'join_voice_state');
+    expect(join, contains('voice_channel_is_full_for_current_user'));
+    expect(join, contains("errcode = '53300'"));
+    expect(join, contains('member.voice_server_mute'));
+    expect(join, contains('delete from public.voice_disconnects'));
+
+    final full = functionBody(sql, 'voice_channel_is_full_for_current_user');
+    expect(full, contains("'move_members'"));
+    expect(full, contains('vs.user_id <> auth.uid()'));
+
+    final token = functionBody(sql, 'can_current_user_connect_voice');
+    expect(token, contains("'full'"));
+    expect(token, contains("'server_mute'"));
+
+    for (final (name, permission) in [
+      ('set_voice_server_mute', 'mute_members'),
+      ('set_voice_server_deaf', 'deafen_members'),
+      ('disconnect_voice_member', 'move_members'),
+      ('move_voice_member', 'move_members'),
+    ]) {
+      final body = functionBody(sql, name);
+      expect(body, contains('can_moderate_voice_member'), reason: name);
+      expect(body, contains("'$permission'"), reason: name);
+      expect(body, contains('write_circle_audit'), reason: name);
+    }
+    expect(
+      functionBody(sql, 'can_moderate_voice_member'),
+      contains('circle_member_rank(target_circle_id, target_user_id)'),
+    );
+    expect(
+      functionBody(sql, 'set_voice_channel_user_limit'),
+      contains("'channel_user_limit_update'"),
+    );
+    expect(
+      sql,
+      contains('revoke all on public.voice_disconnects from authenticated;'),
+    );
+    for (final grant in [
+      'get_own_voice_state()',
+      'set_voice_server_mute(uuid, uuid, boolean)',
+      'move_voice_member(uuid, uuid, uuid)',
+      'voice_enforcement_state(uuid, uuid)',
+      'list_voice_channel_user_limits(uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function public.$grant to authenticated;'),
+      );
+    }
+  });
+
   test('voice channels: states, heartbeats and token access', () {
     final sql = effectiveMigrationSql();
     expect(
@@ -3199,7 +3263,8 @@ void main() {
       contains("channel_kind not in ('text', 'forum', 'voice')"),
     );
     final send = functionBody(sql, 'check_channel_message_send');
-    expect(send, contains("if channel.kind = 'voice' then"));
+    // Voice channels have their own text chat since 202610160005.
+    expect(send, isNot(contains("if channel.kind = 'voice' then")));
     expect(send, contains("if channel.kind = 'forum' then"));
     expect(send, contains('new.webhook_name is not null'));
 

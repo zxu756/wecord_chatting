@@ -42,6 +42,24 @@ typedef CircleThreadViewBuilder =
       List<Widget> actions,
     );
 
+/// A voice channel's own text chat, shown from its voice view: the
+/// channel's conversation, with the channel's send permission, timeout and
+/// slowmode.
+Widget voiceChannelChat(CircleDetail detail, CircleChannel channel) {
+  return ChatThreadScreen(
+    key: ValueKey('voice-chat-${channel.conversationId}'),
+    conversationId: channel.conversationId,
+    title: channel.name,
+    conversationType: ConversationType.channel,
+    canSendMessages: detail.canInChannel(
+      channel,
+      CirclePermission.sendMessages,
+    ),
+    timedOutUntil: detail.currentUserTimedOutUntil,
+    slowmodeSeconds: detail.slowmodeFor(channel),
+  );
+}
+
 /// Wide-screen circle layout beside the shell's rail: channel sidebar, the
 /// selected channel or feed, and a toggleable member list. An open thread takes the
 /// member list's place until closed.
@@ -358,6 +376,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         ),
         actions: actions,
         moderation: VoiceModeration.forCircle(widget.detail),
+        chatBuilder: (context) => voiceChannelChat(widget.detail, channel),
       );
     }
     return ChatThreadScreen(

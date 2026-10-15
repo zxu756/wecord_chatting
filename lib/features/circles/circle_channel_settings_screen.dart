@@ -309,9 +309,10 @@ class _CircleChannelSettingsScreenState
           onSave: (name, topic) =>
               _saveOverview(channel, name: name, topic: topic),
         ),
+        // Voice channels have a text chat too, with its own slowmode.
         if (channel.isForum)
           ..._forumTagsSection(channel)
-        else if (!channel.isVoice)
+        else
           ..._slowmodeSection(channel),
         if (channel.isVoice)
           VoiceUserLimitSection(

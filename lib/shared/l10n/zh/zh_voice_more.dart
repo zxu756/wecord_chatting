@@ -36,6 +36,10 @@ const zhVoiceMore = <String, String>{
   'Talking…': '正在说话…',
   'User volume': '用户音量',
 
+  // Text chat in voice channels
+  'Show chat': '显示聊天',
+  'Hide chat': '隐藏聊天',
+
   // Voice moderation
   'Mute members': '静音成员',
   'Server mute members ranked below them in voice channels.':

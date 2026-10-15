@@ -6,6 +6,7 @@ import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/models/circle_event.dart';
+import 'package:wecord/shared/models/conversation.dart';
 
 import '../../mobile/phone_test_support.dart';
 import 'voice_fakes.dart';
@@ -444,6 +445,88 @@ void main() {
     await tester.drag(slider, const Offset(-2000, 0));
     await settle(tester);
     expect(world.voice.setLimits, {'ch-lounge': 0});
+    await world.close(tester);
+  });
+
+  testWidgets('voice channels have their own text chat beside the call', (
+    tester,
+  ) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.chats.conversations = [
+      ...world.chats.conversations,
+      ConversationSummary(
+        id: 'conv-lounge',
+        type: ConversationType.channel,
+        unreadCount: 3,
+        title: 'Lounge',
+        lastMessageAt: DateTime.utc(2026, 10, 16, 9),
+        circleId: 'circle-1',
+      ),
+    ];
+    await world.open(tester, '/circles/circle-1');
+
+    // Unread chat marks the voice channel like a text channel.
+    expect(
+      find.descendant(
+        of: channelRow('ch-lounge'),
+        matching: find.byKey(const ValueKey('channel-unread-pill')),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+    expect(
+      find.byKey(const ValueKey('voice-chat-unread-badge')),
+      findsOneWidget,
+    );
+    final panel = find.byKey(const ValueKey('voice-chat-panel-ch-lounge'));
+    expect(panel, findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('voice-chat-button')));
+    await settle(tester);
+    expect(panel, findsOneWidget);
+    // The call stays beside it.
+    expect(find.byKey(const ValueKey('voice-call-grid')), findsOneWidget);
+    expect(world.chats.markReadCalls, contains('conv-lounge'));
+
+    await tester.enterText(
+      find.descendant(of: panel, matching: find.byType(TextField)),
+      'On my way',
+    );
+    await tester.tap(
+      find.descendant(of: panel, matching: find.byIcon(Icons.send)),
+    );
+    await settle(tester);
+    expect(world.chats.sentMessages.last.conversationId, 'conv-lounge');
+    expect(world.chats.sentMessages.last.body, 'On my way');
+
+    await tester.tap(find.byKey(const ValueKey('voice-chat-button')));
+    await settle(tester);
+    expect(panel, findsNothing);
+    await world.close(tester);
+  });
+
+  testWidgets('on a phone the voice chat opens full screen', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final world = voiceWorld();
+    await world.open(tester, '/circles/circle-1/channels/conv-lounge');
+
+    expect(
+      find.byKey(const ValueKey('voice-channel-view-ch-lounge')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('voice-chat-button')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('voice-chat-button')));
+    await settle(tester);
+    expect(
+      find.byKey(const ValueKey('voice-chat-page-ch-lounge')),
+      findsOneWidget,
+    );
+    expect(find.byType(TextField), findsWidgets);
     await world.close(tester);
   });
 

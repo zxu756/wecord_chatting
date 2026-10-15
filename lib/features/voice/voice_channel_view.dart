@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
@@ -9,12 +10,21 @@ import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
+
+/// From this width the voice view shows its chat beside the call; below
+/// it the chat opens full screen.
+const voiceChatPanelBreakpoint = 760.0;
+
+/// How wide the chat beside the call is.
+const voiceChatPanelWidth = 360.0;
 
 /// A voice channel: while the current user is connected to it, everyone in
 /// the call (video when they publish it, the shared screen larger) and the
-/// call controls; otherwise who is there and a Join button.
-class VoiceChannelView extends ConsumerWidget {
+/// call controls; otherwise who is there and a Join button. The chat button
+/// opens the channel's own text chat, beside the call on wide screens.
+class VoiceChannelView extends ConsumerStatefulWidget {
   const VoiceChannelView({
     required this.circleId,
     required this.channelId,
@@ -24,6 +34,8 @@ class VoiceChannelView extends ConsumerWidget {
     this.actions = const [],
     this.onBack,
     this.moderation,
+    this.chatBuilder,
+    this.initialChatOpen = false,
     super.key,
   });
 
@@ -42,17 +54,64 @@ class VoiceChannelView extends ConsumerWidget {
   /// What the current user may do to participants from their menu.
   final VoiceModeration? moderation;
 
+  /// Builds the channel's text chat; no chat button without it.
+  final WidgetBuilder? chatBuilder;
+
+  /// Starts with the chat open beside the call (on wide screens).
+  final bool initialChatOpen;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VoiceChannelView> createState() => _VoiceChannelViewState();
+}
+
+class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
+  late var _chatOpen = widget.initialChatOpen;
+
+  void _toggleChat(bool wide) {
+    final builder = widget.chatBuilder;
+    if (builder == null) {
+      return;
+    }
+    if (wide) {
+      setState(() => _chatOpen = !_chatOpen);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => KeyedSubtree(
+          key: ValueKey('voice-chat-page-${widget.channelId}'),
+          child: builder(context),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(voiceSessionProvider);
+    final channelId = widget.channelId;
     final here = session != null && session.channelId == channelId;
-    final members = voiceMembersIn(watchVoiceStates(ref, circleId), channelId);
+    final members = voiceMembersIn(
+      watchVoiceStates(ref, widget.circleId),
+      channelId,
+    );
+    final chatBuilder = widget.chatBuilder;
+    final unread = chatBuilder == null
+        ? 0
+        : (ref.watch(conversationsProvider).valueOrNull ??
+                      const <ConversationSummary>[])
+                  .where(
+                    (conversation) => conversation.id == widget.conversationId,
+                  )
+                  .map((conversation) => conversation.unreadCount)
+                  .firstOrNull ??
+              0;
 
     final Widget body;
     if (here && session.isConnected) {
       body = VoiceCallGrid(
         session: session,
-        moderation: moderation,
+        moderation: widget.moderation,
         people: {
           for (final member in members)
             member.userId: (
@@ -79,54 +138,95 @@ class VoiceChannelView extends ConsumerWidget {
     } else {
       body = _NotConnected(
         members: members,
-        canConnect: canConnect,
+        canConnect: widget.canConnect,
         onJoin: () => joinVoiceChannel(
           context,
           ref,
-          circleId: circleId,
+          circleId: widget.circleId,
           channelId: channelId,
-          conversationId: conversationId,
-          channelName: channelName,
+          conversationId: widget.conversationId,
+          channelName: widget.channelName,
         ),
       );
     }
 
-    return Scaffold(
-      key: ValueKey('voice-channel-view-$channelId'),
-      appBar: AppBar(
-        automaticallyImplyLeading: onBack == null,
-        leading: onBack == null
+    final call = Column(
+      children: [
+        Expanded(child: body),
+        if (here && session.isConnected)
+          SizedBox(
+            width: double.infinity,
+            child: VoiceCallControls(session: session),
+          ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= voiceChatPanelBreakpoint;
+        final showPanel = wide && _chatOpen && chatBuilder != null;
+        final chatButton = chatBuilder == null
             ? null
             : IconButton(
-                tooltip: tr('Back'),
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack,
-              ),
-        title: Row(
-          children: [
-            const Icon(Icons.volume_up_outlined, size: 20),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                channelName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+                key: const ValueKey('voice-chat-button'),
+                tooltip: showPanel ? tr('Hide chat') : tr('Show chat'),
+                isSelected: showPanel,
+                onPressed: () => _toggleChat(wide),
+                icon: Badge(
+                  key: unread > 0
+                      ? const ValueKey('voice-chat-unread-badge')
+                      : null,
+                  isLabelVisible: unread > 0 && !showPanel,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: Icon(
+                    showPanel ? Icons.chat_bubble : Icons.chat_bubble_outline,
+                  ),
+                ),
+              );
+        return Scaffold(
+          key: ValueKey('voice-channel-view-$channelId'),
+          appBar: AppBar(
+            automaticallyImplyLeading: widget.onBack == null,
+            leading: widget.onBack == null
+                ? null
+                : IconButton(
+                    tooltip: tr('Back'),
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: widget.onBack,
+                  ),
+            title: Row(
+              children: [
+                const Icon(Icons.volume_up_outlined, size: 20),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    widget.channelName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [for (final action in actions) action.toIconButton()],
-      ),
-      body: Column(
-        children: [
-          Expanded(child: body),
-          if (here && session.isConnected)
-            SizedBox(
-              width: double.infinity,
-              child: VoiceCallControls(session: session),
-            ),
-        ],
-      ),
+            actions: [
+              ?chatButton,
+              for (final action in widget.actions) action.toIconButton(),
+            ],
+          ),
+          body: showPanel
+              ? Row(
+                  children: [
+                    Expanded(child: call),
+                    const VerticalDivider(width: 1),
+                    SizedBox(
+                      key: ValueKey('voice-chat-panel-$channelId'),
+                      width: voiceChatPanelWidth,
+                      child: chatBuilder(context),
+                    ),
+                  ],
+                )
+              : call,
+        );
+      },
     );
   }
 }

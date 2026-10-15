@@ -14,6 +14,7 @@ import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
+import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -1177,6 +1178,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onPickFile: _pickAndSendFile,
                   onCreatePoll: _openPollComposer,
                   onPickSticker: _pickAndSendSticker,
+                  onPickGif: _pickAndSendGif,
+                  gifAvailable: ref.watch(gifSearchAvailableProvider) != false,
                   isRecordingVoice: _isRecordingVoice,
                   isSendingVoice: _isSendingVoice,
                   onStartVoiceRecording: _startVoiceRecording,
@@ -1635,6 +1638,45 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           _isPickingImage = false;
           _isSendingImage = false;
         });
+      }
+    }
+  }
+
+  /// Sends the GIF picked from the picker as a message holding its link,
+  /// which chats show as the GIF.
+  Future<void> _pickAndSendGif() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    if (ref.read(gifSearchAvailableProvider) == false) {
+      _showSnackBar(tr("GIF search isn't set up on this server yet."));
+      return;
+    }
+    final gif = await showGifPicker(context);
+    if (gif == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSending = true;
+      _sendError = null;
+    });
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendTextMessage(
+            conversationId: widget.conversationId,
+            body: gif.url,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _sendError = tr('Could not send GIF. Try again.'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
       }
     }
   }
@@ -2963,7 +3005,8 @@ class _MessageBubble extends StatelessWidget {
   String? get _previewUrl {
     if (message.recalledAt != null ||
         message.type != MessageType.text ||
-        message.suppressEmbeds) {
+        message.suppressEmbeds ||
+        gifUrlIn(message.body) != null) {
       return null;
     }
     return firstLinkInMarkdown(message.body, mentions: message.mentions);
@@ -3597,6 +3640,8 @@ class _MessageContent extends StatelessWidget {
           actions: pollActions,
         ),
       );
+    } else if (gifUrlIn(message.body) case final gifUrl?) {
+      content.add(GifMessageImage(url: gifUrl, textColor: textColor));
     } else {
       content.add(
         MessageMarkdownText(
@@ -3896,6 +3941,8 @@ class _Composer extends StatelessWidget {
     required this.onPickFile,
     required this.onCreatePoll,
     required this.onPickSticker,
+    required this.onPickGif,
+    required this.gifAvailable,
     required this.isRecordingVoice,
     required this.isSendingVoice,
     required this.onStartVoiceRecording,
@@ -3938,6 +3985,10 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
   final Future<void> Function() onPickSticker;
+  final Future<void> Function() onPickGif;
+
+  /// False once the server said GIF search isn't set up.
+  final bool gifAvailable;
   final bool isRecordingVoice;
   final bool isSendingVoice;
   final Future<void> Function() onStartVoiceRecording;
@@ -3960,6 +4011,7 @@ class _Composer extends StatelessWidget {
     final isBusy = isSending || isSendingImage || isSendingVoice;
     // Edits are not new messages, so slowmode leaves them alone.
     final isSlowed = slowmodeRemainingSeconds > 0 && !isEditing;
+    final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
 
     return SafeArea(
       top: false,
@@ -4069,6 +4121,7 @@ class _Composer extends StatelessWidget {
                             _ComposerAttachment.file => onPickFile(),
                             _ComposerAttachment.poll => onCreatePoll(),
                             _ComposerAttachment.sticker => onPickSticker(),
+                            _ComposerAttachment.gif => onPickGif(),
                           }),
                           itemBuilder: (context) => [
                             PopupMenuItem(
@@ -4105,6 +4158,17 @@ class _Composer extends StatelessWidget {
                                 title: Text(tr('Send sticker')),
                               ),
                             ),
+                            // Wider screens have a GIF button of their own.
+                            if (compact)
+                              PopupMenuItem(
+                                value: _ComposerAttachment.gif,
+                                enabled: gifAvailable,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(Icons.gif_box_outlined),
+                                  title: Text(tr('Send GIF')),
+                                ),
+                              ),
                           ],
                         ),
                       const SizedBox(width: 8),
@@ -4169,6 +4233,23 @@ class _Composer extends StatelessWidget {
                               : const Icon(Icons.send),
                         ),
                       ] else ...[
+                        if (!compact) ...[
+                          IconButton(
+                            key: const ValueKey('composer-gif-button'),
+                            tooltip: gifAvailable
+                                ? tr('Send GIF')
+                                : tr(
+                                    "GIF search isn't set up on this server "
+                                    'yet.',
+                                  ),
+                            onPressed:
+                                !gifAvailable || isBusy || isEditing || isSlowed
+                                ? null
+                                : () => unawaited(onPickGif()),
+                            icon: const Icon(Icons.gif_box_outlined),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         IconButton(
                           tooltip: tr('Record voice message'),
                           onPressed: isBusy || isEditing || isSlowed
@@ -4204,7 +4285,7 @@ class _Composer extends StatelessWidget {
   }
 }
 
-enum _ComposerAttachment { image, file, poll, sticker }
+enum _ComposerAttachment { image, file, poll, sticker, gif }
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).

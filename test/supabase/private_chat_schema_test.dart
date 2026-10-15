@@ -3351,4 +3351,28 @@ void main() {
     expect(index, contains('{ error: "voice_not_configured" }, 503'));
     expect(index, isNot(contains('SERVICE_ROLE')));
   });
+
+  test('gif-search keeps the key and needs a signed-in user', () {
+    final config = File('supabase/config.toml').readAsStringSync();
+    expect(
+      config,
+      contains(
+        '[functions.gif-search]\n'
+        'enabled = true\n'
+        '# Signed-in users only; the GIPHY key (GIPHY_API_KEY secret) never leaves\n'
+        '# the function.\n'
+        'verify_jwt = true',
+      ),
+    );
+    final index = File(
+      'supabase/functions/gif-search/index.ts',
+    ).readAsStringSync();
+    expect(index, contains('auth.getUser('));
+    expect(index, contains('{ error: "gif_not_configured" }, 503'));
+    expect(index, isNot(contains('SERVICE_ROLE')));
+    final giphy = File(
+      'supabase/functions/gif-search/giphy.ts',
+    ).readAsStringSync();
+    expect(giphy, contains('get("GIPHY_API_KEY")'));
+  });
 }

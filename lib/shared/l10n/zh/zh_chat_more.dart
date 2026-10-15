@@ -31,4 +31,16 @@ const zhChatMore = <String, String>{
   'Mentioned your role': '提到了你的角色',
   'Mentioned @here': '使用了 @here',
   'Anyone can mention': '任何人可提及',
+
+  // GIF search
+  "GIF search isn't set up on this server yet.": '这个服务器还没有设置 GIF 搜索。',
+  'Could not load GIFs. Try again.': '无法加载 GIF，请重试。',
+  'No GIFs found.': '没有找到 GIF。',
+  'GIF': 'GIF',
+  'Search GIFs': '搜索 GIF',
+  'Trending': '热门',
+  'Results': '搜索结果',
+  'Send GIF': '发送 GIF',
+  'Could not send GIF. Try again.': '无法发送 GIF，请重试。',
+  '[GIF]': '[GIF]',
 };

@@ -1,17 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
+
+/// From this width the voice view shows its chat beside the call; below
+/// it the chat opens full screen.
+const voiceChatPanelBreakpoint = 760.0;
+
+/// How wide the chat beside the call is.
+const voiceChatPanelWidth = 360.0;
 
 /// A voice channel: while the current user is connected to it, everyone in
 /// the call (video when they publish it, the shared screen larger) and the
-/// call controls; otherwise who is there and a Join button.
-class VoiceChannelView extends ConsumerWidget {
+/// call controls; otherwise who is there and a Join button. The chat button
+/// opens the channel's own text chat, beside the call on wide screens.
+class VoiceChannelView extends ConsumerStatefulWidget {
   const VoiceChannelView({
     required this.circleId,
     required this.channelId,
@@ -20,6 +33,9 @@ class VoiceChannelView extends ConsumerWidget {
     this.canConnect = true,
     this.actions = const [],
     this.onBack,
+    this.moderation,
+    this.chatBuilder,
+    this.initialChatOpen = false,
     super.key,
   });
 
@@ -35,22 +51,75 @@ class VoiceChannelView extends ConsumerWidget {
   /// Shows a back button calling this, when set.
   final VoidCallback? onBack;
 
+  /// What the current user may do to participants from their menu.
+  final VoiceModeration? moderation;
+
+  /// Builds the channel's text chat; no chat button without it.
+  final WidgetBuilder? chatBuilder;
+
+  /// Starts with the chat open beside the call (on wide screens).
+  final bool initialChatOpen;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VoiceChannelView> createState() => _VoiceChannelViewState();
+}
+
+class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
+  late var _chatOpen = widget.initialChatOpen;
+
+  void _toggleChat(bool wide) {
+    final builder = widget.chatBuilder;
+    if (builder == null) {
+      return;
+    }
+    if (wide) {
+      setState(() => _chatOpen = !_chatOpen);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => KeyedSubtree(
+          key: ValueKey('voice-chat-page-${widget.channelId}'),
+          child: builder(context),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(voiceSessionProvider);
+    final channelId = widget.channelId;
     final here = session != null && session.channelId == channelId;
-    final members = voiceMembersIn(watchVoiceStates(ref, circleId), channelId);
+    final members = voiceMembersIn(
+      watchVoiceStates(ref, widget.circleId),
+      channelId,
+    );
+    final chatBuilder = widget.chatBuilder;
+    final unread = chatBuilder == null
+        ? 0
+        : (ref.watch(conversationsProvider).valueOrNull ??
+                      const <ConversationSummary>[])
+                  .where(
+                    (conversation) => conversation.id == widget.conversationId,
+                  )
+                  .map((conversation) => conversation.unreadCount)
+                  .firstOrNull ??
+              0;
 
     final Widget body;
     if (here && session.isConnected) {
       body = VoiceCallGrid(
         session: session,
+        moderation: widget.moderation,
         people: {
           for (final member in members)
             member.userId: (
               name: member.name,
               avatarUrl: member.avatarUrl,
               selfDeaf: member.selfDeaf,
+              serverMute: member.serverMute,
+              serverDeaf: member.serverDeaf,
             ),
         },
       );
@@ -69,54 +138,95 @@ class VoiceChannelView extends ConsumerWidget {
     } else {
       body = _NotConnected(
         members: members,
-        canConnect: canConnect,
+        canConnect: widget.canConnect,
         onJoin: () => joinVoiceChannel(
           context,
           ref,
-          circleId: circleId,
+          circleId: widget.circleId,
           channelId: channelId,
-          conversationId: conversationId,
-          channelName: channelName,
+          conversationId: widget.conversationId,
+          channelName: widget.channelName,
         ),
       );
     }
 
-    return Scaffold(
-      key: ValueKey('voice-channel-view-$channelId'),
-      appBar: AppBar(
-        automaticallyImplyLeading: onBack == null,
-        leading: onBack == null
+    final call = Column(
+      children: [
+        Expanded(child: body),
+        if (here && session.isConnected)
+          SizedBox(
+            width: double.infinity,
+            child: VoiceCallControls(session: session),
+          ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= voiceChatPanelBreakpoint;
+        final showPanel = wide && _chatOpen && chatBuilder != null;
+        final chatButton = chatBuilder == null
             ? null
             : IconButton(
-                tooltip: tr('Back'),
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack,
-              ),
-        title: Row(
-          children: [
-            const Icon(Icons.volume_up_outlined, size: 20),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                channelName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+                key: const ValueKey('voice-chat-button'),
+                tooltip: showPanel ? tr('Hide chat') : tr('Show chat'),
+                isSelected: showPanel,
+                onPressed: () => _toggleChat(wide),
+                icon: Badge(
+                  key: unread > 0
+                      ? const ValueKey('voice-chat-unread-badge')
+                      : null,
+                  isLabelVisible: unread > 0 && !showPanel,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: Icon(
+                    showPanel ? Icons.chat_bubble : Icons.chat_bubble_outline,
+                  ),
+                ),
+              );
+        return Scaffold(
+          key: ValueKey('voice-channel-view-$channelId'),
+          appBar: AppBar(
+            automaticallyImplyLeading: widget.onBack == null,
+            leading: widget.onBack == null
+                ? null
+                : IconButton(
+                    tooltip: tr('Back'),
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: widget.onBack,
+                  ),
+            title: Row(
+              children: [
+                const Icon(Icons.volume_up_outlined, size: 20),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    widget.channelName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [for (final action in actions) action.toIconButton()],
-      ),
-      body: Column(
-        children: [
-          Expanded(child: body),
-          if (here && session.isConnected)
-            SizedBox(
-              width: double.infinity,
-              child: VoiceCallControls(session: session),
-            ),
-        ],
-      ),
+            actions: [
+              ?chatButton,
+              for (final action in widget.actions) action.toIconButton(),
+            ],
+          ),
+          body: showPanel
+              ? Row(
+                  children: [
+                    Expanded(child: call),
+                    const VerticalDivider(width: 1),
+                    SizedBox(
+                      key: ValueKey('voice-chat-panel-$channelId'),
+                      width: voiceChatPanelWidth,
+                      child: chatBuilder(context),
+                    ),
+                  ],
+                )
+              : call,
+        );
+      },
     );
   }
 }
@@ -214,18 +324,34 @@ class _NotConnected extends StatelessWidget {
 }
 
 /// What the server knows about someone in a call: the name and avatar to
-/// show, and whether they deafened themselves.
-typedef VoiceCallPerson = ({String name, String? avatarUrl, bool selfDeaf});
+/// show, whether they deafened themselves, and whether a moderator muted or
+/// deafened them.
+typedef VoiceCallPerson = ({
+  String name,
+  String? avatarUrl,
+  bool selfDeaf,
+  bool serverMute,
+  bool serverDeaf,
+});
 
 /// Everyone in the call: shared screens first and wide, then a tile per
 /// person (their camera, or their avatar), outlined while they speak.
+/// Right-click or long-press opens a person's menu.
 class VoiceCallGrid extends StatelessWidget {
-  const VoiceCallGrid({required this.session, required this.people, super.key});
+  const VoiceCallGrid({
+    required this.session,
+    required this.people,
+    this.moderation,
+    super.key,
+  });
 
   final VoiceSession session;
 
   /// The server's view of each participant, by user id.
   final Map<String, VoiceCallPerson> people;
+
+  /// What the current user may do to people from their menu.
+  final VoiceModeration? moderation;
 
   @override
   Widget build(BuildContext context) {
@@ -278,15 +404,36 @@ class VoiceCallGrid extends StatelessWidget {
                     SizedBox(
                       width: tileWidth,
                       height: tileWidth * 10 / 16,
-                      child: _ParticipantTile(
-                        participant: participant,
-                        name:
-                            people[participant.userId]?.name ??
-                            participant.name,
-                        avatarUrl: people[participant.userId]?.avatarUrl,
-                        deafened:
-                            (participant.isLocal && session.selfDeaf) ||
-                            (people[participant.userId]?.selfDeaf ?? false),
+                      child: VoiceParticipantMenuRegion(
+                        person: VoiceMenuPerson(
+                          userId: participant.userId,
+                          name:
+                              people[participant.userId]?.name ??
+                              participant.name,
+                          isLocal: participant.isLocal,
+                          channelId: session.channelId,
+                          serverMute:
+                              people[participant.userId]?.serverMute ?? false,
+                          serverDeaf:
+                              people[participant.userId]?.serverDeaf ?? false,
+                        ),
+                        moderation: moderation,
+                        child: _ParticipantTile(
+                          participant: participant,
+                          name:
+                              people[participant.userId]?.name ??
+                              participant.name,
+                          avatarUrl: people[participant.userId]?.avatarUrl,
+                          deafened:
+                              (participant.isLocal && session.selfDeaf) ||
+                              (people[participant.userId]?.selfDeaf ?? false),
+                          serverDeafened:
+                              (participant.isLocal && session.serverDeaf) ||
+                              (people[participant.userId]?.serverDeaf ?? false),
+                          serverMuted:
+                              (participant.isLocal && session.serverMute) ||
+                              (people[participant.userId]?.serverMute ?? false),
+                        ),
                       ),
                     ),
                 ],
@@ -305,12 +452,16 @@ class _ParticipantTile extends StatelessWidget {
     required this.name,
     required this.avatarUrl,
     required this.deafened,
+    this.serverMuted = false,
+    this.serverDeafened = false,
   });
 
   final VoiceCallParticipant participant;
   final String name;
   final String? avatarUrl;
   final bool deafened;
+  final bool serverMuted;
+  final bool serverDeafened;
 
   @override
   Widget build(BuildContext context) {
@@ -319,11 +470,17 @@ class _ParticipantTile extends StatelessWidget {
       key: ValueKey('voice-tile-${participant.userId}'),
       label: participant.isLocal ? tr('{name} (you)', {'name': name}) : name,
       speaking: participant.isSpeaking,
-      trailing: deafened
+      trailingKey: serverDeafened || serverMuted
+          ? const ValueKey('voice-tile-server-silenced')
+          : null,
+      trailingColor: serverDeafened || serverMuted
+          ? Theme.of(context).colorScheme.errorContainer
+          : null,
+      trailing: deafened || serverDeafened
           ? Icons.headset_off
-          : participant.microphoneEnabled
-          ? null
-          : Icons.mic_off,
+          : serverMuted || !participant.microphoneEnabled
+          ? Icons.mic_off
+          : null,
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
@@ -350,6 +507,8 @@ class _Tile extends StatelessWidget {
     required this.speaking,
     required this.child,
     this.trailing,
+    this.trailingColor,
+    this.trailingKey,
     super.key,
   });
 
@@ -357,6 +516,8 @@ class _Tile extends StatelessWidget {
   final bool speaking;
   final Widget child;
   final IconData? trailing;
+  final Color? trailingColor;
+  final Key? trailingKey;
 
   @override
   Widget build(BuildContext context) {
@@ -397,7 +558,12 @@ class _Tile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (trailing != null) ...[
-                          Icon(trailing, size: 12, color: Colors.white),
+                          Icon(
+                            trailing,
+                            key: trailingKey,
+                            size: 12,
+                            color: trailingColor ?? Colors.white,
+                          ),
                           const SizedBox(width: 3),
                         ],
                         Flexible(
@@ -425,7 +591,8 @@ class _Tile extends StatelessWidget {
 }
 
 /// Microphone, deafen, camera, screen share (where the platform can) and
-/// disconnect.
+/// disconnect; with push to talk on a phone (or without a key set), a
+/// button to hold while talking.
 class VoiceCallControls extends ConsumerStatefulWidget {
   const VoiceCallControls({required this.session, super.key});
 
@@ -495,6 +662,14 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
       );
     }
 
+    final hasKey = ref.watch(
+      voiceSettingsProvider.select(
+        (settings) => settings.pushToTalkKeyId != null,
+      ),
+    );
+    final holdToTalk =
+        session.pushToTalk && (usesTouchInput(context) || !hasKey);
+
     return Material(
       key: const ValueKey('voice-call-controls'),
       color: colorScheme.surfaceContainerLow,
@@ -504,28 +679,39 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Wrap(
             alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
             runSpacing: 8,
             children: [
+              if (holdToTalk)
+                VoiceHoldToTalkButton(session: session, enabled: !_busy),
               toggle(
                 key: const ValueKey('voice-control-mic'),
-                tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
-                icon: session.selfMute ? Icons.mic_off : Icons.mic_none,
-                on: session.selfMute,
-                onPressed: () => _run(
-                  controller.toggleMute,
-                  tr('Could not change the microphone.'),
-                ),
+                tooltip: voiceMuteTooltip(session),
+                icon: session.selfMute || session.serverMute
+                    ? Icons.mic_off
+                    : Icons.mic_none,
+                on: session.selfMute || session.serverMute,
+                onPressed: session.serverMute
+                    ? null
+                    : () => _run(
+                        controller.toggleMute,
+                        tr('Could not change the microphone.'),
+                      ),
               ),
               toggle(
                 key: const ValueKey('voice-control-deafen'),
-                tooltip: session.selfDeaf ? tr('Undeafen') : tr('Deafen'),
-                icon: session.selfDeaf
+                tooltip: voiceDeafenTooltip(session),
+                icon: session.selfDeaf || session.serverDeaf
                     ? Icons.headset_off
                     : Icons.headset_outlined,
-                on: session.selfDeaf,
-                onPressed: () =>
-                    _run(controller.toggleDeafen, tr('Could not deafen.')),
+                on: session.selfDeaf || session.serverDeaf,
+                onPressed: session.serverDeaf
+                    ? null
+                    : () => _run(
+                        controller.toggleDeafen,
+                        tr('Could not deafen.'),
+                      ),
               ),
               toggle(
                 key: const ValueKey('voice-control-camera'),
@@ -566,6 +752,75 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 ),
                 onPressed: controller.leave,
                 icon: const Icon(Icons.call_end),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sends while held, for push to talk on touch screens.
+class VoiceHoldToTalkButton extends ConsumerWidget {
+  const VoiceHoldToTalkButton({
+    required this.session,
+    this.enabled = true,
+    super.key,
+  });
+
+  final VoiceSession session;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final controller = ref.read(voiceSessionProvider.notifier);
+    final talking = session.transmitting;
+    final usable =
+        enabled &&
+        !session.selfMute &&
+        !session.selfDeaf &&
+        !session.serverMute &&
+        !session.serverDeaf;
+    return Semantics(
+      button: true,
+      label: tr('Hold to talk'),
+      child: Listener(
+        key: const ValueKey('voice-hold-to-talk'),
+        onPointerDown: usable ? (_) => controller.setTransmitting(true) : null,
+        onPointerUp: (_) => controller.setTransmitting(false),
+        onPointerCancel: (_) => controller.setTransmitting(false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: talking
+                ? voiceConnectedColor
+                : colorScheme.secondaryContainer.withValues(
+                    alpha: usable ? 1 : 0.5,
+                  ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                talking ? Icons.mic : Icons.mic_none,
+                color: talking
+                    ? Colors.white
+                    : colorScheme.onSecondaryContainer,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                talking ? tr('Talking…') : tr('Hold to talk'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: talking
+                      ? Colors.white
+                      : colorScheme.onSecondaryContainer,
+                ),
               ),
             ],
           ),

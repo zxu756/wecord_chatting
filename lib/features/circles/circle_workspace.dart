@@ -21,6 +21,7 @@ import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -43,6 +44,24 @@ typedef CircleThreadViewBuilder =
       ThreadTarget thread,
       List<Widget> actions,
     );
+
+/// A voice channel's own text chat, shown from its voice view: the
+/// channel's conversation, with the channel's send permission, timeout and
+/// slowmode.
+Widget voiceChannelChat(CircleDetail detail, CircleChannel channel) {
+  return ChatThreadScreen(
+    key: ValueKey('voice-chat-${channel.conversationId}'),
+    conversationId: channel.conversationId,
+    title: channel.name,
+    conversationType: ConversationType.channel,
+    canSendMessages: detail.canInChannel(
+      channel,
+      CirclePermission.sendMessages,
+    ),
+    timedOutUntil: detail.currentUserTimedOutUntil,
+    slowmodeSeconds: detail.slowmodeFor(channel),
+  );
+}
 
 /// Wide-screen circle layout beside the shell's rail: channel sidebar, the
 /// selected channel or feed, and a toggleable member list. An open thread takes the
@@ -359,6 +378,8 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           CirclePermission.connectVoice,
         ),
         actions: actions,
+        moderation: VoiceModeration.forCircle(widget.detail),
+        chatBuilder: (context) => voiceChannelChat(widget.detail, channel),
       );
     }
     return ChatThreadScreen(

@@ -52,10 +52,25 @@ export function callRoomName(callId: string): string {
 
 export interface VideoGrant {
   room: string;
-  roomJoin: boolean;
-  canPublish: boolean;
-  canSubscribe: boolean;
-  canPublishData: boolean;
+  roomJoin?: boolean;
+  roomAdmin?: boolean;
+  canPublish?: boolean;
+  canSubscribe?: boolean;
+  canPublishData?: boolean;
+  /// What may be published; every source when absent.
+  canPublishSources?: string[];
+}
+
+/// What a server-muted or server-deafened member may still publish: their
+/// camera and screen, not their microphone. Null when unrestricted.
+export function publishSourcesFor(flags: {
+  serverMute: boolean;
+  serverDeaf: boolean;
+}): string[] | null {
+  if (!flags.serverMute && !flags.serverDeaf) {
+    return null;
+  }
+  return ["camera", "screen_share", "screen_share_audio"];
 }
 
 export interface LiveKitClaims {
@@ -73,25 +88,120 @@ export const TOKEN_TTL_SECONDS = 60 * 60;
 
 /// Claims letting [identity] (the user id) join [room] (the channel id) as
 /// [name], valid from [nowSeconds] for an hour.
+/// [publishSources] limits what they may publish (see [publishSourcesFor]).
 export function buildClaims(options: {
   apiKey: string;
   identity: string;
   name: string;
   room: string;
   nowSeconds: number;
+  publishSources?: string[] | null;
 }): LiveKitClaims {
+  const video: VideoGrant = {
+    room: options.room,
+    roomJoin: true,
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: true,
+  };
+  if (options.publishSources) {
+    video.canPublishSources = options.publishSources;
+  }
   return {
     iss: options.apiKey,
     sub: options.identity,
     name: options.name,
     nbf: options.nowSeconds,
     exp: options.nowSeconds + TOKEN_TTL_SECONDS,
-    video: {
-      room: options.room,
-      roomJoin: true,
-      canPublish: true,
-      canSubscribe: true,
-      canPublishData: true,
+    video,
+  };
+}
+
+/// How long a server-side admin token lives: one request.
+export const ADMIN_TOKEN_TTL_SECONDS = 60;
+
+/// Claims for this function itself to manage [room] through LiveKit's
+/// RoomService API.
+export function buildAdminClaims(options: {
+  apiKey: string;
+  room: string;
+  nowSeconds: number;
+}): LiveKitClaims {
+  return {
+    iss: options.apiKey,
+    sub: "wecord-moderation",
+    name: "WeCord moderation",
+    nbf: options.nowSeconds,
+    exp: options.nowSeconds + ADMIN_TOKEN_TTL_SECONDS,
+    video: { room: options.room, roomAdmin: true },
+  };
+}
+
+/// LiveKit's HTTP API base for its websocket [url] (wss becomes https).
+export function liveKitHttpUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/^wss:/i, "https:")
+    .replace(/^ws:/i, "http:")
+    .replace(/\/+$/, "");
+}
+
+/// A moderator's request to make a voice channel's room match the
+/// database for one member: {enforce: {channel_id, user_id}}.
+export function parseEnforceRequest(
+  body: unknown,
+): { channelId: string; userId: string } | null {
+  if (typeof body !== "object" || body === null) {
+    return null;
+  }
+  const enforce = (body as Record<string, unknown>).enforce;
+  const channelId = parseChannelId(enforce);
+  const userId = parseUuidField(enforce, "user_id");
+  if (!channelId || !userId) {
+    return null;
+  }
+  return { channelId, userId };
+}
+
+export interface EnforcementState {
+  channel_id: string;
+  user_id: string;
+  in_channel: boolean;
+  server_mute: boolean;
+  server_deaf: boolean;
+}
+
+/// The RoomService call that makes the room match [state]: remove a
+/// member who is no longer in the channel, otherwise set what they may
+/// publish. The body is Twirp JSON.
+export function enforcementRequest(state: EnforcementState): {
+  method: "RemoveParticipant" | "UpdateParticipant";
+  body: Record<string, unknown>;
+} {
+  if (!state.in_channel) {
+    return {
+      method: "RemoveParticipant",
+      body: { room: state.channel_id, identity: state.user_id },
+    };
+  }
+  const sources = publishSourcesFor({
+    serverMute: state.server_mute,
+    serverDeaf: state.server_deaf,
+  });
+  return {
+    method: "UpdateParticipant",
+    body: {
+      room: state.channel_id,
+      identity: state.user_id,
+      permission: {
+        can_subscribe: true,
+        can_publish: true,
+        can_publish_data: true,
+        // Empty allows every source.
+        can_publish_sources: (sources ?? []).map((source) =>
+          source.toUpperCase()
+        ),
+      },
     },
   };
 }

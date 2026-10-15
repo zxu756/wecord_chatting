@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_volume.dart';
 
 /// Connects to LiveKit rooms.
 class LiveKitVoiceCallConnector implements VoiceCallConnector {
@@ -15,11 +16,20 @@ class LiveKitVoiceCallConnector implements VoiceCallConnector {
     required String url,
     required String token,
     required bool microphoneEnabled,
+    VoiceAudioProcessing audio = const VoiceAudioProcessing(),
+    Map<String, double> userVolumes = const {},
   }) async {
     final room = lk.Room(
-      roomOptions: const lk.RoomOptions(adaptiveStream: true, dynacast: true),
+      roomOptions: lk.RoomOptions(
+        adaptiveStream: true,
+        dynacast: true,
+        defaultAudioCaptureOptions: _captureOptions(
+          const lk.AudioCaptureOptions(),
+          audio,
+        ),
+      ),
     );
-    final call = LiveKitVoiceCall._(room);
+    final call = LiveKitVoiceCall._(room).._volumes = Map.of(userVolumes);
     try {
       await room.connect(url, token);
     } catch (_) {
@@ -35,6 +45,19 @@ class LiveKitVoiceCallConnector implements VoiceCallConnector {
     }
     return call;
   }
+}
+
+lk.AudioCaptureOptions _captureOptions(
+  lk.AudioCaptureOptions options,
+  VoiceAudioProcessing audio,
+) {
+  return options.copyWith(
+    noiseSuppression: audio.noiseSuppression,
+    voiceIsolation: audio.noiseSuppression,
+    echoCancellation: audio.echoCancellation,
+    autoGainControl: audio.autoGainControl,
+    stopAudioCaptureOnMute: !audio.keepMicrophoneOpen,
+  );
 }
 
 /// Asks which screen to share. Browsers show their own picker, so there
@@ -64,6 +87,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   var _closing = false;
   var _closed = false;
   var _remoteAudioEnabled = true;
+  var _volumes = <String, double>{};
 
   void _onEvent(lk.RoomEvent event) {
     switch (event) {
@@ -71,10 +95,16 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
         if (!_closing && !_disconnected.isCompleted) {
           _disconnected.complete();
         }
-      case lk.TrackSubscribedEvent(:final track)
-          when track is lk.RemoteAudioTrack && !_remoteAudioEnabled:
-        // Stay deafened for people who join later.
-        unawaited(track.disable());
+      case lk.TrackSubscribedEvent(:final track, :final participant)
+          when track is lk.RemoteAudioTrack:
+        if (!_remoteAudioEnabled) {
+          // Stay deafened for people who join later.
+          unawaited(track.disable());
+        }
+        final volume = _volumes[participant.identity];
+        if (volume != null) {
+          unawaited(_applyVolume(track, volume));
+        }
       default:
         break;
     }
@@ -188,6 +218,47 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   }
 
   @override
+  Future<void> setAudioProcessing(VoiceAudioProcessing audio) async {
+    final local = _room.localParticipant;
+    if (local == null) {
+      return;
+    }
+    for (final publication in local.audioTrackPublications) {
+      final track = publication.track;
+      if (track == null) {
+        continue;
+      }
+      track.currentOptions = _captureOptions(track.currentOptions, audio);
+      // A muted microphone picks the options up when it unmutes; restarting
+      // it now could start sending.
+      if (!publication.muted) {
+        await track.restartTrack();
+      }
+    }
+  }
+
+  @override
+  Future<void> setUserVolumes(Map<String, double> volumes) async {
+    _volumes = Map.of(volumes);
+    for (final remote in _room.remoteParticipants.values) {
+      for (final publication in remote.audioTrackPublications) {
+        final track = publication.track;
+        if (track != null) {
+          await _applyVolume(track, _volumes[remote.identity] ?? 1);
+        }
+      }
+    }
+  }
+
+  Future<void> _applyVolume(lk.RemoteAudioTrack track, double volume) async {
+    try {
+      await setRemoteAudioVolume(track, volume);
+    } catch (_) {
+      // Not supported here; the participant plays at the normal volume.
+    }
+  }
+
+  @override
   Future<void> disconnect() async {
     _closing = true;
     await _close();
@@ -202,6 +273,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       await _room.disconnect();
     } finally {
       _closed = true;
+      disposeRemoteAudioVolumes();
       _room.removeListener(_changed);
       await _listener.dispose();
       await _room.dispose();

@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
+import 'package:wecord/shared/models/voice.dart';
 
 import 'voice_fakes.dart';
 
@@ -12,13 +14,14 @@ void main() {
   late VoiceSessionController controller;
   late List<String> changedCircles;
 
-  void setUpController() {
+  void setUpController({VoiceSettings settings = const VoiceSettings()}) {
     repository = FakeVoiceRepository();
     connector = FakeVoiceCallConnector();
     changedCircles = [];
     controller = VoiceSessionController(
       repository: repository,
       connector: connector,
+      settings: settings,
       onMembersChanged: (session) =>
           changedCircles.add(session.circleId ?? 'call'),
     );
@@ -172,6 +175,178 @@ void main() {
     ));
     await controller.setScreenShare(null);
     expect(call.screen, isFalse);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('push to talk sends only while held', (tester) async {
+    setUpController(
+      settings: const VoiceSettings(inputMode: VoiceInputMode.pushToTalk),
+    );
+    await joinLounge();
+    final call = connector.last;
+
+    expect(controller.state!.pushToTalk, isTrue);
+    // Not muted, just quiet until the key is held.
+    expect(controller.state!.selfMute, isFalse);
+    expect(call.microphone, isFalse);
+    expect(call.audio.keepMicrophoneOpen, isTrue);
+
+    await controller.setTransmitting(true);
+    expect(controller.state!.transmitting, isTrue);
+    expect(call.microphone, isTrue);
+    await controller.setTransmitting(false);
+    expect(call.microphone, isFalse);
+
+    // Muted, holding the key sends nothing.
+    await controller.toggleMute();
+    await controller.setTransmitting(true);
+    expect(call.microphone, isFalse);
+    await controller.setTransmitting(false);
+    // Unmuting doesn't open the microphone either.
+    await controller.toggleMute();
+    expect(call.microphone, isFalse);
+
+    // Back to voice activity, the microphone opens.
+    await controller.updateSettings(const VoiceSettings());
+    expect(controller.state!.pushToTalk, isFalse);
+    expect(call.microphone, isTrue);
+    await controller.setTransmitting(false);
+    expect(call.microphone, isTrue);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('processing and volumes reach the call', (tester) async {
+    setUpController(
+      settings: const VoiceSettings(
+        noiseSuppression: false,
+        userVolumes: {'user-2': 1.5},
+      ),
+    );
+    await joinLounge();
+    final call = connector.last;
+    expect(call.audio.noiseSuppression, isFalse);
+    expect(call.audio.echoCancellation, isTrue);
+    expect(call.userVolumes, {'user-2': 1.5});
+
+    await controller.updateSettings(
+      const VoiceSettings(
+        autoGainControl: false,
+        userVolumes: {'user-2': 0.5, 'user-3': 2},
+      ),
+    );
+    expect(call.audio.noiseSuppression, isTrue);
+    expect(call.audio.autoGainControl, isFalse);
+    expect(call.userVolumes, {'user-2': 0.5, 'user-3': 2});
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('a server mute silences the microphone until lifted', (
+    tester,
+  ) async {
+    setUpController();
+    await joinLounge();
+    final call = connector.last;
+    expect(call.microphone, isTrue);
+
+    repository.ownState = const OwnVoiceState(
+      channelId: 'ch-lounge',
+      circleId: 'circle-1',
+      serverMute: true,
+    );
+    repository.emitChange();
+    await tester.pump();
+    expect(controller.state!.serverMute, isTrue);
+    expect(controller.state!.selfMute, isFalse);
+    expect(call.microphone, isFalse);
+
+    // Deafened by the server, nothing is heard either.
+    repository.ownState = const OwnVoiceState(
+      channelId: 'ch-lounge',
+      circleId: 'circle-1',
+      serverMute: true,
+      serverDeaf: true,
+    );
+    repository.emitChange();
+    await tester.pump();
+    expect(call.remoteAudio, isFalse);
+
+    repository.ownState = const OwnVoiceState(
+      channelId: 'ch-lounge',
+      circleId: 'circle-1',
+    );
+    repository.emitChange();
+    await tester.pump();
+    expect(controller.state!.serverMute, isFalse);
+    expect(call.microphone, isTrue);
+    expect(call.remoteAudio, isTrue);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('joining server muted keeps the microphone closed', (
+    tester,
+  ) async {
+    setUpController();
+    repository.tokenServerMute = true;
+    await joinLounge();
+    expect(controller.state!.serverMute, isTrue);
+    expect(controller.state!.selfMute, isFalse);
+    expect(connector.last.microphone, isFalse);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('a move reconnects to the new channel, keeping mute', (
+    tester,
+  ) async {
+    setUpController();
+    await joinLounge();
+    final first = connector.last;
+    await controller.toggleMute();
+
+    repository.ownState = const OwnVoiceState(
+      channelId: 'ch-stage',
+      circleId: 'circle-1',
+      conversationId: 'conv-stage',
+      channelName: 'Stage',
+    );
+    repository.emitChange();
+    await tester.pump();
+    await tester.pump();
+
+    expect(first.disconnects, 1);
+    expect(repository.leaves, 0);
+    expect(repository.tokenRequests, ['ch-lounge', 'ch-stage']);
+    final session = controller.state!;
+    expect(session.channelId, 'ch-stage');
+    expect(session.conversationId, 'conv-stage');
+    expect(session.channelName, 'Stage');
+    expect(session.isConnected, isTrue);
+    expect(session.selfMute, isTrue);
+    expect(connector.last.microphone, isFalse);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('a moderator disconnect ends the session', (tester) async {
+    setUpController();
+    await joinLounge();
+
+    repository.ownState = const OwnVoiceState(disconnected: true);
+    repository.emitChange();
+    await tester.pump();
+    expect(controller.state, isNull);
+    expect(connector.last.disconnects, 1);
+
+    // The heartbeat doesn't rejoin after a disconnect either.
+    await joinLounge();
+    repository.updateResult = false;
+    await tester.pump(voiceHeartbeatInterval);
+    expect(controller.state, isNull);
+    expect(repository.joined, ['ch-lounge', 'ch-lounge']);
     // Stops the heartbeat before the test ends.
     await controller.leave();
   });

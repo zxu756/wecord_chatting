@@ -3,12 +3,27 @@
 // ({call_id}). The room is the channel id, or "call-<call id>"; the
 // participant identity is the user id. Returns 503 voice_not_configured until LIVEKIT_URL, LIVEKIT_API_KEY
 // and LIVEKIT_API_SECRET are set as function secrets.
+//
+// Server-muted or server-deafened members get a token that can't publish
+// their microphone, and a full voice channel answers 409 channel_full.
+//
+// {enforce: {channel_id, user_id}}, from a member who can mute, deafen or
+// move members, makes the channel's LiveKit room match the database for
+// that member: removes them when they are no longer in the channel (moved
+// or disconnected), otherwise updates what they may publish.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
+  buildAdminClaims,
   buildClaims,
   callRoomName,
+  enforcementRequest,
+  type EnforcementState,
+  type LiveKitConfig,
+  liveKitHttpUrl,
   parseCallId,
   parseChannelId,
+  parseEnforceRequest,
+  publishSourcesFor,
   readLiveKitConfig,
   signJwt,
 } from "./token.ts";
@@ -32,6 +47,41 @@ interface VoiceAccess {
   channel_name: string;
   circle_id: string;
   display_name: string | null;
+  full?: boolean;
+  server_mute?: boolean;
+  server_deaf?: boolean;
+}
+
+/// Calls LiveKit's RoomService; a participant who already left is fine.
+async function enforce(
+  config: LiveKitConfig,
+  state: EnforcementState,
+): Promise<Response> {
+  const request = enforcementRequest(state);
+  const token = await signJwt(
+    buildAdminClaims({
+      apiKey: config.apiKey,
+      room: state.channel_id,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    }),
+    config.apiSecret,
+  );
+  const response = await fetch(
+    `${liveKitHttpUrl(config.url)}/twirp/livekit.RoomService/${request.method}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request.body),
+    },
+  );
+  await response.body?.cancel();
+  if (!response.ok && response.status !== 404) {
+    return json({ error: "enforce_failed", status: response.status }, 502);
+  }
+  return json({ ok: true, action: request.method });
 }
 
 interface CallAccess {
@@ -77,6 +127,29 @@ Deno.serve(async (request) => {
   } catch {
     return json({ error: "invalid_body" }, 400);
   }
+
+  const enforceRequest = parseEnforceRequest(body);
+  if (enforceRequest) {
+    const { data: state, error: stateError } = await userClient.rpc(
+      "voice_enforcement_state",
+      {
+        target_channel_id: enforceRequest.channelId,
+        target_user_id: enforceRequest.userId,
+      },
+    );
+    if (stateError) {
+      return json({ error: "lookup_failed" }, 500);
+    }
+    if (!state) {
+      return json({ error: "forbidden" }, 403);
+    }
+    const enforceConfig = readLiveKitConfig((name) => Deno.env.get(name));
+    if (!enforceConfig) {
+      return json({ error: "voice_not_configured" }, 503);
+    }
+    return await enforce(enforceConfig, state as EnforcementState);
+  }
+
   const channelId = parseChannelId(body);
   const callId = channelId ? null : parseCallId(body);
   if (!channelId && !callId) {
@@ -103,17 +176,26 @@ Deno.serve(async (request) => {
   }
 
   const voice = access as VoiceAccess | CallAccess;
+  const channel = "channel_id" in voice ? voice : null;
+  if (channel?.full) {
+    return json({ error: "channel_full" }, 409);
+  }
+  const serverMute = channel?.server_mute === true;
+  const serverDeaf = channel?.server_deaf === true;
   const claims = buildClaims({
     apiKey: config.apiKey,
     identity: user.id,
     name: voice.display_name?.trim() || user.id,
-    room: "channel_id" in voice
-      ? voice.channel_id
-      : callRoomName(voice.call_id),
+    room: channel ? channel.channel_id : callRoomName(
+      (voice as CallAccess).call_id,
+    ),
     nowSeconds: Math.floor(Date.now() / 1000),
+    publishSources: publishSourcesFor({ serverMute, serverDeaf }),
   });
   return json({
     url: config.url,
     token: await signJwt(claims, config.apiSecret),
+    server_mute: serverMute,
+    server_deaf: serverDeaf,
   });
 });

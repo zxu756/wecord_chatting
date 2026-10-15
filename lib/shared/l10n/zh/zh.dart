@@ -12,6 +12,7 @@ import 'package:wecord/shared/l10n/zh/zh_circles_core.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
+import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -25,6 +26,7 @@ const zhAreas = <Map<String, String>>[
   zhCirclesMore,
   zhPush,
   zhProfileMore,
+  zhVoiceMore,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

@@ -23,6 +23,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
@@ -1628,6 +1629,7 @@ class PhoneWorld {
   });
   final openedLinks = <Uri>[];
   final voice = FakeVoiceRepository();
+  final voiceSettings = InMemoryVoiceSettingsStore();
   final inbox = FakeInboxRepository()
     ..items = [
       InboxItem(
@@ -1715,6 +1717,7 @@ class PhoneWorld {
         (context) async => screenShareSource,
       ),
       voiceScreenShareSupportedProvider.overrideWithValue(true),
+      voiceSettingsStoreProvider.overrideWithValue(voiceSettings),
       appLanguageStoreProvider.overrideWithValue(
         InMemoryAppLanguageStore(
           _chineseScreens ? AppLanguage.chinese : AppLanguage.english,

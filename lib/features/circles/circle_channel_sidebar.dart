@@ -15,6 +15,8 @@ import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
+import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -429,9 +431,15 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         ? const <String, List<ConversationSummary>>{}
         : activeThreadsByParent(conversations, now: DateTime.now());
     // Only circles with voice channels ask who is in them.
-    final voiceStates = detail.channels.any((channel) => channel.isVoice)
+    final hasVoice = detail.channels.any((channel) => channel.isVoice);
+    final voiceStates = hasVoice
         ? watchVoiceStates(ref, _circleId)
         : const <VoiceMemberState>[];
+    final userLimits = hasVoice
+        ? ref.watch(voiceChannelUserLimitsProvider(_circleId)).valueOrNull ??
+              const <String, int>{}
+        : const <String, int>{};
+    final voiceModeration = hasVoice ? VoiceModeration.forCircle(detail) : null;
     final wide = isWideLayout(MediaQuery.sizeOf(context).width);
     final showVoicePanel = ref.watch(voiceSessionProvider) != null && wide;
     final layout = _layout;
@@ -536,6 +544,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               },
               label: channel.name,
               locked: channel.isPrivate,
+              trailing: switch (userLimits[channel.id]) {
+                final limit? when channel.isVoice => VoiceUserLimitBadge(
+                  count: voiceMembers.length,
+                  limit: limit,
+                ),
+                _ => null,
+              },
               selected:
                   channel.id == widget.selectedChannelId &&
                   widget.selectedThreadConversationId == null,
@@ -560,6 +575,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                           VoiceChannelMembers(
                             channelId: channel.id,
                             members: voiceMembers,
+                            moderation: voiceModeration,
                           ),
                         ],
                       )

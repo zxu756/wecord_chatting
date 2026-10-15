@@ -307,6 +307,22 @@ class CircleDetail {
         !_isAdministrator(member);
   }
 
+  /// Whether the current user may use a voice moderation [permission]
+  /// (mute, deafen or move members) on [userId]: themselves, or members
+  /// ranked below them (never the owner).
+  bool canModerateVoice(String userId, CirclePermission permission) {
+    if (!can(permission)) {
+      return false;
+    }
+    for (final member in members) {
+      if (member.profile.id == userId) {
+        return member.isCurrentUser ||
+            (member.role != 'owner' && rankOf(member) < currentUserRank);
+      }
+    }
+    return false;
+  }
+
   bool _isAdministrator(CircleMember member) {
     final administrator = CirclePermission.administrator.bit;
     return roles.any(

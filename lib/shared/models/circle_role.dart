@@ -118,6 +118,28 @@ enum CirclePermission {
     'Connect',
     'Join voice channels.',
   ),
+  muteMembers(
+    1 << 17,
+    'mute_members',
+    CirclePermissionGroup.voice,
+    'Mute members',
+    'Server mute members ranked below them in voice channels.',
+  ),
+  deafenMembers(
+    1 << 18,
+    'deafen_members',
+    CirclePermissionGroup.voice,
+    'Deafen members',
+    'Server deafen members ranked below them in voice channels.',
+  ),
+  moveMembers(
+    1 << 19,
+    'move_members',
+    CirclePermissionGroup.voice,
+    'Move members',
+    'Move members ranked below them between voice channels, disconnect '
+        'them, and join full channels.',
+  ),
   administrator(
     1 << 14,
     'administrator',
@@ -135,7 +157,7 @@ enum CirclePermission {
   );
 
   /// Every permission bit.
-  static const all = (1 << 17) - 1;
+  static const all = (1 << 20) - 1;
 
   /// What `@everyone` gets in a new circle.
   static final defaultRolePermissions = maskOf(const [

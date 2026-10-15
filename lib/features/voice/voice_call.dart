@@ -56,6 +56,13 @@ abstract interface class VoiceCall implements Listenable {
   /// Stops (or resumes) hearing everyone else.
   Future<void> setRemoteAudioEnabled(bool enabled);
 
+  /// Restarts the microphone with [audio]'s processing.
+  Future<void> setAudioProcessing(VoiceAudioProcessing audio);
+
+  /// How loud each other participant plays, by user id: 1 is as sent, up
+  /// to 2; missing ids play at 1. Applies to people joining later too.
+  Future<void> setUserVolumes(Map<String, double> volumes);
+
   Future<void> disconnect();
 }
 
@@ -65,7 +72,45 @@ abstract interface class VoiceCallConnector {
     required String url,
     required String token,
     required bool microphoneEnabled,
+    VoiceAudioProcessing audio = const VoiceAudioProcessing(),
+    Map<String, double> userVolumes = const {},
   });
+}
+
+/// How the microphone is cleaned up before it is sent, where the platform
+/// supports it.
+@immutable
+class VoiceAudioProcessing {
+  const VoiceAudioProcessing({
+    this.noiseSuppression = true,
+    this.echoCancellation = true,
+    this.autoGainControl = true,
+    this.keepMicrophoneOpen = false,
+  });
+
+  final bool noiseSuppression;
+  final bool echoCancellation;
+  final bool autoGainControl;
+
+  /// Keeps capturing while muted, so push to talk starts instantly.
+  final bool keepMicrophoneOpen;
+
+  @override
+  bool operator ==(Object other) {
+    return other is VoiceAudioProcessing &&
+        other.noiseSuppression == noiseSuppression &&
+        other.echoCancellation == echoCancellation &&
+        other.autoGainControl == autoGainControl &&
+        other.keepMicrophoneOpen == keepMicrophoneOpen;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    noiseSuppression,
+    echoCancellation,
+    autoGainControl,
+    keepMicrophoneOpen,
+  );
 }
 
 /// What to share, as picked by the user.

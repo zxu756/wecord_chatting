@@ -324,6 +324,13 @@ IconData circleAuditIcon(String action) {
     'channel_permissions_update' => Icons.lock_person_outlined,
     'channel_privacy_update' => Icons.lock_outline,
     'channel_slowmode_update' => Icons.timer_outlined,
+    'channel_user_limit_update' => Icons.group_outlined,
+    'member_voice_mute' => Icons.mic_off_outlined,
+    'member_voice_unmute' => Icons.mic_none,
+    'member_voice_deafen' => Icons.headset_off_outlined,
+    'member_voice_undeafen' => Icons.headset_outlined,
+    'member_voice_disconnect' => Icons.call_end,
+    'member_voice_move' => Icons.move_up,
     'channel_update' => Icons.edit_note,
     'channel_delete' => Icons.delete_sweep_outlined,
     'category_create' => Icons.create_new_folder_outlined,
@@ -413,6 +420,28 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
         'duration': _formatSeconds(_newValue(changes['slowmode_seconds'])),
       },
     ),
+    'channel_user_limit_update' => switch (_newValue(changes['user_limit'])) {
+      final int limit when limit > 0 => (
+        tr('{actor} set the user limit of {target} to {limit}'),
+        {'limit': '$limit'},
+      ),
+      _ => (tr('{actor} removed the user limit of {target}'), {}),
+    },
+    'member_voice_mute' => (tr('{actor} server muted {target}'), {}),
+    'member_voice_unmute' => (tr('{actor} server unmuted {target}'), {}),
+    'member_voice_deafen' => (tr('{actor} server deafened {target}'), {}),
+    'member_voice_undeafen' => (tr('{actor} server undeafened {target}'), {}),
+    'member_voice_disconnect' => (
+      tr('{actor} disconnected {target} from voice'),
+      {},
+    ),
+    'member_voice_move' => switch (changes['channel_name']) {
+      final String channelName => (
+        tr('{actor} moved {target} to {channel}'),
+        {'channel': channelName},
+      ),
+      _ => (tr('{actor} moved {target} to another voice channel'), {}),
+    },
     'channel_update' => switch (changes['name']) {
       {'old': final String oldName} => (
         tr('{actor} renamed channel {old} to {channel}'),

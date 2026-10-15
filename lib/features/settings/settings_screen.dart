@@ -14,6 +14,7 @@ import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/features/push/push_settings_tile.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/voice/voice_settings_screen.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/presence_status.dart';
@@ -250,6 +251,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onSelectionChanged: (selection) => ref
                     .read(appLanguageProvider.notifier)
                     .set(selection.single),
+              ),
+              const Divider(height: 32),
+              ListTile(
+                key: const ValueKey('voice-settings-tile'),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.headset_mic_outlined),
+                title: Text(tr('Voice')),
+                subtitle: Text(
+                  tr('Push to talk, noise suppression and echo cancellation'),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openVoiceSettings(context),
               ),
               const Divider(height: 32),
               Text(

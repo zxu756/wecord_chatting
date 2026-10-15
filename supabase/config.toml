@@ -438,6 +438,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/gif-search/index.ts"
 
+[functions.bot-api]
+enabled = true
+# Public: bots authenticate with `Authorization: Bot <token>`, which the
+# bot_api_* database functions check; there is no user session to verify.
+verify_jwt = false
+entrypoint = "./functions/bot-api/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

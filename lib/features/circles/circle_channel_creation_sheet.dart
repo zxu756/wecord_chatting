@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/announcement_repository.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -34,6 +35,9 @@ class _CircleChannelCreationSheetState
       ? widget.initialCategoryId
       : null;
   var _kind = CircleChannelKind.text;
+
+  /// A text channel created as an announcement channel.
+  var _announcement = false;
   var _isSaving = false;
   String? _errorText;
 
@@ -107,10 +111,26 @@ class _CircleChannelCreationSheetState
                   'A few speakers talk while everyone else listens and can '
                   'raise a hand to speak.',
                 ),
-                CircleChannelKind.text => tr(
+                CircleChannelKind.text || CircleChannelKind.announcement => tr(
                   'Members chat in one stream of messages.',
                 ),
               }, style: Theme.of(context).textTheme.bodySmall),
+              if (_kind == CircleChannelKind.text)
+                SwitchListTile(
+                  key: const ValueKey('channel-announcement-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.campaign_outlined),
+                  title: Text(tr('Announcement channel')),
+                  subtitle: Text(
+                    tr(
+                      'Posts here can be published to channels that follow it.',
+                    ),
+                  ),
+                  value: _announcement,
+                  onChanged: _isSaving
+                      ? null
+                      : (value) => setState(() => _announcement = value),
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
@@ -180,7 +200,7 @@ class _CircleChannelCreationSheetState
       _errorText = null;
     });
     try {
-      await ref
+      final channelId = await ref
           .read(circlesRepositoryProvider)
           .createChannel(
             circleId: widget.circleId,
@@ -188,6 +208,11 @@ class _CircleChannelCreationSheetState
             categoryId: _categoryId,
             kind: _kind,
           );
+      if (_kind == CircleChannelKind.text && _announcement) {
+        await ref
+            .read(announcementRepositoryProvider)
+            .setAnnouncementChannel(channelId: channelId, enabled: true);
+      }
       ref.invalidate(circleDetailProvider(widget.circleId));
       if (mounted) Navigator.of(context).pop();
     } catch (error) {

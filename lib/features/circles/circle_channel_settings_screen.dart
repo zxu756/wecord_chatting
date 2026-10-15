@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/announcement_widgets.dart';
 import 'package:wecord/features/circles/channel_webhooks_section.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
@@ -323,7 +324,20 @@ class _CircleChannelSettingsScreenState
             enabled: !_saving,
           ),
       ],
+      if (detail.canManageChannels && channel.isTextLike)
+        AnnouncementChannelSwitch(
+          key: ValueKey('channel-announcement-${channel.id}'),
+          channel: channel,
+          onChanged: () =>
+              ref.invalidate(circleDetailProvider(widget.circleId)),
+        ),
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
+      if (channel.isTextLike &&
+          detail.canInChannel(channel, CirclePermission.manageWebhooks))
+        FollowedChannelsSection(
+          key: ValueKey('channel-follows-${channel.id}'),
+          channel: channel,
+        ),
       if (channel.kind == CircleChannelKind.text &&
           detail.canInChannel(channel, CirclePermission.manageWebhooks))
         ChannelWebhooksSection(
@@ -928,7 +942,7 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
               'This cannot be undone.',
               {'name': name},
             ),
-            CircleChannelKind.text => tr(
+            CircleChannelKind.text || CircleChannelKind.announcement => tr(
               'Delete #{name} with all of its messages and threads? This '
               'cannot be undone.',
               {'name': name},

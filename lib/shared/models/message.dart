@@ -1,6 +1,7 @@
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
+import 'package:wecord/shared/models/message_origin.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -69,6 +70,9 @@ class ChatMessage {
     this.webhookId,
     this.webhookName,
     this.webhookAvatarUrl,
+    this.crosspost,
+    this.publishedAt,
+    this.interaction,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -109,6 +113,9 @@ class ChatMessage {
       webhookId: json['webhook_id'] as String?,
       webhookName: json['webhook_name'] as String?,
       webhookAvatarUrl: json['webhook_avatar_url'] as String?,
+      crosspost: MessageCrosspost.maybeFromJson(json['crosspost']),
+      publishedAt: _parseOptionalTimestamp(json['published_at']),
+      interaction: MessageInteraction.maybeFromJson(json['interaction']),
     );
   }
 
@@ -161,6 +168,18 @@ class ChatMessage {
   /// message (also after the webhook is deleted), so it marks them.
   final String? webhookName;
   final String? webhookAvatarUrl;
+
+  /// A copy of a message published in an announcement channel this
+  /// channel follows.
+  final MessageCrosspost? crosspost;
+
+  /// When this announcement was published to the channels following it.
+  final DateTime? publishedAt;
+
+  bool get isPublished => publishedAt != null;
+
+  /// A bot's answer to a member's slash command.
+  final MessageInteraction? interaction;
 
   /// Posted through a webhook: shown under the webhook's name, not as a
   /// message of [senderId] (the webhook's creator).
@@ -282,6 +301,7 @@ class ChatMessage {
     Object? webhookId = _sentinel,
     Object? webhookName = _sentinel,
     Object? webhookAvatarUrl = _sentinel,
+    Object? publishedAt = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -340,6 +360,11 @@ class ChatMessage {
       webhookAvatarUrl: identical(webhookAvatarUrl, _sentinel)
           ? this.webhookAvatarUrl
           : webhookAvatarUrl as String?,
+      crosspost: crosspost,
+      interaction: interaction,
+      publishedAt: identical(publishedAt, _sentinel)
+          ? this.publishedAt
+          : publishedAt as DateTime?,
     );
   }
 }

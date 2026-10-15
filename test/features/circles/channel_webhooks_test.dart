@@ -102,6 +102,11 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Sections above load as they scroll into view; settle, then bring
+    // the target back on screen.
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(create);
+    await tester.pumpAndSettle();
     expect(find.text('No webhooks yet.'), findsOneWidget);
     await tester.tap(create);
     await tester.pumpAndSettle();
@@ -153,6 +158,11 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Sections above load as they scroll into view; settle, then bring
+    // the target back on screen.
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(menu);
+    await tester.pumpAndSettle();
 
     Future<void> choose(String label) async {
       await tester.tap(menu);

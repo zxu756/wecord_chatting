@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
+import 'package:wecord/features/circles/announcement_widgets.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -89,7 +90,17 @@ class _CircleChannelThreadScreenState
     if (title == null && channel != null) {
       title = channel.isVoice ? channel.name : '# ${channel.name}';
     }
+    final announcementChannel = channel != null && channel.isAnnouncement
+        ? channel
+        : null;
     final actions = [
+      if (announcementChannel != null)
+        ChatThreadAction(
+          tooltip: tr('Follow'),
+          icon: Icons.campaign_outlined,
+          onPressed: () =>
+              showFollowChannelSheet(context, channel: announcementChannel),
+        ),
       ChatThreadAction(
         tooltip: tr('Show member list'),
         icon: Icons.people_outline,
@@ -233,6 +244,7 @@ class _CircleChannelThreadScreenState
                 ? detail.slowmodeFor(channel)
                 : null,
             topic: channel?.topic,
+            isAnnouncementChannel: channel?.isAnnouncement ?? false,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(
                 circleId,

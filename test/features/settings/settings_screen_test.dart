@@ -313,6 +313,11 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Tiles above load as they scroll into view; settle, then bring the
+    // target back on screen.
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Sign out'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Sign out'));
     await tester.pump();
 
@@ -530,6 +535,11 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    // Tiles above load as they scroll into view; settle, then bring the
+    // target back on screen.
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Blocked users'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Blocked users'));
     await tester.pumpAndSettle();
 

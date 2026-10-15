@@ -31,6 +31,11 @@ import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
+import 'package:wecord/features/circles/announcement_repository.dart';
+import 'package:wecord/features/circles/announcement_widgets.dart';
+import 'package:wecord/features/circles/circle_bot_repository.dart';
+import 'package:wecord/features/circles/circle_bot_widgets.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -198,10 +203,15 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.topic,
     this.forumPost = false,
     this.onBack,
+    this.isAnnouncementChannel = false,
     super.key,
   });
 
   final String conversationId;
+
+  /// An announcement channel: its messages can be published to the
+  /// channels following it.
+  final bool isAnnouncementChannel;
   final String? title;
   final String? avatarUrl;
   final ConversationType? conversationType;
@@ -557,9 +567,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final slowmodeSeconds =
         widget.slowmodeSeconds ?? conversationSummary?.slowmodeSeconds ?? 0;
     _circleId = conversationSummary?.circleId;
+    // Bots answer commands in channels (not threads).
+    final circleId = _circleId;
     _slashContext = SlashCommandContext(
-      isCircleConversation: _circleId != null,
+      isCircleConversation: circleId != null,
       canCreatePolls: true,
+      botCommands:
+          circleId != null &&
+              conversationType == ConversationType.channel &&
+              canSend
+          ? ref.watch(circleBotCommandsProvider(circleId)).valueOrNull ??
+                const []
+          : const [],
     );
     _slowmodeUntil = slowmodeSeconds > 0
         ? _slowmodeEnd(
@@ -633,6 +652,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               (message.isWebhook &&
                   currentUserId != null &&
                   message.senderId == currentUserId));
+    }
+
+    // The author or a moderator publishes announcement posts once.
+    bool canPublish(ChatMessage message) {
+      return widget.isAnnouncementChannel &&
+          !isThread &&
+          message.type == MessageType.text &&
+          message.recalledAt == null &&
+          message.crosspost == null &&
+          !message.isPublished &&
+          (canModerateMessages || (message.isSentBy(currentUserId) && canSend));
     }
 
     final pollActions = PollActions(
@@ -1056,6 +1086,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           canStartThread: canStartThreads && canSend,
                           onOpenThread: _openOrCreateThread,
                           pollActions: pollActions,
+                          onPublish: canPublish(message)
+                              ? _publishMessage
+                              : null,
                         );
                       }
                       final highlighted = AnimatedContainer(
@@ -1177,8 +1210,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   emojiCandidates: _emojiCandidates(),
                   onSelectEmoji: _insertCustomEmoji,
                   slashCommands: _slashCandidates(),
+                  botSlashCommands: _botSlashCandidates(),
                   highlightedSlashIndex: _slashIndex,
                   onSelectSlashCommand: _selectSlashCommand,
+                  onSelectBotSlashCommand: _selectBotSlashCommand,
                   onComposerKey: _handleComposerKey,
                   replyPreviewText: _replyingTo == null
                       ? null
@@ -1452,6 +1487,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       case SlashSendText(body: final commandBody):
         messageBody = commandBody;
       case null:
+        if (parseBotSlashCommand(body, _slashContext) case (
+          final command,
+          final options,
+        )) {
+          await _runSlashAction(() => _invokeBotCommand(command, options));
+          return;
+        }
         messageBody = body;
     }
 
@@ -1983,6 +2025,58 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  /// Sends a bot's command to it; the bot answers in the channel.
+  Future<bool> _invokeBotCommand(
+    BotSlashCommand command,
+    String options,
+  ) async {
+    try {
+      await ref
+          .read(circleBotRepositoryProvider)
+          .invoke(
+            conversationId: widget.conversationId,
+            command: command.name,
+            options: options,
+          );
+      _showSnackBar(
+        tr('Sent /{command} to {bot}.', {
+          'command': command.name,
+          'bot': command.botName,
+        }),
+      );
+      return true;
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _sendError = tr('Could not use the command. Try again.'),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// The bots' commands offered for what is being typed.
+  List<BotSlashCommand> _botSlashCandidates() {
+    final query = _slashQuery;
+    if (query == null || _editingMessage != null) {
+      return const [];
+    }
+    return botSlashCommandCandidates(query, _slashContext);
+  }
+
+  /// Puts `/name ` in the composer, ready for the bot command's options.
+  void _selectBotSlashCommand(BotSlashCommand command) {
+    final text = '/${command.name} ';
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    setState(() {
+      _slashQuery = null;
+      _slashIndex = 0;
+    });
+  }
+
   /// The commands offered for what is being typed; none while editing.
   List<SlashCommand> _slashCandidates() {
     final query = _slashQuery;
@@ -2014,7 +2108,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// Arrow keys move through the command list; Enter and Tab pick.
   KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
     final commands = _slashCandidates();
-    if (commands.isEmpty) {
+    final botCommands = _botSlashCandidates();
+    final count = commands.length + botCommands.length;
+    if (count == 0) {
       return _handleComposerShortcut(event);
     }
     if (event is KeyUpEvent) {
@@ -2025,7 +2121,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         key == LogicalKeyboardKey.arrowUp) {
       final step = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
       setState(() {
-        _slashIndex = (_slashIndex + step) % commands.length;
+        _slashIndex = (_slashIndex + step) % count;
       });
       return KeyEventResult.handled;
     }
@@ -2033,7 +2129,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         (key == LogicalKeyboardKey.enter ||
             key == LogicalKeyboardKey.numpadEnter ||
             key == LogicalKeyboardKey.tab)) {
-      _selectSlashCommand(commands[_slashIndex.clamp(0, commands.length - 1)]);
+      final index = _slashIndex.clamp(0, count - 1);
+      if (index < commands.length) {
+        _selectSlashCommand(commands[index]);
+      } else {
+        _selectBotSlashCommand(botCommands[index - commands.length]);
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -2318,6 +2419,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ? tr('Could not unpin message. Try again.')
             : tr('Could not pin message. Try again.'),
       );
+    }
+  }
+
+  Future<void> _publishMessage(ChatMessage message) async {
+    try {
+      final delivered = await ref
+          .read(announcementRepositoryProvider)
+          .publish(message.id);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _showSnackBar(switch (delivered) {
+        0 => tr('Published. No channels follow this one yet.'),
+        1 => tr('Published to 1 channel.'),
+        _ => tr('Published to {count} channels.', {'count': delivered}),
+      });
+    } catch (_) {
+      _showSnackBar(tr('Could not publish the message. Try again.'));
     }
   }
 
@@ -2899,6 +3016,7 @@ _MessageSender _senderFor(
         : tr('Unknown member'),
     avatarUrl: message.senderCircleAvatarUrl ?? profile?.avatarUrl,
     roleColor: message.senderRoleColor,
+    userId: message.senderId,
   );
 }
 
@@ -2908,10 +3026,15 @@ class _MessageSender {
     this.avatarUrl,
     this.roleColor,
     this.isBot = false,
+    this.userId,
   });
 
   final String name;
   final String? avatarUrl;
+
+  /// The member behind the name (not set for webhooks), whose circle tag
+  /// shows next to it.
+  final String? userId;
 
   /// A webhook, marked with a BOT tag.
   final bool isBot;
@@ -2974,7 +3097,12 @@ class _MessageBubble extends StatelessWidget {
     this.pollActions,
     this.canModerate = false,
     this.circleId,
+    this.onPublish,
   });
+
+  /// Publishes this announcement to the following channels; null when the
+  /// current user cannot (or it is not an unpublished announcement).
+  final Future<void> Function(ChatMessage message)? onPublish;
 
   /// The circle of a channel or its thread, whose custom emoji the reaction
   /// picker lists first.
@@ -3269,6 +3397,8 @@ class _MessageBubble extends StatelessWidget {
                   const SizedBox(width: 6),
                   const MessageBotTag(),
                 ],
+                if (sender.userId case final userId?)
+                  ProfileNameBadges(userId: userId),
               ],
             ),
           ),
@@ -3495,6 +3625,16 @@ class _MessageBubble extends StatelessWidget {
                       unawaited(onPreviewImage(imageAttachment));
                     },
                   ),
+                if (onPublish case final publish?)
+                  ListTile(
+                    key: const ValueKey('message-publish'),
+                    leading: const Icon(Icons.campaign_outlined),
+                    title: Text(tr('Publish')),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(publish(message));
+                    },
+                  ),
                 if (canPin)
                   ListTile(
                     leading: Icon(
@@ -3644,6 +3784,10 @@ class _MessageContent extends StatelessWidget {
     }
 
     final content = <Widget>[
+      if (message.crosspost case final crosspost?)
+        CrosspostOrigin(crosspost: crosspost, foregroundColor: textColor),
+      if (message.interaction case final interaction?)
+        InteractionOrigin(interaction: interaction, foregroundColor: textColor),
       if (message.replyPreview != null) ...[
         _QuotedReplyPreview(
           senderName: message.replyPreview!.senderName,
@@ -3700,6 +3844,10 @@ class _MessageContent extends StatelessWidget {
           ),
         ),
       );
+    }
+
+    if (message.isPublished) {
+      content.add(PublishedMarker(foregroundColor: textColor));
     }
 
     return Column(
@@ -3966,8 +4114,10 @@ class _Composer extends StatelessWidget {
     required this.emojiCandidates,
     required this.onSelectEmoji,
     required this.slashCommands,
+    this.botSlashCommands = const [],
     required this.highlightedSlashIndex,
     required this.onSelectSlashCommand,
+    this.onSelectBotSlashCommand,
     required this.onComposerKey,
     required this.replyPreviewText,
     required this.isEditing,
@@ -4007,8 +4157,12 @@ class _Composer extends StatelessWidget {
 
   /// The commands offered while one is typed after a leading `/`.
   final List<SlashCommand> slashCommands;
+
+  /// Circle bots' commands, offered after [slashCommands].
+  final List<BotSlashCommand> botSlashCommands;
   final int highlightedSlashIndex;
   final ValueChanged<SlashCommand> onSelectSlashCommand;
+  final ValueChanged<BotSlashCommand>? onSelectBotSlashCommand;
 
   /// Sees the text field's key presses first (arrow keys and Enter in the
   /// command list).
@@ -4098,9 +4252,12 @@ class _Composer extends StatelessWidget {
                     _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
                     const SizedBox(height: 8),
                   ],
-                  if (slashCommands.isNotEmpty) ...[
+                  if (slashCommands.isNotEmpty ||
+                      botSlashCommands.isNotEmpty) ...[
                     SlashCommandList(
                       commands: slashCommands,
+                      botCommands: botSlashCommands,
+                      onSelectBot: onSelectBotSlashCommand,
                       highlightedIndex: highlightedSlashIndex,
                       onSelect: onSelectSlashCommand,
                       maxHeight: math.min(240, availableHeight * 0.3),

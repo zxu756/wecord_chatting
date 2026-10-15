@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_banner.dart';
@@ -133,6 +134,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 profile.displayLabel,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              Center(
+                child: ProfileNameBadges(userId: profile.id, leadingGap: 0),
               ),
               Text(
                 ['@${profile.username}', ?profile.pronouns].join(' · '),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/announcement_widgets.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
@@ -220,6 +222,15 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
             ),
           )
         : null;
+    final followChannel =
+        selectedChannel != null && selectedChannel.isAnnouncement
+        ? ChatThreadAction(
+            tooltip: tr('Follow'),
+            icon: Icons.campaign_outlined,
+            onPressed: () =>
+                showFollowChannelSheet(context, channel: selectedChannel),
+          )
+        : null;
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
 
@@ -268,10 +279,12 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
                     ),
                   )
                 : widget.channelViewBuilder?.call(context, selectedChannel, [
+                        ?followChannel?.toIconButton(),
                         memberToggle.toIconButton(),
                         ?channelSettings?.toIconButton(),
                       ]) ??
                       _defaultChannelView(selectedChannel, [
+                        ?followChannel,
                         memberToggle,
                         ?channelSettings,
                       ]),
@@ -398,6 +411,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       timedOutUntil: widget.detail.currentUserTimedOutUntil,
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
       topic: channel.topic,
+      isAnnouncementChannel: channel.isAnnouncement,
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
   }
@@ -915,14 +929,21 @@ class _MemberRow extends ConsumerWidget {
               ),
             ],
           ),
-          title: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: switch (roleColor) {
-              final color? => TextStyle(color: circleRoleColor(color)),
-              null => null,
-            },
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: switch (roleColor) {
+                    final color? => TextStyle(color: circleRoleColor(color)),
+                    null => null,
+                  },
+                ),
+              ),
+              ProfileNameBadges(userId: profile.id),
+            ],
           ),
           subtitle: activeCustomStatus(profile.customStatus) == null
               ? null

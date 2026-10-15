@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -50,6 +51,19 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
                   Text(
                     tr('Create Circle'),
                     style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      key: const ValueKey('use-template-button'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: _isSaving ? null : _useTemplate,
+                      icon: const Icon(Icons.dashboard_customize_outlined),
+                      label: Text(tr('Use a template code')),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -122,6 +136,17 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
         ),
       ),
     );
+  }
+
+  /// Creates the circle from a template instead, then opens it.
+  Future<void> _useTemplate() async {
+    final circleId = await showUseCircleTemplateSheet(context);
+    if (circleId == null || !mounted) {
+      return;
+    }
+    ref.invalidate(circleSummariesProvider);
+    context.pop();
+    context.go('/circles/$circleId');
   }
 
   Future<void> _createCircle() async {

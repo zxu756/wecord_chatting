@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
+
+final _nameChar = RegExp(r'[A-Za-z0-9_]');
+
+/// `@here` on its own, not part of an address or a longer name.
+final _herePattern = RegExp(r'(?:^|[^A-Za-z0-9_@.])@here(?![A-Za-z0-9_])');
 
 /// An `@` being typed right before the cursor, with what follows it.
 final _mentionQueryPattern = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$');
@@ -49,9 +56,34 @@ List<GroupMember> mentionCandidates(
 class MentionDraft {
   final _selections = <String, _MentionSelection>{};
 
+  final _roles = <String, SpecialMention>{};
+
   /// Replaces the `@` being typed in [controller] with [member]'s username.
   /// Returns false when the cursor is not in a mention.
   bool insert(TextEditingController controller, GroupMember member) {
+    if (!_replaceQuery(controller, '@${member.profile.username} ')) {
+      return false;
+    }
+    _selections[member.profile.username] = _MentionSelection(
+      userId: member.profile.id,
+      username: member.profile.username,
+      displayName: mentionName(member),
+    );
+    return true;
+  }
+
+  /// Replaces the `@` being typed in [controller] with `@here` or a role.
+  bool insertSpecial(TextEditingController controller, SpecialMention special) {
+    if (!_replaceQuery(controller, '${special.token} ')) {
+      return false;
+    }
+    if (!special.isHere) {
+      _roles[special.token] = special;
+    }
+    return true;
+  }
+
+  bool _replaceQuery(TextEditingController controller, String mentionText) {
     final text = controller.text;
     final match = _mentionMatch(controller.value);
     if (match == null) {
@@ -62,23 +94,19 @@ class MentionDraft {
     final safeCursor = cursor.clamp(0, text.length);
     final prefix = text.substring(0, safeCursor);
     final tokenStart = match.start + (prefix[match.start] == '@' ? 0 : 1);
-    final mentionText = '@${member.profile.username} ';
     controller.value = TextEditingValue(
       text: text.replaceRange(tokenStart, safeCursor, mentionText),
       selection: TextSelection.collapsed(
         offset: tokenStart + mentionText.length,
       ),
     );
-    _selections[member.profile.username] = _MentionSelection(
-      userId: member.profile.id,
-      username: member.profile.username,
-      displayName: mentionName(member),
-    );
     return true;
   }
 
-  /// Every picked member's `@username` still in [body], in order.
-  List<MessageMention> mentionsFor(String body) {
+  /// Every picked member's `@username` and picked role still in [body], in
+  /// order. With [hereUserIds] (the members online now), every `@here` in
+  /// [body] too, typed or picked.
+  List<MessageMention> mentionsFor(String body, {List<String>? hereUserIds}) {
     final mentions = <MessageMention>[];
     for (final selection in _selections.values) {
       final token = '@${selection.username}';
@@ -95,11 +123,82 @@ class MentionDraft {
         start = body.indexOf(token, start + token.length);
       }
     }
+    for (final role in _roles.values) {
+      final token = role.token;
+      var start = body.indexOf(token);
+      while (start != -1) {
+        final end = start + token.length;
+        // Not inside a longer name: "@Mods" is not "@Moderators".
+        if (end == body.length || !_nameChar.hasMatch(body[end])) {
+          mentions.add(
+            MessageMention.role(
+              roleId: role.roleId!,
+              displayName: role.name,
+              color: role.color,
+              start: start,
+              end: end,
+            ),
+          );
+        }
+        start = body.indexOf(token, end);
+      }
+    }
+    if (hereUserIds != null) {
+      for (final match in _herePattern.allMatches(body)) {
+        final start = match.start + match.group(0)!.indexOf('@');
+        mentions.add(
+          MessageMention.here(
+            start: start,
+            end: start + '@here'.length,
+            userIds: hereUserIds,
+          ),
+        );
+      }
+    }
     mentions.sort((a, b) => a.start.compareTo(b.start));
-    return mentions;
+    // One mention per place; the longer one wins.
+    final distinct = <MessageMention>[];
+    for (final mention in mentions) {
+      if (distinct.isNotEmpty && mention.start < distinct.last.end) {
+        if (mention.end - mention.start >
+            distinct.last.end - distinct.last.start) {
+          distinct.last = mention;
+        }
+        continue;
+      }
+      distinct.add(mention);
+    }
+    return distinct;
   }
 
-  void clear() => _selections.clear();
+  void clear() {
+    _selections.clear();
+    _roles.clear();
+  }
+
+  /// The picked members, for keeping with a draft.
+  List<DraftMention> get picked => [
+    for (final selection in _selections.values)
+      DraftMention(
+        userId: selection.userId,
+        username: selection.username,
+        displayName: selection.displayName,
+      ),
+  ];
+
+  /// Replaces the picked members with a restored draft's.
+  void restore(List<DraftMention> mentions) {
+    _selections
+      ..clear()
+      ..addAll({
+        for (final mention in mentions)
+          mention.username: _MentionSelection(
+            userId: mention.userId,
+            username: mention.username,
+            displayName: mention.displayName,
+          ),
+      });
+  }
 }
 
 class _MentionSelection {

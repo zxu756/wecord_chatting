@@ -81,7 +81,7 @@ enum CirclePermission {
     'mention_everyone',
     CirclePermissionGroup.text,
     'Mention everyone',
-    'Notify every member of a channel at once.',
+    'Use @here and mention every role, even ones not open to all.',
   ),
   manageEvents(
     1 << 9,

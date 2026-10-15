@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -264,6 +265,9 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
   late int? _color = widget.role?.color;
   late bool _hoist = widget.role?.hoist ?? false;
   late int _permissions = widget.role?.permissions ?? 0;
+
+  /// Whether anyone may @mention the role; null until changed here.
+  bool? _mentionable;
   var _isSaving = false;
   String? _errorText;
 
@@ -302,8 +306,9 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
     final circleId = widget.detail.circle.id;
     try {
       final role = _role;
+      String? roleId = role?.id;
       if (role == null) {
-        await repository.createRole(
+        roleId = await repository.createRole(
           circleId: circleId,
           name: name,
           color: _color,
@@ -318,6 +323,15 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
           permissions: _permissions,
           hoist: !role.isDefault && _hoist,
         );
+      }
+      final mentionable = _mentionable;
+      if (roleId != null &&
+          mentionable != null &&
+          mentionable != _savedMentionable) {
+        await ref
+            .read(roleMentionsRepositoryProvider)
+            .setRoleMentionable(roleId: roleId, mentionable: mentionable);
+        ref.invalidate(circleMentionableRoleIdsProvider(circleId));
       }
       ref.invalidate(circleDetailProvider(circleId));
       if (mounted) Navigator.of(context).pop();
@@ -372,6 +386,19 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
         _errorText = tr('Could not delete the role. Try again.');
       });
     }
+  }
+
+  /// Whether anyone may mention the role as saved; false for new roles.
+  bool get _savedMentionable {
+    final role = _role;
+    if (role == null) {
+      return false;
+    }
+    return ref
+            .watch(circleMentionableRoleIdsProvider(widget.detail.circle.id))
+            .valueOrNull
+            ?.contains(role.id) ??
+        false;
   }
 
   @override
@@ -462,6 +489,18 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
                   value: _hoist,
                   onChanged: editable
                       ? (value) => setState(() => _hoist = value)
+                      : null,
+                ),
+                SwitchListTile(
+                  key: const ValueKey('role-mentionable'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(tr('Allow anyone to @mention this role')),
+                  subtitle: Text(
+                    tr('Members with Mention everyone can mention any role.'),
+                  ),
+                  value: _mentionable ?? _savedMentionable,
+                  onChanged: editable
+                      ? (value) => setState(() => _mentionable = value)
                       : null,
                 ),
               ],

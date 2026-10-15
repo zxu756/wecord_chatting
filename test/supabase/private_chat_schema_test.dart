@@ -2239,7 +2239,11 @@ void main() {
     }
     final sendBody = functionBody(sql, 'send_text_message');
     expect(sendBody, contains('visible_mentions'));
-    expect(sendBody, contains("'view_channel'"));
+    expect(sendBody, contains('resolve_message_mentions'));
+    expect(
+      functionBody(sql, 'resolve_message_mentions'),
+      contains("'view_channel'"),
+    );
 
     expect(
       rawSql,
@@ -2248,6 +2252,46 @@ void main() {
         'public.current_user_readable_conversation_ids() to authenticated',
       ),
     );
+  });
+
+  test('@here and role mentions reach their members', () {
+    final sql = effectiveMigrationSql();
+    final rawSql = allMigrationSql();
+
+    expect(
+      rawSql,
+      contains('add column if not exists mentionable boolean not null'),
+    );
+    expect(rawSql, contains("check (kind in ('user', 'all', 'here', 'role'))"));
+
+    final resolveBody = functionBody(sql, 'resolve_message_mentions');
+    expect(resolveBody, contains('security definer'));
+    expect(resolveBody, contains("'mention_everyone'"));
+    expect(resolveBody, contains('mentionable or can_mention_everyone'));
+    expect(resolveBody, contains('not r.is_default'));
+
+    final recordBody = functionBody(sql, 'record_message_mentions');
+    expect(recordBody, contains("'here'"));
+    expect(recordBody, contains('circle_member_roles'));
+    expect(recordBody, contains('cm.user_id <> sender_id'));
+
+    final sendBody = functionBody(sql, 'send_text_message');
+    expect(sendBody, contains('record_message_mentions'));
+
+    final setBody = functionBody(sql, 'set_circle_role_mentionable');
+    expect(setBody, contains("'manage_roles'"));
+    expect(setBody, contains('circle_member_rank'));
+    expect(setBody, contains('write_circle_audit'));
+
+    expect(functionBody(sql, 'list_inbox'), contains("'mention_role'"));
+    for (final grant in [
+      'grant execute on function public.list_conversation_mention_roles(uuid) to authenticated',
+      'grant execute on function public.set_circle_role_mentionable(uuid, boolean) to authenticated',
+      'revoke execute on function public.resolve_message_mentions(uuid, uuid, jsonb) from public, anon, authenticated',
+      'revoke execute on function public.record_message_mentions(uuid, uuid, uuid, jsonb, jsonb) from public, anon, authenticated',
+    ]) {
+      expect(rawSql, contains(grant));
+    }
   });
 
   test('members can leave and owners hand the circle over', () {
@@ -3306,5 +3350,29 @@ void main() {
     expect(index, contains('"can_current_user_connect_voice"'));
     expect(index, contains('{ error: "voice_not_configured" }, 503'));
     expect(index, isNot(contains('SERVICE_ROLE')));
+  });
+
+  test('gif-search keeps the key and needs a signed-in user', () {
+    final config = File('supabase/config.toml').readAsStringSync();
+    expect(
+      config,
+      contains(
+        '[functions.gif-search]\n'
+        'enabled = true\n'
+        '# Signed-in users only; the GIPHY key (GIPHY_API_KEY secret) never leaves\n'
+        '# the function.\n'
+        'verify_jwt = true',
+      ),
+    );
+    final index = File(
+      'supabase/functions/gif-search/index.ts',
+    ).readAsStringSync();
+    expect(index, contains('auth.getUser('));
+    expect(index, contains('{ error: "gif_not_configured" }, 503'));
+    expect(index, isNot(contains('SERVICE_ROLE')));
+    final giphy = File(
+      'supabase/functions/gif-search/giphy.ts',
+    ).readAsStringSync();
+    expect(giphy, contains('get("GIPHY_API_KEY")'));
   });
 }

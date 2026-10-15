@@ -151,6 +151,8 @@ class _InboxTile extends StatelessWidget {
     final reason = switch (item.reason) {
       InboxReason.mention => tr('Mentioned you'),
       InboxReason.mentionAll => tr('Mentioned everyone'),
+      InboxReason.mentionRole => tr('Mentioned your role'),
+      InboxReason.mentionHere => tr('Mentioned @here'),
       InboxReason.reply => tr('Replied to you'),
     };
 

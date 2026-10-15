@@ -9,9 +9,12 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
+import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -23,6 +26,7 @@ import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
+import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
@@ -260,6 +264,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _mentionQuery = '';
   final _mentionDraft = MentionDraft();
 
+  /// `@here` and the roles the current user may mention here, and who
+  /// `@here` reaches (members online now), refreshed on every build.
+  var _mentionTargets = const MentionTargets();
+  List<String>? _hereUserIds;
+
   /// The custom emoji name typed after a `:`, while suggestions show.
   String? _emojiQuery;
   final _emojiDraft = CustomEmojiDraft();
@@ -293,6 +302,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// The end of the current slowmode wait, refreshed on every build.
   DateTime? _slowmodeUntil;
 
+  /// A restored draft's reply, picked up once the messages load.
+  String? _pendingDraftReplyId;
+
   @override
   void initState() {
     super.initState();
@@ -301,6 +313,49 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       activeConversationIdProvider.notifier,
     );
     _scheduleActiveConversationUpdate(widget.conversationId);
+    unawaited(_restoreDraft());
+  }
+
+  /// Puts the conversation's saved draft (text, picked mentions and reply)
+  /// back in an untouched composer.
+  Future<void> _restoreDraft() async {
+    final drafts = ref.read(composerDraftsProvider.notifier);
+    final conversationId = widget.conversationId;
+    await drafts.loaded;
+    final draft = drafts.draftFor(conversationId);
+    if (!mounted ||
+        draft == null ||
+        widget.conversationId != conversationId ||
+        _composerController.text.isNotEmpty ||
+        _editingMessage != null) {
+      return;
+    }
+    setState(() {
+      _composerController.value = TextEditingValue(
+        text: draft.text,
+        selection: TextSelection.collapsed(offset: draft.text.length),
+      );
+      _mentionDraft.restore(draft.mentions);
+      _pendingDraftReplyId = draft.replyToMessageId;
+    });
+  }
+
+  /// Keeps what is in the composer as this conversation's draft; edits of
+  /// sent messages are not drafts.
+  void _saveDraft() {
+    if (_editingMessage != null) {
+      return;
+    }
+    ref
+        .read(composerDraftsProvider.notifier)
+        .set(
+          widget.conversationId,
+          ComposerDraft(
+            text: _composerController.text,
+            replyToMessageId: _replyingTo?.id ?? _pendingDraftReplyId,
+            mentions: _mentionDraft.picked,
+          ),
+        );
   }
 
   @override
@@ -308,6 +363,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversationId != widget.conversationId) {
       _scheduleActiveConversationUpdate(widget.conversationId);
+      // Each conversation keeps its own draft (saved as it was typed).
+      _composerController.clear();
+      _mentionDraft.clear();
+      _emojiDraft.clear();
+      _replyingTo = null;
+      _editingMessage = null;
+      _pendingDraftReplyId = null;
+      _isMentioning = false;
+      _mentionQuery = '';
+      _emojiQuery = null;
+      _slashQuery = null;
+      _sendError = null;
+      unawaited(_restoreDraft());
       _hasCapturedReadPosition = false;
       _newMessageDividerId = null;
       _isAtBottom = true;
@@ -509,6 +577,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final directPeerId = conversationType == ConversationType.direct
         ? conversationSummary?.directUserId ??
               _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
+        : null;
+    _mentionTargets = canStartThreads || isThread
+        ? ref
+                  .watch(
+                    conversationMentionTargetsProvider(widget.conversationId),
+                  )
+                  .valueOrNull ??
+              const MentionTargets()
+        : const MentionTargets();
+    _hereUserIds = _mentionTargets.canMentionEveryone
+        ? [
+            for (final member in groupDetail?.members ?? const <GroupMember>[])
+              if (member.profile.id != currentUserId &&
+                  onlineUserIds.contains(member.profile.id))
+                member.profile.id,
+          ]
         : null;
     final peerIsOnline = conversationType == ConversationType.direct
         ? directPeerId != null && onlineUserIds.contains(directPeerId)
@@ -1087,6 +1171,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   errorText: _sendError,
                   mentionCandidates: _mentionCandidates(groupDetail),
                   onSelectMention: _insertMention,
+                  specialMentionCandidates: _specialMentionCandidates(),
+                  onSelectSpecialMention: _insertSpecialMention,
                   emojiCandidates: _emojiCandidates(),
                   onSelectEmoji: _insertCustomEmoji,
                   slashCommands: _slashCandidates(),
@@ -1103,6 +1189,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onPickFile: _pickAndSendFile,
                   onCreatePoll: _openPollComposer,
                   onPickSticker: _pickAndSendSticker,
+                  onPickGif: _pickAndSendGif,
+                  gifAvailable: ref.watch(gifSearchAvailableProvider) != false,
                   isRecordingVoice: _isRecordingVoice,
                   isSendingVoice: _isSendingVoice,
                   onStartVoiceRecording: _startVoiceRecording,
@@ -1262,6 +1350,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _reconcileActiveMessageState(Map<String, ChatMessage> messagesById) {
+    if (_pendingDraftReplyId case final replyId?) {
+      // Read by the composer further down this build.
+      _pendingDraftReplyId = null;
+      final message = messagesById[replyId];
+      if (_replyingTo == null &&
+          _editingMessage == null &&
+          message != null &&
+          message.recalledAt == null) {
+        _replyingTo = message;
+      }
+    }
     final replyingTo = _replyingTo;
     final editingMessage = _editingMessage;
     if (replyingTo == null && editingMessage == null) {
@@ -1389,6 +1488,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _mentionQuery = '';
       _slashQuery = null;
       _replyingTo = null;
+      _pendingDraftReplyId = null;
+      if (mounted) {
+        _saveDraft();
+      }
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
@@ -1422,6 +1525,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _emojiDraft.clear();
       _emojiQuery = null;
       _editingMessage = null;
+      unawaited(_restoreDraft());
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
       if (mounted) {
@@ -1545,6 +1649,45 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           _isPickingImage = false;
           _isSendingImage = false;
         });
+      }
+    }
+  }
+
+  /// Sends the GIF picked from the picker as a message holding its link,
+  /// which chats show as the GIF.
+  Future<void> _pickAndSendGif() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    if (ref.read(gifSearchAvailableProvider) == false) {
+      _showSnackBar(tr("GIF search isn't set up on this server yet."));
+      return;
+    }
+    final gif = await showGifPicker(context);
+    if (gif == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _isSending = true;
+      _sendError = null;
+    });
+    try {
+      await ref
+          .read(chatsRepositoryProvider)
+          .sendTextMessage(
+            conversationId: widget.conversationId,
+            body: gif.url,
+          );
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SlowmodeException catch (error) {
+      _waitOutSlowmode(error);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _sendError = tr('Could not send GIF. Try again.'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
       }
     }
   }
@@ -1708,6 +1851,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _voiceMessageRecorder ?? ref.read(voiceMessageRecorderProvider);
 
   void _handleComposerChanged(String value) {
+    _saveDraft();
     _updateMentionQuery();
     _updateEmojiQuery();
     _updateSlashQuery();
@@ -1848,7 +1992,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// Arrow keys move through the command list; Enter and Tab pick.
   KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
     final commands = _slashCandidates();
-    if (commands.isEmpty || event is KeyUpEvent) {
+    if (commands.isEmpty) {
+      return _handleComposerShortcut(event);
+    }
+    if (event is KeyUpEvent) {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
@@ -1870,6 +2017,47 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return KeyEventResult.ignored;
   }
 
+  /// Esc backs out of an edit, a reply or the search, else marks the
+  /// conversation read; Up in an empty field edits the last message sent.
+  KeyEventResult _handleComposerShortcut(KeyEvent event) {
+    switch (composerShortcutFor(event, text: _composerController.text)) {
+      case ComposerShortcut.escape:
+        if (_editingMessage != null) {
+          _cancelEdit();
+        } else if (_replyingTo != null) {
+          _cancelReply();
+        } else if (_isSearchingMessages) {
+          _toggleMessageSearch();
+        } else {
+          unawaited(
+            ref
+                .read(chatsRepositoryProvider)
+                .markConversationRead(widget.conversationId)
+                .then((_) => ref.invalidate(conversationsProvider))
+                .catchError((Object _) {}),
+          );
+          _jumpToLatest();
+        }
+        return KeyEventResult.handled;
+      case ComposerShortcut.editLast:
+        final message = lastEditableMessage(
+          ref
+                  .read(chatThreadProvider(widget.conversationId))
+                  .valueOrNull
+                  ?.messages ??
+              const [],
+          ref.read(authRepositoryProvider).currentUser?.id,
+        );
+        if (message == null || _editingMessage != null) {
+          return KeyEventResult.ignored;
+        }
+        _startEdit(message);
+        return KeyEventResult.handled;
+      case null:
+        return KeyEventResult.ignored;
+    }
+  }
+
   void _clearComposerAfterCommand() {
     _composerController.clear();
     _mentionDraft.clear();
@@ -1881,6 +2069,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _slashQuery = null;
       _sendError = null;
     });
+    _saveDraft();
     unawaited(_setTyping(false));
   }
 
@@ -1970,10 +2159,34 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _isMentioning = false;
       _mentionQuery = '';
     });
+    _saveDraft();
+  }
+
+  /// `@here` and roles matching the mention being typed.
+  List<SpecialMention> _specialMentionCandidates() {
+    if (!_isMentioning) {
+      return const [];
+    }
+    return specialMentionCandidates(
+      _mentionTargets,
+      _mentionQuery,
+      allowHere: _hereUserIds != null,
+    );
+  }
+
+  void _insertSpecialMention(SpecialMention mention) {
+    if (!_mentionDraft.insertSpecial(_composerController, mention)) {
+      return;
+    }
+    setState(() {
+      _isMentioning = false;
+      _mentionQuery = '';
+    });
+    _saveDraft();
   }
 
   List<MessageMention> _mentionsForBody(String body) {
-    return _mentionDraft.mentionsFor(body);
+    return _mentionDraft.mentionsFor(body, hereUserIds: _hereUserIds);
   }
 
   Future<void> _setTyping(bool isTyping) async {
@@ -2313,6 +2526,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       _sendError = null;
     });
+    _saveDraft();
   }
 
   void _startEdit(ChatMessage message) {
@@ -2348,7 +2562,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   void _cancelReply() {
     setState(() {
       _replyingTo = null;
+      _pendingDraftReplyId = null;
     });
+    _saveDraft();
   }
 
   void _cancelEdit() {
@@ -2356,6 +2572,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       _composerController.clear();
     });
+    unawaited(_restoreDraft());
   }
 
   Future<void> _previewImage(ImageAttachment attachment) async {
@@ -2799,7 +3016,8 @@ class _MessageBubble extends StatelessWidget {
   String? get _previewUrl {
     if (message.recalledAt != null ||
         message.type != MessageType.text ||
-        message.suppressEmbeds) {
+        message.suppressEmbeds ||
+        gifUrlIn(message.body) != null) {
       return null;
     }
     return firstLinkInMarkdown(message.body, mentions: message.mentions);
@@ -3433,6 +3651,8 @@ class _MessageContent extends StatelessWidget {
           actions: pollActions,
         ),
       );
+    } else if (gifUrlIn(message.body) case final gifUrl?) {
+      content.add(GifMessageImage(url: gifUrl, textColor: textColor));
     } else {
       content.add(
         MessageMarkdownText(
@@ -3716,6 +3936,8 @@ class _Composer extends StatelessWidget {
     required this.errorText,
     required this.mentionCandidates,
     required this.onSelectMention,
+    required this.specialMentionCandidates,
+    required this.onSelectSpecialMention,
     required this.emojiCandidates,
     required this.onSelectEmoji,
     required this.slashCommands,
@@ -3730,6 +3952,8 @@ class _Composer extends StatelessWidget {
     required this.onPickFile,
     required this.onCreatePoll,
     required this.onPickSticker,
+    required this.onPickGif,
+    required this.gifAvailable,
     required this.isRecordingVoice,
     required this.isSendingVoice,
     required this.onStartVoiceRecording,
@@ -3747,6 +3971,10 @@ class _Composer extends StatelessWidget {
   final String? errorText;
   final List<GroupMember> mentionCandidates;
   final ValueChanged<GroupMember> onSelectMention;
+
+  /// `@here` and roles offered above the members.
+  final List<SpecialMention> specialMentionCandidates;
+  final ValueChanged<SpecialMention> onSelectSpecialMention;
 
   /// Custom emoji offered while `:name` is typed.
   final List<CircleEmoji> emojiCandidates;
@@ -3768,6 +3996,10 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
   final Future<void> Function() onPickSticker;
+  final Future<void> Function() onPickGif;
+
+  /// False once the server said GIF search isn't set up.
+  final bool gifAvailable;
   final bool isRecordingVoice;
   final bool isSendingVoice;
   final Future<void> Function() onStartVoiceRecording;
@@ -3790,6 +4022,7 @@ class _Composer extends StatelessWidget {
     final isBusy = isSending || isSendingImage || isSendingVoice;
     // Edits are not new messages, so slowmode leaves them alone.
     final isSlowed = slowmodeRemainingSeconds > 0 && !isEditing;
+    final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
 
     return SafeArea(
       top: false,
@@ -3857,6 +4090,14 @@ class _Composer extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                   ],
+                  if (specialMentionCandidates.isNotEmpty) ...[
+                    SpecialMentionCandidateList(
+                      candidates: specialMentionCandidates,
+                      onSelect: onSelectSpecialMention,
+                      maxHeight: math.min(150, availableHeight * 0.2),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (mentionCandidates.isNotEmpty) ...[
                     MentionCandidateList(
                       candidates: mentionCandidates,
@@ -3891,6 +4132,7 @@ class _Composer extends StatelessWidget {
                             _ComposerAttachment.file => onPickFile(),
                             _ComposerAttachment.poll => onCreatePoll(),
                             _ComposerAttachment.sticker => onPickSticker(),
+                            _ComposerAttachment.gif => onPickGif(),
                           }),
                           itemBuilder: (context) => [
                             PopupMenuItem(
@@ -3927,6 +4169,17 @@ class _Composer extends StatelessWidget {
                                 title: Text(tr('Send sticker')),
                               ),
                             ),
+                            // Wider screens have a GIF button of their own.
+                            if (compact)
+                              PopupMenuItem(
+                                value: _ComposerAttachment.gif,
+                                enabled: gifAvailable,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(Icons.gif_box_outlined),
+                                  title: Text(tr('Send GIF')),
+                                ),
+                              ),
                           ],
                         ),
                       const SizedBox(width: 8),
@@ -3991,6 +4244,23 @@ class _Composer extends StatelessWidget {
                               : const Icon(Icons.send),
                         ),
                       ] else ...[
+                        if (!compact) ...[
+                          IconButton(
+                            key: const ValueKey('composer-gif-button'),
+                            tooltip: gifAvailable
+                                ? tr('Send GIF')
+                                : tr(
+                                    "GIF search isn't set up on this server "
+                                    'yet.',
+                                  ),
+                            onPressed:
+                                !gifAvailable || isBusy || isEditing || isSlowed
+                                ? null
+                                : () => unawaited(onPickGif()),
+                            icon: const Icon(Icons.gif_box_outlined),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         IconButton(
                           tooltip: tr('Record voice message'),
                           onPressed: isBusy || isEditing || isSlowed
@@ -4026,7 +4296,7 @@ class _Composer extends StatelessWidget {
   }
 }
 
-enum _ComposerAttachment { image, file, poll, sticker }
+enum _ComposerAttachment { image, file, poll, sticker, gif }
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).

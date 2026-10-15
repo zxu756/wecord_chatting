@@ -419,6 +419,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/push/index.ts"
 
+[functions.gif-search]
+enabled = true
+# Signed-in users only; the GIPHY key (GIPHY_API_KEY secret) never leaves
+# the function.
+verify_jwt = true
+entrypoint = "./functions/gif-search/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_controller.dart';
+import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -74,6 +75,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 autofillHints: const [AutofillHints.password],
                 onFieldSubmitted: (_) => _submit(),
               ),
+              if (!_isCreatingAccount)
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton(
+                    onPressed: state.isLoading ? null : _forgotPassword,
+                    child: Text(tr('Forgot password?')),
+                  ),
+                ),
               if (state.errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -111,6 +120,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
+  Future<void> _forgotPassword() async {
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (context) =>
+          ForgotPasswordDialog(initialEmail: _emailController.text.trim()),
+    );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            tr('Check your email for a link to reset your password.'),
+          ),
+        ),
+      );
+    }
+  }
+
   void _submit() {
     final controller = ref.read(authControllerProvider.notifier);
 
@@ -125,5 +151,101 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
 
     controller.signIn(_emailController.text, _passwordController.text);
+  }
+}
+
+/// Asks for the account's email and sends it a password reset link.
+/// Pops true once the email is sent.
+class ForgotPasswordDialog extends ConsumerStatefulWidget {
+  const ForgotPasswordDialog({this.initialEmail = '', super.key});
+
+  final String initialEmail;
+
+  @override
+  ConsumerState<ForgotPasswordDialog> createState() =>
+      _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends ConsumerState<ForgotPasswordDialog> {
+  late final _emailController = TextEditingController(
+    text: widget.initialEmail,
+  );
+  var _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = tr('Email is required.'));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(passwordRecoveryRepositoryProvider)
+          .sendPasswordReset(email);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _error = passwordRecoveryErrorMessage(error);
+        });
+      }
+      return;
+    }
+    if (mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(tr('Reset your password')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            tr(
+              "Enter your account's email and we'll send you a link to set "
+              'a new password.',
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: const ValueKey('forgot-password-email'),
+            controller: _emailController,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: tr('Email'),
+              errorText: _error,
+            ),
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            onSubmitted: (_) => _send(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.of(context).pop(false),
+          child: Text(tr('Cancel')),
+        ),
+        FilledButton(
+          onPressed: _sending ? null : _send,
+          child: Text(tr('Send link')),
+        ),
+      ],
+    );
   }
 }

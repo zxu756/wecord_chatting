@@ -9,6 +9,7 @@ import 'package:wecord/shared/l10n/zh/zh_chat_thread.dart';
 import 'package:wecord/shared/l10n/zh/zh_chats.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_core.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
+import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 
 /// Every area's map, for checks.
@@ -21,6 +22,7 @@ const zhAreas = <Map<String, String>>[
   zhCirclesCore,
   zhCirclesMore,
   zhPush,
+  zhLeftovers,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

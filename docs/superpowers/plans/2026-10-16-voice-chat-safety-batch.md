@@ -39,31 +39,43 @@ here up front and new Chinese strings go in a new area map per worktree.
 9. Custom emoji lists refresh live; group admins (not only the owner) can
    pin; the reactions query gets the index or rewrite it needs; files of
    deleted channels are removed from storage. Migrations `202610160014` to
-   `202610160016` as needed.
+   `202610160017`.
 10. Branded web icons and manifest; `wrangler.jsonc` and a deploy script in
     the repo; sign-up and reset emails redirect to the web app's own URL.
+
+Wave A is merged (presence, profile, chat, voice and leftovers), with
+its migrations pushed. Wave B numbers start after the leftovers' 0017 so
+they sort after everything already on the remote.
 
 ## Wave B (after wave A is merged)
 
 ### Moderation and safety
 11. AutoMod: keyword and pattern filters, spam limits, and actions (block,
-    alert channel, timeout). Migration `202610160008`.
+    alert channel, timeout). Migration `202610160020`.
 12. Member onboarding: rules to accept before chatting, then a welcome
-    screen. Migration `202610160009`.
+    screen. Migration `202610160021`.
 13. Two-step verification with an authenticator app (Supabase MFA TOTP).
 
 ### Circles
 14. Announcement channels that other circles can follow, with a publish
-    action that forwards posts. Migration `202610160010`.
+    action that forwards posts. Migration `202610160022`.
 15. Circle templates (create a circle from a saved layout). Migration
-    `202610160011`.
-16. Circle tags shown next to member names. Migration `202610160012`.
+    `202610160023`.
+16. Circle tags shown next to member names. Migration `202610160024`.
 17. A bot API: bot accounts with tokens and a REST Edge Function for
     reading and sending messages and answering slash commands. Migration
-    `202610160013`.
+    `202610160025`.
 
 ### Stage and soundboard
 18. Stage channels: speakers and an audience, raising hands, inviting to
-    speak. Migration `202610160006`.
+    speak. Migration `202610160018`.
 19. Soundboard: short uploaded sounds played into voice channels.
-    Migration `202610160007`.
+    Migration `202610160019`.
+
+### Phone layout
+20. A phone home closer to the observed mobile layout: the server rail and
+    the conversation panel run edge to edge under the status bar; the
+    panel has a title, a search button, an Add Friends button and a new
+    message button, a row of online friends, and conversation rows with the
+    last message and its age; the bottom tab bar gives way to a floating
+    user panel (status, profile, notifications).

@@ -1290,7 +1290,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     final rows = await _client
         .from('messages')
         .select(
-          '*,reactions,is_pinned,sender_nickname,sender_role_color,thread_summary,poll_results,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+          '*,reactions,is_pinned,sender_nickname,sender_circle_avatar,sender_role_color,thread_summary,poll_results,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
         )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)

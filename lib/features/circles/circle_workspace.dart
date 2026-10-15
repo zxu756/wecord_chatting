@@ -14,8 +14,10 @@ import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
+import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
@@ -26,6 +28,7 @@ import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 
 typedef CircleChannelViewBuilder =
     Widget Function(
@@ -691,6 +694,10 @@ class CircleMemberList extends ConsumerWidget {
     online.sort(byRank);
     offline.sort(_compareNames);
     final theme = Theme.of(context);
+    final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
+    final circleAvatars =
+        ref.watch(circleMemberAvatarsProvider(detail.circle.id)).valueOrNull ??
+        const <String, String>{};
     final groups = [
       for (final role in detail.roles)
         if (hoisted[role.id] case final members?) (role.name, members, true),
@@ -724,6 +731,12 @@ class CircleMemberList extends ConsumerWidget {
                   _MemberRow(
                     member: member,
                     isOnline: isOnline,
+                    circleAvatarUrl: circleAvatars[member.profile.id],
+                    presence: presenceOf(
+                      member.profile.id,
+                      onlineUserIds: onlineUserIds,
+                      statuses: presenceStatuses,
+                    ),
                     roleColor: detail.roleColorOf(member),
                     onChangeNickname: detail.canChangeNickname(member)
                         ? () => onChangeNickname(member)
@@ -790,6 +803,8 @@ class _MemberRow extends ConsumerWidget {
   const _MemberRow({
     required this.member,
     required this.isOnline,
+    this.presence,
+    this.circleAvatarUrl,
     this.roleColor,
     this.onChangeNickname,
     this.onManageRoles,
@@ -801,6 +816,12 @@ class _MemberRow extends ConsumerWidget {
 
   final CircleMember member;
   final bool isOnline;
+
+  /// Online, Idle or Do Not Disturb; null while offline.
+  final PresenceStatus? presence;
+
+  /// The member's avatar for this circle, shown instead of their usual one.
+  final String? circleAvatarUrl;
 
   /// The member's highest coloured role, as 0xRRGGBB.
   final int? roleColor;
@@ -821,8 +842,9 @@ class _MemberRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final profile = member.profile;
+    final storedAvatarUrl = circleAvatarUrl ?? profile.avatarUrl;
     final avatarUrl = ref
-        .watch(avatarDisplayUrlProvider(profile.avatarUrl))
+        .watch(avatarDisplayUrlProvider(storedAvatarUrl))
         .valueOrNull;
     final name = member.displayName;
     final roleIcon = switch (member.role) {
@@ -849,7 +871,7 @@ class _MemberRow extends ConsumerWidget {
                     : NetworkImage(avatarUrl),
                 onBackgroundImageError: avatarUrl == null
                     ? null
-                    : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
+                    : (_, _) => refreshAvatarDisplayUrl(ref, storedAvatarUrl),
                 child: avatarUrl == null
                     ? Text(name.characters.first.toUpperCase())
                     : null,
@@ -857,22 +879,14 @@ class _MemberRow extends ConsumerWidget {
               Positioned(
                 right: -2,
                 bottom: -2,
-                child: Container(
+                child: PresenceIndicator(
                   key: ValueKey(
                     isOnline
                         ? 'member-online-${profile.id}'
                         : 'member-offline-${profile.id}',
                   ),
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isOnline ? Colors.green : colorScheme.outline,
-                    border: Border.all(
-                      color: colorScheme.surfaceContainerLow,
-                      width: 2,
-                    ),
-                  ),
+                  status: isOnline ? presence ?? PresenceStatus.online : null,
+                  borderColor: colorScheme.surfaceContainerLow,
                 ),
               ),
             ],

@@ -14,6 +14,7 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
+import 'package:wecord/features/profile/circle_avatar_sheet.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -817,6 +818,12 @@ class _SidebarHeader extends StatelessWidget {
               openCircleEmojisScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
               onChangeNickname(currentMember!);
+            case _CircleMenuAction.changeCircleAvatar:
+              showCircleAvatarSheet(
+                context,
+                circleId: detail.circle.id,
+                member: currentMember!,
+              );
             case _CircleMenuAction.notificationSettings:
               showCircleNotificationSettingsSheet(
                 context,
@@ -901,6 +908,14 @@ class _SidebarHeader extends StatelessWidget {
                 title: Text(tr('Change my nickname')),
               ),
             ),
+          if (currentMember != null)
+            PopupMenuItem(
+              value: _CircleMenuAction.changeCircleAvatar,
+              child: ListTile(
+                leading: const Icon(Icons.face_retouching_natural_outlined),
+                title: Text(tr('Change circle avatar')),
+              ),
+            ),
           if (detail.isOwner)
             PopupMenuItem(
               value: _CircleMenuAction.transferOwnership,
@@ -948,6 +963,7 @@ enum _CircleMenuAction {
   emojis,
   notificationSettings,
   changeNickname,
+  changeCircleAvatar,
   transferOwnership,
   leave,
 }

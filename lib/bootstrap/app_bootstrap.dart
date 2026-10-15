@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
@@ -50,6 +51,8 @@ class WeCordApp extends ConsumerWidget {
       supportedLocales: const [Locale('en'), Locale('zh')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
+      builder: (context, child) =>
+          PresenceActivityListener(child: child ?? const SizedBox.shrink()),
     );
   }
 }

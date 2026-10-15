@@ -1,82 +1,86 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Presence, SinglePresenceState;
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 
 void main() {
-  test('tracks the current user when online status is shown', () async {
-    final dataSource = FakePresenceDataSource()..showOnlineStatusValue = true;
+  test('loads the saved status and show-online switch', () async {
+    final dataSource = FakePresenceDataSource()
+      ..row = {'presence_status': 'dnd', 'show_online_status': false};
     final repository = SupabasePresenceRepository.withDataSource(
       dataSource,
       currentUserId: () => 'user-1',
     );
 
-    final updates = <Set<String>>[];
-    final subscription = repository.onlineUserIds().listen(updates.add);
-    await pumpEventQueue();
-    dataSource.updates.add({'user-1'});
-    dataSource.updates.add({'user-1', 'user-2'});
-    await pumpEventQueue();
-    await subscription.cancel();
+    final settings = await repository.loadSettings();
 
-    expect(dataSource.privacyRequests, ['user-1']);
-    expect(dataSource.joins, [(currentUserId: 'user-1', trackSelf: true)]);
-    expect(updates, [
-      {'user-1'},
-      {'user-1', 'user-2'},
-    ]);
-    expect(dataSource.cancelled, isTrue);
+    expect(dataSource.settingsRequests, ['user-1']);
+    expect(settings.status, PresenceStatus.doNotDisturb);
+    expect(settings.showOnlineStatus, isFalse);
+    expect(settings.hidden, isTrue);
   });
 
-  test('missing privacy settings default to showing online status', () async {
+  test('missing settings default to online and shown', () async {
+    final repository = SupabasePresenceRepository.withDataSource(
+      FakePresenceDataSource(),
+      currentUserId: () => 'user-1',
+    );
+
+    final settings = await repository.loadSettings();
+
+    expect(settings, const PresenceSettings());
+    expect(settings.hidden, isFalse);
+  });
+
+  test('saves the status and the switch through RPCs', () async {
     final dataSource = FakePresenceDataSource();
     final repository = SupabasePresenceRepository.withDataSource(
       dataSource,
       currentUserId: () => 'user-1',
     );
 
-    final subscription = repository.onlineUserIds().listen((_) {});
-    await pumpEventQueue();
-    await subscription.cancel();
+    await repository.setStatus(PresenceStatus.invisible);
+    await repository.setShowOnlineStatus(false);
 
-    expect(dataSource.joins.single.trackSelf, isTrue);
-  });
-
-  test('hidden online status watches without tracking', () async {
-    final dataSource = FakePresenceDataSource()..showOnlineStatusValue = false;
-    final repository = SupabasePresenceRepository.withDataSource(
-      dataSource,
-      currentUserId: () => 'user-1',
-    );
-
-    final updates = <Set<String>>[];
-    final subscription = repository.onlineUserIds().listen(updates.add);
-    await pumpEventQueue();
-    dataSource.updates.add({'user-2'});
-    await pumpEventQueue();
-    await subscription.cancel();
-
-    expect(dataSource.joins, [(currentUserId: 'user-1', trackSelf: false)]);
-    expect(updates, [
-      {'user-2'},
+    expect(dataSource.rpcs.map((call) => call.$1), [
+      'set_presence_status',
+      'set_show_online_status',
     ]);
+    expect(dataSource.rpcs.first.$2, {'new_status': 'invisible'});
+    expect(dataSource.rpcs.last.$2, {'show': false});
   });
 
-  test('an unreadable privacy setting still tracks', () async {
-    final dataSource = FakePresenceDataSource()
-      ..privacyError = StateError('offline');
+  test('joins with the current user and their status', () async {
+    final dataSource = FakePresenceDataSource();
     final repository = SupabasePresenceRepository.withDataSource(
       dataSource,
       currentUserId: () => 'user-1',
     );
+    final own = ValueNotifier<PresenceStatus?>(PresenceStatus.idle);
 
-    final subscription = repository.onlineUserIds().listen((_) {});
+    final updates = <Map<String, PresenceStatus>>[];
+    final subscription = repository.statuses(own).listen(updates.add);
+    await pumpEventQueue();
+    dataSource.updates.add({
+      'user-1': PresenceStatus.idle,
+      'user-2': PresenceStatus.doNotDisturb,
+    });
     await pumpEventQueue();
     await subscription.cancel();
 
-    expect(dataSource.joins.single.trackSelf, isTrue);
+    expect(dataSource.joins.single.currentUserId, 'user-1');
+    expect(dataSource.joins.single.ownStatus, same(own));
+    expect(updates.single, {
+      'user-1': PresenceStatus.idle,
+      'user-2': PresenceStatus.doNotDisturb,
+    });
+    expect(dataSource.cancelled, isTrue);
   });
 
   test('signed out yields nobody and joins nothing', () async {
@@ -86,69 +90,203 @@ void main() {
       currentUserId: () => null,
     );
 
-    expect(await repository.onlineUserIds().toList(), [<String>{}]);
+    expect(await repository.statuses(ValueNotifier(null)).toList(), [
+      <String, PresenceStatus>{},
+    ]);
     expect(dataSource.joins, isEmpty);
+    expect(await repository.loadSettings(), const PresenceSettings());
   });
 
-  test('onlineUserIdsProvider joins only while signed in', () async {
-    final presence = FakePresenceRepository();
-    final authState = StreamController<AuthUser?>.broadcast();
-    final container = ProviderContainer(
-      overrides: [
-        presenceRepositoryProvider.overrideWithValue(presence),
-        authStateProvider.overrideWith((ref) => authState.stream),
-      ],
+  test('a channel key shows its most present status', () {
+    Presence presence(Object? status) => Presence(
+      presenceRef: 'ref',
+      payload: {'user_id': 'x', 'status': ?status},
     );
-    addTearDown(container.dispose);
-    final subscription = container.listen(
-      onlineUserIdsProvider,
-      (previous, next) {},
+
+    final statuses = presenceStatusesFromState([
+      SinglePresenceState(
+        key: 'two-tabs',
+        presences: [presence('idle'), presence('online')],
+      ),
+      SinglePresenceState(
+        key: 'busy',
+        presences: [presence('idle'), presence('dnd')],
+      ),
+      SinglePresenceState(key: 'away', presences: [presence('idle')]),
+      SinglePresenceState(key: 'old-client', presences: [presence(null)]),
+      SinglePresenceState(key: 'hidden', presences: [presence('invisible')]),
+    ]);
+
+    expect(statuses, {
+      'two-tabs': PresenceStatus.online,
+      'busy': PresenceStatus.doNotDisturb,
+      'away': PresenceStatus.idle,
+      'old-client': PresenceStatus.online,
+    });
+  });
+
+  test('presenceOf needs someone online and defaults to Online', () {
+    const online = {'a', 'b'};
+    final statuses = {'a': PresenceStatus.idle};
+
+    expect(
+      presenceOf('a', onlineUserIds: online, statuses: statuses),
+      PresenceStatus.idle,
     );
-    addTearDown(subscription.close);
+    expect(
+      presenceOf('b', onlineUserIds: online, statuses: statuses),
+      PresenceStatus.online,
+    );
+    expect(presenceOf('c', onlineUserIds: online, statuses: statuses), isNull);
+    expect(presenceOf(null, onlineUserIds: online), isNull);
+  });
 
-    authState.add(null);
-    await pumpEventQueue();
-    expect(container.read(onlineUserIdsProvider).valueOrNull, <String>{});
-    expect(presence.listens, 0);
+  group('providers', () {
+    late FakePresenceRepository presence;
+    late StreamController<AuthUser?> authState;
+    late ProviderContainer container;
 
-    authState.add(const AuthUser(id: 'user-1'));
-    await pumpEventQueue();
-    presence.online.add({'user-1', 'user-2'});
-    await pumpEventQueue();
-    expect(presence.listens, 1);
-    expect(container.read(onlineUserIdsProvider).valueOrNull, {
-      'user-1',
-      'user-2',
+    setUp(() {
+      presence = FakePresenceRepository();
+      authState = StreamController<AuthUser?>.broadcast();
+      container = ProviderContainer(
+        overrides: [
+          presenceRepositoryProvider.overrideWithValue(presence),
+          authStateProvider.overrideWith((ref) => authState.stream),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('onlineUserIdsProvider joins only while signed in', () async {
+      final subscription = container.listen(
+        onlineUserIdsProvider,
+        (previous, next) {},
+      );
+      addTearDown(subscription.close);
+
+      authState.add(null);
+      await pumpEventQueue(times: 100);
+      expect(container.read(onlineUserIdsProvider).valueOrNull, <String>{});
+      expect(presence.listens, 0);
+
+      authState.add(const AuthUser(id: 'user-1'));
+      await pumpEventQueue();
+      presence.online.add({
+        'user-1': PresenceStatus.online,
+        'user-2': PresenceStatus.idle,
+      });
+      await pumpEventQueue(times: 100);
+      expect(presence.listens, 1);
+      expect(container.read(onlineUserIdsProvider).valueOrNull, {
+        'user-1',
+        'user-2',
+      });
+      expect(
+        container.read(presenceStatusesProvider).valueOrNull?['user-2'],
+        PresenceStatus.idle,
+      );
+    });
+
+    test('the broadcast status follows the settings and idleness', () async {
+      presence.settings = const PresenceSettings();
+      final subscription = container.listen(
+        presenceStatusesProvider,
+        (previous, next) {},
+      );
+      addTearDown(subscription.close);
+      authState.add(const AuthUser(id: 'user-1'));
+      await pumpEventQueue();
+
+      final own = presence.ownStatus!;
+      expect(own.value, PresenceStatus.online);
+      expect(container.read(ownPresenceProvider), PresenceStatus.online);
+
+      container.read(presenceInactiveProvider.notifier).state = true;
+      await pumpEventQueue();
+      expect(own.value, PresenceStatus.idle);
+      expect(container.read(ownPresenceProvider), PresenceStatus.idle);
+
+      await container
+          .read(presenceSettingsProvider.notifier)
+          .setStatus(PresenceStatus.doNotDisturb);
+      await pumpEventQueue();
+      // Do Not Disturb stays Do Not Disturb while away.
+      expect(own.value, PresenceStatus.doNotDisturb);
+      expect(presence.savedStatuses, [PresenceStatus.doNotDisturb]);
+
+      await container
+          .read(presenceSettingsProvider.notifier)
+          .setStatus(PresenceStatus.invisible);
+      await pumpEventQueue();
+      expect(own.value, isNull);
+      expect(container.read(ownPresenceProvider), PresenceStatus.invisible);
+
+      await container
+          .read(presenceSettingsProvider.notifier)
+          .setStatus(PresenceStatus.online);
+      await container
+          .read(presenceSettingsProvider.notifier)
+          .setShowOnlineStatus(false);
+      await pumpEventQueue();
+      expect(own.value, isNull);
+      expect(container.read(ownPresenceProvider), PresenceStatus.invisible);
+      expect(presence.savedShowOnline, [false]);
+    });
+
+    test('a failed save puts the old status back', () async {
+      presence.saveError = StateError('offline');
+      authState.add(const AuthUser(id: 'user-1'));
+      final subscription = container.listen(
+        presenceSettingsProvider,
+        (previous, next) {},
+      );
+      addTearDown(subscription.close);
+      await pumpEventQueue();
+
+      await expectLater(
+        container
+            .read(presenceSettingsProvider.notifier)
+            .setStatus(PresenceStatus.idle),
+        throwsStateError,
+      );
+      expect(
+        container.read(presenceSettingsProvider).valueOrNull?.status,
+        PresenceStatus.online,
+      );
     });
   });
 }
 
 class FakePresenceDataSource implements PresenceDataSource {
-  bool? showOnlineStatusValue;
-  Object? privacyError;
-  final privacyRequests = <String>[];
-  final joins = <({String currentUserId, bool trackSelf})>[];
-  final updates = StreamController<Set<String>>.broadcast();
+  Map<String, dynamic>? row;
+  final settingsRequests = <String>[];
+  final rpcs = <(String, Map<String, dynamic>)>[];
+  final joins =
+      <({String currentUserId, ValueListenable<PresenceStatus?> ownStatus})>[];
+  final updates = StreamController<Map<String, PresenceStatus>>.broadcast();
   var cancelled = false;
 
   @override
-  Future<bool?> showOnlineStatus(String userId) async {
-    privacyRequests.add(userId);
-    if (privacyError case final error?) {
-      throw error;
-    }
-    return showOnlineStatusValue;
+  Future<Map<String, dynamic>?> settings(String userId) async {
+    settingsRequests.add(userId);
+    return row;
   }
 
   @override
-  Stream<Set<String>> presence({
+  Future<void> rpc(String functionName, Map<String, dynamic> params) async {
+    rpcs.add((functionName, params));
+  }
+
+  @override
+  Stream<Map<String, PresenceStatus>> presence({
     required String currentUserId,
-    required bool trackSelf,
+    required ValueListenable<PresenceStatus?> ownStatus,
   }) {
-    joins.add((currentUserId: currentUserId, trackSelf: trackSelf));
-    late StreamController<Set<String>> controller;
-    StreamSubscription<Set<String>>? subscription;
-    controller = StreamController<Set<String>>(
+    joins.add((currentUserId: currentUserId, ownStatus: ownStatus));
+    late StreamController<Map<String, PresenceStatus>> controller;
+    StreamSubscription<Map<String, PresenceStatus>>? subscription;
+    controller = StreamController<Map<String, PresenceStatus>>(
       onListen: () {
         subscription = updates.stream.listen(controller.add);
       },
@@ -162,12 +300,39 @@ class FakePresenceDataSource implements PresenceDataSource {
 }
 
 class FakePresenceRepository implements PresenceRepository {
-  final online = StreamController<Set<String>>.broadcast();
+  final online = StreamController<Map<String, PresenceStatus>>.broadcast();
   var listens = 0;
+  var settings = const PresenceSettings();
+  Object? saveError;
+  ValueListenable<PresenceStatus?>? ownStatus;
+  final savedStatuses = <PresenceStatus>[];
+  final savedShowOnline = <bool>[];
 
   @override
-  Stream<Set<String>> onlineUserIds() {
+  Future<PresenceSettings> loadSettings() async => settings;
+
+  @override
+  Future<void> setStatus(PresenceStatus status) async {
+    if (saveError case final error?) {
+      throw error;
+    }
+    savedStatuses.add(status);
+  }
+
+  @override
+  Future<void> setShowOnlineStatus(bool show) async {
+    if (saveError case final error?) {
+      throw error;
+    }
+    savedShowOnline.add(show);
+  }
+
+  @override
+  Stream<Map<String, PresenceStatus>> statuses(
+    ValueListenable<PresenceStatus?> ownStatus,
+  ) {
     listens += 1;
+    this.ownStatus = ownStatus;
     return online.stream;
   }
 }

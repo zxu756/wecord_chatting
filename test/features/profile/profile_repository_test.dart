@@ -29,6 +29,41 @@ void main() {
     expect(dataSource.calls.single.params, {'target_user_id': 'user-2'});
   });
 
+  test('getProfileSummary parses the banner, pronouns and mutuals', () async {
+    final dataSource = FakeProfileDataSource()
+      ..rpcResult = [
+        {
+          'id': 'user-2',
+          'username': 'ada',
+          'display_name': 'Ada',
+          'bio': '',
+          'relationship_status': 'friend',
+          'banner_url': 'profile-banners/user-2/1-sky.png',
+          'pronouns': 'she/her',
+          'mutual_friends': [
+            {
+              'id': 'user-3',
+              'username': 'grace',
+              'display_name': '',
+              'avatar_url': null,
+            },
+          ],
+          'mutual_circles': [
+            {'id': 'circle-1', 'name': 'Hikers', 'avatar_url': null},
+          ],
+        },
+      ];
+    final repository = ProfileRepository.withDataSource(dataSource);
+
+    final summary = await repository.getProfileSummary('user-2');
+
+    expect(summary.profile.bannerUrl, 'profile-banners/user-2/1-sky.png');
+    expect(summary.profile.pronouns, 'she/her');
+    expect(summary.mutualFriends.single.id, 'user-3');
+    expect(summary.mutualFriends.single.label, 'grace');
+    expect(summary.mutualCircles.single.name, 'Hikers');
+  });
+
   test('block report and unblock use narrow RPCs', () async {
     final dataSource = FakeProfileDataSource();
     final repository = ProfileRepository.withDataSource(dataSource);

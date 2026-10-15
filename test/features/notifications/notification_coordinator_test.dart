@@ -87,6 +87,36 @@ void main() {
     expect(harness.notifications, isEmpty);
   });
 
+  test('Do Not Disturb silences messages until it ends', () async {
+    var doNotDisturb = true;
+    final harness = NotificationCoordinatorHarness(
+      doNotDisturb: () => doNotDisturb,
+    );
+    harness.seed([harness.summary(id: 'c1')]);
+    await harness.start();
+
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 1,
+        body: 'quiet',
+        lastMessageAt: DateTime.utc(2026, 5, 18, 12, 31),
+      ),
+    ]);
+    expect(harness.notifications, isEmpty);
+
+    doNotDisturb = false;
+    await harness.emit([
+      harness.summary(
+        id: 'c1',
+        unreadCount: 2,
+        body: 'loud',
+        lastMessageAt: DateTime.utc(2026, 5, 18, 12, 32),
+      ),
+    ]);
+    expect(harness.notifications.single.body, 'loud');
+  });
+
   test('uses New message when previews are disabled', () async {
     final harness = NotificationCoordinatorHarness(previewsEnabled: false);
     harness.seed([harness.summary(id: 'c1')]);
@@ -677,6 +707,22 @@ void main() {
       expect(disabled.harness.notifications, isEmpty);
     });
 
+    test('Do Not Disturb silences event reminders', () async {
+      var now = start.subtract(const Duration(minutes: 40));
+      final harness = NotificationCoordinatorHarness(
+        circlesRepository: circle_fakes.FakeCirclesRepository()
+          ..eventReminders = [reminder()],
+        now: () => now,
+        doNotDisturb: () => true,
+      );
+      harness.seed([]);
+      await harness.start();
+      now = start.subtract(const Duration(minutes: 10));
+      await harness.poll([]);
+
+      expect(harness.notifications, isEmpty);
+    });
+
     test('reminders are fetched again after a while', () async {
       final setup = setUpReminders([]);
       setup.harness.seed([]);
@@ -713,6 +759,7 @@ class NotificationCoordinatorHarness {
     String? currentUserId = 'current-user',
     CirclesRepository? circlesRepository,
     DateTime Function()? now,
+    bool Function()? doNotDisturb,
   }) : _activeConversationId = activeConversationId,
        _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
@@ -733,6 +780,7 @@ class NotificationCoordinatorHarness {
       preferencesRepository: _preferencesRepository,
       notificationService: _notificationService,
       activeConversationId: () => _activeConversationId,
+      doNotDisturb: doNotDisturb,
       now: now ?? () => DateTime.utc(2026, 5, 18, 12, 30),
       pollTicks: _pollTicks.stream,
     );

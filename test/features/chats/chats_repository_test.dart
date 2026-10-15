@@ -1281,6 +1281,7 @@ void main() {
             ],
           },
           'sender_nickname': 'Admiral',
+          'sender_circle_avatar': 'user-2/1-circle.png',
           'sender_role_color': 3447003,
         },
         {
@@ -1303,9 +1304,11 @@ void main() {
     expect(messages.first.sender?.displayLabel, 'Amazing Grace');
     expect(messages.first.sender?.avatarUrl, 'user-2/avatar.png');
     expect(messages.first.senderNickname, 'Admiral');
+    expect(messages.first.senderCircleAvatarUrl, 'user-2/1-circle.png');
     expect(messages.first.senderRoleColor, 3447003);
     expect(messages.last.sender, isNull);
     expect(messages.last.senderNickname, isNull);
+    expect(messages.last.senderCircleAvatarUrl, isNull);
   });
 
   group('link previews', () {

@@ -13,6 +13,8 @@ class Profile {
     this.alias,
     this.avatarUrl,
     this.customStatus,
+    this.bannerUrl,
+    this.pronouns,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,8 @@ class Profile {
       createdAt: _parseTimestamp(json['created_at']),
       updatedAt: _parseTimestamp(json['updated_at']),
       customStatus: CustomStatus.maybeFromJson(json['custom_status']),
+      bannerUrl: _nonEmpty(json['banner_url']),
+      pronouns: _nonEmpty(json['pronouns']),
     );
   }
 
@@ -41,6 +45,14 @@ class Profile {
   /// Their custom status, when the source included one (and it had not
   /// expired by then).
   final CustomStatus? customStatus;
+
+  /// A banner image (a stored `profile-banners/…` path or an http(s) URL).
+  final String? bannerUrl;
+
+  /// Short pronouns shown next to their name, up to [maxPronounsLength].
+  final String? pronouns;
+
+  static const maxPronounsLength = 40;
 
   String get displayLabel {
     final value = alias?.trim();
@@ -67,6 +79,8 @@ class Profile {
     DateTime? createdAt,
     DateTime? updatedAt,
     Object? customStatus = _sentinel,
+    Object? bannerUrl = _sentinel,
+    Object? pronouns = _sentinel,
   }) {
     return Profile(
       id: id ?? this.id,
@@ -82,8 +96,19 @@ class Profile {
       customStatus: identical(customStatus, _sentinel)
           ? this.customStatus
           : customStatus as CustomStatus?,
+      bannerUrl: identical(bannerUrl, _sentinel)
+          ? this.bannerUrl
+          : bannerUrl as String?,
+      pronouns: identical(pronouns, _sentinel)
+          ? this.pronouns
+          : pronouns as String?,
     );
   }
+}
+
+String? _nonEmpty(Object? value) {
+  final text = value is String ? value.trim() : null;
+  return text == null || text.isEmpty ? null : text;
 }
 
 DateTime _parseTimestamp(Object? value) {

@@ -16,7 +16,9 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -31,10 +33,56 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
 void main() {
+  testWidgets('member list shows statuses and circle avatars', (tester) async {
+    final detail = _detail();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          presenceStatusesProvider.overrideWith(
+            (ref) => Stream.value({'user-1': PresenceStatus.doNotDisturb}),
+          ),
+          circleMemberAvatarsProvider(detail.circle.id).overrideWith(
+            (ref) async => {'user-1': 'https://example.com/circle.png'},
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                CircleMemberList(
+                  detail: detail,
+                  onlineUserIds: {
+                    for (final member in detail.members) member.profile.id,
+                  },
+                  onChangeNickname: (_) {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final indicator = tester.widget<PresenceIndicator>(
+      find.byKey(const ValueKey('member-online-user-1')),
+    );
+    expect(indicator.status, PresenceStatus.doNotDisturb);
+    final images = [
+      for (final avatar in tester.widgetList<CircleAvatar>(
+        find.byType(CircleAvatar),
+      ))
+        if (avatar.backgroundImage case final NetworkImage image) image.url,
+    ];
+    expect(images, contains('https://example.com/circle.png'));
+  });
+
   testWidgets('narrow circle home opens channels full screen', (tester) async {
     final repository = FakeCirclesRepository()
       ..detail = _detail()
@@ -2461,6 +2509,8 @@ void main() {
 
       await openMenu(tester);
       expect(find.text('Leave circle'), findsNothing);
+      await tester.ensureVisible(find.text('Transfer ownership'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Transfer ownership'));
       await tester.pumpAndSettle();
 

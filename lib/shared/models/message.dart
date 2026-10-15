@@ -62,6 +62,7 @@ class ChatMessage {
     this.suppressEmbeds = false,
     this.sender,
     this.senderNickname,
+    this.senderCircleAvatarUrl,
     this.senderRoleColor,
     this.threadSummary,
     this.pollResults,
@@ -101,6 +102,7 @@ class ChatMessage {
           ? Profile.fromJson(json['sender'] as Map<String, dynamic>)
           : null,
       senderNickname: json['sender_nickname'] as String?,
+      senderCircleAvatarUrl: json['sender_circle_avatar'] as String?,
       senderRoleColor: (json['sender_role_color'] as num?)?.toInt(),
       threadSummary: MessageThreadSummary.maybeFromJson(json['thread_summary']),
       pollResults: PollResults.maybeFromJson(json['poll_results']),
@@ -137,6 +139,10 @@ class ChatMessage {
 
   /// The sender's circle nickname in circle channel threads.
   final String? senderNickname;
+
+  /// The sender's avatar for this circle in circle channel threads, shown
+  /// instead of their usual one.
+  final String? senderCircleAvatarUrl;
 
   /// The colour (0xRRGGBB) of the sender's highest coloured circle role in
   /// circle channel threads.
@@ -269,6 +275,7 @@ class ChatMessage {
     bool? suppressEmbeds,
     Object? sender = _sentinel,
     Object? senderNickname = _sentinel,
+    Object? senderCircleAvatarUrl = _sentinel,
     Object? senderRoleColor = _sentinel,
     Object? threadSummary = _sentinel,
     Object? pollResults = _sentinel,
@@ -312,6 +319,9 @@ class ChatMessage {
       senderNickname: identical(senderNickname, _sentinel)
           ? this.senderNickname
           : senderNickname as String?,
+      senderCircleAvatarUrl: identical(senderCircleAvatarUrl, _sentinel)
+          ? this.senderCircleAvatarUrl
+          : senderCircleAvatarUrl as String?,
       senderRoleColor: identical(senderRoleColor, _sentinel)
           ? this.senderRoleColor
           : senderRoleColor as int?,

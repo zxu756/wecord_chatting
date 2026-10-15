@@ -1,7 +1,7 @@
 // Deletes the caller's account. prepare_account_deletion (run as the
 // caller) leaves their circles and groups and turns their profile into
-// "Deleted User"; then, with the service role, their avatar files and
-// their login are removed. Refuses with 409 owns_circles while they own a
+// "Deleted User"; then, with the service role, their avatar and banner
+// files and their login are removed. Refuses with 409 owns_circles while they own a
 // circle that has other members.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -12,7 +12,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const avatarBucket = "profile-avatars";
+// Each user's files sit in a folder named after them.
+const userBuckets = ["profile-avatars", "profile-banners"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -69,13 +70,15 @@ Deno.serve(async (request) => {
   });
 
   // Best effort: the profile no longer points at these files.
-  const { data: files } = await admin.storage.from(avatarBucket).list(
-    user.id,
-    { limit: 1000 },
-  );
-  const paths = (files ?? []).map((file) => `${user.id}/${file.name}`);
-  if (paths.length > 0) {
-    await admin.storage.from(avatarBucket).remove(paths);
+  for (const bucket of userBuckets) {
+    const { data: files } = await admin.storage.from(bucket).list(
+      user.id,
+      { limit: 1000 },
+    );
+    const paths = (files ?? []).map((file) => `${user.id}/${file.name}`);
+    if (paths.length > 0) {
+      await admin.storage.from(bucket).remove(paths);
+    }
   }
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);

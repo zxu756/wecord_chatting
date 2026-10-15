@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
+import 'package:wecord/features/profile/profile_banner.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/profile/report_user_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -116,9 +119,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              CircleAvatar(
-                radius: 40,
-                child: Text(_initials(profile.displayLabel)),
+              ProfileBannerHeader(
+                bannerUrl: profile.bannerUrl,
+                avatarRadius: 40,
+                avatar: FallbackAvatar(
+                  title: profile.displayLabel,
+                  avatarUrl: profile.avatarUrl,
+                  radius: 40,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -126,7 +134,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              Text('@${profile.username}', textAlign: TextAlign.center),
+              Text(
+                ['@${profile.username}', ?profile.pronouns].join(' · '),
+                key: const ValueKey('profile-username-line'),
+                textAlign: TextAlign.center,
+              ),
               if (activeCustomStatus(profile.customStatus) != null) ...[
                 const SizedBox(height: 8),
                 CustomStatusLabel(
@@ -164,9 +176,92 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 ),
                 onReport: () => showReportUserSheet(context, profile),
               ),
+              if (summary.mutualCircles.isNotEmpty)
+                _MutualSection(
+                  key: const ValueKey('mutual-circles'),
+                  title: summary.mutualCircles.length == 1
+                      ? tr('1 mutual circle')
+                      : tr('{count} mutual circles', {
+                          'count': summary.mutualCircles.length,
+                        }),
+                  children: [
+                    for (final circle in summary.mutualCircles)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: FallbackAvatar(
+                          title: circle.name,
+                          avatarUrl: circle.avatarUrl,
+                          radius: 18,
+                        ),
+                        title: Text(circle.name),
+                        onTap: () =>
+                            openPage(context, circleLocation(circle.id)),
+                      ),
+                  ],
+                ),
+              if (summary.mutualFriends.isNotEmpty)
+                _MutualSection(
+                  key: const ValueKey('mutual-friends'),
+                  title: summary.mutualFriends.length == 1
+                      ? tr('1 mutual friend')
+                      : tr('{count} mutual friends', {
+                          'count': summary.mutualFriends.length,
+                        }),
+                  children: [
+                    for (final friend in summary.mutualFriends)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: FallbackAvatar(
+                          title: friend.label,
+                          avatarUrl: friend.avatarUrl,
+                          radius: 18,
+                        ),
+                        title: Text(friend.label),
+                        subtitle: Text('@${friend.username}'),
+                        onTap: () => context.push(
+                          '${UserProfileScreen.path}/${friend.id}',
+                        ),
+                      ),
+                  ],
+                ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// The friends or circles a profile shares with the viewer.
+class _MutualSection extends StatelessWidget {
+  const _MutualSection({
+    required this.title,
+    required this.children,
+    super.key,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          ...children,
+        ],
       ),
     );
   }
@@ -236,18 +331,4 @@ class _ProfileActions extends StatelessWidget {
       ],
     );
   }
-}
-
-String _initials(String value) {
-  final parts = value
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  final first = parts.first.characters.first;
-  final second = parts.length > 1 ? parts.last.characters.first : '';
-  return '$first$second'.toUpperCase();
 }

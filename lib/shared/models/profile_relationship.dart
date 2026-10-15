@@ -30,6 +30,8 @@ class ProfileSummary {
     required this.outgoingRequestId,
     required this.isBlockedByMe,
     required this.hasBlockedMe,
+    this.mutualFriends = const <MutualFriend>[],
+    this.mutualCircles = const <MutualCircle>[],
   });
 
   factory ProfileSummary.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,14 @@ class ProfileSummary {
       outgoingRequestId: json['outgoing_request_id'] as String?,
       isBlockedByMe: json['is_blocked_by_me'] as bool? ?? false,
       hasBlockedMe: json['has_blocked_me'] as bool? ?? false,
+      mutualFriends: [
+        for (final item in _maps(json['mutual_friends']))
+          MutualFriend.fromJson(item),
+      ],
+      mutualCircles: [
+        for (final item in _maps(json['mutual_circles']))
+          MutualCircle.fromJson(item),
+      ],
     );
   }
 
@@ -51,6 +61,12 @@ class ProfileSummary {
   final String? outgoingRequestId;
   final bool isBlockedByMe;
   final bool hasBlockedMe;
+
+  /// Friends of both the viewer and this user (empty on their own profile).
+  final List<MutualFriend> mutualFriends;
+
+  /// Circles both the viewer and this user are in.
+  final List<MutualCircle> mutualCircles;
 
   bool get canStartChat =>
       relationshipStatus == ProfileRelationshipStatus.friend;
@@ -70,4 +86,53 @@ class ProfileSummary {
       'updated_at': json['updated_at'] ?? fallbackTimestamp,
     };
   }
+}
+
+Iterable<Map<String, dynamic>> _maps(Object? value) {
+  return value is List ? value.whereType<Map<String, dynamic>>() : const [];
+}
+
+/// A friend shared with someone, as their profile lists it.
+class MutualFriend {
+  const MutualFriend({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    this.avatarUrl,
+  });
+
+  factory MutualFriend.fromJson(Map<String, dynamic> json) {
+    return MutualFriend(
+      id: json['id'] as String,
+      username: json['username'] as String? ?? '',
+      displayName: json['display_name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+
+  final String id;
+  final String username;
+
+  /// Their display name, or the viewer's alias for them.
+  final String displayName;
+  final String? avatarUrl;
+
+  String get label => displayName.trim().isEmpty ? username : displayName;
+}
+
+/// A circle shared with someone, as their profile lists it.
+class MutualCircle {
+  const MutualCircle({required this.id, required this.name, this.avatarUrl});
+
+  factory MutualCircle.fromJson(Map<String, dynamic> json) {
+    return MutualCircle(
+      id: json['id'] as String,
+      name: json['name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+
+  final String id;
+  final String name;
+  final String? avatarUrl;
 }

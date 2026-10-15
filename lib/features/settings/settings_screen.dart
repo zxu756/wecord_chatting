@@ -8,6 +8,8 @@ import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
+import 'package:wecord/features/profile/profile_banner.dart';
+import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/features/push/push_settings_tile.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
@@ -48,16 +50,20 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _displayNameController = TextEditingController();
   final _bioController = TextEditingController();
+  final _pronounsController = TextEditingController();
   String? _loadedProfileId;
   String? _avatarUrl;
+  String? _bannerUrl;
   String? _errorText;
   var _saving = false;
   var _uploadingAvatar = false;
+  var _uploadingBanner = false;
 
   @override
   void dispose() {
     _displayNameController.dispose();
     _bioController.dispose();
+    _pronounsController.dispose();
     super.dispose();
   }
 
@@ -81,8 +87,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Center(
-                child: _ProfileAvatar(
+              ProfileBannerHeader(
+                bannerUrl: _bannerUrl,
+                avatar: _ProfileAvatar(
                   displayName: _displayNameController.text,
                   avatarUrl: _avatarUrl,
                   radius: 42,
@@ -104,6 +111,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         : const Icon(Icons.photo_camera_outlined),
                     label: Text(tr('Change avatar')),
                   ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('change-banner'),
+                    onPressed: _uploadingBanner ? null : _changeBanner,
+                    icon: _uploadingBanner
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.panorama_outlined),
+                    label: Text(tr('Change banner')),
+                  ),
+                  if (_bannerUrl != null)
+                    TextButton.icon(
+                      key: const ValueKey('remove-banner'),
+                      onPressed: _uploadingBanner
+                          ? null
+                          : () => setState(() => _bannerUrl = null),
+                      icon: const Icon(Icons.hide_image_outlined),
+                      label: Text(tr('Remove banner')),
+                    ),
                   _PresenceButton(
                     status: ref.watch(ownPresenceProvider),
                     onPressed: () => showPresenceStatusSheet(context),
@@ -128,6 +155,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('pronouns'),
+                controller: _pronounsController,
+                maxLength: Profile.maxPronounsLength,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: tr('Pronouns'),
+                  hintText: tr('Add your pronouns'),
+                ),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 4),
               TextField(
                 controller: _bioController,
                 decoration: InputDecoration(
@@ -320,7 +359,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadedProfileId = profile.id;
     _displayNameController.text = profile.displayName;
     _bioController.text = profile.bio;
+    _pronounsController.text = profile.pronouns ?? '';
     _avatarUrl = profile.avatarUrl;
+    _bannerUrl = profile.bannerUrl;
   }
 
   Future<void> _saveProfile() async {
@@ -337,6 +378,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             bio: _bioController.text.trim(),
             avatarUrl: _avatarUrl,
           );
+      // Pronouns and banner are saved separately, and only when changed.
+      final saved = ref.read(currentProfileProvider).valueOrNull;
+      final pronouns = _pronounsController.text.trim();
+      if (saved == null ||
+          pronouns != (saved.pronouns ?? '') ||
+          _bannerUrl != saved.bannerUrl) {
+        await ref
+            .read(profileExtrasRepositoryProvider)
+            .updateProfileExtras(pronouns: pronouns, bannerUrl: _bannerUrl);
+      }
       ref.invalidate(currentProfileProvider);
     } catch (_) {
       if (mounted) {
@@ -386,6 +437,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         setState(() {
           _uploadingAvatar = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _changeBanner() async {
+    setState(() {
+      _uploadingBanner = true;
+      _errorText = null;
+    });
+
+    try {
+      final image = await ref.read(imagePickerServiceProvider).pickImage();
+      if (image == null) {
+        return;
+      }
+      final bannerPath = await ref
+          .read(profileExtrasRepositoryProvider)
+          .uploadBanner(
+            fileName: image.fileName,
+            mimeType: image.mimeType,
+            bytes: image.bytes,
+          );
+      if (mounted) {
+        setState(() {
+          _bannerUrl = bannerPath;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorText = tr('Could not upload banner. Try again.');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingBanner = false;
         });
       }
     }

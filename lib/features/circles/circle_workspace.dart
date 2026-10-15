@@ -17,6 +17,7 @@ import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
+import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
@@ -694,6 +695,9 @@ class CircleMemberList extends ConsumerWidget {
     offline.sort(_compareNames);
     final theme = Theme.of(context);
     final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
+    final circleAvatars =
+        ref.watch(circleMemberAvatarsProvider(detail.circle.id)).valueOrNull ??
+        const <String, String>{};
     final groups = [
       for (final role in detail.roles)
         if (hoisted[role.id] case final members?) (role.name, members, true),
@@ -727,6 +731,7 @@ class CircleMemberList extends ConsumerWidget {
                   _MemberRow(
                     member: member,
                     isOnline: isOnline,
+                    circleAvatarUrl: circleAvatars[member.profile.id],
                     presence: presenceOf(
                       member.profile.id,
                       onlineUserIds: onlineUserIds,
@@ -799,6 +804,7 @@ class _MemberRow extends ConsumerWidget {
     required this.member,
     required this.isOnline,
     this.presence,
+    this.circleAvatarUrl,
     this.roleColor,
     this.onChangeNickname,
     this.onManageRoles,
@@ -813,6 +819,9 @@ class _MemberRow extends ConsumerWidget {
 
   /// Online, Idle or Do Not Disturb; null while offline.
   final PresenceStatus? presence;
+
+  /// The member's avatar for this circle, shown instead of their usual one.
+  final String? circleAvatarUrl;
 
   /// The member's highest coloured role, as 0xRRGGBB.
   final int? roleColor;
@@ -833,8 +842,9 @@ class _MemberRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final profile = member.profile;
+    final storedAvatarUrl = circleAvatarUrl ?? profile.avatarUrl;
     final avatarUrl = ref
-        .watch(avatarDisplayUrlProvider(profile.avatarUrl))
+        .watch(avatarDisplayUrlProvider(storedAvatarUrl))
         .valueOrNull;
     final name = member.displayName;
     final roleIcon = switch (member.role) {
@@ -861,7 +871,7 @@ class _MemberRow extends ConsumerWidget {
                     : NetworkImage(avatarUrl),
                 onBackgroundImageError: avatarUrl == null
                     ? null
-                    : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
+                    : (_, _) => refreshAvatarDisplayUrl(ref, storedAvatarUrl),
                 child: avatarUrl == null
                     ? Text(name.characters.first.toUpperCase())
                     : null,

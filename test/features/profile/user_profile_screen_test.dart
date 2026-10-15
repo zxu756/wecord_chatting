@@ -61,6 +61,63 @@ void main() {
     );
   });
 
+  testWidgets('profile page shows pronouns and what is shared', (tester) async {
+    final summary = friendSummary(displayName: 'Ada', username: 'ada');
+    final profileDataSource = FakeProfileDataSource()
+      ..rpcResult = [
+        {
+          ...summaryJson(summary),
+          'banner_url': 'https://example.com/banner.png',
+          'pronouns': 'she/her',
+          'mutual_friends': [
+            {
+              'id': 'user-3',
+              'username': 'grace',
+              'display_name': 'Grace',
+              'avatar_url': null,
+            },
+            {
+              'id': 'user-4',
+              'username': 'alan',
+              'display_name': 'Alan',
+              'avatar_url': null,
+            },
+          ],
+          'mutual_circles': [
+            {'id': 'circle-1', 'name': 'Hikers', 'avatar_url': null},
+          ],
+        },
+      ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileRepositoryProvider.overrideWithValue(
+            ProfileRepository.withDataSource(profileDataSource),
+          ),
+          contactsRepositoryProvider.overrideWithValue(
+            FakeContactsRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: UserProfileScreen(userId: 'user-2')),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('@ada · she/her'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-banner-image')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Alan'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('1 MUTUAL CIRCLE'), findsOneWidget);
+    expect(find.text('Hikers'), findsOneWidget);
+    expect(find.text('2 MUTUAL FRIENDS'), findsOneWidget);
+    expect(find.text('Grace'), findsOneWidget);
+  });
+
   testWidgets('profile page shows add friend action for non-friends', (
     tester,
   ) async {

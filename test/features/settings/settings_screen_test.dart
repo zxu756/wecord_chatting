@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -20,6 +21,7 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
 import '../presence/presence_repository_test.dart' as presence_fakes;
+import '../profile/profile_extras_repository_test.dart';
 
 void main() {
   testWidgets('edits and saves the current profile', (tester) async {
@@ -40,7 +42,7 @@ void main() {
       find.widgetWithText(TextField, 'Bio'),
       'First programmer',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pump();
 
     expect(settingsRepository.updateCalls, [
@@ -115,6 +117,8 @@ void main() {
         tester.widget(find.byKey(const ValueKey('theme-mode')));
     expect(picker().selected, {ThemeMode.system});
 
+    await tester.ensureVisible(find.text('Dark'));
+    await tester.pump();
     await tester.tap(find.text('Dark'));
     await tester.pump();
 
@@ -330,7 +334,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pump();
 
     expect(settingsRepository.uploadCalls, [
@@ -341,6 +345,47 @@ void main() {
       ),
     ]);
     expect(settingsRepository.updateCalls.single.avatarUrl, 'avatars/ada.png');
+  });
+
+  testWidgets('saves pronouns and a banner only when they change', (
+    tester,
+  ) async {
+    final extras = FakeProfileExtrasDataSource();
+    final imagePickerService = FakeImagePickerService()
+      ..nextImage = ChatImageUpload(
+        fileName: 'sky.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList([1, 2, 3]),
+      );
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: FakeSettingsRepository(),
+        imagePickerService: imagePickerService,
+        profileExtrasDataSource: extras,
+      ),
+    );
+    await tester.pump();
+
+    await tapSave(tester);
+    await tester.pump();
+    expect(extras.calls, isEmpty);
+
+    await tester.drag(find.byType(ListView), const Offset(0, 2000));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('change-banner')));
+    await tester.pump();
+    expect(extras.uploads.single.bucket, 'profile-banners');
+    expect(find.byKey(const ValueKey('remove-banner')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('pronouns')), 'she/her');
+    await tapSave(tester);
+    await tester.pump();
+
+    expect(extras.calls.single.name, 'update_profile_extras');
+    expect(extras.calls.single.params, {
+      'pronouns': 'she/her',
+      'banner_url': 'profile-banners/user-1/7-sky.png',
+    });
   });
 
   testWidgets('renders uploaded private avatar paths with signed URLs', (
@@ -423,8 +468,17 @@ void main() {
       find.widgetWithText(TextField, 'Bio'),
       'First programmer',
     );
+    await tester.ensureVisible(
+      find.widgetWithText(OutlinedButton, 'Change avatar'),
+    );
+    await tester.pump();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Could not upload avatar. Try again.'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
 
     expect(find.text('Could not upload avatar. Try again.'), findsOneWidget);
     expect(find.text('Ada Byron'), findsOneWidget);
@@ -492,7 +546,11 @@ void main() {
     );
     await tester.pump();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.scrollUntilVisible(
+      find.text('Message previews'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pump();
     await tester.tap(find.widgetWithText(SwitchListTile, 'Notifications'));
     await tester.pump();
@@ -538,6 +596,18 @@ void main() {
   });
 }
 
+/// Taps the profile's Save button, scrolled into view first.
+Future<void> tapSave(WidgetTester tester) async {
+  final save = find.widgetWithText(FilledButton, 'Save');
+  await tester.scrollUntilVisible(
+    save,
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pump();
+  await tester.tap(save);
+}
+
 Widget _app({
   required FakeSettingsRepository settingsRepository,
   ThemeModeStore? themeModeStore,
@@ -547,9 +617,17 @@ Widget _app({
   NotificationPreferencesRepository? notificationPreferencesRepository,
   LocalNotificationService? localNotificationService,
   PresenceRepository? presenceRepository,
+  ProfileExtrasDataSource? profileExtrasDataSource,
 }) {
   return ProviderScope(
     overrides: [
+      profileExtrasRepositoryProvider.overrideWithValue(
+        ProfileExtrasRepository(
+          profileExtrasDataSource ?? FakeProfileExtrasDataSource(),
+          currentUserId: () => 'user-1',
+          storagePathSeed: () => '7',
+        ),
+      ),
       presenceRepositoryProvider.overrideWithValue(
         presenceRepository ?? presence_fakes.FakePresenceRepository(),
       ),

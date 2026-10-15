@@ -2658,7 +2658,7 @@ _MessageSender _senderFor(
         : profile?.username.trim().isNotEmpty == true
         ? profile!.username
         : tr('Unknown member'),
-    avatarUrl: profile?.avatarUrl,
+    avatarUrl: message.senderCircleAvatarUrl ?? profile?.avatarUrl,
     roleColor: message.senderRoleColor,
   );
 }

@@ -237,7 +237,11 @@ class SupabaseSettingsRepository implements SettingsRepository {
   }
 
   _AvatarStoragePath _avatarStoragePath(String avatarPath) {
-    for (final bucket in ['profile-avatars', 'group-avatars']) {
+    for (final bucket in [
+      'profile-avatars',
+      'group-avatars',
+      'profile-banners',
+    ]) {
       final prefix = '$bucket/';
       if (avatarPath.startsWith(prefix)) {
         return _AvatarStoragePath(

@@ -3242,10 +3242,8 @@ void main() {
     expect(bit, contains("when 'mute_members' then 131072::bigint"));
     expect(bit, contains("when 'deafen_members' then 262144::bigint"));
     expect(bit, contains("when 'move_members' then 524288::bigint"));
-    expect(
-      functionBody(sql, 'circle_all_permissions'),
-      contains('select 1048575::bigint;'),
-    );
+    // 202610160020_automod widens the mask again for manage_circle.
+    expect(sql, contains('select 1048575::bigint;'));
     expect(sql, contains('permissions >= 0 and permissions <= 1048575'));
     expect(sql, contains('check (\n    user_limit between 0 and 99\n  )'));
 

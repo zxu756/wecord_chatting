@@ -556,6 +556,61 @@ void main() {
     ]);
   });
 
+  test('AutoMod refusals become AutoModBlockedException', () async {
+    final dataSource = FakeChatsDataSource()
+      ..insertReturnsNull = true
+      ..autoModNotice = {'rule_name': 'Bad words', 'reason': 'Keep it clean'}
+      ..rpcErrors['send_sticker'] = const PostgrestException(
+        message: 'AutoMod blocked this message',
+        code: 'P0001',
+        details: 'automod_block',
+        hint: '',
+      );
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+
+    // A quiet refusal: nothing inserted, and the notice says why.
+    await expectLater(
+      repository.sendTextMessage(conversationId: 'conversation-1', body: 'hm'),
+      throwsA(
+        isA<AutoModBlockedException>()
+            .having((error) => error.reason, 'reason', 'Keep it clean')
+            .having(
+              (error) => error.toString(),
+              'message',
+              'AutoMod blocked your message: Keep it clean',
+            ),
+      ),
+    );
+    expect(dataSource.autoModNoticeCalls, ['conversation-1']);
+
+    // Refused with an error on other paths.
+    await expectLater(
+      repository.sendSticker(
+        conversationId: 'conversation-1',
+        stickerId: 'sticker-1',
+      ),
+      throwsA(
+        isA<AutoModBlockedException>()
+            .having((error) => error.reason, 'reason', isNull)
+            .having(
+              (error) => error.toString(),
+              'message',
+              'AutoMod blocked your message.',
+            ),
+      ),
+    );
+
+    // Without a notice, a missing id is not an error.
+    dataSource.autoModNotice = null;
+    await repository.sendTextMessage(
+      conversationId: 'conversation-2',
+      body: 'fine',
+    );
+  });
+
   test('sends map slowmode refusals to SlowmodeException', () async {
     final dataSource = FakeChatsDataSource()
       ..insertError = const PostgrestException(
@@ -2057,6 +2112,7 @@ class FakeChatsDataSource implements ChatsDataSource {
   final rpcResults = <String, Object?>{};
   final rpcErrors = <String, Object>{};
   Object? insertError;
+  var insertReturnsNull = false;
   String? latestMessageResult;
   String signedUrlResult = 'https://signed.example.test/default.jpg';
   var listCalls = 0;
@@ -2071,6 +2127,8 @@ class FakeChatsDataSource implements ChatsDataSource {
   Object? removeObjectsError;
   final signedUrlCalls = <SignedUrlCall>[];
   final rpcCalls = <RpcCall>[];
+  final autoModNoticeCalls = <String>[];
+  Map<String, dynamic>? autoModNotice;
   final functionCalls = <RpcCall>[];
   final functionResults = <String, Object?>{};
   final functionErrors = <String, Object>{};
@@ -2123,7 +2181,16 @@ class FakeChatsDataSource implements ChatsDataSource {
       throw error;
     }
     insertedMessages.add(values);
+    if (insertReturnsNull) {
+      return null;
+    }
     return 'inserted-${insertedMessages.length}';
+  }
+
+  @override
+  Future<Map<String, dynamic>?> takeAutoModNotice(String conversationId) async {
+    autoModNoticeCalls.add(conversationId);
+    return autoModNotice;
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -128,11 +129,16 @@ class _ForumPostComposerSheetState
       if (mounted) {
         Navigator.of(context).pop(post);
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
+        final autoMod = error is PostgrestException
+            ? AutoModBlockedException.fromPostgrest(error)
+            : null;
         setState(() {
           _saving = false;
-          _errorText = tr('Could not create the post. Try again.');
+          _errorText =
+              autoMod?.toString() ??
+              tr('Could not create the post. Try again.');
         });
       }
     }

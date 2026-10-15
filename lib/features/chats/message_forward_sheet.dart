@@ -167,13 +167,15 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
       }
       navigator.pop();
       messenger.showSnackBar(SnackBar(content: Text(tr('Message forwarded'))));
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _isForwarding = false;
-        _errorText = tr('Could not forward message. Try again.');
+        _errorText = error is AutoModBlockedException
+            ? error.toString()
+            : tr('Could not forward message. Try again.');
       });
     }
   }

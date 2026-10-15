@@ -273,8 +273,13 @@ abstract interface class ChatsDataSource {
 
   Future<String?> latestMessageId(String conversationId);
 
-  /// Inserts a message and returns its id.
+  /// Inserts a message and returns its id, or null when nothing was
+  /// inserted (AutoMod refused it).
   Future<String?> insertMessage(Map<String, dynamic> values);
+
+  /// Why AutoMod just refused the current user's message in
+  /// [conversationId] (`{rule_name, reason}`), or null.
+  Future<Map<String, dynamic>?> takeAutoModNotice(String conversationId);
 
   Future<void> uploadBinary({
     required String bucket,
@@ -424,6 +429,7 @@ class SupabaseChatsRepository implements ChatsRepository {
     final trimmedBody = body.trim();
     if (mentions.isNotEmpty) {
       await _send(
+        conversationId,
         () => _dataSource.rpc('send_text_message', {
           'target_conversation_id': conversationId,
           'body': trimmedBody,
@@ -442,23 +448,43 @@ class SupabaseChatsRepository implements ChatsRepository {
       if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
       if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
     };
-    await _send(() => _dataSource.insertMessage(values));
+    await _send(conversationId, () => _dataSource.insertMessage(values));
   }
 
-  /// Runs a send, turning the server's slowmode refusal into a
-  /// [SlowmodeException].
-  Future<void> _send(Future<Object?> Function() send) async {
+  /// Runs a send, turning the server's slowmode and AutoMod refusals into
+  /// a [SlowmodeException] or an [AutoModBlockedException].
+  Future<void> _send(
+    String conversationId,
+    Future<Object?> Function() send,
+  ) async {
+    final Object? messageId;
     try {
-      final messageId = await send();
-      if (messageId is String) {
-        unawaited(_onMessageSent?.call(messageId));
-      }
+      messageId = await send();
     } on PostgrestException catch (error) {
       final slowmode = SlowmodeException.fromPostgrest(error);
       if (slowmode != null) {
         throw slowmode;
       }
+      final autoMod = AutoModBlockedException.fromPostgrest(error);
+      if (autoMod != null) {
+        throw autoMod;
+      }
       rethrow;
+    }
+    if (messageId is String) {
+      unawaited(_onMessageSent?.call(messageId));
+      return;
+    }
+    // AutoMod refuses some sends quietly, so that its alerts and timeouts
+    // stay; it leaves a note of why.
+    final Map<String, dynamic>? notice;
+    try {
+      notice = await _dataSource.takeAutoModNotice(conversationId);
+    } catch (_) {
+      return;
+    }
+    if (notice != null) {
+      throw AutoModBlockedException(notice['reason'] as String?);
     }
   }
 
@@ -487,6 +513,7 @@ class SupabaseChatsRepository implements ChatsRepository {
       height: image.height,
     );
     await _send(
+      conversationId,
       () => _dataSource.insertMessage({
         'conversation_id': conversationId,
         'sender_id': _requireCurrentUserId(),
@@ -523,6 +550,7 @@ class SupabaseChatsRepository implements ChatsRepository {
       durationMs: durationMs,
     );
     await _send(
+      conversationId,
       () => _dataSource.insertMessage({
         'conversation_id': conversationId,
         'sender_id': _requireCurrentUserId(),
@@ -562,6 +590,7 @@ class SupabaseChatsRepository implements ChatsRepository {
       size: bytes.length,
     );
     await _send(
+      conversationId,
       () => _dataSource.insertMessage({
         'conversation_id': conversationId,
         'sender_id': _requireCurrentUserId(),
@@ -611,6 +640,7 @@ class SupabaseChatsRepository implements ChatsRepository {
     required String targetConversationId,
   }) async {
     await _send(
+      targetConversationId,
       () => _dataSource.rpc('forward_message', {
         'source_message_id': sourceMessageId,
         'target_conversation_id': targetConversationId,
@@ -627,6 +657,7 @@ class SupabaseChatsRepository implements ChatsRepository {
     int? durationHours,
   }) async {
     await _send(
+      conversationId,
       () => _dataSource.rpc('create_poll', {
         'target_conversation_id': conversationId,
         'question': question.trim(),
@@ -643,6 +674,7 @@ class SupabaseChatsRepository implements ChatsRepository {
     required String stickerId,
   }) async {
     await _send(
+      conversationId,
       () => _dataSource.rpc('send_sticker', {
         'target_conversation_id': conversationId,
         'target_emoji_id': stickerId,
@@ -863,10 +895,14 @@ class SupabaseChatsRepository implements ChatsRepository {
     required String messageId,
     required String body,
   }) async {
-    await _dataSource.rpc('edit_message', {
-      'target_message_id': messageId,
-      'body': body.trim(),
-    });
+    try {
+      await _dataSource.rpc('edit_message', {
+        'target_message_id': messageId,
+        'body': body.trim(),
+      });
+    } on PostgrestException catch (error) {
+      throw AutoModBlockedException.fromPostgrest(error) ?? error;
+    }
   }
 
   @override
@@ -1207,6 +1243,32 @@ class SlowmodeException implements Exception {
   );
 }
 
+/// AutoMod refused a message (or an edit); [reason] is the circle's
+/// custom message, if it set one.
+class AutoModBlockedException implements Exception {
+  const AutoModBlockedException([this.reason]);
+
+  /// Reads the server's AutoMod refusal (SQLSTATE P0001, detail
+  /// `automod_block`, the reason as the hint), or returns null.
+  static AutoModBlockedException? fromPostgrest(PostgrestException error) {
+    if (error.code != 'P0001' || '${error.details ?? ''}' != 'automod_block') {
+      return null;
+    }
+    final hint = error.hint?.trim() ?? '';
+    return AutoModBlockedException(hint.isEmpty ? null : hint);
+  }
+
+  final String? reason;
+
+  @override
+  String toString() {
+    final reason = this.reason?.trim() ?? '';
+    return reason.isEmpty
+        ? tr('AutoMod blocked your message.')
+        : tr('AutoMod blocked your message: {reason}', {'reason': reason});
+  }
+}
+
 class PinnedMessageLimitException implements Exception {
   const PinnedMessageLimitException();
 
@@ -1360,12 +1422,19 @@ class SupabaseChatsDataSource implements ChatsDataSource {
 
   @override
   Future<String?> insertMessage(Map<String, dynamic> values) async {
-    final row = await _client
-        .from('messages')
-        .insert(values)
-        .select('id')
-        .single();
-    return row['id'] as String?;
+    // Not .single(): AutoMod may drop the row, and the insert must still
+    // succeed so its alerts and timeouts are kept.
+    final rows = await _client.from('messages').insert(values).select('id');
+    return rows.isEmpty ? null : rows.first['id'] as String?;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> takeAutoModNotice(String conversationId) async {
+    final notice = await _client.rpc<Object?>(
+      'take_automod_notice',
+      params: {'target_conversation_id': conversationId},
+    );
+    return notice is Map<String, dynamic> ? notice : null;
   }
 
   @override

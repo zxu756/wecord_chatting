@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 
 import 'voice_fakes.dart';
 
@@ -12,13 +13,14 @@ void main() {
   late VoiceSessionController controller;
   late List<String> changedCircles;
 
-  void setUpController() {
+  void setUpController({VoiceSettings settings = const VoiceSettings()}) {
     repository = FakeVoiceRepository();
     connector = FakeVoiceCallConnector();
     changedCircles = [];
     controller = VoiceSessionController(
       repository: repository,
       connector: connector,
+      settings: settings,
       onMembersChanged: (session) =>
           changedCircles.add(session.circleId ?? 'call'),
     );
@@ -172,6 +174,70 @@ void main() {
     ));
     await controller.setScreenShare(null);
     expect(call.screen, isFalse);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('push to talk sends only while held', (tester) async {
+    setUpController(
+      settings: const VoiceSettings(inputMode: VoiceInputMode.pushToTalk),
+    );
+    await joinLounge();
+    final call = connector.last;
+
+    expect(controller.state!.pushToTalk, isTrue);
+    // Not muted, just quiet until the key is held.
+    expect(controller.state!.selfMute, isFalse);
+    expect(call.microphone, isFalse);
+    expect(call.audio.keepMicrophoneOpen, isTrue);
+
+    await controller.setTransmitting(true);
+    expect(controller.state!.transmitting, isTrue);
+    expect(call.microphone, isTrue);
+    await controller.setTransmitting(false);
+    expect(call.microphone, isFalse);
+
+    // Muted, holding the key sends nothing.
+    await controller.toggleMute();
+    await controller.setTransmitting(true);
+    expect(call.microphone, isFalse);
+    await controller.setTransmitting(false);
+    // Unmuting doesn't open the microphone either.
+    await controller.toggleMute();
+    expect(call.microphone, isFalse);
+
+    // Back to voice activity, the microphone opens.
+    await controller.updateSettings(const VoiceSettings());
+    expect(controller.state!.pushToTalk, isFalse);
+    expect(call.microphone, isTrue);
+    await controller.setTransmitting(false);
+    expect(call.microphone, isTrue);
+    // Stops the heartbeat before the test ends.
+    await controller.leave();
+  });
+
+  testWidgets('processing and volumes reach the call', (tester) async {
+    setUpController(
+      settings: const VoiceSettings(
+        noiseSuppression: false,
+        userVolumes: {'user-2': 1.5},
+      ),
+    );
+    await joinLounge();
+    final call = connector.last;
+    expect(call.audio.noiseSuppression, isFalse);
+    expect(call.audio.echoCancellation, isTrue);
+    expect(call.userVolumes, {'user-2': 1.5});
+
+    await controller.updateSettings(
+      const VoiceSettings(
+        autoGainControl: false,
+        userVolumes: {'user-2': 0.5, 'user-3': 2},
+      ),
+    );
+    expect(call.audio.noiseSuppression, isTrue);
+    expect(call.audio.autoGainControl, isFalse);
+    expect(call.userVolumes, {'user-2': 0.5, 'user-3': 2});
     // Stops the heartbeat before the test ends.
     await controller.leave();
   });

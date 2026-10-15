@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -10,7 +11,9 @@ import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/voice.dart';
 
 final voiceCallConnectorProvider = Provider<VoiceCallConnector>((ref) {
   return const LiveKitVoiceCallConnector();
@@ -38,6 +41,7 @@ final voiceSessionProvider =
       final controller = VoiceSessionController(
         repository: ref.watch(voiceRepositoryProvider),
         connector: ref.watch(voiceCallConnectorProvider),
+        settings: ref.read(voiceSettingsProvider),
         onCallJoined: ref.watch(pushRepositoryProvider).notifyCall,
         onMembersChanged: (session) {
           if (session.circleId case final circleId?) {
@@ -55,6 +59,31 @@ final voiceSessionProvider =
           unawaited(controller.leave());
         }
       });
+      ref.listen(voiceSettingsProvider, (previous, next) {
+        unawaited(controller.updateSettings(next));
+      });
+      // The push to talk key works anywhere in the app while connected.
+      bool onKey(KeyEvent event) {
+        final settings = ref.read(voiceSettingsProvider);
+        final key = settings.pushToTalkKey;
+        if (!settings.pushToTalk || key == null || event.logicalKey != key) {
+          return false;
+        }
+        if (event is KeyDownEvent) {
+          unawaited(controller.setTransmitting(true));
+        } else if (event is KeyUpEvent) {
+          unawaited(controller.setTransmitting(false));
+        }
+        // Let the key type too, as it does elsewhere.
+        return false;
+      }
+
+      try {
+        HardwareKeyboard.instance.addHandler(onKey);
+        ref.onDispose(() => HardwareKeyboard.instance.removeHandler(onKey));
+      } catch (_) {
+        // No keyboard binding (plain unit tests).
+      }
       return controller;
     });
 
@@ -88,6 +117,8 @@ class VoiceSession {
     this.screen = false,
     this.participants = const [],
     this.quality = VoiceConnectionQuality.unknown,
+    this.pushToTalk = false,
+    this.transmitting = false,
   });
 
   /// The circle and voice channel, for a voice channel; null in a call.
@@ -114,6 +145,16 @@ class VoiceSession {
   final List<VoiceCallParticipant> participants;
   final VoiceConnectionQuality quality;
 
+  /// Push to talk is on: the microphone sends only while [transmitting].
+  final bool pushToTalk;
+
+  /// The push to talk key or button is held.
+  final bool transmitting;
+
+  /// Whether the microphone should be sending now.
+  bool get microphoneWanted =>
+      !selfMute && !selfDeaf && (!pushToTalk || transmitting);
+
   bool get isConnected => status == VoiceSessionStatus.connected;
 
   /// A call in a direct or group chat rather than a circle voice channel.
@@ -128,6 +169,8 @@ class VoiceSession {
     bool? screen,
     List<VoiceCallParticipant>? participants,
     VoiceConnectionQuality? quality,
+    bool? pushToTalk,
+    bool? transmitting,
   }) {
     return VoiceSession(
       circleId: circleId,
@@ -142,6 +185,8 @@ class VoiceSession {
       screen: screen ?? this.screen,
       participants: participants ?? this.participants,
       quality: quality ?? this.quality,
+      pushToTalk: pushToTalk ?? this.pushToTalk,
+      transmitting: transmitting ?? this.transmitting,
     );
   }
 }
@@ -155,7 +200,9 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     required VoiceCallConnector connector,
     void Function(VoiceSession session)? onMembersChanged,
     Future<void> Function(String callId)? onCallJoined,
+    VoiceSettings settings = const VoiceSettings(),
   }) : _repository = repository,
+       _settings = settings,
        _onCallJoined = onCallJoined,
        _connector = connector,
        _onMembersChanged = onMembersChanged,
@@ -164,6 +211,10 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   final VoiceRepository _repository;
   final VoiceCallConnector _connector;
   final void Function(VoiceSession session)? _onMembersChanged;
+
+  /// Input mode, microphone processing and volumes, kept in step by
+  /// [updateSettings].
+  VoiceSettings _settings;
 
   /// Called with each call joined, so a newly started one rings by push
   /// (the server ignores calls someone else started).
@@ -216,11 +267,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       if (attempt != _attempt) {
         return;
       }
-      call = await _connector.connect(
-        url: details.url,
-        token: details.token,
-        microphoneEnabled: true,
-      );
+      call = await _connect(details);
       if (attempt != _attempt) {
         await call.disconnect();
         return;
@@ -277,11 +324,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
         unawaited(_leaveCallQuietly(callId));
         return;
       }
-      call = await _connector.connect(
-        url: details.url,
-        token: details.token,
-        microphoneEnabled: true,
-      );
+      call = await _connect(details);
       if (attempt != _attempt) {
         await call.disconnect();
         unawaited(_leaveCallQuietly(callId));
@@ -309,6 +352,16 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     }
   }
 
+  Future<VoiceCall> _connect(VoiceConnectionDetails details) {
+    return _connector.connect(
+      url: details.url,
+      token: details.token,
+      microphoneEnabled: true,
+      audio: _settings.audioProcessing,
+      userVolumes: _settings.userVolumes,
+    );
+  }
+
   Future<void> _leaveCallQuietly(String callId) async {
     try {
       await _repository.leaveDirectCall(callId);
@@ -333,7 +386,13 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       selfMute: !(local?.microphoneEnabled ?? false),
       participants: call.participants,
       quality: call.quality,
+      pushToTalk: _settings.pushToTalk,
+      transmitting: false,
     );
+    if (_settings.pushToTalk && state?.selfMute == false) {
+      // Push to talk sends only while the key is held.
+      unawaited(_applyMicrophone());
+    }
     _heartbeat = Timer.periodic(voiceHeartbeatInterval, (_) => _beat());
     _lifecycle = AppLifecycleListener(onDetach: () => unawaited(leave()));
     if (state?.selfMute == true) {
@@ -410,20 +469,78 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     }
     if (session.selfDeaf) {
       // Unmuting while deafened undeafens too.
+      final next = session.copyWith(selfMute: false, selfDeaf: false);
       await call.setRemoteAudioEnabled(true);
-      await call.setMicrophoneEnabled(true);
+      await call.setMicrophoneEnabled(next.microphoneWanted);
       if (!mounted) {
         return;
       }
       state = state?.copyWith(selfMute: false, selfDeaf: false);
     } else {
-      await call.setMicrophoneEnabled(session.selfMute);
+      final next = session.copyWith(selfMute: !session.selfMute);
+      await call.setMicrophoneEnabled(next.microphoneWanted);
       if (!mounted) {
         return;
       }
       state = state?.copyWith(selfMute: !session.selfMute);
     }
     await _pushFlags();
+  }
+
+  /// Starts or stops sending while push to talk is on (the key or the
+  /// hold to talk button). Does nothing otherwise.
+  Future<void> setTransmitting(bool transmitting) async {
+    final session = state;
+    if (session == null ||
+        !session.isConnected ||
+        !session.pushToTalk ||
+        session.transmitting == transmitting) {
+      return;
+    }
+    state = session.copyWith(transmitting: transmitting);
+    await _applyMicrophone();
+  }
+
+  /// Turns the microphone on or off to match the session.
+  Future<void> _applyMicrophone() async {
+    final session = state;
+    final call = _call;
+    if (session == null || call == null) {
+      return;
+    }
+    try {
+      await call.setMicrophoneEnabled(session.microphoneWanted);
+    } catch (_) {
+      // No microphone or no permission; the mute button says why.
+    }
+  }
+
+  /// Applies changed voice settings to the call in progress.
+  Future<void> updateSettings(VoiceSettings settings) async {
+    final previous = _settings;
+    _settings = settings;
+    final session = state;
+    final call = _call;
+    if (session == null || call == null || !session.isConnected) {
+      return;
+    }
+    if (previous.pushToTalk != settings.pushToTalk) {
+      state = session.copyWith(
+        pushToTalk: settings.pushToTalk,
+        transmitting: false,
+      );
+      await _applyMicrophone();
+    }
+    try {
+      if (previous.audioProcessing != settings.audioProcessing) {
+        await call.setAudioProcessing(settings.audioProcessing);
+      }
+      if (!mapEquals(previous.userVolumes, settings.userVolumes)) {
+        await call.setUserVolumes(settings.userVolumes);
+      }
+    } catch (_) {
+      // Applies from the next call.
+    }
   }
 
   Future<void> toggleDeafen() async {
@@ -434,7 +551,11 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     }
     if (session.selfDeaf) {
       await call.setRemoteAudioEnabled(true);
-      await call.setMicrophoneEnabled(!_mutedBeforeDeafen);
+      await call.setMicrophoneEnabled(
+        session
+            .copyWith(selfDeaf: false, selfMute: _mutedBeforeDeafen)
+            .microphoneWanted,
+      );
       if (!mounted) {
         return;
       }

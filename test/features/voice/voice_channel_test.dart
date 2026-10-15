@@ -1,7 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 
 import '../../mobile/phone_test_support.dart';
@@ -216,6 +219,77 @@ void main() {
     expect(world.voice.leaves, 1);
     expect(panel(), findsNothing);
     expect(find.byKey(const ValueKey('voice-not-connected')), findsOneWidget);
+    await world.close(tester);
+  });
+
+  testWidgets('a participant menu sets their volume for me', (tester) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.voiceCalls.prepare = (call) {
+      call.remotes = [
+        VoiceCallParticipant(userId: bart.id, name: bart.displayName),
+      ];
+    };
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+
+    await tester.tap(
+      find.byKey(ValueKey('voice-tile-${bart.id}')),
+      buttons: kSecondaryMouseButton,
+    );
+    await settle(tester);
+    final slider = find.byKey(ValueKey('voice-user-volume-${bart.id}'));
+    expect(slider, findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
+
+    await tester.drag(slider, const Offset(600, 0));
+    await settle(tester);
+    expect(find.text('200%'), findsOneWidget);
+    expect(world.voiceSettings.saved!.volumeFor(bart.id), 2);
+    expect(world.voiceCalls.last.userVolumes, {bart.id: 2.0});
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    // There is no volume for yourself.
+    await tester.tap(
+      find.byKey(ValueKey('voice-tile-${me.id}')),
+      buttons: kSecondaryMouseButton,
+    );
+    await settle(tester);
+    expect(find.byKey(ValueKey('voice-user-volume-${me.id}')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    await world.close(tester);
+  });
+
+  testWidgets('push to talk on a phone holds a button to talk', (tester) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.voiceSettings.saved = const VoiceSettings(
+      inputMode: VoiceInputMode.pushToTalk,
+    );
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+
+    final call = world.voiceCalls.last;
+    expect(call.microphone, isFalse);
+    final hold = find.byKey(const ValueKey('voice-hold-to-talk'));
+    expect(hold, findsOneWidget);
+
+    final gesture = await tester.startGesture(tester.getCenter(hold));
+    await tester.pump();
+    expect(call.microphone, isTrue);
+    expect(find.text('Talking…'), findsOneWidget);
+    await gesture.up();
+    await tester.pump();
+    expect(call.microphone, isFalse);
+    // Others still see an unmuted member.
+    expect(world.voice.updates.every((update) => !update.mute), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('voice-control-leave')));
+    await settle(tester);
     await world.close(tester);
   });
 

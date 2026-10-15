@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -42,15 +44,23 @@ class VoiceChannelMembers extends ConsumerWidget {
       ref.watch(voiceSessionProvider),
       channelId,
     );
+    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
     return Column(
       key: ValueKey('voice-channel-members-$channelId'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final member in members)
-          _VoiceMemberRow(
-            member: member,
-            speaking: speaking.contains(member.userId),
+          VoiceParticipantMenuRegion(
+            person: (
+              userId: member.userId,
+              name: member.name,
+              isLocal: member.userId == currentUserId,
+            ),
+            child: _VoiceMemberRow(
+              member: member,
+              speaking: speaking.contains(member.userId),
+            ),
           ),
       ],
     );

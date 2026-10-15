@@ -166,6 +166,12 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   bool screen = false;
   bool remoteAudio = true;
   var disconnects = 0;
+
+  /// What the microphone was started or last restarted with.
+  VoiceAudioProcessing audio = const VoiceAudioProcessing();
+
+  /// The volumes set for people, by user id.
+  Map<String, double> userVolumes = const {};
   final _disconnected = Completer<void>();
 
   /// Everyone else in the room.
@@ -242,6 +248,16 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   }
 
   @override
+  Future<void> setAudioProcessing(VoiceAudioProcessing audio) async {
+    this.audio = audio;
+  }
+
+  @override
+  Future<void> setUserVolumes(Map<String, double> volumes) async {
+    userVolumes = Map.of(volumes);
+  }
+
+  @override
   Future<void> disconnect() async {
     disconnects++;
   }
@@ -265,6 +281,8 @@ class FakeVoiceCallConnector implements VoiceCallConnector {
     required String url,
     required String token,
     required bool microphoneEnabled,
+    VoiceAudioProcessing audio = const VoiceAudioProcessing(),
+    Map<String, double> userVolumes = const {},
   }) async {
     final failure = error;
     if (failure != null) {
@@ -275,6 +293,9 @@ class FakeVoiceCallConnector implements VoiceCallConnector {
       localName: localName,
       microphoneEnabled: microphoneEnabled,
     );
+    call
+      ..audio = audio
+      ..userVolumes = Map.of(userVolumes);
     prepare?.call(call);
     calls.add(call);
     return call;

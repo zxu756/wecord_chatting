@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/voice.dart';
 
 /// A voice channel: while the current user is connected to it, everyone in
@@ -278,15 +281,24 @@ class VoiceCallGrid extends StatelessWidget {
                     SizedBox(
                       width: tileWidth,
                       height: tileWidth * 10 / 16,
-                      child: _ParticipantTile(
-                        participant: participant,
-                        name:
-                            people[participant.userId]?.name ??
-                            participant.name,
-                        avatarUrl: people[participant.userId]?.avatarUrl,
-                        deafened:
-                            (participant.isLocal && session.selfDeaf) ||
-                            (people[participant.userId]?.selfDeaf ?? false),
+                      child: VoiceParticipantMenuRegion(
+                        person: (
+                          userId: participant.userId,
+                          name:
+                              people[participant.userId]?.name ??
+                              participant.name,
+                          isLocal: participant.isLocal,
+                        ),
+                        child: _ParticipantTile(
+                          participant: participant,
+                          name:
+                              people[participant.userId]?.name ??
+                              participant.name,
+                          avatarUrl: people[participant.userId]?.avatarUrl,
+                          deafened:
+                              (participant.isLocal && session.selfDeaf) ||
+                              (people[participant.userId]?.selfDeaf ?? false),
+                        ),
                       ),
                     ),
                 ],
@@ -425,7 +437,8 @@ class _Tile extends StatelessWidget {
 }
 
 /// Microphone, deafen, camera, screen share (where the platform can) and
-/// disconnect.
+/// disconnect; with push to talk on a phone (or without a key set), a
+/// button to hold while talking.
 class VoiceCallControls extends ConsumerStatefulWidget {
   const VoiceCallControls({required this.session, super.key});
 
@@ -495,6 +508,14 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
       );
     }
 
+    final hasKey = ref.watch(
+      voiceSettingsProvider.select(
+        (settings) => settings.pushToTalkKeyId != null,
+      ),
+    );
+    final holdToTalk =
+        session.pushToTalk && (usesTouchInput(context) || !hasKey);
+
     return Material(
       key: const ValueKey('voice-call-controls'),
       color: colorScheme.surfaceContainerLow,
@@ -504,9 +525,12 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Wrap(
             alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
             runSpacing: 8,
             children: [
+              if (holdToTalk)
+                VoiceHoldToTalkButton(session: session, enabled: !_busy),
               toggle(
                 key: const ValueKey('voice-control-mic'),
                 tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
@@ -566,6 +590,70 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 ),
                 onPressed: controller.leave,
                 icon: const Icon(Icons.call_end),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sends while held, for push to talk on touch screens.
+class VoiceHoldToTalkButton extends ConsumerWidget {
+  const VoiceHoldToTalkButton({
+    required this.session,
+    this.enabled = true,
+    super.key,
+  });
+
+  final VoiceSession session;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final controller = ref.read(voiceSessionProvider.notifier);
+    final talking = session.transmitting;
+    final usable = enabled && !session.selfMute && !session.selfDeaf;
+    return Semantics(
+      button: true,
+      label: tr('Hold to talk'),
+      child: Listener(
+        key: const ValueKey('voice-hold-to-talk'),
+        onPointerDown: usable ? (_) => controller.setTransmitting(true) : null,
+        onPointerUp: (_) => controller.setTransmitting(false),
+        onPointerCancel: (_) => controller.setTransmitting(false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: talking
+                ? voiceConnectedColor
+                : colorScheme.secondaryContainer.withValues(
+                    alpha: usable ? 1 : 0.5,
+                  ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                talking ? Icons.mic : Icons.mic_none,
+                color: talking
+                    ? Colors.white
+                    : colorScheme.onSecondaryContainer,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                talking ? tr('Talking…') : tr('Hold to talk'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: talking
+                      ? Colors.white
+                      : colorScheme.onSecondaryContainer,
+                ),
               ),
             ],
           ),

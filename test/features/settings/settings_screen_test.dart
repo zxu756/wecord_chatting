@@ -386,7 +386,11 @@ void main() {
 
     await tester.pumpWidget(_app(settingsRepository: settingsRepository));
     await tester.pump();
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.scrollUntilVisible(
+      find.text('Message previews'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pump();
 
     expect(find.text('Notifications'), findsOneWidget);

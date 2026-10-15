@@ -108,6 +108,8 @@ class _PollComposerSheetState extends ConsumerState<PollComposerSheet> {
       }
     } on SlowmodeException catch (error) {
       _fail(error.toString());
+    } on SendRefusedException catch (error) {
+      _fail(error.toString());
     } catch (_) {
       _fail(tr('Could not post the poll. Try again.'));
     }

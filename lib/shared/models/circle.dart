@@ -149,6 +149,9 @@ class CircleDetail {
 
   bool get canManageEmojis => can(CirclePermission.manageEmojis);
 
+  /// AutoMod and member onboarding.
+  bool get canManageCircle => can(CirclePermission.manageCircle);
+
   /// The current user's permission bits in [channel]: what the server
   /// computed with its overwrites, otherwise the circle-wide permissions.
   int channelPermissionsOf(CircleChannel channel) {

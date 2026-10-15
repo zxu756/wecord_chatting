@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
+import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/circles/circle_emojis_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
@@ -10,6 +11,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
+import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -831,6 +833,10 @@ class _SidebarHeader extends StatelessWidget {
               openCircleAuditLogScreen(context, detail.circle.id);
             case _CircleMenuAction.bans:
               openCircleBansScreen(context, detail.circle.id);
+            case _CircleMenuAction.autoMod:
+              openCircleAutoModScreen(context, detail);
+            case _CircleMenuAction.onboarding:
+              openCircleOnboardingSettings(context, detail);
             case _CircleMenuAction.emojis:
               openCircleEmojisScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
@@ -892,6 +898,22 @@ class _SidebarHeader extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.block),
                 title: Text(tr('Bans')),
+              ),
+            ),
+          if (detail.canManageCircle)
+            PopupMenuItem(
+              value: _CircleMenuAction.autoMod,
+              child: ListTile(
+                leading: const Icon(Icons.gpp_maybe_outlined),
+                title: Text(tr('AutoMod')),
+              ),
+            ),
+          if (detail.canManageCircle)
+            PopupMenuItem(
+              value: _CircleMenuAction.onboarding,
+              child: ListTile(
+                leading: const Icon(Icons.rule),
+                title: Text(tr('Onboarding')),
               ),
             ),
           if (detail.canViewAuditLog)
@@ -977,6 +999,8 @@ enum _CircleMenuAction {
   roles,
   auditLog,
   bans,
+  autoMod,
+  onboarding,
   emojis,
   notificationSettings,
   changeNickname,

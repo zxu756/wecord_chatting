@@ -24,6 +24,13 @@ enum CirclePermission {
     'Manage messages',
     "Pin messages, archive threads and delete other members' posts.",
   ),
+  manageCircle(
+    1 << 20,
+    'manage_circle',
+    CirclePermissionGroup.general,
+    'Manage circle',
+    'Set up AutoMod and member onboarding.',
+  ),
   manageChannels(
     1 << 3,
     'manage_channels',
@@ -157,7 +164,7 @@ enum CirclePermission {
   );
 
   /// Every permission bit.
-  static const all = (1 << 20) - 1;
+  static const all = (1 << 21) - 1;
 
   /// What `@everyone` gets in a new circle.
   static final defaultRolePermissions = maskOf(const [

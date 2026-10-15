@@ -376,6 +376,13 @@ IconData circleAuditIcon(String action) {
     'webhook_update' => Icons.drive_file_rename_outline,
     'webhook_regenerate' => Icons.key_outlined,
     'webhook_delete' => Icons.delete_outline,
+    'automod_rule_create' => Icons.add_moderator_outlined,
+    'automod_rule_update' => Icons.gpp_maybe_outlined,
+    'automod_rule_delete' => Icons.remove_moderator_outlined,
+    'automod_block' => Icons.block,
+    'automod_alert' => Icons.campaign_outlined,
+    'automod_timeout' => Icons.timer_outlined,
+    'onboarding_update' => Icons.rule,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
     'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
@@ -609,6 +616,31 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     'stage_end' => (tr('{actor} ended the stage in {target}'), {}),
     'sound_create' => (tr('{actor} added sound {target}'), {}),
     'sound_delete' => (tr('{actor} deleted sound {target}'), {}),
+    'automod_rule_create' => (tr('{actor} created AutoMod rule {target}'), {}),
+    'automod_rule_update' => switch (changes['name']) {
+      {'old': final String oldName} => (
+        tr('{actor} renamed AutoMod rule {old} to {target}'),
+        {'old': oldName},
+      ),
+      _ => (tr('{actor} updated AutoMod rule {target}'), {}),
+    },
+    'automod_rule_delete' => (tr('{actor} deleted AutoMod rule {target}'), {}),
+    'automod_block' =>
+      inChannel == null
+          ? (tr('AutoMod blocked a message by {target}'), {})
+          : (
+              tr('AutoMod blocked a message by {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'automod_alert' =>
+      inChannel == null
+          ? (tr('AutoMod sent an alert about {target}'), {})
+          : (
+              tr('AutoMod sent an alert about {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'automod_timeout' => (tr('AutoMod timed out {target}'), {}),
+    'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),
@@ -663,6 +695,7 @@ List<CircleAuditDetail> circleAuditDetails(CircleAuditEntry entry) {
         key == 'created_by' ||
         (key == 'channel_name' &&
             (entry.action.startsWith('forum_') ||
+                entry.action.startsWith('automod_') ||
                 entry.action == 'message_delete')) ||
         (key == 'target_name' &&
             entry.action == 'channel_permissions_update')) {
@@ -709,6 +742,26 @@ String _labelFor(String key) {
     'deleted_messages' => tr('Messages deleted'),
     'allow' => tr('Allowed'),
     'mentionable' => tr('Anyone can mention'),
+    'rule_name' => tr('Rule'),
+    'content' => tr('Message'),
+    'alert_channel_name' => tr('Alert channel'),
+    'kind' => tr('Type'),
+    'enabled' => tr('Enabled'),
+    'keyword_count' => tr('Keywords'),
+    'pattern_count' => tr('Patterns'),
+    'mention_limit' => tr('Mention limit'),
+    'message_limit' => tr('Message limit'),
+    'window_seconds' => tr('Time window'),
+    'block_message' => tr('Block message'),
+    'block_reason' => tr('Custom message'),
+    'timeout_seconds' => tr('Timeout'),
+    'exempt_role_count' => tr('Exempt roles'),
+    'exempt_channel_count' => tr('Exempt channels'),
+    'keywords_changed' => tr('Keywords changed'),
+    'patterns_changed' => tr('Patterns changed'),
+    'exemptions_changed' => tr('Exemptions changed'),
+    'rule_count' => tr('Rules'),
+    'welcome_message_changed' => tr('Welcome message changed'),
     'deny' => tr('Denied'),
     _ =>
       key.isEmpty
@@ -740,8 +793,19 @@ String _formatValue(String key, Object? value) {
   if (value is bool) {
     return value ? tr('on') : tr('off');
   }
-  if (key == 'slowmode_seconds' && value is num) {
+  if ((key == 'slowmode_seconds' ||
+          key == 'window_seconds' ||
+          key == 'timeout_seconds') &&
+      value is num) {
     return _formatSeconds(value);
+  }
+  if (key == 'kind' && value is String) {
+    return switch (value) {
+      'keyword' => tr('Custom keywords'),
+      'mention_spam' => tr('Mention spam'),
+      'spam' => tr('Spam'),
+      _ => value,
+    };
   }
   if (key == 'color' && value is num) {
     return '#${value.toInt().toRadixString(16).padLeft(6, '0').toUpperCase()}';

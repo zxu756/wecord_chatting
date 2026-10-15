@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -1495,6 +1496,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1527,6 +1530,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       unawaited(_restoreDraft());
       ref.invalidate(chatThreadProvider(widget.conversationId));
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1546,6 +1551,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   bool get _isSlowedDown {
     final until = _slowmodeUntil;
     return until != null && DateTime.now().isBefore(until);
+  }
+
+  /// AutoMod or the circle's rules refused the message: says why.
+  void _showSendRefusal(SendRefusedException error) {
+    if (mounted) {
+      setState(() => _sendError = error.toString());
+    }
   }
 
   /// Counts down from the server's answer, which wins over the local
@@ -1593,6 +1605,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1637,6 +1651,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1681,6 +1697,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() => _sendError = tr('Could not send GIF. Try again.'));
@@ -1831,6 +1849,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1939,6 +1959,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() => _sendError = tr('Could not send sticker. Try again.'));
@@ -3549,6 +3571,9 @@ class _SystemMessageLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
+      return AutoModAlertCard(alert: alert);
+    }
     final theme = Theme.of(context);
     final pinnedMessageId = message.pinnedMessageId;
     final text = Text(

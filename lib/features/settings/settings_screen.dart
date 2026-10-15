@@ -7,6 +7,7 @@ import 'package:wecord/features/notifications/notification_preferences_repositor
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
+import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/profile/profile_banner.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
@@ -263,6 +264,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => openVoiceSettings(context),
+              ),
+              const Divider(height: 32),
+              Text(
+                tr('Account'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              ListTile(
+                key: const ValueKey('two-factor-settings-tile'),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.phonelink_lock_outlined),
+                title: Text(tr('Two-step verification')),
+                subtitle: Text(
+                  tr(
+                    'Ask for a code from an authenticator app when signing in',
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openTwoFactorSettings(context),
               ),
               const Divider(height: 32),
               Text(

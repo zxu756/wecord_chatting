@@ -210,12 +210,21 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
             ),
           ),
         );
-      case MarkdownMention(:final text):
+      case MarkdownMention(:final text, :final mention):
+        // Role mentions take the role's colour; @here and roles get a
+        // tinted background since they reach many people.
+        final roleColor = mention.color;
+        final color = mention.isRole && roleColor != null
+            ? Color(0xFF000000 | roleColor)
+            : colorScheme.primary;
         return TextSpan(
           text: text,
           style: TextStyle(
-            color: colorScheme.primary,
+            color: color,
             fontWeight: FontWeight.w700,
+            backgroundColor: mention.isHere || mention.isRole
+                ? color.withValues(alpha: 0.14)
+                : null,
           ),
         );
       case MarkdownInlineCode(:final code):

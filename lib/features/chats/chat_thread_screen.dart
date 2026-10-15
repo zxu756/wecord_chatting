@@ -25,6 +25,7 @@ import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
+import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
@@ -261,6 +262,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _isMentioning = false;
   var _mentionQuery = '';
   final _mentionDraft = MentionDraft();
+
+  /// `@here` and the roles the current user may mention here, and who
+  /// `@here` reaches (members online now), refreshed on every build.
+  var _mentionTargets = const MentionTargets();
+  List<String>? _hereUserIds;
 
   /// The custom emoji name typed after a `:`, while suggestions show.
   String? _emojiQuery;
@@ -570,6 +576,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final directPeerId = conversationType == ConversationType.direct
         ? conversationSummary?.directUserId ??
               _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
+        : null;
+    _mentionTargets = canStartThreads || isThread
+        ? ref
+                  .watch(
+                    conversationMentionTargetsProvider(widget.conversationId),
+                  )
+                  .valueOrNull ??
+              const MentionTargets()
+        : const MentionTargets();
+    _hereUserIds = _mentionTargets.canMentionEveryone
+        ? [
+            for (final member in groupDetail?.members ?? const <GroupMember>[])
+              if (member.profile.id != currentUserId &&
+                  onlineUserIds.contains(member.profile.id))
+                member.profile.id,
+          ]
         : null;
     final peerIsOnline = conversationType == ConversationType.direct
         ? directPeerId != null && onlineUserIds.contains(directPeerId)
@@ -1137,6 +1159,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   errorText: _sendError,
                   mentionCandidates: _mentionCandidates(groupDetail),
                   onSelectMention: _insertMention,
+                  specialMentionCandidates: _specialMentionCandidates(),
+                  onSelectSpecialMention: _insertSpecialMention,
                   emojiCandidates: _emojiCandidates(),
                   onSelectEmoji: _insertCustomEmoji,
                   slashCommands: _slashCandidates(),
@@ -1964,7 +1988,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         return KeyEventResult.handled;
       case ComposerShortcut.editLast:
         final message = lastEditableMessage(
-          ref.read(chatThreadProvider(widget.conversationId)).valueOrNull
+          ref
+                  .read(chatThreadProvider(widget.conversationId))
+                  .valueOrNull
                   ?.messages ??
               const [],
           ref.read(authRepositoryProvider).currentUser?.id,
@@ -2083,8 +2109,31 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _saveDraft();
   }
 
+  /// `@here` and roles matching the mention being typed.
+  List<SpecialMention> _specialMentionCandidates() {
+    if (!_isMentioning) {
+      return const [];
+    }
+    return specialMentionCandidates(
+      _mentionTargets,
+      _mentionQuery,
+      allowHere: _hereUserIds != null,
+    );
+  }
+
+  void _insertSpecialMention(SpecialMention mention) {
+    if (!_mentionDraft.insertSpecial(_composerController, mention)) {
+      return;
+    }
+    setState(() {
+      _isMentioning = false;
+      _mentionQuery = '';
+    });
+    _saveDraft();
+  }
+
   List<MessageMention> _mentionsForBody(String body) {
-    return _mentionDraft.mentionsFor(body);
+    return _mentionDraft.mentionsFor(body, hereUserIds: _hereUserIds);
   }
 
   Future<void> _setTyping(bool isTyping) async {
@@ -3831,6 +3880,8 @@ class _Composer extends StatelessWidget {
     required this.errorText,
     required this.mentionCandidates,
     required this.onSelectMention,
+    required this.specialMentionCandidates,
+    required this.onSelectSpecialMention,
     required this.emojiCandidates,
     required this.onSelectEmoji,
     required this.slashCommands,
@@ -3862,6 +3913,10 @@ class _Composer extends StatelessWidget {
   final String? errorText;
   final List<GroupMember> mentionCandidates;
   final ValueChanged<GroupMember> onSelectMention;
+
+  /// `@here` and roles offered above the members.
+  final List<SpecialMention> specialMentionCandidates;
+  final ValueChanged<SpecialMention> onSelectSpecialMention;
 
   /// Custom emoji offered while `:name` is typed.
   final List<CircleEmoji> emojiCandidates;
@@ -3969,6 +4024,14 @@ class _Composer extends StatelessWidget {
                       candidates: emojiCandidates,
                       onSelect: onSelectEmoji,
                       maxHeight: math.min(220, availableHeight * 0.3),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (specialMentionCandidates.isNotEmpty) ...[
+                    SpecialMentionCandidateList(
+                      candidates: specialMentionCandidates,
+                      onSelect: onSelectSpecialMention,
+                      maxHeight: math.min(150, availableHeight * 0.2),
                     ),
                     const SizedBox(height: 8),
                   ],

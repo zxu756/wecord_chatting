@@ -341,31 +341,78 @@ class MessageMention {
     required this.start,
     required this.end,
     this.kind = 'user',
+    this.roleId,
+    this.color,
+    this.userIds = const [],
   });
+
+  /// `@here`: [userIds] are the members online when it is sent (only sent
+  /// to the server, which does not store them).
+  const MessageMention.here({
+    required this.start,
+    required this.end,
+    this.userIds = const [],
+  }) : userId = '',
+       displayName = 'here',
+       kind = kindHere,
+       roleId = null,
+       color = null;
+
+  /// A mention of every member holding [roleId].
+  const MessageMention.role({
+    required String this.roleId,
+    required this.displayName,
+    required this.start,
+    required this.end,
+    this.color,
+  }) : userId = '',
+       kind = kindRole,
+       userIds = const [];
 
   factory MessageMention.fromJson(Map<String, dynamic> json) {
     return MessageMention(
-      userId: json['user_id'] as String,
+      userId: json['user_id'] as String? ?? '',
       displayName: json['display_name'] as String? ?? '',
       start: (json['start'] as num?)?.toInt() ?? 0,
       end: (json['end'] as num?)?.toInt() ?? 0,
       kind: json['kind'] as String? ?? 'user',
+      roleId: json['role_id'] as String?,
+      color: (json['color'] as num?)?.toInt(),
     );
   }
 
+  static const kindHere = 'here';
+  static const kindRole = 'role';
+
+  /// The mentioned user; empty for `@here` and role mentions.
   final String userId;
   final String displayName;
   final int start;
   final int end;
+
+  /// `user`, `all`, `here` or `role`.
   final String kind;
+
+  /// The mentioned role, for role mentions.
+  final String? roleId;
+
+  /// The role's colour as 0xRRGGBB, for role mentions of coloured roles.
+  final int? color;
+  final List<String> userIds;
+
+  bool get isHere => kind == kindHere;
+
+  bool get isRole => kind == kindRole;
 
   Map<String, dynamic> toJson() {
     return {
-      'user_id': userId,
+      if (!isHere && !isRole) 'user_id': userId,
       'display_name': displayName,
       'start': start,
       'end': end,
       'kind': kind,
+      if (isRole) 'role_id': roleId,
+      if (isHere) 'user_ids': userIds,
     };
   }
 }

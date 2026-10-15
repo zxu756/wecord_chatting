@@ -663,6 +663,7 @@ String _labelFor(String key) {
     'seconds' => tr('Duration'),
     'deleted_messages' => tr('Messages deleted'),
     'allow' => tr('Allowed'),
+    'mentionable' => tr('Anyone can mention'),
     'deny' => tr('Denied'),
     _ =>
       key.isEmpty

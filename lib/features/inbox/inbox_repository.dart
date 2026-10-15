@@ -17,12 +17,20 @@ enum InboxReason {
 
   /// An @all mention.
   mentionAll,
+
+  /// A mention of a role the user has.
+  mentionRole,
+
+  /// `@here` while the user was online.
+  mentionHere,
   reply;
 
   factory InboxReason.fromJson(String value) {
     return switch (value) {
       'mention' => InboxReason.mention,
       'mention_all' => InboxReason.mentionAll,
+      'mention_role' => InboxReason.mentionRole,
+      'mention_here' => InboxReason.mentionHere,
       'reply' => InboxReason.reply,
       _ => throw ArgumentError.value(value, 'value', 'Unknown inbox reason'),
     };

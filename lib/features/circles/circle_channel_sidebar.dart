@@ -13,6 +13,7 @@ import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
+import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
@@ -839,6 +840,8 @@ class _SidebarHeader extends StatelessWidget {
               onCreateCategory();
             case _CircleMenuAction.roles:
               openCircleRolesScreen(context, detail.circle.id);
+            case _CircleMenuAction.circleSettings:
+              openCircleSettingsScreen(context, detail.circle.id);
             case _CircleMenuAction.auditLog:
               openCircleAuditLogScreen(context, detail.circle.id);
             case _CircleMenuAction.bans:
@@ -894,6 +897,14 @@ class _SidebarHeader extends StatelessWidget {
               ),
             ),
           ],
+          if (canOpenCircleSettings(detail))
+            PopupMenuItem(
+              value: _CircleMenuAction.circleSettings,
+              child: ListTile(
+                leading: const Icon(Icons.tune),
+                title: Text(tr('Circle settings')),
+              ),
+            ),
           if (detail.canManageRoles)
             PopupMenuItem(
               value: _CircleMenuAction.roles,
@@ -1006,6 +1017,7 @@ enum _CircleMenuAction {
   invite,
   createChannel,
   createCategory,
+  circleSettings,
   roles,
   auditLog,
   bans,

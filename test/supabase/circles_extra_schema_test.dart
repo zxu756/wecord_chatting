@@ -91,4 +91,54 @@ void main() {
       expect(sql, contains('when (new.published_at is not null)'));
     });
   });
+  group('circle templates', () {
+    final sql = migration('202610160028');
+
+    test('templates are private to their RPCs and one per circle', () {
+      expect(
+        sql,
+        contains('revoke all on public.circle_templates from authenticated'),
+      );
+      expect(
+        sql,
+        contains(
+          'constraint circle_templates_circle_unique unique (circle_id)',
+        ),
+      );
+      expect(sql, contains("check (code ~ '^[a-z0-9]{10}\$')"));
+    });
+
+    test('managing a template needs manage_circle', () {
+      for (final name in [
+        'create_circle_template',
+        'get_circle_template',
+        'circle_template_for_management',
+      ]) {
+        expect(function(sql, name), contains("'manage_circle'"), reason: name);
+      }
+      expect(
+        function(sql, 'sync_circle_template'),
+        contains('circle_template_for_management'),
+      );
+      expect(
+        function(sql, 'delete_circle_template'),
+        contains('circle_template_for_management'),
+      );
+    });
+
+    test('the snapshot leaves out messages, members and member overwrites', () {
+      final snapshot = function(sql, 'circle_template_snapshot');
+      expect(snapshot, isNot(contains('public.messages')));
+      expect(snapshot, isNot(contains('circle_members')));
+      expect(snapshot, contains('o.role_id is not null'));
+    });
+
+    test('building a circle goes through create_circle and masks bits', () {
+      final build = function(sql, 'create_circle_from_template');
+      expect(build, contains('public.create_circle(circle_name'));
+      expect(build, contains('& public.circle_all_permissions()'));
+      expect(build, contains('overwrite_bits'));
+      expect(build, contains('usage_count = t.usage_count + 1'));
+    });
+  });
 }

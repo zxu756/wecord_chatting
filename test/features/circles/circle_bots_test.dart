@@ -109,7 +109,7 @@ void main() {
   test('the repository calls the bot functions', () async {
     final rpc = RecordingRpc({
       'list_circle_bots': (_) => [_botJson()],
-      'create_circle_bot': (_) => {..._botJson(), 'token': 'secret'},
+      'bots': (_) => {..._botJson(), 'token': 'secret'},
       'regenerate_bot_token': (_) => {..._botJson(), 'token': 'secret-2'},
       'revoke_bot_token': (_) => _botJson(hasToken: false),
       'delete_circle_bot': (_) => null,
@@ -128,7 +128,7 @@ void main() {
         'command': 'ping',
       },
     });
-    final repository = CircleBotRepository(rpc.call);
+    final repository = CircleBotRepository(rpc.call, rpc.call);
 
     final bots = await repository.listBots('circle-1');
     final created = await repository.createBot(
@@ -151,10 +151,11 @@ void main() {
     expect(regenerated.token, 'secret-2');
     expect(commands.single.botName, 'Helper');
     expect(invocation.botName, 'Helper');
+    expect(rpc.calls[1].$1, 'bots');
     expect(rpc.calls[1].$2, {
-      'target_circle_id': 'circle-1',
-      'bot_name': 'Helper',
-      'target_role_id': 'role-1',
+      'circle_id': 'circle-1',
+      'name': 'Helper',
+      'role_id': 'role-1',
     });
     expect(rpc.calls.last.$2, {
       'target_conversation_id': 'conversation-1',
@@ -167,14 +168,17 @@ void main() {
     var bots = <Map<String, dynamic>>[];
     final rpc = RecordingRpc({
       'list_circle_bots': (_) => bots,
-      'create_circle_bot': (params) {
+      'bots': (params) {
         bots = [_botJson()];
         return {..._botJson(), 'token': 'the-secret-token'};
       },
     });
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [circleRpcProvider.overrideWithValue(rpc.call)],
+        overrides: [
+          circleRpcProvider.overrideWithValue(rpc.call),
+          circleFunctionProvider.overrideWithValue(rpc.call),
+        ],
         child: MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
@@ -200,9 +204,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final create = rpc.calls.firstWhere(
-      (call) => call.$1 == 'create_circle_bot',
+      (call) => call.$1 == 'bots',
     );
-    expect(create.$2['target_role_id'], 'role-1');
+    expect(create.$2['role_id'], 'role-1');
     expect(find.text('Bot created'), findsOneWidget);
     expect(find.text('the-secret-token'), findsOneWidget);
     await tester.tap(find.text('Done'));

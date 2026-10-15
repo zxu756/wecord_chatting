@@ -445,6 +445,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/bot-api/index.ts"
 
+[functions.bots]
+enabled = true
+# Signed-in members create bots; the function makes the bot's login with
+# the service role, then create_circle_bot checks the caller's permissions.
+verify_jwt = true
+entrypoint = "./functions/bots/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

@@ -205,11 +205,19 @@ void main() {
       expect(fields, contains('new.crosspost is not null'));
     });
 
-    test('bot accounts cannot sign in', () {
-      final create = function(sql, 'create_circle_bot');
-      expect(create, contains("'infinity'"));
+    test('bot logins come from the Auth admin API', () {
+      final later = migration('202610160031');
+      final create = function(later, 'create_circle_bot');
+      expect(create, isNot(contains('insert into auth.users')));
+      expect(create, contains("raw_app_meta_data->>'provider' = 'bot'"));
       expect(create, contains("'manage_circle'"));
       expect(create, contains('public.circle_member_rank'));
+      expect(
+        later,
+        contains(
+          'drop function if exists public.create_circle_bot(uuid, text, uuid);',
+        ),
+      );
     });
 
     test('bot writes reuse the member functions as the bot', () {

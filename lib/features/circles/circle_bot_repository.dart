@@ -88,7 +88,10 @@ class BotCommandInvocation {
 }
 
 final circleBotRepositoryProvider = Provider<CircleBotRepository>((ref) {
-  return CircleBotRepository(ref.watch(circleRpcProvider));
+  return CircleBotRepository(
+    ref.watch(circleRpcProvider),
+    ref.watch(circleFunctionProvider),
+  );
 });
 
 /// A circle's bots, for its managers.
@@ -111,9 +114,10 @@ final circleBotCommandsProvider = FutureProvider.autoDispose
     });
 
 class CircleBotRepository {
-  const CircleBotRepository(this._rpc);
+  const CircleBotRepository(this._rpc, this._function);
 
   final CircleRpc _rpc;
+  final CircleFunction _function;
 
   Future<List<CircleBot>> listBots(String circleId) async {
     final rows = await _rpc('list_circle_bots', {'target_circle_id': circleId});
@@ -121,16 +125,17 @@ class CircleBotRepository {
   }
 
   /// Creates a bot in the circle, with [roleId] when given; the returned
-  /// token is never shown again.
+  /// token is never shown again. The `bots` Edge Function makes the bot's
+  /// login, then create_circle_bot checks the caller's permissions.
   Future<CircleBotSecret> createBot({
     required String circleId,
     required String name,
     String? roleId,
   }) async {
-    final result = await _rpc('create_circle_bot', {
-      'target_circle_id': circleId,
-      'bot_name': name.trim(),
-      'target_role_id': roleId,
+    final result = await _function('bots', {
+      'circle_id': circleId,
+      'name': name.trim(),
+      'role_id': roleId,
     });
     return CircleBotSecret.fromJson(rpcObject(result));
   }

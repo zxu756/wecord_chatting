@@ -19,6 +19,24 @@ final circleRpcProvider = Provider<CircleRpc>((ref) {
   };
 });
 
+/// Calls an Edge Function with a JSON body and returns its JSON result.
+typedef CircleFunction =
+    Future<Object?> Function(String functionName, Map<String, dynamic> body);
+
+/// The Edge Function caller used where the database alone isn't enough
+/// (creating bot logins); tests override it.
+final circleFunctionProvider = Provider<CircleFunction>((ref) {
+  return (functionName, body) async {
+    try {
+      final client = ref.read(supabaseClientProvider);
+      final response = await client.functions.invoke(functionName, body: body);
+      return response.data;
+    } on AssertionError {
+      throw StateError('Supabase must be initialized first.');
+    }
+  };
+});
+
 /// Rows of a function returning a set or a table.
 List<Map<String, dynamic>> rpcRows(Object? result) {
   if (result is List) {

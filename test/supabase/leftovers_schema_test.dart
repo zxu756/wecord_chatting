@@ -98,4 +98,62 @@ void main() {
     expect(field, contains('mr.conversation_id = message_row.conversation_id'));
     expect(field, contains('message_row.recalled_at is not null'));
   });
+
+  test('deleted channels and circles return their files for removal', () {
+    final sql = migration('202610160017');
+
+    String function(String name) => RegExp(
+      'create or replace function public\\.$name\\([\\s\\S]*?\\n\\\$\\\$;',
+    ).firstMatch(sql)!.group(0)!;
+
+    final remember = function('remember_conversation_media');
+    expect(remember, contains('insert into public.recalled_message_media'));
+    expect(
+      remember,
+      contains("in ('chat-images', 'voice-messages', 'chat-files')"),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke execute on function public.remember_conversation_media(uuid[], uuid) from authenticated',
+      ),
+    );
+
+    for (final name in ['delete_circle_channel', 'prepare_account_deletion']) {
+      final body = function(name);
+      expect(
+        body,
+        contains('returns table (bucket_id text, object_path text)'),
+        reason: name,
+      );
+      expect(
+        body,
+        contains('public.remember_conversation_media('),
+        reason: name,
+      );
+      // Files a forwarded copy still uses stay.
+      expect(
+        body,
+        contains("m.attachment->>'path' = u.media_path"),
+        reason: name,
+      );
+      expect(sql, contains('drop function if exists public.$name('));
+    }
+    final channel = function('delete_circle_channel');
+    expect(channel, contains("'manage_channels'"));
+    expect(channel, contains("'channel_delete'"));
+    expect(
+      channel,
+      contains('ct.parent_conversation_id = channel.conversation_id'),
+    );
+    final account = function('prepare_account_deletion');
+    expect(account, contains("o.bucket_id in ('circle-emojis', 'chat-media')"));
+    expect(account, contains("errcode = '55000'"));
+
+    final edge = File(
+      'supabase/functions/delete-account/index.ts',
+    ).readAsStringSync();
+    expect(edge, contains('data: deletedObjects'));
+    expect(edge, contains('admin.storage.from(bucket).remove('));
+  });
 }

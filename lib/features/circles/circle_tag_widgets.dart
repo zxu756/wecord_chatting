@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_tag_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -51,8 +52,8 @@ class CircleTagChip extends StatelessWidget {
   }
 }
 
-/// What shows next to [userId]'s name: their circle tag, if they chose
-/// one. Nothing while loading or without one.
+/// What shows next to [userId]'s name: a BOT badge for bots and their
+/// circle tag, if they chose one. Nothing while loading or without them.
 class ProfileNameBadges extends ConsumerWidget {
   const ProfileNameBadges({
     required this.userId,
@@ -71,13 +72,21 @@ class ProfileNameBadges extends ConsumerWidget {
         ref.watch(profileBadgesProvider(userId)).valueOrNull ??
         ProfileBadges.none;
     final tag = badges.tag;
-    if (tag == null) {
+    if (badges.isEmpty) {
       return const SizedBox.shrink();
     }
     return Padding(
       key: ValueKey('profile-badges-$userId'),
       padding: EdgeInsetsDirectional.only(start: leadingGap),
-      child: CircleTagChip(tag: tag, circleName: badges.tagCircleName),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (badges.isBot) const MessageBotTag(),
+          if (badges.isBot && tag != null) const SizedBox(width: 4),
+          if (tag != null)
+            CircleTagChip(tag: tag, circleName: badges.tagCircleName),
+        ],
+      ),
     );
   }
 }

@@ -102,15 +102,22 @@ class TagCircle {
   final bool isSelected;
 }
 
-/// What shows next to a user's name: the circle tag they chose.
+/// What shows next to a user's name: the circle tag they chose, and a
+/// BOT badge for bot accounts.
 class ProfileBadges {
-  const ProfileBadges({this.tag, this.tagCircleId, this.tagCircleName});
+  const ProfileBadges({
+    this.tag,
+    this.tagCircleId,
+    this.tagCircleName,
+    this.isBot = false,
+  });
 
   factory ProfileBadges.fromJson(Map<String, dynamic> json) {
     return ProfileBadges(
       tag: CircleTag.maybeFromJson(json),
       tagCircleId: json['circle_id'] as String?,
       tagCircleName: json['circle_name'] as String?,
+      isBot: json['is_bot'] == true,
     );
   }
 
@@ -120,7 +127,10 @@ class ProfileBadges {
   final String? tagCircleId;
   final String? tagCircleName;
 
-  bool get isEmpty => tag == null;
+  /// A bot account, shown with a BOT badge.
+  final bool isBot;
+
+  bool get isEmpty => tag == null && !isBot;
 }
 
 final circleTagRepositoryProvider = Provider<CircleTagRepository>((ref) {

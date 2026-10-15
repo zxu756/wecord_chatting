@@ -33,6 +33,8 @@ import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
+import 'package:wecord/features/circles/circle_bot_repository.dart';
+import 'package:wecord/features/circles/circle_bot_widgets.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
@@ -565,9 +567,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final slowmodeSeconds =
         widget.slowmodeSeconds ?? conversationSummary?.slowmodeSeconds ?? 0;
     _circleId = conversationSummary?.circleId;
+    // Bots answer commands in channels (not threads).
+    final circleId = _circleId;
     _slashContext = SlashCommandContext(
-      isCircleConversation: _circleId != null,
+      isCircleConversation: circleId != null,
       canCreatePolls: true,
+      botCommands:
+          circleId != null &&
+              conversationType == ConversationType.channel &&
+              canSend
+          ? ref.watch(circleBotCommandsProvider(circleId)).valueOrNull ??
+                const []
+          : const [],
     );
     _slowmodeUntil = slowmodeSeconds > 0
         ? _slowmodeEnd(
@@ -1199,8 +1210,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   emojiCandidates: _emojiCandidates(),
                   onSelectEmoji: _insertCustomEmoji,
                   slashCommands: _slashCandidates(),
+                  botSlashCommands: _botSlashCandidates(),
                   highlightedSlashIndex: _slashIndex,
                   onSelectSlashCommand: _selectSlashCommand,
+                  onSelectBotSlashCommand: _selectBotSlashCommand,
                   onComposerKey: _handleComposerKey,
                   replyPreviewText: _replyingTo == null
                       ? null
@@ -1474,6 +1487,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       case SlashSendText(body: final commandBody):
         messageBody = commandBody;
       case null:
+        if (parseBotSlashCommand(body, _slashContext) case (
+          final command,
+          final options,
+        )) {
+          await _runSlashAction(() => _invokeBotCommand(command, options));
+          return;
+        }
         messageBody = body;
     }
 
@@ -2005,6 +2025,58 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  /// Sends a bot's command to it; the bot answers in the channel.
+  Future<bool> _invokeBotCommand(
+    BotSlashCommand command,
+    String options,
+  ) async {
+    try {
+      await ref
+          .read(circleBotRepositoryProvider)
+          .invoke(
+            conversationId: widget.conversationId,
+            command: command.name,
+            options: options,
+          );
+      _showSnackBar(
+        tr('Sent /{command} to {bot}.', {
+          'command': command.name,
+          'bot': command.botName,
+        }),
+      );
+      return true;
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _sendError = tr('Could not use the command. Try again.'),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// The bots' commands offered for what is being typed.
+  List<BotSlashCommand> _botSlashCandidates() {
+    final query = _slashQuery;
+    if (query == null || _editingMessage != null) {
+      return const [];
+    }
+    return botSlashCommandCandidates(query, _slashContext);
+  }
+
+  /// Puts `/name ` in the composer, ready for the bot command's options.
+  void _selectBotSlashCommand(BotSlashCommand command) {
+    final text = '/${command.name} ';
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    setState(() {
+      _slashQuery = null;
+      _slashIndex = 0;
+    });
+  }
+
   /// The commands offered for what is being typed; none while editing.
   List<SlashCommand> _slashCandidates() {
     final query = _slashQuery;
@@ -2036,7 +2108,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// Arrow keys move through the command list; Enter and Tab pick.
   KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
     final commands = _slashCandidates();
-    if (commands.isEmpty) {
+    final botCommands = _botSlashCandidates();
+    final count = commands.length + botCommands.length;
+    if (count == 0) {
       return _handleComposerShortcut(event);
     }
     if (event is KeyUpEvent) {
@@ -2047,7 +2121,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         key == LogicalKeyboardKey.arrowUp) {
       final step = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
       setState(() {
-        _slashIndex = (_slashIndex + step) % commands.length;
+        _slashIndex = (_slashIndex + step) % count;
       });
       return KeyEventResult.handled;
     }
@@ -2055,7 +2129,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         (key == LogicalKeyboardKey.enter ||
             key == LogicalKeyboardKey.numpadEnter ||
             key == LogicalKeyboardKey.tab)) {
-      _selectSlashCommand(commands[_slashIndex.clamp(0, commands.length - 1)]);
+      final index = _slashIndex.clamp(0, count - 1);
+      if (index < commands.length) {
+        _selectSlashCommand(commands[index]);
+      } else {
+        _selectBotSlashCommand(botCommands[index - commands.length]);
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -3707,6 +3786,8 @@ class _MessageContent extends StatelessWidget {
     final content = <Widget>[
       if (message.crosspost case final crosspost?)
         CrosspostOrigin(crosspost: crosspost, foregroundColor: textColor),
+      if (message.interaction case final interaction?)
+        InteractionOrigin(interaction: interaction, foregroundColor: textColor),
       if (message.replyPreview != null) ...[
         _QuotedReplyPreview(
           senderName: message.replyPreview!.senderName,
@@ -4033,8 +4114,10 @@ class _Composer extends StatelessWidget {
     required this.emojiCandidates,
     required this.onSelectEmoji,
     required this.slashCommands,
+    this.botSlashCommands = const [],
     required this.highlightedSlashIndex,
     required this.onSelectSlashCommand,
+    this.onSelectBotSlashCommand,
     required this.onComposerKey,
     required this.replyPreviewText,
     required this.isEditing,
@@ -4074,8 +4157,12 @@ class _Composer extends StatelessWidget {
 
   /// The commands offered while one is typed after a leading `/`.
   final List<SlashCommand> slashCommands;
+
+  /// Circle bots' commands, offered after [slashCommands].
+  final List<BotSlashCommand> botSlashCommands;
   final int highlightedSlashIndex;
   final ValueChanged<SlashCommand> onSelectSlashCommand;
+  final ValueChanged<BotSlashCommand>? onSelectBotSlashCommand;
 
   /// Sees the text field's key presses first (arrow keys and Enter in the
   /// command list).
@@ -4165,9 +4252,12 @@ class _Composer extends StatelessWidget {
                     _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
                     const SizedBox(height: 8),
                   ],
-                  if (slashCommands.isNotEmpty) ...[
+                  if (slashCommands.isNotEmpty ||
+                      botSlashCommands.isNotEmpty) ...[
                     SlashCommandList(
                       commands: slashCommands,
+                      botCommands: botSlashCommands,
+                      onSelectBot: onSelectBotSlashCommand,
                       highlightedIndex: highlightedSlashIndex,
                       onSelect: onSelectSlashCommand,
                       maxHeight: math.min(240, availableHeight * 0.3),

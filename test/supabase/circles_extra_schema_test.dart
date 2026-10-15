@@ -181,4 +181,79 @@ void main() {
       expect(badges, contains('c.tag is not null'));
     });
   });
+  group('bot API', () {
+    final sql = migration('202610160030');
+
+    test('only hashes of tokens are kept and clients cannot read bots', () {
+      expect(sql, contains("token_hash ~ '^[0-9a-f]{64}\$'"));
+      expect(
+        sql,
+        contains('revoke all on public.circle_bots from anon, authenticated'),
+      );
+      expect(
+        function(sql, 'bot_from_token'),
+        contains('public.webhook_token_hash(bot_token)'),
+      );
+    });
+
+    test('clients cannot mark bots or forge interactions', () {
+      final guard = function(sql, 'profiles_guard_is_bot');
+      expect(guard, isNot(contains('security definer')));
+      expect(guard, contains("current_user in ('authenticated', 'anon')"));
+      final fields = function(sql, 'messages_guard_server_fields');
+      expect(fields, contains('new.interaction is not null'));
+      expect(fields, contains('new.crosspost is not null'));
+    });
+
+    test('bot accounts cannot sign in', () {
+      final create = function(sql, 'create_circle_bot');
+      expect(create, contains("'infinity'"));
+      expect(create, contains("'manage_circle'"));
+      expect(create, contains('public.circle_member_rank'));
+    });
+
+    test('bot writes reuse the member functions as the bot', () {
+      final act = function(sql, 'act_as_bot');
+      expect(act, contains("'request.jwt.claims'"));
+      expect(act, contains("'request.jwt.claim.sub'"));
+      expect(
+        function(sql, 'bot_api_send_message'),
+        contains('public.send_text_message('),
+      );
+      expect(
+        function(sql, 'bot_api_add_reaction'),
+        contains('public.toggle_message_reaction('),
+      );
+      expect(function(sql, 'bot_visible_channel'), contains("'view_channel'"));
+      expect(function(sql, 'count_bot_write'), contains('> 60'));
+    });
+
+    test('only the Edge Function may call the bot API functions', () {
+      expect(sql, contains("'bot_api_send_message(text, uuid, text, uuid)'"));
+      expect(
+        sql,
+        contains('grant execute on function public.%s to service_role'),
+      );
+      expect(
+        sql,
+        contains(
+          'revoke execute on function public.%s from public, anon, authenticated',
+        ),
+      );
+    });
+
+    test('commands need send permission and the bot must answer there', () {
+      final invoke = function(sql, 'invoke_bot_command');
+      expect(invoke, contains("'send_messages'"));
+      expect(
+        invoke,
+        contains(
+          "public.circle_channel_has_permission(channel.id, bot.user_id, 'view_channel')",
+        ),
+      );
+      final respond = function(sql, 'bot_api_respond_interaction');
+      expect(respond, contains('pending.responded_at is not null'));
+      expect(respond, contains('pending.expires_at <= now()'));
+    });
+  });
 }

@@ -16,6 +16,7 @@ class SlashCommandContext {
   const SlashCommandContext({
     this.isCircleConversation = false,
     this.canCreatePolls = false,
+    this.botCommands = const [],
   });
 
   /// A circle channel or a thread of one, where `/nick` changes the
@@ -24,6 +25,74 @@ class SlashCommandContext {
 
   /// Polls can be posted here (`/poll`).
   final bool canCreatePolls;
+
+  /// The commands of the circle's bots, offered after the built-in ones
+  /// in circle channels.
+  final List<BotSlashCommand> botCommands;
+}
+
+/// A command a circle's bot registered. Using it sends the bot an
+/// interaction instead of a message; the bot answers in the channel.
+class BotSlashCommand {
+  const BotSlashCommand({
+    required this.name,
+    required this.description,
+    required this.botName,
+    this.botUserId,
+  });
+
+  factory BotSlashCommand.fromJson(Map<String, dynamic> json) {
+    return BotSlashCommand(
+      name: json['name'] as String,
+      description: json['description'] as String? ?? '',
+      botName: json['bot_name'] as String? ?? '',
+      botUserId: json['bot_user_id'] as String?,
+    );
+  }
+
+  final String name;
+  final String description;
+  final String botName;
+  final String? botUserId;
+}
+
+/// The bot commands in [context] whose name starts with [query], leaving
+/// out names a built-in command already uses.
+List<BotSlashCommand> botSlashCommandCandidates(
+  String query,
+  SlashCommandContext context,
+) {
+  final normalized = query.toLowerCase();
+  return [
+    for (final command in context.botCommands)
+      if (command.name.startsWith(normalized) &&
+          SlashCommand.named(command.name) == null)
+        command,
+  ];
+}
+
+/// The bot command [input] uses and its options, or null when it does not
+/// start with one of [context]'s bot commands. Built-in commands win.
+(BotSlashCommand, String)? parseBotSlashCommand(
+  String input,
+  SlashCommandContext context,
+) {
+  final match = RegExp(
+    r'^/([a-z0-9_-]+)(?:\s+([\s\S]*))?$',
+  ).firstMatch(input.trim());
+  if (match == null) {
+    return null;
+  }
+  final name = match.group(1)!;
+  if (SlashCommand.named(name) != null) {
+    return null;
+  }
+  for (final command in context.botCommands) {
+    if (command.name == name) {
+      return (command, (match.group(2) ?? '').trim());
+    }
+  }
+  return null;
 }
 
 enum SlashCommand {
@@ -286,10 +355,17 @@ class SlashCommandList extends StatelessWidget {
     required this.highlightedIndex,
     required this.onSelect,
     required this.maxHeight,
+    this.botCommands = const [],
+    this.onSelectBot,
     super.key,
   });
 
   final List<SlashCommand> commands;
+
+  /// Bots' commands, listed after [commands]; [highlightedIndex] counts
+  /// on into them.
+  final List<BotSlashCommand> botCommands;
+  final ValueChanged<BotSlashCommand>? onSelectBot;
 
   /// The command Enter or Tab picks, moved with the arrow keys.
   final int highlightedIndex;
@@ -342,6 +418,40 @@ class SlashCommandList extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 onTap: () => onSelect(command),
+              ),
+            for (final (index, command) in botCommands.indexed)
+              ListTile(
+                key: ValueKey('bot-command-${command.name}'),
+                dense: true,
+                selected: commands.length + index == highlightedIndex,
+                selectedTileColor: theme.colorScheme.primary.withValues(
+                  alpha: 0.12,
+                ),
+                leading: const Icon(Icons.smart_toy_outlined, size: 18),
+                title: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '/${command.name}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextSpan(
+                        text: ' ${command.botName}',
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  command.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => onSelectBot?.call(command),
               ),
           ],
         ),

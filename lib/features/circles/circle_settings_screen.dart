@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/circle_bot_widgets.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 
-/// Opens the circle's settings: its template (and more sections as the
-/// circle allows).
+/// Opens the circle's settings: its template, tag and bots.
 void openCircleSettingsScreen(BuildContext context, String circleId) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -50,6 +50,11 @@ class CircleSettingsScreen extends ConsumerWidget {
               CircleTagSection(
                 key: ValueKey('circle-tag-$circleId'),
                 circleId: circleId,
+              ),
+              const Divider(height: 32),
+              CircleBotsSection(
+                key: ValueKey('circle-bots-$circleId'),
+                detail: detail,
               ),
             ],
           ],

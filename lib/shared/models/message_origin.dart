@@ -48,3 +48,32 @@ class MessageCrosspost {
   /// The original's author; null when a webhook posted it.
   final String? authorId;
 }
+
+/// A bot's answer to a slash command: who used which command.
+class MessageInteraction {
+  const MessageInteraction({
+    required this.command,
+    required this.userName,
+    this.userId,
+  });
+
+  /// Null for anything that is not an interaction object.
+  static MessageInteraction? maybeFromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final command = json['command'];
+    if (command is! String || command.isEmpty) {
+      return null;
+    }
+    return MessageInteraction(
+      command: command,
+      userName: json['user_name'] as String? ?? '',
+      userId: json['user_id'] as String?,
+    );
+  }
+
+  final String command;
+  final String userName;
+  final String? userId;
+}

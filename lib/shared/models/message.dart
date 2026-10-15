@@ -72,6 +72,7 @@ class ChatMessage {
     this.webhookAvatarUrl,
     this.crosspost,
     this.publishedAt,
+    this.interaction,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -114,6 +115,7 @@ class ChatMessage {
       webhookAvatarUrl: json['webhook_avatar_url'] as String?,
       crosspost: MessageCrosspost.maybeFromJson(json['crosspost']),
       publishedAt: _parseOptionalTimestamp(json['published_at']),
+      interaction: MessageInteraction.maybeFromJson(json['interaction']),
     );
   }
 
@@ -175,6 +177,9 @@ class ChatMessage {
   final DateTime? publishedAt;
 
   bool get isPublished => publishedAt != null;
+
+  /// A bot's answer to a member's slash command.
+  final MessageInteraction? interaction;
 
   /// Posted through a webhook: shown under the webhook's name, not as a
   /// message of [senderId] (the webhook's creator).
@@ -356,6 +361,7 @@ class ChatMessage {
           ? this.webhookAvatarUrl
           : webhookAvatarUrl as String?,
       crosspost: crosspost,
+      interaction: interaction,
       publishedAt: identical(publishedAt, _sentinel)
           ? this.publishedAt
           : publishedAt as DateTime?,

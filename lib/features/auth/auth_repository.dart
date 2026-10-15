@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/config/site_url.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -47,9 +48,15 @@ abstract interface class AuthRepository {
 }
 
 class SupabaseAuthRepository implements AuthRepository {
-  const SupabaseAuthRepository(this._client);
+  const SupabaseAuthRepository(
+    this._client, {
+    String Function() redirectUrl = authRedirectUrl,
+  }) : _redirectUrl = redirectUrl;
 
   final SupabaseClient _client;
+
+  /// Where links in auth emails lead back to (see [authRedirectUrl]).
+  final String Function() _redirectUrl;
 
   @override
   AuthUser? get currentUser => _toAuthUser(_client.auth.currentUser);
@@ -82,6 +89,8 @@ class SupabaseAuthRepository implements AuthRepository {
     await _client.auth.signUp(
       email: email,
       password: password,
+      // The confirmation link opens the web app.
+      emailRedirectTo: _redirectUrl(),
       data: {
         'username': username.trim().toLowerCase(),
         'display_name': displayName.trim(),

@@ -1,8 +1,9 @@
 // Deletes the caller's account. prepare_account_deletion (run as the
 // caller) leaves their circles and groups and turns their profile into
-// "Deleted User"; then, with the service role, their avatar and banner
-// files and their login are removed. Refuses with 409 owns_circles while they own a
-// circle that has other members.
+// "Deleted User", and returns the Storage objects of the circles it
+// deleted; then, with the service role, those objects, their avatar and
+// banner files and their login are removed. Refuses with 409 owns_circles
+// while they own a circle that has other members.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -14,6 +15,14 @@ const corsHeaders = {
 
 // Each user's files sit in a folder named after them.
 const userBuckets = ["profile-avatars", "profile-banners"];
+
+// Storage removes at most 1000 objects per request.
+const removeBatchSize = 1000;
+
+interface DeletedObject {
+  bucket_id?: unknown;
+  object_path?: unknown;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -55,7 +64,7 @@ Deno.serve(async (request) => {
   }
 
   // As the caller, so it can only ever touch their own account.
-  const { error: prepareError } = await userClient.rpc(
+  const { data: deletedObjects, error: prepareError } = await userClient.rpc(
     "prepare_account_deletion",
   );
   if (prepareError) {
@@ -68,6 +77,23 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Best effort: nothing points at these files any more.
+  const pathsByBucket = new Map<string, string[]>();
+  for (const row of (deletedObjects ?? []) as DeletedObject[]) {
+    if (typeof row?.bucket_id !== "string") continue;
+    if (typeof row?.object_path !== "string") continue;
+    const paths = pathsByBucket.get(row.bucket_id) ?? [];
+    paths.push(row.object_path);
+    pathsByBucket.set(row.bucket_id, paths);
+  }
+  for (const [bucket, paths] of pathsByBucket) {
+    for (let start = 0; start < paths.length; start += removeBatchSize) {
+      await admin.storage.from(bucket).remove(
+        paths.slice(start, start + removeBatchSize),
+      );
+    }
+  }
 
   // Best effort: the profile no longer points at these files.
   for (const bucket of userBuckets) {

@@ -1,23 +1,31 @@
 {
     "name": "WeCord",
     "short_name": "WeCord",
-    "start_url": ".",
+    "description": "WeCord: chat with friends, groups and circles in real time.",
+    "lang": "en",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
+    "orientation": "portrait-primary",
     "background_color": "#F7F8FA",
     "theme_color": "#F7F8FA",
-    "description": "A familiar-social real-time chat app.",
-    "orientation": "portrait-primary",
+    "categories": [
+        "social",
+        "communication"
+    ],
     "prefer_related_applications": false,
     "icons": [
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-maskable-192.png",

@@ -11,6 +11,14 @@ coverage/
 # Local environment files
 .env
 .env.local
+.env.*
+!.env.example
+
+# Cloudflare (wrangler) local state and secrets
+.wrangler/
+.dev.vars
+node_modules/
+
 supabase/.temp/
 
 # IDE state

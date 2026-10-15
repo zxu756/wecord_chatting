@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/features/auth/password_recovery.dart';
+import 'package:wecord/features/auth/set_new_password_screen.dart';
 import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
@@ -29,6 +31,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final authRouter = AuthRouterNotifier(ref.read(authStateProvider));
   ref.listen<AsyncValue<AuthUser?>>(authStateProvider, (previous, next) {
     authRouter.authState = next;
+  });
+  authRouter.recoveringPassword = ref.read(passwordRecoveryPendingProvider);
+  ref.listen<bool>(passwordRecoveryPendingProvider, (previous, next) {
+    authRouter.recoveringPassword = next;
   });
 
   final pushedPageObserver = PushedPageObserver();
@@ -59,7 +65,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (!signedIn && !onAuthRoute) {
         return _withPendingLocation(AuthScreen.path, pendingLocation);
       }
-      if (signedIn && (onAuthRoute || onLoadingRoute)) {
+      // Opened from a password reset link: choose a new password first.
+      final onNewPasswordRoute = location == SetNewPasswordScreen.path;
+      if (signedIn && authRouter.recoveringPassword) {
+        return onNewPasswordRoute ? null : SetNewPasswordScreen.path;
+      }
+      if (signedIn && (onAuthRoute || onLoadingRoute || onNewPasswordRoute)) {
         return pendingLocation ?? HomeScreen.path;
       }
       // Circles are listed in the rail; there is no page of them.
@@ -76,6 +87,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AuthScreen.path,
         builder: (context, state) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: SetNewPasswordScreen.path,
+        builder: (context, state) => const SetNewPasswordScreen(),
       ),
       ShellRoute(
         observers: [pushedPageObserver],
@@ -276,6 +291,19 @@ class AuthRouterNotifier extends ChangeNotifier {
 
   set authState(AsyncValue<AuthUser?> value) {
     _authState = value;
+    notifyListeners();
+  }
+
+  var _recoveringPassword = false;
+
+  /// See passwordRecoveryPendingProvider.
+  bool get recoveringPassword => _recoveringPassword;
+
+  set recoveringPassword(bool value) {
+    if (value == _recoveringPassword) {
+      return;
+    }
+    _recoveringPassword = value;
     notifyListeners();
   }
 }

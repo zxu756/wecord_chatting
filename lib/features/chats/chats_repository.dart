@@ -1285,17 +1285,37 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     return rows.cast<Map<String, dynamic>>();
   }
 
+  static const _messageColumns =
+      '*,is_pinned,sender_nickname,sender_circle_avatar,sender_role_color,thread_summary,poll_results,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))';
+
   @override
   Future<List<Map<String, dynamic>>> listMessages(String conversationId) async {
-    final rows = await _client
-        .from('messages')
-        .select(
-          '*,reactions,is_pinned,sender_nickname,sender_circle_avatar,sender_role_color,thread_summary,poll_results,sender:profiles!messages_sender_id_fkey(id,username,display_name,avatar_url,bio,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
+    Future<List<Map<String, dynamic>>> select(String columns) async {
+      final rows = await _client
+          .from('messages')
+          .select(columns)
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: true)
+          .order('id', ascending: true);
+      return rows.cast<Map<String, dynamic>>();
+    }
+
+    // The reactions of the whole page come from one query, which is much
+    // cheaper than the per-message reactions field.
+    final reactions = _client
+        .rpc<List<dynamic>>(
+          'list_conversation_reactions',
+          params: {'target_conversation_id': conversationId},
         )
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .order('id', ascending: true);
-    return rows.cast<Map<String, dynamic>>();
+        .then<List<dynamic>?>((rows) => rows)
+        .catchError((Object _) => null);
+    final rows = await select(_messageColumns);
+    final reactionRows = await reactions;
+    if (reactionRows == null) {
+      // A server without list_conversation_reactions yet.
+      return select('reactions,$_messageColumns');
+    }
+    return withConversationReactions(rows, reactionRows);
   }
 
   @override
@@ -2117,6 +2137,23 @@ ChatMessage _chatMessageFromJson(Map<String, dynamic> row) {
     ...row,
     'sender': {...sender, 'alias': alias},
   });
+}
+
+/// [messageRows] with the `reactions` of each message from
+/// [reactionRows] (`{message_id, reactions}` rows of
+/// list_conversation_reactions); messages without a row get none.
+List<Map<String, dynamic>> withConversationReactions(
+  List<Map<String, dynamic>> messageRows,
+  List<dynamic> reactionRows,
+) {
+  final reactionsByMessage = <Object?, Object?>{
+    for (final row in reactionRows)
+      if (row is Map) row['message_id']: row['reactions'],
+  };
+  return [
+    for (final row in messageRows)
+      {...row, 'reactions': reactionsByMessage[row['id']] ?? const <Object?>[]},
+  ];
 }
 
 String? _embeddedContactAlias(Map<String, dynamic> profile) {

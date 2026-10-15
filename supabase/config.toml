@@ -157,11 +157,22 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
+# Local only: the hosted project's Site URL and Redirect URLs are set in the
+# dashboard (Authentication > URL Configuration), not pushed from here.
 site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# Sign-up and password reset emails link back to the app (lib/shared/config/
+# site_url.dart): the deployed web app, or a local `flutter run -d chrome`
+# on any port.
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "http://localhost:*/**",
+  "http://127.0.0.1:*/**",
+  "https://wecord.jokebear.fyi",
+  "https://wecord.jokebear.fyi/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

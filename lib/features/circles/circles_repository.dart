@@ -678,9 +678,16 @@ class SupabaseCirclesRepository implements CirclesRepository {
     });
     // Deleted messages' images and voice clips nothing else uses; removing
     // them is best effort, as when deleting a single message.
+    await _removeDeletedMedia(result);
+  }
+
+  /// Removes the `{bucket_id, object_path}` rows an RPC returned for
+  /// messages it deleted. Best effort: the deletion is done, and a leftover
+  /// file is harmless.
+  Future<void> _removeDeletedMedia(Object? rows) async {
     final pathsByBucket = <String, List<String>>{};
-    if (result is List) {
-      for (final row in result) {
+    if (rows is List) {
+      for (final row in rows) {
         if (row is! Map) {
           continue;
         }
@@ -691,13 +698,20 @@ class SupabaseCirclesRepository implements CirclesRepository {
         }
       }
     }
-    for (final entry in pathsByBucket.entries) {
-      try {
-        await _withStorageTimeout(
-          _dataSource.removeObjects(bucket: entry.key, paths: entry.value),
-        );
-      } catch (_) {
-        // The ban is done; a leftover file is harmless.
+    for (final MapEntry(key: bucket, value: paths) in pathsByBucket.entries) {
+      // Storage removes at most 1000 objects per request.
+      for (var start = 0; start < paths.length; start += 1000) {
+        final end = start + 1000 < paths.length ? start + 1000 : paths.length;
+        try {
+          await _withStorageTimeout(
+            _dataSource.removeObjects(
+              bucket: bucket,
+              paths: paths.sublist(start, end),
+            ),
+          );
+        } catch (_) {
+          // Leave the file behind.
+        }
       }
     }
   }
@@ -848,9 +862,11 @@ class SupabaseCirclesRepository implements CirclesRepository {
 
   @override
   Future<void> deleteChannel(String channelId) async {
-    await _dataSource.rpc('delete_circle_channel', {
+    final result = await _dataSource.rpc('delete_circle_channel', {
       'target_channel_id': channelId,
     });
+    // The files of the channel's messages that nothing else uses.
+    await _removeDeletedMedia(result);
   }
 
   @override

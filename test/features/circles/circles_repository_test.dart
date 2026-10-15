@@ -789,6 +789,27 @@ void main() {
     expect(dataSource.calls[2].params, {'target_channel_id': 'channel-1'});
   });
 
+  test('deleting a channel removes the files of its messages', () async {
+    final dataSource = FakeCirclesDataSource()
+      ..rpcRows['delete_circle_channel'] = [
+        {'bucket_id': 'chat-images', 'object_path': 'c1/a.png'},
+        {'bucket_id': 'chat-files', 'object_path': 't1/doc.pdf'},
+        {'bucket_id': 'chat-images', 'object_path': 'c1/b.png'},
+      ];
+    final repository = SupabaseCirclesRepository.withDataSource(dataSource);
+
+    await repository.deleteChannel('channel-1');
+
+    expect(dataSource.calls.single.functionName, 'delete_circle_channel');
+    expect(
+      [
+        for (final removed in dataSource.removedObjects)
+          '${removed.bucket}: ${removed.paths.join(', ')}',
+      ],
+      ['chat-images: c1/a.png, c1/b.png', 'chat-files: t1/doc.pdf'],
+    );
+  });
+
   test('CircleDetail uses channel permissions after overwrites', () {
     final detail = CircleDetail.fromJson({
       'circle': {

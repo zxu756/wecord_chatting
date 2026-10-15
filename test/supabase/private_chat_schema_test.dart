@@ -990,7 +990,7 @@ void main() {
 
     expect(permissionBody, contains('security definer'));
     expect(permissionBody, contains("when 'direct'"));
-    expect(permissionBody, contains("cm.role = 'owner'"));
+    expect(permissionBody, contains("cm.role in ('owner', 'admin')"));
     expect(permissionBody, contains('public.circle_channels'));
     expect(
       permissionBody,

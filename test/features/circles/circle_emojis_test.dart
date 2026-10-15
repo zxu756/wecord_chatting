@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthUser;
+import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
@@ -101,6 +103,12 @@ class FakeCircleEmojiRepository implements CircleEmojiRepository {
   final deleted = <String>[];
   Object? addError;
 
+  /// Emits a change another client made; see [emojiChanges].
+  final changes = StreamController<void>.broadcast();
+
+  /// The circle of every [emojiChanges] call; null for every circle.
+  final watched = <String?>[];
+
   @override
   Future<List<CircleEmoji>> listCircleEmojis(String circleId) async {
     return [
@@ -158,12 +166,19 @@ class FakeCircleEmojiRepository implements CircleEmojiRepository {
   Future<String> createEmojiUrl(String storagePath) async {
     return 'https://emoji.test/$storagePath';
   }
+
+  @override
+  Stream<void> emojiChanges({String? circleId}) {
+    watched.add(circleId);
+    return changes.stream;
+  }
 }
 
 class _FakeEmojiDataSource implements CircleEmojiDataSource {
   final rpcCalls = <(String, Map<String, dynamic>)>[];
   final uploads = <({String bucket, String path, String mimeType})>[];
   final removed = <String>[];
+  final watched = <String?>[];
   Object? rpcError;
   Object? rpcResult;
 
@@ -198,6 +213,12 @@ class _FakeEmojiDataSource implements CircleEmojiDataSource {
     required Duration expiresIn,
   }) async {
     return 'https://signed.test/$bucket/$path?ttl=${expiresIn.inHours}h';
+  }
+
+  @override
+  Stream<void> emojiChanges({String? circleId}) {
+    watched.add(circleId);
+    return const Stream.empty();
   }
 }
 
@@ -371,6 +392,73 @@ void main() {
         await repository.createEmojiUrl('circle-1/x.png'),
         'https://signed.test/circle-emojis/circle-1/x.png?ttl=24h',
       );
+    });
+
+    test('watches changes in one circle or in all of them', () async {
+      final source = _FakeEmojiDataSource();
+      final repository = SupabaseCircleEmojiRepository(source);
+
+      await repository.emojiChanges(circleId: 'circle-1').drain<void>();
+      await repository.emojiChanges().drain<void>();
+
+      expect(source.watched, ['circle-1', null]);
+    });
+  });
+
+  group('live updates', () {
+    test('the usable list reloads when emoji change elsewhere', () async {
+      final emojis = FakeCircleEmojiRepository();
+      final container = ProviderContainer(
+        overrides: [
+          circleEmojiRepositoryProvider.overrideWithValue(emojis),
+          authRepositoryProvider.overrideWithValue(
+            chat_fakes.FakeAuthRepository()
+              ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final listener = container.listen(
+        usableEmojisProvider,
+        (previous, next) {},
+      );
+      addTearDown(listener.close);
+
+      expect(await container.read(usableEmojisProvider.future), hasLength(5));
+      expect(emojis.watched, [null]);
+
+      // Someone in circle-2 deletes cat_thumbs.
+      emojis.emojis = [
+        for (final emoji in emojis.emojis)
+          if (emoji.id != catThumbsId) emoji,
+      ];
+      emojis.changes.add(null);
+      await Future<void>.delayed(Duration.zero);
+
+      final reloaded = await container.read(usableEmojisProvider.future);
+      expect(
+        reloaded.map((emoji) => emoji.name),
+        isNot(contains('cat_thumbs')),
+      );
+      expect(reloaded, hasLength(4));
+    });
+
+    testWidgets('the management page shows emoji others add', (tester) async {
+      final emojis = FakeCircleEmojiRepository();
+      await tester.pumpWidget(_page(emojis, canManage: false));
+      await tester.pumpAndSettle();
+      expect(emojis.watched, contains('circle-1'));
+      expect(find.text('2 of 50 emoji'), findsOneWidget);
+
+      emojis.emojis = [
+        ...emojis.emojis,
+        testEmoji('00000000-0000-4000-8000-000000000099', 'fresh'),
+      ];
+      emojis.changes.add(null);
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 of 50 emoji'), findsOneWidget);
+      expect(find.text(':fresh:'), findsOneWidget);
     });
   });
 

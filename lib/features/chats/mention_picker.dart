@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -100,6 +101,30 @@ class MentionDraft {
   }
 
   void clear() => _selections.clear();
+
+  /// The picked members, for keeping with a draft.
+  List<DraftMention> get picked => [
+    for (final selection in _selections.values)
+      DraftMention(
+        userId: selection.userId,
+        username: selection.username,
+        displayName: selection.displayName,
+      ),
+  ];
+
+  /// Replaces the picked members with a restored draft's.
+  void restore(List<DraftMention> mentions) {
+    _selections
+      ..clear()
+      ..addAll({
+        for (final mention in mentions)
+          mention.username: _MentionSelection(
+            userId: mention.userId,
+            username: mention.username,
+            displayName: mention.displayName,
+          ),
+      });
+  }
 }
 
 class _MentionSelection {

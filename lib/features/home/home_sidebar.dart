@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
@@ -267,6 +268,12 @@ class _DirectMessageRow extends ConsumerWidget {
         ? colorScheme.onSurface
         : colorScheme.onSurfaceVariant;
     final status = activeCustomStatus(conversation.directCustomStatus);
+    // The open conversation's draft is right there in its composer.
+    final draft = selected
+        ? null
+        : ref.watch(
+            composerDraftsProvider.select((drafts) => drafts[conversation.id]),
+          );
     final subtitle = conversation.type == ConversationType.group
         ? tr('{count} members', {'count': conversation.memberCount})
         : status?.label;
@@ -332,7 +339,14 @@ class _DirectMessageRow extends ConsumerWidget {
                               : FontWeight.w400,
                         ),
                       ),
-                      if (subtitle != null)
+                      if (draft != null && draft.hasText)
+                        DraftPreviewText(
+                          draft: draft,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      else if (subtitle != null)
                         Text(
                           subtitle,
                           maxLines: 1,

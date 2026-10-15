@@ -9,6 +9,8 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
@@ -293,6 +295,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// The end of the current slowmode wait, refreshed on every build.
   DateTime? _slowmodeUntil;
 
+  /// A restored draft's reply, picked up once the messages load.
+  String? _pendingDraftReplyId;
+
   @override
   void initState() {
     super.initState();
@@ -301,6 +306,49 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       activeConversationIdProvider.notifier,
     );
     _scheduleActiveConversationUpdate(widget.conversationId);
+    unawaited(_restoreDraft());
+  }
+
+  /// Puts the conversation's saved draft (text, picked mentions and reply)
+  /// back in an untouched composer.
+  Future<void> _restoreDraft() async {
+    final drafts = ref.read(composerDraftsProvider.notifier);
+    final conversationId = widget.conversationId;
+    await drafts.loaded;
+    final draft = drafts.draftFor(conversationId);
+    if (!mounted ||
+        draft == null ||
+        widget.conversationId != conversationId ||
+        _composerController.text.isNotEmpty ||
+        _editingMessage != null) {
+      return;
+    }
+    setState(() {
+      _composerController.value = TextEditingValue(
+        text: draft.text,
+        selection: TextSelection.collapsed(offset: draft.text.length),
+      );
+      _mentionDraft.restore(draft.mentions);
+      _pendingDraftReplyId = draft.replyToMessageId;
+    });
+  }
+
+  /// Keeps what is in the composer as this conversation's draft; edits of
+  /// sent messages are not drafts.
+  void _saveDraft() {
+    if (_editingMessage != null) {
+      return;
+    }
+    ref
+        .read(composerDraftsProvider.notifier)
+        .set(
+          widget.conversationId,
+          ComposerDraft(
+            text: _composerController.text,
+            replyToMessageId: _replyingTo?.id ?? _pendingDraftReplyId,
+            mentions: _mentionDraft.picked,
+          ),
+        );
   }
 
   @override
@@ -308,6 +356,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversationId != widget.conversationId) {
       _scheduleActiveConversationUpdate(widget.conversationId);
+      // Each conversation keeps its own draft (saved as it was typed).
+      _composerController.clear();
+      _mentionDraft.clear();
+      _emojiDraft.clear();
+      _replyingTo = null;
+      _editingMessage = null;
+      _pendingDraftReplyId = null;
+      _isMentioning = false;
+      _mentionQuery = '';
+      _emojiQuery = null;
+      _slashQuery = null;
+      _sendError = null;
+      unawaited(_restoreDraft());
       _hasCapturedReadPosition = false;
       _newMessageDividerId = null;
       _isAtBottom = true;
@@ -1251,6 +1312,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _reconcileActiveMessageState(Map<String, ChatMessage> messagesById) {
+    if (_pendingDraftReplyId case final replyId?) {
+      // Read by the composer further down this build.
+      _pendingDraftReplyId = null;
+      final message = messagesById[replyId];
+      if (_replyingTo == null &&
+          _editingMessage == null &&
+          message != null &&
+          message.recalledAt == null) {
+        _replyingTo = message;
+      }
+    }
     final replyingTo = _replyingTo;
     final editingMessage = _editingMessage;
     if (replyingTo == null && editingMessage == null) {
@@ -1378,6 +1450,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _mentionQuery = '';
       _slashQuery = null;
       _replyingTo = null;
+      _pendingDraftReplyId = null;
+      if (mounted) {
+        _saveDraft();
+      }
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
@@ -1411,6 +1487,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _emojiDraft.clear();
       _emojiQuery = null;
       _editingMessage = null;
+      unawaited(_restoreDraft());
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } catch (_) {
       if (mounted) {
@@ -1697,6 +1774,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _voiceMessageRecorder ?? ref.read(voiceMessageRecorderProvider);
 
   void _handleComposerChanged(String value) {
+    _saveDraft();
     _updateMentionQuery();
     _updateEmojiQuery();
     _updateSlashQuery();
@@ -1837,7 +1915,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// Arrow keys move through the command list; Enter and Tab pick.
   KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
     final commands = _slashCandidates();
-    if (commands.isEmpty || event is KeyUpEvent) {
+    if (commands.isEmpty) {
+      return _handleComposerShortcut(event);
+    }
+    if (event is KeyUpEvent) {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
@@ -1859,6 +1940,45 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return KeyEventResult.ignored;
   }
 
+  /// Esc backs out of an edit, a reply or the search, else marks the
+  /// conversation read; Up in an empty field edits the last message sent.
+  KeyEventResult _handleComposerShortcut(KeyEvent event) {
+    switch (composerShortcutFor(event, text: _composerController.text)) {
+      case ComposerShortcut.escape:
+        if (_editingMessage != null) {
+          _cancelEdit();
+        } else if (_replyingTo != null) {
+          _cancelReply();
+        } else if (_isSearchingMessages) {
+          _toggleMessageSearch();
+        } else {
+          unawaited(
+            ref
+                .read(chatsRepositoryProvider)
+                .markConversationRead(widget.conversationId)
+                .then((_) => ref.invalidate(conversationsProvider))
+                .catchError((Object _) {}),
+          );
+          _jumpToLatest();
+        }
+        return KeyEventResult.handled;
+      case ComposerShortcut.editLast:
+        final message = lastEditableMessage(
+          ref.read(chatThreadProvider(widget.conversationId)).valueOrNull
+                  ?.messages ??
+              const [],
+          ref.read(authRepositoryProvider).currentUser?.id,
+        );
+        if (message == null || _editingMessage != null) {
+          return KeyEventResult.ignored;
+        }
+        _startEdit(message);
+        return KeyEventResult.handled;
+      case null:
+        return KeyEventResult.ignored;
+    }
+  }
+
   void _clearComposerAfterCommand() {
     _composerController.clear();
     _mentionDraft.clear();
@@ -1870,6 +1990,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _slashQuery = null;
       _sendError = null;
     });
+    _saveDraft();
     unawaited(_setTyping(false));
   }
 
@@ -1959,6 +2080,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _isMentioning = false;
       _mentionQuery = '';
     });
+    _saveDraft();
   }
 
   List<MessageMention> _mentionsForBody(String body) {
@@ -2302,6 +2424,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       _sendError = null;
     });
+    _saveDraft();
   }
 
   void _startEdit(ChatMessage message) {
@@ -2337,7 +2460,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   void _cancelReply() {
     setState(() {
       _replyingTo = null;
+      _pendingDraftReplyId = null;
     });
+    _saveDraft();
   }
 
   void _cancelEdit() {
@@ -2345,6 +2470,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       _composerController.clear();
     });
+    unawaited(_restoreDraft());
   }
 
   Future<void> _previewImage(ImageAttachment attachment) async {

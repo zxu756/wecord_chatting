@@ -3700,6 +3700,7 @@ class FakeChatsRepository implements ChatsRepository {
   var canManageThreads = false;
   String? sentReplyToMessageId;
   ReplyPreview? sentReplyPreview;
+  var sentMentions = const <MessageMention>[];
   String? editedMessageId;
   String? editedBody;
   final _conversationChanges = StreamController<void>.broadcast();
@@ -3751,6 +3752,7 @@ class FakeChatsRepository implements ChatsRepository {
     }
     sentReplyToMessageId = replyToMessageId;
     sentReplyPreview = replyPreview;
+    sentMentions = mentions;
     sentMessages.add(SentMessage(conversationId: conversationId, body: body));
   }
 

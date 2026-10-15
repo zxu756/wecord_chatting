@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
@@ -151,6 +152,9 @@ class _ConversationTile extends ConsumerWidget {
               : conversation.lastMessageBody!
         : tr('No messages yet');
 
+    final draft = ref.watch(
+      composerDraftsProvider.select((drafts) => drafts[conversation.id]),
+    );
     final hasUnread = conversation.unreadCount > 0;
     final appearsUnread = hasUnread || conversation.isMarkedUnread;
     final groupMeta =
@@ -196,11 +200,14 @@ class _ConversationTile extends ConsumerWidget {
       subtitle: Row(
         children: [
           Expanded(
-            child: Text(
-              lastMessage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: switch (draft) {
+              final draft? when draft.hasText => DraftPreviewText(draft: draft),
+              _ => Text(
+                lastMessage,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            },
           ),
           if (groupMeta != null) ...[
             const SizedBox(width: 8),

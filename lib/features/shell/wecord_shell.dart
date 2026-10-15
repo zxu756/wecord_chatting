@@ -8,6 +8,7 @@ import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/features/push/push_shell_listener.dart';
+import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
@@ -124,8 +125,10 @@ class WeCordShell extends ConsumerWidget {
     // changes (sidebar or tabs shown or hidden, window resized).
     final shellChild = KeyedSubtree(
       key: _bodyKey,
-      child: NotificationShellListener(
-        child: IncomingCallListener(child: PushShellListener(child: child)),
+      child: AppKeyboardShortcuts(
+        child: NotificationShellListener(
+          child: IncomingCallListener(child: PushShellListener(child: child)),
+        ),
       ),
     );
 

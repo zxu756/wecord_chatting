@@ -79,3 +79,12 @@ they sort after everything already on the remote.
     message button, a row of online friends, and conversation rows with the
     last message and its age; the bottom tab bar gives way to a floating
     user panel (status, profile, notifications).
+
+## Status
+
+All twenty items are merged into `wecord-foundation`, every migration
+through `202610160030` is on the remote project, and the `gif-search`,
+`livekit-token`, `delete-account` and `bot-api` functions are deployed.
+Still to check by hand: two-person voice (stage, soundboard, server mute),
+web push and two-step sign-in on a real device, creating a bot on the
+hosted project, and GIF search once `GIPHY_API_KEY` is set.

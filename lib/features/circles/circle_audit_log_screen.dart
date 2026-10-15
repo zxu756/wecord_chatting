@@ -377,6 +377,7 @@ IconData circleAuditIcon(String action) {
     'automod_block' => Icons.block,
     'automod_alert' => Icons.campaign_outlined,
     'automod_timeout' => Icons.timer_outlined,
+    'onboarding_update' => Icons.rule,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
     'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
@@ -623,6 +624,7 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
               {'channel': inChannel},
             ),
     'automod_timeout' => (tr('AutoMod timed out {target}'), {}),
+    'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),
@@ -742,6 +744,8 @@ String _labelFor(String key) {
     'keywords_changed' => tr('Keywords changed'),
     'patterns_changed' => tr('Patterns changed'),
     'exemptions_changed' => tr('Exemptions changed'),
+    'rule_count' => tr('Rules'),
+    'welcome_message_changed' => tr('Welcome message changed'),
     'deny' => tr('Denied'),
     _ =>
       key.isEmpty

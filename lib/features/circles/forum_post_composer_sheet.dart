@@ -131,13 +131,13 @@ class _ForumPostComposerSheetState
       }
     } catch (error) {
       if (mounted) {
-        final autoMod = error is PostgrestException
-            ? AutoModBlockedException.fromPostgrest(error)
+        final refused = error is PostgrestException
+            ? SendRefusedException.fromPostgrest(error)
             : null;
         setState(() {
           _saving = false;
           _errorText =
-              autoMod?.toString() ??
+              refused?.toString() ??
               tr('Could not create the post. Try again.');
         });
       }

@@ -147,4 +147,71 @@ void main() {
       expect(send, contains('is_current_user_blocked_in_conversation'));
     });
   });
+
+  group('Member onboarding', () {
+    test('rules are read by members and changed by managers', () {
+      final sql = migration('202610160021');
+      expect(
+        sql,
+        contains(
+          'alter table public.circle_members\n  add column if not exists rules_accepted_at timestamptz;',
+        ),
+      );
+      expect(
+        sql,
+        contains('using (public.is_current_user_circle_member(circle_id))'),
+      );
+      expect(
+        sql,
+        contains(
+          'revoke insert, update, delete, truncate on public.circle_onboarding from anon, authenticated;',
+        ),
+      );
+
+      final save = functionBody(sql, 'set_circle_onboarding');
+      expect(save, contains("'manage_circle'"));
+      expect(save, contains("'onboarding_update'"));
+      // Turning it on counts everyone already in the circle as accepted.
+      expect(
+        save,
+        contains(
+          'set rules_accepted_at = now()\n    where cm.circle_id = target_circle_id\n      and cm.rules_accepted_at is null;',
+        ),
+      );
+      expect(
+        functionBody(sql, 'accept_circle_rules'),
+        contains(
+          'set rules_accepted_at = coalesce(cm.rules_accepted_at, now())',
+        ),
+      );
+    });
+
+    test('members who have not accepted cannot talk, react or join voice', () {
+      final sql = migration('202610160021');
+      final needs = functionBody(sql, 'circle_member_needs_rules');
+      expect(needs, contains('cm.rules_accepted_at is null'));
+      expect(needs, contains("'manage_circle'"));
+
+      for (final table in [
+        'messages',
+        'message_reactions',
+        'message_poll_votes',
+        'voice_states',
+      ]) {
+        expect(sql, contains('before insert on public.$table'), reason: table);
+      }
+      // After the send check, before AutoMod.
+      expect(
+        'messages_check_channel_send'.compareTo(
+          'messages_check_rules_accepted',
+        ),
+        lessThan(0),
+      );
+      expect(
+        'messages_check_rules_accepted'.compareTo('messages_circle_automod'),
+        lessThan(0),
+      );
+      expect(sql, contains("detail = 'rules_not_accepted'"));
+    });
+  });
 }

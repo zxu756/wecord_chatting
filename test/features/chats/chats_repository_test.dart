@@ -603,6 +603,27 @@ void main() {
       ),
     );
 
+    // Circles with onboarding refuse members who have not accepted the
+    // rules.
+    dataSource.rpcErrors['forward_message'] = const PostgrestException(
+      message: 'Accept the circle rules before taking part',
+      code: '42501',
+      details: 'rules_not_accepted',
+    );
+    await expectLater(
+      repository.forwardMessage(
+        sourceMessageId: 'message-1',
+        targetConversationId: 'conversation-1',
+      ),
+      throwsA(
+        isA<CircleRulesNotAcceptedException>().having(
+          (error) => error.toString(),
+          'message',
+          'Accept the circle rules to start chatting.',
+        ),
+      ),
+    );
+
     // Without a notice, a missing id is not an error.
     dataSource.autoModNotice = null;
     await repository.sendTextMessage(

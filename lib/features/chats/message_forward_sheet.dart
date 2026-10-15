@@ -173,7 +173,7 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
       }
       setState(() {
         _isForwarding = false;
-        _errorText = error is AutoModBlockedException
+        _errorText = error is SendRefusedException
             ? error.toString()
             : tr('Could not forward message. Try again.');
       });

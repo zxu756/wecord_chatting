@@ -451,8 +451,8 @@ class SupabaseChatsRepository implements ChatsRepository {
     await _send(conversationId, () => _dataSource.insertMessage(values));
   }
 
-  /// Runs a send, turning the server's slowmode and AutoMod refusals into
-  /// a [SlowmodeException] or an [AutoModBlockedException].
+  /// Runs a send, turning the server's slowmode, AutoMod and rules
+  /// refusals into a [SlowmodeException] or a [SendRefusedException].
   Future<void> _send(
     String conversationId,
     Future<Object?> Function() send,
@@ -465,9 +465,9 @@ class SupabaseChatsRepository implements ChatsRepository {
       if (slowmode != null) {
         throw slowmode;
       }
-      final autoMod = AutoModBlockedException.fromPostgrest(error);
-      if (autoMod != null) {
-        throw autoMod;
+      final refused = SendRefusedException.fromPostgrest(error);
+      if (refused != null) {
+        throw refused;
       }
       rethrow;
     }
@@ -901,7 +901,7 @@ class SupabaseChatsRepository implements ChatsRepository {
         'body': body.trim(),
       });
     } on PostgrestException catch (error) {
-      throw AutoModBlockedException.fromPostgrest(error) ?? error;
+      throw SendRefusedException.fromPostgrest(error) ?? error;
     }
   }
 
@@ -1243,9 +1243,41 @@ class SlowmodeException implements Exception {
   );
 }
 
+/// The server refused a send for a reason the sender should read
+/// ([toString]).
+sealed class SendRefusedException implements Exception {
+  const SendRefusedException();
+
+  /// Reads an AutoMod or circle rules refusal from [error], or returns
+  /// null for other errors.
+  static SendRefusedException? fromPostgrest(PostgrestException error) {
+    return AutoModBlockedException.fromPostgrest(error) ??
+        CircleRulesNotAcceptedException.fromPostgrest(error);
+  }
+}
+
+/// The circle asks new members to accept its rules first.
+class CircleRulesNotAcceptedException extends SendRefusedException {
+  const CircleRulesNotAcceptedException();
+
+  /// SQLSTATE 42501 with detail `rules_not_accepted`.
+  static CircleRulesNotAcceptedException? fromPostgrest(
+    PostgrestException error,
+  ) {
+    if (error.code != '42501' ||
+        '${error.details ?? ''}' != 'rules_not_accepted') {
+      return null;
+    }
+    return const CircleRulesNotAcceptedException();
+  }
+
+  @override
+  String toString() => tr('Accept the circle rules to start chatting.');
+}
+
 /// AutoMod refused a message (or an edit); [reason] is the circle's
 /// custom message, if it set one.
-class AutoModBlockedException implements Exception {
+class AutoModBlockedException extends SendRefusedException {
   const AutoModBlockedException([this.reason]);
 
   /// Reads the server's AutoMod refusal (SQLSTATE P0001, detail

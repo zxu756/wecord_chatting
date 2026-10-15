@@ -1496,8 +1496,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1530,8 +1530,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _editingMessage = null;
       unawaited(_restoreDraft());
       ref.invalidate(chatThreadProvider(widget.conversationId));
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1553,8 +1553,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     return until != null && DateTime.now().isBefore(until);
   }
 
-  /// AutoMod refused the message: says so (with the circle's reason).
-  void _showAutoModBlock(AutoModBlockedException error) {
+  /// AutoMod or the circle's rules refused the message: says why.
+  void _showSendRefusal(SendRefusedException error) {
     if (mounted) {
       setState(() => _sendError = error.toString());
     }
@@ -1605,8 +1605,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1651,8 +1651,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1697,8 +1697,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() => _sendError = tr('Could not send GIF. Try again.'));
@@ -1849,8 +1849,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1959,8 +1959,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref.invalidate(chatThreadProvider(widget.conversationId));
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
-    } on AutoModBlockedException catch (error) {
-      _showAutoModBlock(error);
+    } on SendRefusedException catch (error) {
+      _showSendRefusal(error);
     } catch (_) {
       if (mounted) {
         setState(() => _sendError = tr('Could not send sticker. Try again.'));

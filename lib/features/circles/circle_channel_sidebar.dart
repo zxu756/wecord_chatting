@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
+import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -833,6 +834,8 @@ class _SidebarHeader extends StatelessWidget {
               openCircleBansScreen(context, detail.circle.id);
             case _CircleMenuAction.autoMod:
               openCircleAutoModScreen(context, detail);
+            case _CircleMenuAction.onboarding:
+              openCircleOnboardingSettings(context, detail);
             case _CircleMenuAction.emojis:
               openCircleEmojisScreen(context, detail.circle.id);
             case _CircleMenuAction.changeNickname:
@@ -902,6 +905,14 @@ class _SidebarHeader extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.gpp_maybe_outlined),
                 title: Text(tr('AutoMod')),
+              ),
+            ),
+          if (detail.canManageCircle)
+            PopupMenuItem(
+              value: _CircleMenuAction.onboarding,
+              child: ListTile(
+                leading: const Icon(Icons.rule),
+                title: Text(tr('Onboarding')),
               ),
             ),
           if (detail.canViewAuditLog)
@@ -988,6 +999,7 @@ enum _CircleMenuAction {
   auditLog,
   bans,
   autoMod,
+  onboarding,
   emojis,
   notificationSettings,
   changeNickname,

@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
+import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -73,23 +74,25 @@ class CircleDetailScreen extends ConsumerWidget {
               appBar: _CircleAppBar(title: tr('Circle')),
               body: Center(child: Text(error.toString())),
             ),
-      data: (detail) {
-        if (isWideLayout(MediaQuery.sizeOf(context).width)) {
-          return CircleWorkspace(
-            key: ValueKey(detail.circle.id),
-            detail: detail,
-            initialConversationId: initialConversationId,
-            onChanged: refresh,
-            channelViewBuilder: channelViewBuilder,
-            threadViewBuilder: threadViewBuilder,
-          );
-        }
-        return CircleMobileHome(
-          key: ValueKey(detail.circle.id),
-          detail: detail,
-          onChanged: refresh,
-        );
-      },
+      data: (detail) => CircleOnboardingGate(
+        key: ValueKey('onboarding-${detail.circle.id}'),
+        circleId: detail.circle.id,
+        circleName: detail.circle.name,
+        child: isWideLayout(MediaQuery.sizeOf(context).width)
+            ? CircleWorkspace(
+                key: ValueKey(detail.circle.id),
+                detail: detail,
+                initialConversationId: initialConversationId,
+                onChanged: refresh,
+                channelViewBuilder: channelViewBuilder,
+                threadViewBuilder: threadViewBuilder,
+              )
+            : CircleMobileHome(
+                key: ValueKey(detail.circle.id),
+                detail: detail,
+                onChanged: refresh,
+              ),
+      ),
     );
   }
 }

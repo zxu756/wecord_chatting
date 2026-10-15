@@ -1,4 +1,5 @@
-// Chinese for moderation and safety: AutoMod.
+// Chinese for moderation and safety: AutoMod, member onboarding and
+// two-step verification.
 const zhSafety = <String, String>{
   // Permission.
   'Manage circle': '管理圈子',
@@ -103,4 +104,34 @@ const zhSafety = <String, String>{
   'Keywords changed': '关键词已更改',
   'Patterns changed': '模式已更改',
   'Exemptions changed': '豁免已更改',
+  // Member onboarding.
+  'Onboarding': '新成员引导',
+  'Could not load onboarding.': '无法加载新成员引导。',
+  'Could not save onboarding. Try again.': '无法保存新成员引导，请重试。',
+  'Onboarding saved.': '新成员引导已保存。',
+  'Members must accept the rules': '成员须接受规则',
+  'New members can read channels, but cannot send messages, react or join voice until they accept. Everyone already here counts as having accepted.':
+      '新成员在接受规则前可以浏览频道，但不能发送消息、添加回应或加入语音。现有成员视为已接受。',
+  'Rules': '规则',
+  'Rule {number}': '规则 {number}',
+  'Add rule': '添加规则',
+  'Remove rule': '移除规则',
+  'Add at least one rule first.': '请先至少添加一条规则。',
+  'Welcome message': '欢迎消息',
+  'Shown once to members after they accept the rules.': '成员接受规则后向其显示一次。',
+  'Read and accept the rules of {circle} to start chatting.':
+      '阅读并接受 {circle} 的规则后即可开始聊天。',
+  'Read rules': '阅读规则',
+  'Rules of {circle}': '{circle} 的规则',
+  'Accept these rules to send messages, react and join voice.':
+      '接受这些规则后即可发送消息、添加回应和加入语音。',
+  'I have read and agree to the rules': '我已阅读并同意这些规则',
+  'Not now': '暂不',
+  'Could not accept the rules. Try again.': '无法接受规则，请重试。',
+  'Welcome to {circle}!': '欢迎来到 {circle}！',
+  'You can now send messages, react and join voice.': '你现在可以发送消息、添加回应和加入语音了。',
+  "Let's go": '开始吧',
+  'Accept the circle rules to start chatting.': '请先接受圈子规则再开始聊天。',
+  '{actor} updated the onboarding': '{actor} 更新了新成员引导',
+  'Welcome message changed': '欢迎消息已更改',
 };

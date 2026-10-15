@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -51,8 +52,14 @@ class WeCordApp extends ConsumerWidget {
       supportedLocales: const [Locale('en'), Locale('zh')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
-      builder: (context, child) =>
-          PresenceActivityListener(child: child ?? const SizedBox.shrink()),
+      // Pages without an app bar draw under the system bars; keep their
+      // icons readable in both themes.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: WeCordTheme.overlayStyleFor(Theme.of(context).brightness),
+        child: PresenceActivityListener(
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 }

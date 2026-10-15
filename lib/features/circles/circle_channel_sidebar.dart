@@ -50,6 +50,8 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
     this.selectedThreadConversationId,
     this.onOpenVoice,
     this.width = defaultWidth,
+    this.color,
+    this.listBottomPadding = 0,
     super.key,
   });
 
@@ -77,6 +79,13 @@ class CircleChannelSidebar extends ConsumerStatefulWidget {
 
   /// Fixed width, or null to fill the available space.
   final double? width;
+
+  /// The background; surfaceContainerLow by default.
+  final Color? color;
+
+  /// Extra space below the channel list, e.g. for the phone's floating
+  /// user panel.
+  final double listBottomPadding;
 
   @override
   ConsumerState<CircleChannelSidebar> createState() =>
@@ -461,7 +470,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     }
 
     final list = ReorderableListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: EdgeInsets.fromLTRB(8, 8, 8, 8 + widget.listBottomPadding),
       buildDefaultDragHandles: false,
       header: Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -610,7 +619,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     );
 
     return Material(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: widget.color ?? theme.colorScheme.surfaceContainerLow,
       child: SizedBox(
         width: widget.width,
         child: Column(

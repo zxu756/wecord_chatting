@@ -6,7 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/home/conversation_preview.dart';
+import 'package:wecord/features/home/phone_messages_panel.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -17,6 +24,7 @@ import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -27,6 +35,7 @@ void main() {
 
     await tester.pumpWidget(_app(repository));
 
+    expect(find.text('Messages'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     completer.complete(const []);
@@ -35,7 +44,10 @@ void main() {
     expect(find.text('No conversations yet'), findsOneWidget);
   });
 
-  testWidgets('renders conversation rows with unread badges', (tester) async {
+  testWidgets('renders conversation rows with previews, ages and badges', (
+    tester,
+  ) async {
+    final sentAt = DateTime.now().subtract(const Duration(days: 9));
     final repository = FakeChatsRepository()
       ..conversations = [
         ConversationSummary(
@@ -44,27 +56,36 @@ void main() {
           title: 'Ada Lovelace',
           avatarUrl: 'profile-avatars/user-2/ada.png',
           lastMessageBody: 'See you soon',
-          lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
+          lastMessageSenderId: 'user-2',
+          lastMessageAt: sentAt,
           unreadCount: 2,
+          directUserId: 'user-2',
         ),
         const ConversationSummary(
           id: 'conversation-2',
           type: ConversationType.direct,
           title: 'Grace Hopper',
-          lastMessageBody: null,
+          lastMessageBody: 'On my way',
+          lastMessageSenderId: 'me',
           unreadCount: 0,
+          directUserId: 'user-3',
         ),
       ];
 
-    await tester.pumpWidget(_app(repository));
+    await tester.pumpWidget(_app(repository, onlineUserIds: {'user-2'}));
     await tester.pump();
     await tester.pump();
 
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('See you soon'), findsOneWidget);
-    expect(find.text('04:30'), findsOneWidget);
+    expect(find.text('9d'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar).first);
+    final avatar = tester.widget<CircleAvatar>(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-dm-conversation-1')),
+        matching: find.byType(CircleAvatar),
+      ),
+    );
     final image = avatar.backgroundImage;
     expect(image, isA<NetworkImage>());
     expect(
@@ -72,8 +93,87 @@ void main() {
       'https://signed.example.com/profile-avatars/user-2/ada.png',
     );
     expect(find.text('AL'), findsNothing);
-    expect(find.text('Grace Hopper'), findsOneWidget);
-    expect(find.text('No messages yet'), findsOneWidget);
+    // The user's own latest message.
+    expect(find.text('You: On my way'), findsOneWidget);
+  });
+
+  test('ages are compact', () {
+    final now = DateTime(2026, 10, 16, 12);
+    String age(Duration ago) => compactAge(now.subtract(ago), now: now);
+    expect(age(const Duration(seconds: 20)), 'now');
+    expect(age(const Duration(minutes: 5)), '5m');
+    expect(age(const Duration(hours: 3)), '3h');
+    expect(age(const Duration(days: 9)), '9d');
+    expect(age(const Duration(days: 40)), '1mo');
+    expect(age(const Duration(days: 800)), '2y');
+  });
+
+  testWidgets('shows drafts, GIFs and presence statuses', (tester) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-1',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          lastMessageBody: 'See you soon',
+          unreadCount: 0,
+          directUserId: 'user-2',
+        ),
+        const ConversationSummary(
+          id: 'conversation-2',
+          type: ConversationType.direct,
+          title: 'Grace Hopper',
+          lastMessageBody: 'https://media.giphy.com/media/abc/giphy.gif',
+          unreadCount: 0,
+          directUserId: 'user-3',
+        ),
+        const ConversationSummary(
+          id: 'conversation-3',
+          type: ConversationType.direct,
+          title: 'Linus',
+          lastMessageBody: 'Later',
+          unreadCount: 0,
+          directUserId: 'user-4',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        onlineUserIds: {'user-2', 'user-3'},
+        statuses: {
+          'user-2': PresenceStatus.doNotDisturb,
+          'user-3': PresenceStatus.idle,
+        },
+        drafts: {'conversation-1': const ComposerDraft(text: 'half   written')},
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('conversation-draft')), findsOneWidget);
+    expect(
+      find.textContaining('[Draft] half written', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.text('See you soon'), findsNothing);
+    expect(find.text('[GIF]'), findsOneWidget);
+
+    PresenceStatus? statusIn(String conversationId) {
+      return tester
+          .widget<PresenceIndicator>(
+            find.descendant(
+              of: find.byKey(ValueKey('home-dm-$conversationId')),
+              matching: find.byType(PresenceIndicator),
+            ),
+          )
+          .status;
+    }
+
+    expect(statusIn('conversation-1'), PresenceStatus.doNotDisturb);
+    expect(statusIn('conversation-2'), PresenceStatus.idle);
+    // Offline (or invisible) people show no status.
+    expect(statusIn('conversation-3'), isNull);
   });
 
   testWidgets('lists only direct and group chats', (tester) async {
@@ -84,6 +184,7 @@ void main() {
           type: ConversationType.group,
           title: 'Hiking crew',
           unreadCount: 0,
+          memberCount: 4,
         ),
         const ConversationSummary(
           id: 'channel-conversation',
@@ -106,6 +207,8 @@ void main() {
 
     // Channels and their threads live in their circle.
     expect(find.text('Hiking crew'), findsOneWidget);
+    // Groups without messages show their size instead.
+    expect(find.text('4 members'), findsOneWidget);
     expect(find.text('general'), findsNothing);
     expect(find.text('Weekend plans'), findsNothing);
     expect(find.text('3'), findsNothing);
@@ -133,25 +236,40 @@ void main() {
     expect(find.text('Ship it today [spoiler]'), findsOneWidget);
   });
 
-  testWidgets('previews latest voice messages as voice', (tester) async {
+  testWidgets('labels voice messages, images, files and calls', (tester) async {
+    ConversationSummary chat(String id, MessageType type, String body) {
+      return ConversationSummary(
+        id: id,
+        type: ConversationType.direct,
+        title: 'Chat $id',
+        lastMessageBody: body,
+        lastMessageType: type,
+        lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
+        unreadCount: 0,
+      );
+    }
+
     final repository = FakeChatsRepository()
       ..conversations = [
-        ConversationSummary(
-          id: 'conversation-1',
-          type: ConversationType.direct,
-          title: 'Ada Lovelace',
-          lastMessageBody: '',
-          lastMessageType: MessageType.voice,
-          lastMessageAt: DateTime.utc(2026, 5, 18, 4, 30),
-          unreadCount: 0,
+        chat('voice', MessageType.voice, ''),
+        chat('image', MessageType.image, '[Image]'),
+        chat('file', MessageType.file, ''),
+        chat(
+          'call',
+          MessageType.system,
+          'Ada started a call that lasted 5 minutes.',
         ),
+        chat('ringing', MessageType.system, 'Ada started a call.'),
       ];
 
     await tester.pumpWidget(_app(repository));
     await tester.pump();
 
     expect(find.text('[Voice]'), findsOneWidget);
-    expect(find.text('No messages yet'), findsNothing);
+    expect(find.text('[Image]'), findsOneWidget);
+    expect(find.text('[File]'), findsOneWidget);
+    expect(find.text('Call ended'), findsOneWidget);
+    expect(find.text('Ada started a call'), findsOneWidget);
   });
 
   testWidgets('renders conversation management indicators', (tester) async {
@@ -162,6 +280,7 @@ void main() {
           type: ConversationType.group,
           title: 'Launch Crew',
           lastMessageBody: '[Image]',
+          lastMessageType: MessageType.image,
           unreadCount: 0,
           pinnedAt: DateTime.utc(2026, 5, 18),
           isMuted: true,
@@ -177,11 +296,12 @@ void main() {
     expect(find.text('[Image]'), findsOneWidget);
     expect(find.byIcon(Icons.push_pin), findsOneWidget);
     expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
-    expect(find.text('3 members'), findsOneWidget);
+    // The latest message replaces the member count.
+    expect(find.text('3 members'), findsNothing);
     expect(find.byType(Badge), findsOneWidget);
   });
 
-  testWidgets('conversation menu calls management actions', (tester) async {
+  testWidgets('long press opens the conversation actions', (tester) async {
     final repository = FakeChatsRepository()
       ..conversations = [
         const ConversationSummary(
@@ -196,25 +316,17 @@ void main() {
     await tester.pumpWidget(_app(repository));
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Conversation actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pin chat'));
-    await tester.pump();
+    Future<void> pick(String action) async {
+      await tester.longPress(find.text('Ada Lovelace'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+    }
 
-    await tester.tap(find.byTooltip('Conversation actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mute'));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Conversation actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mark unread'));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Conversation actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete conversation'));
-    await tester.pump();
+    await pick('Pin chat');
+    await pick('Mute');
+    await pick('Mark unread');
+    await pick('Delete conversation');
 
     expect(repository.pinnedCalls, [
       const ConversationToggleCall(
@@ -253,33 +365,44 @@ void main() {
     expect(find.text('private secret'), findsNothing);
   });
 
-  testWidgets('filters visible conversations by search query', (tester) async {
+  testWidgets('friends show online first and open their direct message', (
+    tester,
+  ) async {
     final repository = FakeChatsRepository()
       ..conversations = [
         const ConversationSummary(
-          id: 'conversation-1',
+          id: 'conversation-ada',
           type: ConversationType.direct,
           title: 'Ada Lovelace',
-          lastMessageBody: 'Math notes',
           unreadCount: 0,
-        ),
-        const ConversationSummary(
-          id: 'conversation-2',
-          type: ConversationType.direct,
-          title: 'Grace Hopper',
-          lastMessageBody: 'Compiler update',
-          unreadCount: 0,
+          directUserId: 'user-2',
         ),
       ];
+    final router = _router();
+    addTearDown(router.dispose);
 
-    await tester.pumpWidget(_app(repository));
+    await tester.pumpWidget(
+      _app(
+        repository,
+        router: router,
+        friends: [
+          _friend('user-2', 'Ada Lovelace'),
+          _friend('user-3', 'Grace'),
+        ],
+        onlineUserIds: {'user-3'},
+      ),
+    );
+    await tester.pump();
     await tester.pump();
 
-    await tester.enterText(find.bySemanticsLabel('Search chats'), 'math');
-    await tester.pump();
+    final ada = find.byKey(const ValueKey('phone-friend-user-2'));
+    final grace = find.byKey(const ValueKey('phone-friend-user-3'));
+    expect(tester.getTopLeft(grace).dx, lessThan(tester.getTopLeft(ada).dx));
 
-    expect(find.text('Ada Lovelace'), findsOneWidget);
-    expect(find.text('Grace Hopper'), findsNothing);
+    // The existing conversation opens.
+    await tester.tap(ada);
+    await tester.pumpAndSettle();
+    expect(find.text('Thread conversation-ada Ada Lovelace'), findsOneWidget);
   });
 
   testWidgets('tapping a conversation passes the title to the thread route', (
@@ -295,27 +418,7 @@ void main() {
           unreadCount: 0,
         ),
       ];
-    final router = GoRouter(
-      initialLocation: ChatsScreen.path,
-      routes: [
-        GoRoute(
-          path: ChatsScreen.path,
-          builder: (context, state) => const ChatsScreen(),
-        ),
-        GoRoute(
-          path: '/chats/:conversationId',
-          builder: (context, state) {
-            final title = switch (state.extra) {
-              ChatThreadRouteExtra(:final title) => title,
-              final extra => extra,
-            };
-            return Text(
-              'Thread ${state.pathParameters['conversationId']} $title',
-            );
-          },
-        ),
-      ],
-    );
+    final router = _router();
     addTearDown(router.dispose);
 
     await tester.pumpWidget(_app(repository, router: router));
@@ -328,15 +431,68 @@ void main() {
   });
 }
 
-Widget _app(FakeChatsRepository repository, {GoRouter? router}) {
+Profile _friend(String id, String name) {
+  final now = DateTime.utc(2026, 5, 18);
+  return Profile(
+    id: id,
+    username: name.toLowerCase().replaceAll(' ', ''),
+    displayName: name,
+    bio: '',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+GoRouter _router() {
+  return GoRouter(
+    initialLocation: '/home',
+    routes: [
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const Scaffold(body: PhoneMessagesPanel()),
+      ),
+      GoRoute(
+        path: '${ChatsScreen.path}/:conversationId',
+        builder: (context, state) {
+          final title = switch (state.extra) {
+            ChatThreadRouteExtra(:final title) => title,
+            final extra => extra,
+          };
+          return Text(
+            'Thread ${state.pathParameters['conversationId']} $title',
+          );
+        },
+      ),
+    ],
+  );
+}
+
+Widget _app(
+  FakeChatsRepository repository, {
+  GoRouter? router,
+  List<Profile> friends = const [],
+  Set<String> onlineUserIds = const {},
+  Map<String, PresenceStatus> statuses = const {},
+  Map<String, ComposerDraft> drafts = const {},
+}) {
   final child = router == null
-      ? const MaterialApp(home: ChatsScreen())
+      ? const MaterialApp(home: Scaffold(body: PhoneMessagesPanel()))
       : MaterialApp.router(routerConfig: router);
 
   return ProviderScope(
     overrides: [
       chatsRepositoryProvider.overrideWithValue(repository),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      authStateProvider.overrideWith(
+        (ref) => Stream.value(const AuthUser(id: 'me')),
+      ),
+      friendsProvider.overrideWith((ref) async => friends),
+      incomingFriendRequestsProvider.overrideWith((ref) async => const []),
+      onlineUserIdsProvider.overrideWith((ref) => Stream.value(onlineUserIds)),
+      presenceStatusesProvider.overrideWith((ref) => Stream.value(statuses)),
+      composerDraftStoreProvider.overrideWithValue(
+        InMemoryComposerDraftStore({'me': drafts}),
+      ),
     ],
     child: child,
   );

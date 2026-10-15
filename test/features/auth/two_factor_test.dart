@@ -172,7 +172,7 @@ void main() {
 
     expect(repository.calls, ['verify 000000', 'verify 123456']);
     expect(find.byType(TwoFactorChallengeScreen), findsNothing);
-    expect(find.text('Find or start a conversation'), findsOneWidget);
+    expect(find.byKey(const ValueKey('phone-home')), findsOneWidget);
   });
 
   testWidgets('turning two-step verification on and off', (tester) async {

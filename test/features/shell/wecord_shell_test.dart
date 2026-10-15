@@ -22,11 +22,7 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
-  Widget shell({
-    required Size size,
-    required ShellPlacement placement,
-    ValueChanged<WeCordTab>? onTabSelected,
-  }) {
+  Widget shell({required Size size, required ShellPlacement placement}) {
     return MediaQuery(
       data: MediaQueryData(size: size),
       child: MaterialApp(
@@ -42,7 +38,6 @@ void main() {
           ],
           child: WeCordShell(
             placement: placement,
-            onTabSelected: onTabSelected ?? (_) {},
             child: const Text('Current screen'),
           ),
         ),
@@ -50,51 +45,25 @@ void main() {
     );
   }
 
-  testWidgets('phones switch between the four tabs', (tester) async {
+  testWidgets('phones show pages full screen without tabs', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final selected = <WeCordTab>[];
 
-    await tester.pumpWidget(
-      shell(
-        size: const Size(390, 844),
-        placement: const ShellPlacement(tab: WeCordTab.home),
-        onTabSelected: selected.add,
-      ),
-    );
-    await tester.pump();
+    for (final placement in const [
+      ShellPlacement(homeSelected: true, homeSection: HomeSection.friends),
+      ShellPlacement(),
+    ]) {
+      await tester.pumpWidget(
+        shell(size: const Size(390, 844), placement: placement),
+      );
+      await tester.pump();
 
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.byKey(const ValueKey('circle-rail')), findsNothing);
-    for (final label in ['Home', 'Messages', 'Notifications', 'You']) {
-      expect(find.text(label), findsOneWidget);
+      expect(find.byType(NavigationBar), findsNothing);
+      // The phone home brings its own rail.
+      expect(find.byKey(const ValueKey('circle-rail')), findsNothing);
+      expect(find.text('Current screen'), findsOneWidget);
     }
-
-    await tester.tap(find.text('Messages'));
-    await tester.tap(find.text('Notifications'));
-    await tester.tap(find.text('You'));
-    await tester.pump();
-
-    expect(selected, [
-      WeCordTab.messages,
-      WeCordTab.notifications,
-      WeCordTab.you,
-    ]);
-  });
-
-  testWidgets('phones hide the tabs on pages opened on top', (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-
-    await tester.pumpWidget(
-      shell(size: const Size(390, 844), placement: const ShellPlacement()),
-    );
-    await tester.pump();
-
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('Current screen'), findsOneWidget);
   });
 
   testWidgets('wide layouts keep the rail, and Home its sidebar', (

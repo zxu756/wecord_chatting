@@ -62,12 +62,11 @@ void main() {
     authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Find or start a conversation'), findsOneWidget);
+    // Phones get the edge-to-edge home without a tab bar.
+    expect(find.byKey(const ValueKey('phone-home')), findsOneWidget);
+    expect(find.byKey(const ValueKey('phone-user-panel')), findsOneWidget);
     expect(find.text('No conversations yet'), findsOneWidget);
-    expect(
-      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
-      0,
-    );
+    expect(find.byType(NavigationBar), findsNothing);
     expect(repository.ensureProfileCalls, 1);
   });
 
@@ -93,14 +92,14 @@ void main() {
 
       expect(find.text('Profile setup failed'), findsOneWidget);
       expect(find.text('Try again'), findsOneWidget);
-      expect(find.text('Find or start a conversation'), findsNothing);
+      expect(find.byKey(const ValueKey('phone-home')), findsNothing);
       expect(repository.ensureProfileCalls, 1);
 
       repository.ensureProfileError = null;
       await tester.tap(find.text('Try again'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Find or start a conversation'), findsOneWidget);
+      expect(find.byKey(const ValueKey('phone-home')), findsOneWidget);
       expect(find.text('No conversations yet'), findsOneWidget);
       expect(repository.ensureProfileCalls, 2);
     },
@@ -240,7 +239,7 @@ void main() {
     expect(find.byType(ChatThreadScreen), findsOneWidget);
   });
 
-  testWidgets('circle channels open full screen over the phone tabs', (
+  testWidgets('circle channels open full screen over the phone home', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -267,12 +266,8 @@ void main() {
 
     authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
     await tester.pumpAndSettle();
-    int? selectedIndex() => find.byType(NavigationBar).evaluate().isEmpty
-        ? null
-        : tester
-              .widget<NavigationBar>(find.byType(NavigationBar))
-              .selectedIndex;
-    expect(selectedIndex(), 0);
+    Finder phoneHome() => find.byKey(const ValueKey('phone-home'));
+    expect(phoneHome(), findsOneWidget);
 
     // Deep link without extras still opens the circle channel.
     router.go('/circles/circle-1/channels/conversation-1');
@@ -284,13 +279,15 @@ void main() {
     expect(screen.circleId, 'circle-1');
     expect(screen.conversationId, 'conversation-1');
     expect(find.byType(ChatThreadScreen), findsOneWidget);
-    expect(selectedIndex(), isNull);
+    await tester.pump(const Duration(seconds: 1));
+    expect(phoneHome(), findsNothing);
 
+    // The old Messages tab's link lands on the phone home.
     router.go('/chats');
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(CircleChannelThreadScreen), findsNothing);
-    expect(selectedIndex(), 1);
+    expect(phoneHome(), findsOneWidget);
 
     router.push(
       CircleChannelThreadScreen.pathFor('circle-1', 'conversation-1'),
@@ -310,7 +307,6 @@ void main() {
           .title,
       '# general',
     );
-    expect(selectedIndex(), isNull);
 
     // Threads of a circle channel open on the same route, as threads.
     router.push(
@@ -331,7 +327,6 @@ void main() {
           .conversationType,
       ConversationType.thread,
     );
-    expect(selectedIndex(), isNull);
   });
 
   testWidgets('routes signed-in users to profile pages', (tester) async {

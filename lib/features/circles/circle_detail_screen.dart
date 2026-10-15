@@ -9,9 +9,9 @@ import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
-import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/home/phone_home.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -111,8 +111,9 @@ class _CircleAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
-/// Narrow circle layout: the circle rail beside the channel list. Channels
-/// open full screen on top (back returns here), and so does the feed.
+/// Narrow circle layout: the phone home frame (rail, rounded panel and the
+/// floating user panel) with the channel list in the panel. Channels open
+/// full screen on top (back returns here), and so does the feed.
 class CircleMobileHome extends ConsumerWidget {
   const CircleMobileHome({
     required this.detail,
@@ -127,73 +128,61 @@ class CircleMobileHome extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final circleId = detail.circle.id;
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CircleRail(selectedCircleId: circleId),
-            Expanded(
-              child: CircleChannelSidebar(
-                detail: detail,
-                width: null,
-                onChanged: onChanged,
-                onChangeNickname: (member) => changeCircleNickname(
-                  context,
-                  ref,
-                  circleId: circleId,
-                  member: member,
-                  onChanged: onChanged,
-                ),
-                onSelectChannel: (channel) {
-                  context.push(
-                    CircleChannelThreadScreen.pathFor(
-                      circleId,
-                      channel.conversationId,
-                    ),
-                    extra: ChatThreadRouteExtra(
-                      title: channel.isVoice
-                          ? channel.name
-                          : '# ${channel.name}',
-                      type: ConversationType.channel,
-                      circleId: circleId,
-                    ),
-                  );
-                  // Voice channels open their call view and join.
-                  if (channel.isVoice &&
-                      detail.canInChannel(
-                        channel,
-                        CirclePermission.connectVoice,
-                      ) &&
-                      ref.read(voiceSessionProvider)?.channelId != channel.id) {
-                    joinVoiceChannel(
-                      context,
-                      ref,
-                      circleId: circleId,
-                      channelId: channel.id,
-                      conversationId: channel.conversationId,
-                      channelName: channel.name,
-                    );
-                  }
-                },
-                onOpenVoice: (session) =>
-                    context.push(voiceSessionPath(session)),
-                onSelectThread: (thread) => context.push(
-                  CircleChannelThreadScreen.pathFor(circleId, thread.id),
-                  extra: ChatThreadRouteExtra(
-                    title: thread.title ?? tr('Thread'),
-                    type: ConversationType.thread,
-                    circleId: circleId,
-                  ),
-                ),
-                onSelectFeed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => _CircleFeedPage(circleId: circleId),
-                  ),
-                ),
+      body: PhoneHomeFrame(
+        selectedCircleId: circleId,
+        panelBuilder: (context, bottomInset) => CircleChannelSidebar(
+          detail: detail,
+          width: null,
+          color: PhoneHomeColors.panel(Theme.of(context).colorScheme),
+          listBottomPadding: bottomInset,
+          onChanged: onChanged,
+          onChangeNickname: (member) => changeCircleNickname(
+            context,
+            ref,
+            circleId: circleId,
+            member: member,
+            onChanged: onChanged,
+          ),
+          onSelectChannel: (channel) {
+            context.push(
+              CircleChannelThreadScreen.pathFor(
+                circleId,
+                channel.conversationId,
               ),
+              extra: ChatThreadRouteExtra(
+                title: channel.isVoice ? channel.name : '# ${channel.name}',
+                type: ConversationType.channel,
+                circleId: circleId,
+              ),
+            );
+            // Voice channels open their call view and join.
+            if (channel.isVoice &&
+                detail.canInChannel(channel, CirclePermission.connectVoice) &&
+                ref.read(voiceSessionProvider)?.channelId != channel.id) {
+              joinVoiceChannel(
+                context,
+                ref,
+                circleId: circleId,
+                channelId: channel.id,
+                conversationId: channel.conversationId,
+                channelName: channel.name,
+              );
+            }
+          },
+          onOpenVoice: (session) => context.push(voiceSessionPath(session)),
+          onSelectThread: (thread) => context.push(
+            CircleChannelThreadScreen.pathFor(circleId, thread.id),
+            extra: ChatThreadRouteExtra(
+              title: thread.title ?? tr('Thread'),
+              type: ConversationType.thread,
+              circleId: circleId,
             ),
-          ],
+          ),
+          onSelectFeed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (context) => _CircleFeedPage(circleId: circleId),
+            ),
+          ),
         ),
       ),
     );

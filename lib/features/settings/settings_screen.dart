@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
@@ -80,7 +81,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         NotificationPermissionStatus.notRequested;
 
     return Scaffold(
-      appBar: AppBar(title: Text(tr('You'))),
+      appBar: AppBar(
+        leading: phoneHomeBackButton(context),
+        title: Text(tr('You')),
+      ),
       body: profile.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(child: _ErrorText(error)),

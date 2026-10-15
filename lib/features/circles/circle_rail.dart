@@ -53,10 +53,23 @@ class CircleRail extends ConsumerWidget {
     this.homeSelected = false,
     this.showVoiceIndicator = false,
     this.onOpenVoice,
+    this.color,
+    this.itemColor,
+    this.padding = const EdgeInsets.symmetric(vertical: 12),
     super.key,
   });
 
   static const width = 72.0;
+
+  /// The rail's background; surfaceContainerHigh by default.
+  final Color? color;
+
+  /// The background of items that are neither selected nor hovered;
+  /// surfaceContainerLowest by default.
+  final Color? itemColor;
+
+  /// Space around the items, e.g. for the status bar on phones.
+  final EdgeInsetsGeometry padding;
 
   final String? selectedCircleId;
 
@@ -77,18 +90,21 @@ class CircleRail extends ConsumerWidget {
         ref.watch(circleSummariesProvider).valueOrNull ??
         const <CircleSummary>[];
     final directUnread = ref.watch(directUnreadCountProvider);
+    final background = color ?? colorScheme.surfaceContainerHigh;
 
     return Container(
       key: const ValueKey('circle-rail'),
       width: width,
-      color: colorScheme.surfaceContainerHigh,
+      color: background,
       child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: padding,
         children: [
           CircleRailItem(
             key: const ValueKey('circle-rail-home'),
             tooltip: tr('Direct messages'),
             selected: homeSelected,
+            color: itemColor,
+            badgeBorderColor: background,
             mentionCount: directUnread,
             onTap: () => context.go(HomeScreen.path),
             child: const Icon(Icons.forum_outlined),
@@ -109,6 +125,8 @@ class CircleRail extends ConsumerWidget {
               key: ValueKey('circle-rail-${circle.id}'),
               tooltip: circle.name,
               selected: circle.id == selectedCircleId,
+              color: itemColor,
+              badgeBorderColor: background,
               unread: circle.unreadCount > 0,
               mentionCount: circle.mentionCount,
               muted: circle.isMuted,
@@ -121,12 +139,16 @@ class CircleRail extends ConsumerWidget {
           CircleRailItem(
             key: const ValueKey('circle-rail-add'),
             tooltip: tr('Add a circle'),
+            color: itemColor,
+            badgeBorderColor: background,
             onTap: () => showAddCircleSheet(context),
             child: const Icon(Icons.add),
           ),
           CircleRailItem(
             key: const ValueKey('circle-rail-explore'),
             tooltip: tr('Search and explore'),
+            color: itemColor,
+            badgeBorderColor: background,
             onTap: () => openPage(context, GlobalMessageSearchScreen.path),
             child: const Icon(Icons.explore_outlined),
           ),
@@ -148,8 +170,17 @@ class CircleRailItem extends StatefulWidget {
     this.mentionCount = 0,
     this.muted = false,
     this.image,
+    this.color,
+    this.badgeBorderColor,
     super.key,
   });
+
+  /// Background while neither selected nor hovered; surfaceContainerLowest
+  /// by default.
+  final Color? color;
+
+  /// Outline of the mention badge, the rail's background.
+  final Color? badgeBorderColor;
 
   final String tooltip;
   final VoidCallback onTap;
@@ -232,7 +263,8 @@ class _CircleRailItemState extends State<CircleRailItem> {
                       decoration: BoxDecoration(
                         color: active
                             ? colorScheme.primary
-                            : colorScheme.surfaceContainerLowest,
+                            : widget.color ??
+                                  colorScheme.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(active ? 16 : 24),
                         image: widget.image == null
                             ? null
@@ -271,7 +303,9 @@ class _CircleRailItemState extends State<CircleRailItem> {
                 child: IgnorePointer(
                   child: CircleMentionBadge(
                     count: widget.mentionCount,
-                    borderColor: colorScheme.surfaceContainerHigh,
+                    borderColor:
+                        widget.badgeBorderColor ??
+                        colorScheme.surfaceContainerHigh,
                   ),
                 ),
               ),

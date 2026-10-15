@@ -15,10 +15,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/voice.dart';
 
 import '../../test/features/voice/voice_fakes.dart';
@@ -123,7 +126,7 @@ void main() {
 
   screen('02c-direct-thread-more-menu', (tester, world) async {
     await openThread(tester, world);
-    await tester.tap(find.byTooltip('More'));
+    await tester.tap(_tooltip('More'));
   });
 
   screen('02d-direct-thread-small-large-text', (tester, world) async {
@@ -156,7 +159,7 @@ void main() {
       find.textContaining('Also this', findRichText: true).first,
     );
     await settle(tester);
-    await tester.tap(find.byTooltip('More reactions'));
+    await tester.tap(_tooltip('More reactions'));
   });
 
   screen('06-composer-reply-keyboard', (tester, world) async {
@@ -165,17 +168,17 @@ void main() {
       find.textContaining('Also this', findRichText: true).first,
     );
     await settle(tester);
-    await tester.tap(find.text('Reply'));
+    await tester.tap(_text('Reply'));
     await settle(tester);
-    await tester.tap(find.widgetWithText(TextField, 'Message'));
+    await tester.tap(find.widgetWithText(TextField, tr('Message')));
     await showKeyboard(tester, notchedPhone);
   });
 
   screen('07-pinned-sheet', (tester, world) async {
     await openThread(tester, world);
-    await tester.tap(find.byTooltip('More'));
+    await tester.tap(_tooltip('More'));
     await settle(tester);
-    await tester.tap(find.text('Pinned messages'));
+    await tester.tap(_text('Pinned messages'));
   });
 
   screen('08-circle-mobile-home', (tester, world) async {
@@ -189,7 +192,7 @@ void main() {
 
   screen('10-members-drawer', (tester, world) async {
     await openChannel(tester, world);
-    await tester.tap(find.byTooltip('Show member list'));
+    await tester.tap(_tooltip('Show member list'));
   });
 
   screen('11-circle-thread', (tester, world) async {
@@ -208,16 +211,49 @@ void main() {
 
   screen('13-status-sheet', (tester, world) async {
     await world.open(tester, '/me');
-    await tester.tap(find.text('Brewing ideas'));
+    await tester.tap(_text('Brewing ideas'));
   });
 
   screen('14-home', (tester, world) async {
     await world.open(tester, '/home');
   });
 
-  screen('14b-messages', (tester, world) async {
-    await world.open(tester, '/chats');
+  screen('14b-home-small', (tester, world) async {
+    await world.open(tester, '/home');
+  }, viewport: smallPhone);
+
+  screen('14b2-home-large-text', (tester, world) async {
+    await world.open(tester, '/home');
+  }, viewport: notchedPhoneLargeText);
+
+  screen('14b3-home-scrolled', (tester, world) async {
+    await world.open(tester, '/home');
+    await tester.drag(
+      find.byKey(const ValueKey('phone-messages-list')),
+      const Offset(0, -600),
+    );
   });
+
+  screen('14b4-new-message-menu', (tester, world) async {
+    await world.open(tester, '/home');
+    await tester.tap(find.byKey(const ValueKey('phone-home-new')));
+  });
+
+  screen('14b5-home-drafts-and-statuses', (tester, world) async {
+    world.presenceStatuses = {
+      bart.id: PresenceStatus.doNotDisturb,
+      grace.id: PresenceStatus.idle,
+    };
+    world.circles.onlineUserIds = {...world.circles.onlineUserIds, grace.id};
+    world.draftStore.drafts[me.id] = {
+      'group-1': const ComposerDraft(text: 'Bring the long lens and a tripod'),
+    };
+    await world.open(tester, '/home');
+  });
+
+  screen('08b-circle-mobile-home-small', (tester, world) async {
+    await world.open(tester, '/circles/circle-1');
+  }, viewport: smallPhone);
 
   screen('14c-notifications', (tester, world) async {
     await world.open(tester, '/notifications');
@@ -253,14 +289,14 @@ void main() {
 
   screen('15-circle-feed', (tester, world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.text('Feed'));
+    await tester.tap(_text('Feed'));
   });
 
   screen('16-circle-invite-sheet', (tester, world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.tap(_tooltip('Circle menu'));
     await settle(tester);
-    await tester.tap(find.text('Invite friends'));
+    await tester.tap(_text('Invite friends'));
   });
 
   screen('17-contacts', (tester, world) async {
@@ -279,9 +315,9 @@ void main() {
 
   screen('20-notification-settings', (tester, world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.tap(_tooltip('Circle menu'));
     await settle(tester);
-    await tester.tap(find.text('Notification settings'));
+    await tester.tap(_text('Notification settings'));
   });
 
   screen('21-forum-posts', (tester, world) async {
@@ -342,18 +378,18 @@ void main() {
       conversationId: 'conv-help',
       title: 'help-and-questions',
     );
-    await tester.tap(find.byTooltip('Channel settings'));
+    await tester.tap(_tooltip('Channel settings'));
     await settle(tester);
     await tester.drag(find.byType(ListView).last, const Offset(0, -300));
   });
 
   screen('25-create-forum-channel', (tester, world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.tap(_tooltip('Circle menu'));
     await settle(tester);
-    await tester.tap(find.text('Create channel'));
+    await tester.tap(_text('Create channel'));
     await settle(tester);
-    await tester.tap(find.text('Forum'));
+    await tester.tap(_text('Forum'));
   });
 
   Future<void> openEvents(WidgetTester tester, PhoneWorld world) async {
@@ -372,7 +408,7 @@ void main() {
 
   screen('27-circle-event-detail', (tester, world) async {
     await openEvents(tester, world);
-    await tester.tap(find.text('Golden hour photo walk along the Embarcadero'));
+    await tester.tap(_text('Golden hour photo walk along the Embarcadero'));
   });
 
   screen('28-create-event-keyboard', (tester, world) async {
@@ -394,7 +430,7 @@ void main() {
       find.byKey(const ValueKey('event-title-field')),
       'Picnic in Dolores Park',
     );
-    await tester.tap(find.text('Elsewhere'));
+    await tester.tap(_text('Elsewhere'));
     await tester.tap(find.byKey(const ValueKey('event-end-switch')));
   });
 
@@ -422,9 +458,9 @@ void main() {
 
   screen('30-poll-composer-keyboard', (tester, world) async {
     await openPolls(tester, world);
-    await tester.tap(find.byTooltip('Attach'));
+    await tester.tap(_tooltip('Attach'));
     await settle(tester);
-    await tester.tap(find.text('Create poll'));
+    await tester.tap(_text('Create poll'));
     await settle(tester);
     await tester.enterText(
       find.byKey(const ValueKey('poll-question-field')),
@@ -453,9 +489,9 @@ void main() {
   screen('33-channel-integrations', (tester, world) async {
     world.circles.webhooks = channelWebhooks();
     await openChannel(tester, world);
-    await tester.tap(find.byTooltip('More'));
+    await tester.tap(_tooltip('More'));
     await settle(tester);
-    await tester.tap(find.text('Channel settings'));
+    await tester.tap(_text('Channel settings'));
     await settle(tester);
     await scrollIntoView(
       tester,
@@ -465,9 +501,9 @@ void main() {
 
   screen('33b-webhook-url', (tester, world) async {
     await openChannel(tester, world);
-    await tester.tap(find.byTooltip('More'));
+    await tester.tap(_tooltip('More'));
     await settle(tester);
-    await tester.tap(find.text('Channel settings'));
+    await tester.tap(_text('Channel settings'));
     await settle(tester);
     final create = find.byKey(const ValueKey('webhook-create-button'));
     await scrollIntoView(tester, create);
@@ -516,7 +552,7 @@ void main() {
     await openEmojiChannel(tester, world);
     await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
     await settle(tester);
-    await tester.tap(find.text('Send sticker'));
+    await tester.tap(_text('Send sticker'));
     await settle(tester);
     await loadImages(tester);
   });
@@ -538,18 +574,18 @@ void main() {
       ),
     );
     await settle(tester);
-    await tester.tap(find.byTooltip('More reactions'));
+    await tester.tap(_tooltip('More reactions'));
     await settle(tester);
     await loadImages(tester);
   });
 
   Future<void> openEmojiPage(WidgetTester tester, PhoneWorld world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.tap(_tooltip('Circle menu'));
     await settle(tester);
-    await tester.ensureVisible(find.text('Emoji & stickers'));
+    await tester.ensureVisible(_text('Emoji & stickers'));
     await settle(tester);
-    await tester.tap(find.text('Emoji & stickers'));
+    await tester.tap(_text('Emoji & stickers'));
     await settle(tester);
     await loadImages(tester);
   }
@@ -560,7 +596,7 @@ void main() {
 
   screen('35b-sticker-management', (tester, world) async {
     await openEmojiPage(tester, world);
-    await tester.tap(find.text('Stickers'));
+    await tester.tap(_text('Stickers'));
     await settle(tester);
     await loadImages(tester);
   });
@@ -683,11 +719,11 @@ void main() {
 
   screen('36f-create-voice-channel', (tester, world) async {
     await world.open(tester, '/circles/circle-1');
-    await tester.tap(find.byTooltip('Circle menu'));
+    await tester.tap(_tooltip('Circle menu'));
     await settle(tester);
-    await tester.tap(find.text('Create channel'));
+    await tester.tap(_text('Create channel'));
     await settle(tester);
-    await tester.tap(find.text('Voice'));
+    await tester.tap(_text('Voice'));
   });
 
   screen('36g-voice-call-small', (tester, world) async {
@@ -729,7 +765,7 @@ void main() {
       ];
     };
     await openThread(tester, world);
-    await tester.tap(find.byTooltip('Start voice call'));
+    await tester.tap(_tooltip('Start voice call'));
   });
 
   screen('37b-direct-call-join-bar', (tester, world) async {
@@ -802,7 +838,7 @@ void main() {
 
   screen('31-slash-commands', (tester, world) async {
     await openChannel(tester, world);
-    final composer = find.widgetWithText(TextField, 'Message');
+    final composer = find.widgetWithText(TextField, tr('Message'));
     await tester.tap(composer);
     await tester.enterText(composer, '/');
     await showKeyboard(tester, notchedPhone);
@@ -871,3 +907,9 @@ Directory _materialFontsDir() {
   }
   throw StateError('Could not find the Flutter SDK material fonts.');
 }
+
+// With PHONE_SCREENS_ZH the app shows Chinese, so look the English labels
+// up through tr() (data such as names and messages stays as it is).
+Finder _text(String text) => find.text(tr(text));
+
+Finder _tooltip(String message) => find.byTooltip(tr(message));

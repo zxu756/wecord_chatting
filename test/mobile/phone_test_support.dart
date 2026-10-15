@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
@@ -45,6 +46,7 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/poll.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -155,6 +157,18 @@ Future<void> showKeyboard(
   final ratio = viewport.devicePixelRatio;
   tester.view.viewInsets = FakeViewPadding(bottom: height * ratio);
   tester.view.padding = FakeViewPadding(top: viewport.topInset * ratio);
+  await settle(tester);
+}
+
+/// Hides the keyboard [showKeyboard] showed, giving the bottom safe area
+/// back.
+Future<void> hideKeyboard(WidgetTester tester, PhoneViewport viewport) async {
+  final ratio = viewport.devicePixelRatio;
+  tester.view.viewInsets = FakeViewPadding.zero;
+  tester.view.padding = FakeViewPadding(
+    top: viewport.topInset * ratio,
+    bottom: viewport.bottomInset * ratio,
+  );
   await settle(tester);
 }
 
@@ -1628,6 +1642,13 @@ class PhoneWorld {
     'circle-1': {'cat-3'},
   });
   final openedLinks = <Uri>[];
+
+  /// Statuses of people in [PhoneChatsRepository]'s world who are online
+  /// (see `circles.onlineUserIds`); anyone missing shows as Online.
+  var presenceStatuses = <String, PresenceStatus>{};
+
+  /// Unsent composer drafts by conversation id.
+  final draftStore = InMemoryComposerDraftStore();
   final voice = FakeVoiceRepository();
   final voiceSettings = InMemoryVoiceSettingsStore();
   final inbox = FakeInboxRepository()
@@ -1690,6 +1711,10 @@ class PhoneWorld {
       onlineUserIdsProvider.overrideWith(
         (ref) => Stream.value(circles.onlineUserIds),
       ),
+      presenceStatusesProvider.overrideWith(
+        (ref) => Stream.value(presenceStatuses),
+      ),
+      composerDraftStoreProvider.overrideWithValue(draftStore),
       circleCategoryCollapseStoreProvider.overrideWithValue(collapseStore),
       circleEventsFollowClockProvider.overrideWithValue(false),
       notificationCoordinatorProvider.overrideWithValue(

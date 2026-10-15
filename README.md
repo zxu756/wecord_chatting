@@ -17,6 +17,8 @@ WeCord is a familiar-social real-time chat app: WeChat-first private and group m
 4. Run `flutter pub get`.
 5. Run `flutter test`.
 
+End-to-end checks against the local Supabase stack (`supabase start`, then `supabase functions serve` in another terminal): `deno run -A tool/e2e/local_features_e2e.ts`. It creates its own users and circles, prints PASS/FAIL per feature and removes everything it made.
+
 ## Run
 
 Pass local config with dart defines. The `.env` file is not bundled as a Flutter asset.

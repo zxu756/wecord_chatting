@@ -1,0 +1,18 @@
+// Cloudflare Worker serving the Flutter web build as static assets at
+// https://wecord.jokebear.fyi. Deploy with tool/deploy_web.sh, which builds
+// build/web first.
+{
+  "name": "wecord",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./build/web",
+    // Deep links such as /circles/<id> load index.html and Flutter routes.
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "wecord.jokebear.fyi",
+      "custom_domain": true
+    }
+  ]
+}

@@ -15,6 +15,8 @@ class VoiceMemberState {
     this.roleColor,
     this.selfMute = false,
     this.selfDeaf = false,
+    this.serverMute = false,
+    this.serverDeaf = false,
     this.video = false,
     this.screen = false,
   });
@@ -37,6 +39,8 @@ class VoiceMemberState {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       selfMute: json['self_mute'] == true,
       selfDeaf: json['self_deaf'] == true,
+      serverMute: json['server_mute'] == true,
+      serverDeaf: json['server_deaf'] == true,
       video: json['video'] == true,
       screen: json['screen'] == true,
     );
@@ -57,6 +61,10 @@ class VoiceMemberState {
   final DateTime joinedAt;
   final bool selfMute;
   final bool selfDeaf;
+
+  /// Muted or deafened by a moderator.
+  final bool serverMute;
+  final bool serverDeaf;
   final bool video;
   final bool screen;
 
@@ -74,13 +82,62 @@ class VoiceMemberState {
 
 /// Where and how to connect to a voice channel's LiveKit room.
 class VoiceConnectionDetails {
-  const VoiceConnectionDetails({required this.url, required this.token});
+  const VoiceConnectionDetails({
+    required this.url,
+    required this.token,
+    this.serverMute = false,
+    this.serverDeaf = false,
+  });
 
   /// The LiveKit server, `wss://…`.
   final String url;
 
   /// An access token for the channel's room, valid for an hour.
   final String token;
+
+  /// The current user is server muted or deafened there, so the token
+  /// can't publish their microphone.
+  final bool serverMute;
+  final bool serverDeaf;
+}
+
+/// The current user's own voice state (`get_own_voice_state`).
+class OwnVoiceState {
+  const OwnVoiceState({
+    this.channelId,
+    this.circleId,
+    this.conversationId,
+    this.channelName,
+    this.serverMute = false,
+    this.serverDeaf = false,
+    this.disconnected = false,
+  });
+
+  factory OwnVoiceState.fromJson(Map<String, dynamic> json) {
+    final state = json['state'] is Map
+        ? Map<String, dynamic>.from(json['state'] as Map)
+        : null;
+    return OwnVoiceState(
+      channelId: state?['channel_id'] as String?,
+      circleId: state?['circle_id'] as String?,
+      conversationId: state?['conversation_id'] as String?,
+      channelName: state?['channel_name'] as String?,
+      serverMute: state?['server_mute'] == true,
+      serverDeaf: state?['server_deaf'] == true,
+      disconnected: json['disconnected'] == true,
+    );
+  }
+
+  /// The voice channel they are in; null when in none.
+  final String? channelId;
+  final String? circleId;
+  final String? conversationId;
+  final String? channelName;
+  final bool serverMute;
+  final bool serverDeaf;
+
+  /// A moderator disconnected them, and they haven't joined since.
+  final bool disconnected;
 }
 
 /// Someone in a direct or group call (`list_active_direct_calls`).

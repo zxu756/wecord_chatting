@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -176,6 +177,7 @@ class _CircleChannelThreadScreenState
                     CirclePermission.connectVoice,
                   ),
                   actions: actions,
+                  moderation: VoiceModeration.forCircle(detail),
                 )
               : null) ??
           (detail != null && channel != null && channel.isForum

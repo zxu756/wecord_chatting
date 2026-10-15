@@ -25,6 +25,96 @@ class FakeVoiceRepository implements VoiceRepository {
 
   void emitChange() => _changes.add(null);
 
+  /// What `get_own_voice_state` returns.
+  OwnVoiceState ownState = const OwnVoiceState();
+
+  /// What the token answers about server mute and deafen.
+  bool tokenServerMute = false;
+  bool tokenServerDeaf = false;
+
+  /// Moderation calls, like `mute:user-2:true` or `move:user-2:ch-stage`.
+  final moderation = <String>[];
+
+  /// Rooms asked to follow the database, as `channel:user`.
+  final enforced = <String>[];
+
+  /// User limits by channel id, per circle.
+  final userLimits = <String, Map<String, int>>{};
+  final setLimits = <String, int>{};
+
+  @override
+  Future<void> setServerMute({
+    required String circleId,
+    required String userId,
+    required bool muted,
+  }) async {
+    moderation.add('mute:$userId:$muted');
+  }
+
+  @override
+  Future<void> setServerDeaf({
+    required String circleId,
+    required String userId,
+    required bool deafened,
+  }) async {
+    moderation.add('deafen:$userId:$deafened');
+  }
+
+  @override
+  Future<String?> disconnectMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    moderation.add('disconnect:$userId');
+    return _channelOf(circleId, userId);
+  }
+
+  @override
+  Future<String?> moveMember({
+    required String circleId,
+    required String userId,
+    required String channelId,
+  }) async {
+    moderation.add('move:$userId:$channelId');
+    return _channelOf(circleId, userId);
+  }
+
+  String? _channelOf(String circleId, String userId) {
+    for (final state in states[circleId] ?? const <VoiceMemberState>[]) {
+      if (state.userId == userId) {
+        return state.channelId;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> enforceVoiceState({
+    required String channelId,
+    required String userId,
+  }) async {
+    enforced.add('$channelId:$userId');
+  }
+
+  @override
+  Future<OwnVoiceState> fetchOwnVoiceState() async => ownState;
+
+  @override
+  Stream<void> ownVoiceStateChanges() => _changes.stream;
+
+  @override
+  Future<Map<String, int>> listUserLimits(String circleId) async {
+    return userLimits[circleId] ?? const {};
+  }
+
+  @override
+  Future<void> setUserLimit({
+    required String channelId,
+    required int limit,
+  }) async {
+    setLimits[channelId] = limit;
+  }
+
   @override
   Future<VoiceConnectionDetails> fetchConnectionDetails(
     String channelId,
@@ -34,9 +124,11 @@ class FakeVoiceRepository implements VoiceRepository {
     if (error != null) {
       throw error;
     }
-    return const VoiceConnectionDetails(
+    return VoiceConnectionDetails(
       url: 'wss://voice.test',
       token: 'token',
+      serverMute: tokenServerMute,
+      serverDeaf: tokenServerDeaf,
     );
   }
 
@@ -309,6 +401,8 @@ VoiceMemberState voiceMember({
   String circleId = 'circle-1',
   bool selfMute = false,
   bool selfDeaf = false,
+  bool serverMute = false,
+  bool serverDeaf = false,
   bool video = false,
   bool screen = false,
   String? nickname,
@@ -325,6 +419,8 @@ VoiceMemberState voiceMember({
     joinedAt: DateTime.utc(2026, 10, 14, 9),
     selfMute: selfMute,
     selfDeaf: selfDeaf,
+    serverMute: serverMute,
+    serverDeaf: serverDeaf,
     video: video,
     screen: screen,
   );

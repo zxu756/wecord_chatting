@@ -46,6 +46,8 @@ class DirectCallBar extends ConsumerWidget {
             name: participant.name,
             avatarUrl: participant.avatarUrl,
             selfDeaf: participant.selfDeaf,
+            serverMute: false,
+            serverDeaf: false,
           ),
       };
       final alone = session.isConnected && session.participants.length < 2;

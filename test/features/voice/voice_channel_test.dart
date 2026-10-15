@@ -293,6 +293,160 @@ void main() {
     await world.close(tester);
   });
 
+  testWidgets('moderators mute, move and disconnect from the menu', (
+    tester,
+  ) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.voice.states['circle-1'] = [
+      voiceMember(userId: me.id, name: me.displayName),
+      voiceMember(userId: bart.id, name: bart.displayName),
+    ];
+    world.voiceCalls.prepare = (call) {
+      call.remotes = [
+        VoiceCallParticipant(userId: bart.id, name: bart.displayName),
+      ];
+    };
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+
+    Future<void> openMenu() async {
+      await tester.tap(
+        find.byKey(ValueKey('voice-tile-${bart.id}')),
+        buttons: kSecondaryMouseButton,
+      );
+      await settle(tester);
+    }
+
+    await openMenu();
+    await tester.tap(find.byKey(const ValueKey('voice-menu-server-mute')));
+    await settle(tester);
+    expect(world.voice.moderation, ['mute:${bart.id}:true']);
+    expect(world.voice.enforced, ['ch-lounge:${bart.id}']);
+
+    await openMenu();
+    await tester.tap(find.byKey(const ValueKey('voice-menu-server-deafen')));
+    await settle(tester);
+    expect(world.voice.moderation.last, 'deafen:${bart.id}:true');
+
+    await openMenu();
+    await tester.tap(find.byKey(const ValueKey('voice-menu-move')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('voice-move-dialog')), findsOneWidget);
+    // Not back into the channel they are in.
+    expect(
+      find.byKey(const ValueKey('voice-move-target-ch-lounge')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('voice-move-target-ch-stage')));
+    await settle(tester);
+    expect(world.voice.moderation.last, 'move:${bart.id}:ch-stage');
+    // The room they left is told to let them go.
+    expect(world.voice.enforced.last, 'ch-lounge:${bart.id}');
+
+    await openMenu();
+    await tester.tap(find.byKey(const ValueKey('voice-menu-disconnect')));
+    await settle(tester);
+    expect(world.voice.moderation.last, 'disconnect:${bart.id}');
+
+    // Your own menu has no volume, but you can server mute yourself.
+    await tester.tap(
+      find.byKey(ValueKey('voice-tile-${me.id}')),
+      buttons: kSecondaryMouseButton,
+    );
+    await settle(tester);
+    expect(
+      find.byKey(const ValueKey('voice-menu-server-mute')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('voice-menu-disconnect')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    await world.close(tester);
+  });
+
+  testWidgets('server muted members show it, and so do my controls', (
+    tester,
+  ) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.voice.states['circle-1'] = [
+      voiceMember(userId: bart.id, name: bart.displayName, serverMute: true),
+    ];
+    world.voice.tokenServerMute = true;
+    await world.open(tester, '/circles/circle-1');
+
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('voice-member-${bart.id}')),
+        // Filled, unlike muting yourself.
+        matching: find.byIcon(Icons.mic_off),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+    final mic = tester.widget<IconButton>(
+      find.byKey(const ValueKey('voice-control-mic')),
+    );
+    expect(mic.onPressed, isNull);
+    expect(mic.tooltip, 'Server muted');
+    expect(world.voiceCalls.last.microphone, isFalse);
+    await tester.tap(find.byKey(const ValueKey('voice-control-leave')));
+    await settle(tester);
+    await world.close(tester);
+  });
+
+  testWidgets('user limits show in the sidebar and stop joining', (
+    tester,
+  ) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    world.voice.userLimits['circle-1'] = {'ch-lounge': 2};
+    world.voice.states['circle-1'] = [
+      voiceMember(userId: bart.id, name: bart.displayName),
+      voiceMember(userId: grace.id, name: grace.displayName),
+    ];
+    world.voice.tokenError = const VoiceChannelFullException();
+    await world.open(tester, '/circles/circle-1');
+
+    final badge = find.descendant(
+      of: channelRow('ch-lounge'),
+      matching: find.byKey(const ValueKey('voice-user-limit-badge')),
+    );
+    expect(badge, findsOneWidget);
+    expect(
+      find.descendant(of: badge, matching: find.text('02/02')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: channelRow('ch-stage'),
+        matching: find.byKey(const ValueKey('voice-user-limit-badge')),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+    expect(find.text('This voice channel is full.'), findsOneWidget);
+    expect(world.voiceCalls.calls, isEmpty);
+
+    // Channel settings change the limit.
+    await tester.tap(find.byTooltip('Channel settings').first);
+    await settle(tester);
+    final slider = find.byKey(const ValueKey('voice-user-limit-slider'));
+    await tester.ensureVisible(slider);
+    await settle(tester);
+    expect(find.text('2 people'), findsOneWidget);
+    await tester.drag(slider, const Offset(-2000, 0));
+    await settle(tester);
+    expect(world.voice.setLimits, {'ch-lounge': 0});
+    await world.close(tester);
+  });
+
   testWidgets('the sidebar rings members speaking in my call', (tester) async {
     useWideScreen(tester);
     final world = voiceWorld();

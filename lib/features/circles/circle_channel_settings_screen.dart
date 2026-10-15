@@ -5,6 +5,7 @@ import 'package:wecord/features/circles/channel_webhooks_section.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/voice/voice_user_limit_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_channel_overwrite.dart';
@@ -312,6 +313,13 @@ class _CircleChannelSettingsScreenState
           ..._forumTagsSection(channel)
         else if (!channel.isVoice)
           ..._slowmodeSection(channel),
+        if (channel.isVoice)
+          VoiceUserLimitSection(
+            key: ValueKey('voice-user-limit-${channel.id}'),
+            circleId: widget.circleId,
+            channelId: channel.id,
+            enabled: !_saving,
+          ),
       ],
       if (detail.canManageRoles) ..._permissionsSection(detail, channel),
       if (channel.kind == CircleChannelKind.text &&

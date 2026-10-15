@@ -87,7 +87,69 @@ class VoiceAccessDeniedException implements Exception {
   String toString() => tr('You cannot connect to this voice channel.');
 }
 
+/// The voice channel is at its user limit.
+class VoiceChannelFullException implements Exception {
+  const VoiceChannelFullException();
+
+  @override
+  String toString() => tr('This voice channel is full.');
+}
+
+/// The user limits of the circle's voice channels the current user can
+/// see, by channel id (unlimited channels are missing).
+final voiceChannelUserLimitsProvider = FutureProvider.autoDispose
+    .family<Map<String, int>, String>((ref, circleId) {
+      return ref.watch(voiceRepositoryProvider).listUserLimits(circleId);
+    });
+
 abstract interface class VoiceRepository {
+  /// Server mutes (or unmutes) [userId] in the circle's voice channels.
+  Future<void> setServerMute({
+    required String circleId,
+    required String userId,
+    required bool muted,
+  });
+
+  /// Server deafens (or undeafens) [userId].
+  Future<void> setServerDeaf({
+    required String circleId,
+    required String userId,
+    required bool deafened,
+  });
+
+  /// Disconnects [userId] from voice; returns the channel they were in.
+  Future<String?> disconnectMember({
+    required String circleId,
+    required String userId,
+  });
+
+  /// Moves [userId] to [channelId]; returns the channel they were in.
+  Future<String?> moveMember({
+    required String circleId,
+    required String userId,
+    required String channelId,
+  });
+
+  /// Asks the voice server to make [channelId]'s room match the database
+  /// for [userId] (after a mute, deafen, move or disconnect).
+  Future<void> enforceVoiceState({
+    required String channelId,
+    required String userId,
+  });
+
+  /// The current user's own voice state.
+  Future<OwnVoiceState> fetchOwnVoiceState();
+
+  /// Fires when the current user's own voice state changes (moved, muted,
+  /// deafened or disconnected by a moderator).
+  Stream<void> ownVoiceStateChanges();
+
+  /// User limits by voice channel id (unlimited channels are missing).
+  Future<Map<String, int>> listUserLimits(String circleId);
+
+  /// Sets [channelId]'s user limit; 0 removes it.
+  Future<void> setUserLimit({required String channelId, required int limit});
+
   /// A LiveKit server and token for the voice channel. Throws
   /// [VoiceNotConfiguredException] when voice is not set up and
   /// [VoiceAccessDeniedException] without `connect_voice`.
@@ -159,6 +221,9 @@ abstract interface class VoiceDataSource {
 
   Stream<void> voiceStateChanges(String circleId);
 
+  /// Changes to the current user's own voice_states row.
+  Stream<void> ownVoiceStateChanges();
+
   Stream<void> directCallChanges();
 }
 
@@ -182,6 +247,9 @@ class SupabaseVoiceRepository implements VoiceRepository {
       if (error.status == 503 && code == 'voice_not_configured') {
         throw const VoiceNotConfiguredException();
       }
+      if (error.status == 409 && code == 'channel_full') {
+        throw const VoiceChannelFullException();
+      }
       if (error.status == 403) {
         throw const VoiceAccessDeniedException();
       }
@@ -193,6 +261,8 @@ class SupabaseVoiceRepository implements VoiceRepository {
     return VoiceConnectionDetails(
       url: data['url'] as String,
       token: data['token'] as String,
+      serverMute: data['server_mute'] == true,
+      serverDeaf: data['server_deaf'] == true,
     );
   }
 
@@ -206,8 +276,110 @@ class SupabaseVoiceRepository implements VoiceRepository {
       if (error.code == '42501') {
         throw const VoiceAccessDeniedException();
       }
+      if (error.code == '53300') {
+        throw const VoiceChannelFullException();
+      }
       rethrow;
     }
+  }
+
+  @override
+  Future<void> setServerMute({
+    required String circleId,
+    required String userId,
+    required bool muted,
+  }) async {
+    await _dataSource.rpc('set_voice_server_mute', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'muted': muted,
+    });
+  }
+
+  @override
+  Future<void> setServerDeaf({
+    required String circleId,
+    required String userId,
+    required bool deafened,
+  }) async {
+    await _dataSource.rpc('set_voice_server_deaf', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'deafened': deafened,
+    });
+  }
+
+  @override
+  Future<String?> disconnectMember({
+    required String circleId,
+    required String userId,
+  }) async {
+    final channelId = await _dataSource.rpc('disconnect_voice_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+    });
+    return channelId is String ? channelId : null;
+  }
+
+  @override
+  Future<String?> moveMember({
+    required String circleId,
+    required String userId,
+    required String channelId,
+  }) async {
+    final previous = await _dataSource.rpc('move_voice_member', {
+      'target_circle_id': circleId,
+      'target_user_id': userId,
+      'target_channel_id': channelId,
+    });
+    return previous is String ? previous : null;
+  }
+
+  @override
+  Future<void> enforceVoiceState({
+    required String channelId,
+    required String userId,
+  }) async {
+    await _dataSource.invokeFunction('livekit-token', {
+      'enforce': {'channel_id': channelId, 'user_id': userId},
+    });
+  }
+
+  @override
+  Future<OwnVoiceState> fetchOwnVoiceState() async {
+    final data = await _dataSource.rpc('get_own_voice_state', const {});
+    if (data is! Map) {
+      return const OwnVoiceState();
+    }
+    return OwnVoiceState.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  @override
+  Stream<void> ownVoiceStateChanges() => _dataSource.ownVoiceStateChanges();
+
+  @override
+  Future<Map<String, int>> listUserLimits(String circleId) async {
+    final data = await _dataSource.rpc('list_voice_channel_user_limits', {
+      'target_circle_id': circleId,
+    });
+    if (data is! Map) {
+      return const {};
+    }
+    return {
+      for (final MapEntry(:key, :value) in data.entries)
+        if (key is String && value is num) key: value.toInt(),
+    };
+  }
+
+  @override
+  Future<void> setUserLimit({
+    required String channelId,
+    required int limit,
+  }) async {
+    await _dataSource.rpc('set_voice_channel_user_limit', {
+      'target_channel_id': channelId,
+      'user_limit': limit,
+    });
   }
 
   @override
@@ -407,6 +579,46 @@ class SupabaseVoiceDataSource implements VoiceDataSource {
   }
 
   @override
+  Stream<void> ownVoiceStateChanges() {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return const Stream<void>.empty();
+    }
+    late RealtimeChannel channel;
+    late StreamController<void> controller;
+    controller = StreamController<void>(
+      onListen: () {
+        channel = _client
+            .channel('own-voice-state-$userId')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'voice_states',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'user_id',
+                value: userId,
+              ),
+              callback: (payload) {
+                if (!isVoiceHeartbeatOnly(
+                  eventType: payload.eventType,
+                  oldRecord: payload.oldRecord,
+                  newRecord: payload.newRecord,
+                )) {
+                  controller.add(null);
+                }
+              },
+            )
+            .subscribe();
+      },
+      onCancel: () async {
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
   Stream<void> directCallChanges() {
     late RealtimeChannel channel;
     late StreamController<void> controller;
@@ -469,6 +681,54 @@ bool isVoiceHeartbeatOnly({
 
 class UninitializedVoiceRepository implements VoiceRepository {
   const UninitializedVoiceRepository();
+
+  @override
+  Future<void> setServerMute({
+    required String circleId,
+    required String userId,
+    required bool muted,
+  }) async {}
+
+  @override
+  Future<void> setServerDeaf({
+    required String circleId,
+    required String userId,
+    required bool deafened,
+  }) async {}
+
+  @override
+  Future<String?> disconnectMember({
+    required String circleId,
+    required String userId,
+  }) async => null;
+
+  @override
+  Future<String?> moveMember({
+    required String circleId,
+    required String userId,
+    required String channelId,
+  }) async => null;
+
+  @override
+  Future<void> enforceVoiceState({
+    required String channelId,
+    required String userId,
+  }) async {}
+
+  @override
+  Future<OwnVoiceState> fetchOwnVoiceState() async => const OwnVoiceState();
+
+  @override
+  Stream<void> ownVoiceStateChanges() => const Stream<void>.empty();
+
+  @override
+  Future<Map<String, int>> listUserLimits(String circleId) async => const {};
+
+  @override
+  Future<void> setUserLimit({
+    required String channelId,
+    required int limit,
+  }) async {}
 
   @override
   Future<VoiceConnectionDetails> fetchConnectionDetails(String channelId) {

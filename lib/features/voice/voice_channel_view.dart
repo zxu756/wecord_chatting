@@ -23,6 +23,7 @@ class VoiceChannelView extends ConsumerWidget {
     this.canConnect = true,
     this.actions = const [],
     this.onBack,
+    this.moderation,
     super.key,
   });
 
@@ -38,6 +39,9 @@ class VoiceChannelView extends ConsumerWidget {
   /// Shows a back button calling this, when set.
   final VoidCallback? onBack;
 
+  /// What the current user may do to participants from their menu.
+  final VoiceModeration? moderation;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(voiceSessionProvider);
@@ -48,12 +52,15 @@ class VoiceChannelView extends ConsumerWidget {
     if (here && session.isConnected) {
       body = VoiceCallGrid(
         session: session,
+        moderation: moderation,
         people: {
           for (final member in members)
             member.userId: (
               name: member.name,
               avatarUrl: member.avatarUrl,
               selfDeaf: member.selfDeaf,
+              serverMute: member.serverMute,
+              serverDeaf: member.serverDeaf,
             ),
         },
       );
@@ -217,18 +224,34 @@ class _NotConnected extends StatelessWidget {
 }
 
 /// What the server knows about someone in a call: the name and avatar to
-/// show, and whether they deafened themselves.
-typedef VoiceCallPerson = ({String name, String? avatarUrl, bool selfDeaf});
+/// show, whether they deafened themselves, and whether a moderator muted or
+/// deafened them.
+typedef VoiceCallPerson = ({
+  String name,
+  String? avatarUrl,
+  bool selfDeaf,
+  bool serverMute,
+  bool serverDeaf,
+});
 
 /// Everyone in the call: shared screens first and wide, then a tile per
 /// person (their camera, or their avatar), outlined while they speak.
+/// Right-click or long-press opens a person's menu.
 class VoiceCallGrid extends StatelessWidget {
-  const VoiceCallGrid({required this.session, required this.people, super.key});
+  const VoiceCallGrid({
+    required this.session,
+    required this.people,
+    this.moderation,
+    super.key,
+  });
 
   final VoiceSession session;
 
   /// The server's view of each participant, by user id.
   final Map<String, VoiceCallPerson> people;
+
+  /// What the current user may do to people from their menu.
+  final VoiceModeration? moderation;
 
   @override
   Widget build(BuildContext context) {
@@ -282,13 +305,19 @@ class VoiceCallGrid extends StatelessWidget {
                       width: tileWidth,
                       height: tileWidth * 10 / 16,
                       child: VoiceParticipantMenuRegion(
-                        person: (
+                        person: VoiceMenuPerson(
                           userId: participant.userId,
                           name:
                               people[participant.userId]?.name ??
                               participant.name,
                           isLocal: participant.isLocal,
+                          channelId: session.channelId,
+                          serverMute:
+                              people[participant.userId]?.serverMute ?? false,
+                          serverDeaf:
+                              people[participant.userId]?.serverDeaf ?? false,
                         ),
+                        moderation: moderation,
                         child: _ParticipantTile(
                           participant: participant,
                           name:
@@ -298,6 +327,12 @@ class VoiceCallGrid extends StatelessWidget {
                           deafened:
                               (participant.isLocal && session.selfDeaf) ||
                               (people[participant.userId]?.selfDeaf ?? false),
+                          serverDeafened:
+                              (participant.isLocal && session.serverDeaf) ||
+                              (people[participant.userId]?.serverDeaf ?? false),
+                          serverMuted:
+                              (participant.isLocal && session.serverMute) ||
+                              (people[participant.userId]?.serverMute ?? false),
                         ),
                       ),
                     ),
@@ -317,12 +352,16 @@ class _ParticipantTile extends StatelessWidget {
     required this.name,
     required this.avatarUrl,
     required this.deafened,
+    this.serverMuted = false,
+    this.serverDeafened = false,
   });
 
   final VoiceCallParticipant participant;
   final String name;
   final String? avatarUrl;
   final bool deafened;
+  final bool serverMuted;
+  final bool serverDeafened;
 
   @override
   Widget build(BuildContext context) {
@@ -331,11 +370,17 @@ class _ParticipantTile extends StatelessWidget {
       key: ValueKey('voice-tile-${participant.userId}'),
       label: participant.isLocal ? tr('{name} (you)', {'name': name}) : name,
       speaking: participant.isSpeaking,
-      trailing: deafened
+      trailingKey: serverDeafened || serverMuted
+          ? const ValueKey('voice-tile-server-silenced')
+          : null,
+      trailingColor: serverDeafened || serverMuted
+          ? Theme.of(context).colorScheme.errorContainer
+          : null,
+      trailing: deafened || serverDeafened
           ? Icons.headset_off
-          : participant.microphoneEnabled
-          ? null
-          : Icons.mic_off,
+          : serverMuted || !participant.microphoneEnabled
+          ? Icons.mic_off
+          : null,
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
@@ -362,6 +407,8 @@ class _Tile extends StatelessWidget {
     required this.speaking,
     required this.child,
     this.trailing,
+    this.trailingColor,
+    this.trailingKey,
     super.key,
   });
 
@@ -369,6 +416,8 @@ class _Tile extends StatelessWidget {
   final bool speaking;
   final Widget child;
   final IconData? trailing;
+  final Color? trailingColor;
+  final Key? trailingKey;
 
   @override
   Widget build(BuildContext context) {
@@ -409,7 +458,12 @@ class _Tile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (trailing != null) ...[
-                          Icon(trailing, size: 12, color: Colors.white),
+                          Icon(
+                            trailing,
+                            key: trailingKey,
+                            size: 12,
+                            color: trailingColor ?? Colors.white,
+                          ),
                           const SizedBox(width: 3),
                         ],
                         Flexible(
@@ -533,23 +587,31 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 VoiceHoldToTalkButton(session: session, enabled: !_busy),
               toggle(
                 key: const ValueKey('voice-control-mic'),
-                tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
-                icon: session.selfMute ? Icons.mic_off : Icons.mic_none,
-                on: session.selfMute,
-                onPressed: () => _run(
-                  controller.toggleMute,
-                  tr('Could not change the microphone.'),
-                ),
+                tooltip: voiceMuteTooltip(session),
+                icon: session.selfMute || session.serverMute
+                    ? Icons.mic_off
+                    : Icons.mic_none,
+                on: session.selfMute || session.serverMute,
+                onPressed: session.serverMute
+                    ? null
+                    : () => _run(
+                        controller.toggleMute,
+                        tr('Could not change the microphone.'),
+                      ),
               ),
               toggle(
                 key: const ValueKey('voice-control-deafen'),
-                tooltip: session.selfDeaf ? tr('Undeafen') : tr('Deafen'),
-                icon: session.selfDeaf
+                tooltip: voiceDeafenTooltip(session),
+                icon: session.selfDeaf || session.serverDeaf
                     ? Icons.headset_off
                     : Icons.headset_outlined,
-                on: session.selfDeaf,
-                onPressed: () =>
-                    _run(controller.toggleDeafen, tr('Could not deafen.')),
+                on: session.selfDeaf || session.serverDeaf,
+                onPressed: session.serverDeaf
+                    ? null
+                    : () => _run(
+                        controller.toggleDeafen,
+                        tr('Could not deafen.'),
+                      ),
               ),
               toggle(
                 key: const ValueKey('voice-control-camera'),
@@ -615,7 +677,12 @@ class VoiceHoldToTalkButton extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final controller = ref.read(voiceSessionProvider.notifier);
     final talking = session.transmitting;
-    final usable = enabled && !session.selfMute && !session.selfDeaf;
+    final usable =
+        enabled &&
+        !session.selfMute &&
+        !session.selfDeaf &&
+        !session.serverMute &&
+        !session.serverDeaf;
     return Semantics(
       button: true,
       label: tr('Hold to talk'),

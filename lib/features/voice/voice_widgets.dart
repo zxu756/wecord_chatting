@@ -32,11 +32,15 @@ class VoiceChannelMembers extends ConsumerWidget {
   const VoiceChannelMembers({
     required this.channelId,
     required this.members,
+    this.moderation,
     super.key,
   });
 
   final String channelId;
   final List<VoiceMemberState> members;
+
+  /// What the current user may do to them from their menu.
+  final VoiceModeration? moderation;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,11 +56,15 @@ class VoiceChannelMembers extends ConsumerWidget {
       children: [
         for (final member in members)
           VoiceParticipantMenuRegion(
-            person: (
+            person: VoiceMenuPerson(
               userId: member.userId,
               name: member.name,
               isLocal: member.userId == currentUserId,
+              channelId: member.channelId,
+              serverMute: member.serverMute,
+              serverDeaf: member.serverDeaf,
             ),
+            moderation: moderation,
             child: _VoiceMemberRow(
               member: member,
               speaking: speaking.contains(member.userId),
@@ -115,8 +123,16 @@ class _VoiceMemberRow extends StatelessWidget {
               ),
             if (member.video)
               _StateIcon(Icons.videocam_outlined, tr('Camera on'), muted),
-            if (member.selfDeaf)
+            if (member.serverDeaf)
+              _StateIcon(
+                Icons.headset_off,
+                tr('Server deafened'),
+                colorScheme.error,
+              )
+            else if (member.selfDeaf)
               _StateIcon(Icons.headset_off_outlined, tr('Deafened'), muted)
+            else if (member.serverMute)
+              _StateIcon(Icons.mic_off, tr('Server muted'), colorScheme.error)
             else if (member.selfMute)
               _StateIcon(Icons.mic_off_outlined, tr('Muted'), muted),
           ],
@@ -168,6 +184,26 @@ class VoiceSpeakingRing extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// The microphone button's tooltip: what pressing it does, or that a
+/// moderator muted the current user.
+String voiceMuteTooltip(VoiceSession session) {
+  if (session.serverDeaf) {
+    return tr('Server deafened');
+  }
+  if (session.serverMute) {
+    return tr('Server muted');
+  }
+  return session.selfMute ? tr('Unmute') : tr('Mute');
+}
+
+/// The headset button's tooltip.
+String voiceDeafenTooltip(VoiceSession session) {
+  if (session.serverDeaf) {
+    return tr('Server deafened');
+  }
+  return session.selfDeaf ? tr('Undeafen') : tr('Deafen');
 }
 
 /// Runs a call control, saying so when it fails.
@@ -296,20 +332,22 @@ class VoiceConnectedPanel extends ConsumerWidget {
                 ),
               ),
               _PanelButton(
-                tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
-                icon: session.selfMute ? Icons.mic_off : Icons.mic_none,
-                active: session.selfMute,
-                onPressed: connected
+                tooltip: voiceMuteTooltip(session),
+                icon: session.selfMute || session.serverMute
+                    ? Icons.mic_off
+                    : Icons.mic_none,
+                active: session.selfMute || session.serverMute,
+                onPressed: connected && !session.serverMute
                     ? () => runVoiceAction(context, controller.toggleMute)
                     : null,
               ),
               _PanelButton(
-                tooltip: session.selfDeaf ? tr('Undeafen') : tr('Deafen'),
-                icon: session.selfDeaf
+                tooltip: voiceDeafenTooltip(session),
+                icon: session.selfDeaf || session.serverDeaf
                     ? Icons.headset_off
                     : Icons.headset_outlined,
-                active: session.selfDeaf,
-                onPressed: connected
+                active: session.selfDeaf || session.serverDeaf,
+                onPressed: connected && !session.serverDeaf
                     ? () => runVoiceAction(context, controller.toggleDeafen)
                     : null,
               ),
@@ -382,14 +420,18 @@ class VoiceRailIndicator extends ConsumerWidget {
             icon: const Icon(Icons.volume_up),
           ),
           IconButton(
-            tooltip: session.selfMute ? tr('Unmute') : tr('Mute'),
-            color: session.selfMute
+            tooltip: voiceMuteTooltip(session),
+            color: session.selfMute || session.serverMute
                 ? Theme.of(context).colorScheme.error
                 : null,
-            onPressed: session.isConnected
+            onPressed: session.isConnected && !session.serverMute
                 ? () => runVoiceAction(context, controller.toggleMute)
                 : null,
-            icon: Icon(session.selfMute ? Icons.mic_off : Icons.mic_none),
+            icon: Icon(
+              session.selfMute || session.serverMute
+                  ? Icons.mic_off
+                  : Icons.mic_none,
+            ),
           ),
           IconButton(
             tooltip: tr('Disconnect'),
@@ -397,6 +439,53 @@ class VoiceRailIndicator extends ConsumerWidget {
             icon: const Icon(Icons.call_end),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "2/5" after a voice channel with a user limit: who is in it, of how many
+/// it takes.
+class VoiceUserLimitBadge extends StatelessWidget {
+  const VoiceUserLimitBadge({
+    required this.count,
+    required this.limit,
+    super.key,
+  });
+
+  final int count;
+  final int limit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final full = count >= limit;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: full
+            ? tr('Full: {count} of {limit}', {'count': count, 'limit': limit})
+            : tr('{count} of {limit}', {'count': count, 'limit': limit}),
+        child: Container(
+          key: const ValueKey('voice-user-limit-badge'),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: full
+                ? theme.colorScheme.errorContainer
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            '${count.toString().padLeft(2, '0')}/'
+            '${limit.toString().padLeft(2, '0')}',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: full
+                  ? theme.colorScheme.onErrorContainer
+                  : theme.colorScheme.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
       ),
     );
   }

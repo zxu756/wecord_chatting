@@ -19,6 +19,7 @@ import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -356,6 +357,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           CirclePermission.connectVoice,
         ),
         actions: actions,
+        moderation: VoiceModeration.forCircle(widget.detail),
       );
     }
     return ChatThreadScreen(

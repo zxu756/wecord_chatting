@@ -1,11 +1,17 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
+  ADMIN_TOKEN_TTL_SECONDS,
   base64UrlDecode,
   base64UrlEncode,
+  buildAdminClaims,
   buildClaims,
   callRoomName,
+  enforcementRequest,
+  liveKitHttpUrl,
   parseCallId,
   parseChannelId,
+  parseEnforceRequest,
+  publishSourcesFor,
   readLiveKitConfig,
   signJwt,
   TOKEN_TTL_SECONDS,
@@ -127,6 +133,97 @@ Deno.test("matches a token signed independently", async () => {
     nowSeconds: 0,
   });
   assertEquals(await signJwt(claims, "secret"), expected);
+});
+
+Deno.test("server-muted members can't publish their microphone", () => {
+  assertEquals(
+    publishSourcesFor({ serverMute: false, serverDeaf: false }),
+    null,
+  );
+  const sources = ["camera", "screen_share", "screen_share_audio"];
+  assertEquals(
+    publishSourcesFor({ serverMute: true, serverDeaf: false }),
+    sources,
+  );
+  assertEquals(
+    publishSourcesFor({ serverMute: false, serverDeaf: true }),
+    sources,
+  );
+  const claims = buildClaims({
+    apiKey: "k",
+    identity: userId,
+    name: "n",
+    room: channelId,
+    nowSeconds: 0,
+    publishSources: sources,
+  });
+  assertEquals(claims.video.canPublishSources, sources);
+  assertEquals(claims.video.canPublish, true);
+});
+
+Deno.test("admin claims manage one room briefly", () => {
+  const claims = buildAdminClaims({
+    apiKey: "k",
+    room: channelId,
+    nowSeconds: 10,
+  });
+  assertEquals(claims.video, { room: channelId, roomAdmin: true });
+  assertEquals(claims.exp, 10 + ADMIN_TOKEN_TTL_SECONDS);
+});
+
+Deno.test("the HTTP API sits beside the websocket url", () => {
+  assertEquals(
+    liveKitHttpUrl("wss://x.livekit.cloud/"),
+    "https://x.livekit.cloud",
+  );
+  assertEquals(
+    liveKitHttpUrl(" ws://localhost:7880 "),
+    "http://localhost:7880",
+  );
+});
+
+Deno.test("enforce requests parse and pick the RoomService call", () => {
+  assertEquals(
+    parseEnforceRequest({
+      enforce: { channel_id: channelId, user_id: userId },
+    }),
+    { channelId, userId },
+  );
+  assertEquals(
+    parseEnforceRequest({ enforce: { channel_id: channelId } }),
+    null,
+  );
+  assertEquals(
+    parseEnforceRequest({ channel_id: channelId, user_id: userId }),
+    null,
+  );
+
+  const state = {
+    channel_id: channelId,
+    user_id: userId,
+    in_channel: false,
+    server_mute: false,
+    server_deaf: false,
+  };
+  assertEquals(enforcementRequest(state), {
+    method: "RemoveParticipant",
+    body: { room: channelId, identity: userId },
+  });
+  const muted = enforcementRequest({
+    ...state,
+    in_channel: true,
+    server_mute: true,
+  });
+  assertEquals(muted.method, "UpdateParticipant");
+  assertEquals(
+    (muted.body.permission as Record<string, unknown>).can_publish_sources,
+    ["CAMERA", "SCREEN_SHARE", "SCREEN_SHARE_AUDIO"],
+  );
+  const free = enforcementRequest({ ...state, in_channel: true });
+  assertEquals(
+    (free.body.permission as Record<string, unknown>).can_publish_sources,
+    [],
+  );
 });
 
 Deno.test("call ids parse on their own and name their room", () => {

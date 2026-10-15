@@ -63,6 +63,134 @@ void main() {
     );
   });
 
+  test('a full channel refuses the token and the join', () async {
+    final source = _FakeVoiceDataSource()
+      ..functionError = const FunctionException(
+        status: 409,
+        details: {'error': 'channel_full'},
+      )
+      ..rpcErrors['join_voice_state'] = const PostgrestException(
+        message: 'This voice channel is full',
+        code: '53300',
+      );
+    final repository = SupabaseVoiceRepository(source);
+    await expectLater(
+      repository.fetchConnectionDetails('channel-1'),
+      throwsA(isA<VoiceChannelFullException>()),
+    );
+    await expectLater(
+      repository.joinVoiceState('channel-1'),
+      throwsA(isA<VoiceChannelFullException>()),
+    );
+  });
+
+  test('the token says whether the server muted us', () async {
+    final source = _FakeVoiceDataSource()
+      ..functionResult = {
+        'url': 'wss://lk.test',
+        'token': 'jwt',
+        'server_mute': true,
+      };
+    final details = await SupabaseVoiceRepository(
+      source,
+    ).fetchConnectionDetails('channel-1');
+    expect(details.serverMute, isTrue);
+    expect(details.serverDeaf, isFalse);
+  });
+
+  test('moderation RPCs send the right parameters', () async {
+    final source = _FakeVoiceDataSource()
+      ..rpcResults['disconnect_voice_member'] = 'channel-1'
+      ..rpcResults['move_voice_member'] = 'channel-1'
+      ..rpcResults['list_voice_channel_user_limits'] = {'channel-2': 5}
+      ..rpcResults['get_own_voice_state'] = {
+        'state': {
+          'channel_id': 'channel-2',
+          'circle_id': 'circle-1',
+          'conversation_id': 'conv-2',
+          'channel_name': 'Stage',
+          'server_mute': true,
+          'server_deaf': false,
+        },
+        'disconnected': false,
+      };
+    final repository = SupabaseVoiceRepository(source);
+
+    await repository.setServerMute(
+      circleId: 'circle-1',
+      userId: 'user-2',
+      muted: true,
+    );
+    await repository.setServerDeaf(
+      circleId: 'circle-1',
+      userId: 'user-2',
+      deafened: false,
+    );
+    expect(
+      await repository.disconnectMember(circleId: 'circle-1', userId: 'user-2'),
+      'channel-1',
+    );
+    expect(
+      await repository.moveMember(
+        circleId: 'circle-1',
+        userId: 'user-2',
+        channelId: 'channel-2',
+      ),
+      'channel-1',
+    );
+    await repository.setUserLimit(channelId: 'channel-2', limit: 5);
+    expect(await repository.listUserLimits('circle-1'), {'channel-2': 5});
+    final own = await repository.fetchOwnVoiceState();
+    expect(own.channelId, 'channel-2');
+    expect(own.conversationId, 'conv-2');
+    expect(own.serverMute, isTrue);
+    await repository.enforceVoiceState(
+      channelId: 'channel-1',
+      userId: 'user-2',
+    );
+
+    expect(source.rpcCalls.take(5), [
+      [
+        'set_voice_server_mute',
+        {
+          'target_circle_id': 'circle-1',
+          'target_user_id': 'user-2',
+          'muted': true,
+        },
+      ],
+      [
+        'set_voice_server_deaf',
+        {
+          'target_circle_id': 'circle-1',
+          'target_user_id': 'user-2',
+          'deafened': false,
+        },
+      ],
+      [
+        'disconnect_voice_member',
+        {'target_circle_id': 'circle-1', 'target_user_id': 'user-2'},
+      ],
+      [
+        'move_voice_member',
+        {
+          'target_circle_id': 'circle-1',
+          'target_user_id': 'user-2',
+          'target_channel_id': 'channel-2',
+        },
+      ],
+      [
+        'set_voice_channel_user_limit',
+        {'target_channel_id': 'channel-2', 'user_limit': 5},
+      ],
+    ]);
+    expect(source.functionCalls.single, [
+      'livekit-token',
+      {
+        'enforce': {'channel_id': 'channel-1', 'user_id': 'user-2'},
+      },
+    ]);
+  });
+
   test('voice state RPCs send the right parameters', () async {
     final source = _FakeVoiceDataSource()
       ..rpcResults['update_voice_state'] = true;
@@ -350,6 +478,9 @@ class _FakeVoiceDataSource implements VoiceDataSource {
   Stream<void> voiceStateChanges(String circleId) {
     return const Stream<void>.empty();
   }
+
+  @override
+  Stream<void> ownVoiceStateChanges() => const Stream<void>.empty();
 
   @override
   Stream<void> directCallChanges() => const Stream<void>.empty();

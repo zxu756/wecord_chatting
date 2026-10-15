@@ -94,6 +94,45 @@ void main() {
       },
     );
   });
+
+  test('sign-up confirmation emails link back to the web app', () async {
+    final httpClient = _RecordingHttpClient(
+      responses: [
+        http.Response(
+          jsonEncode({
+            'id': 'user-1',
+            'aud': 'authenticated',
+            'email': 'ada@example.com',
+            'app_metadata': <String, dynamic>{},
+            'user_metadata': <String, dynamic>{},
+            'created_at': '2026-10-16T00:00:00Z',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      ],
+    );
+    final repository = SupabaseAuthRepository(
+      SupabaseClient(
+        'https://example.supabase.co',
+        'test-anon-key',
+        httpClient: httpClient,
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      ),
+      redirectUrl: () => 'https://wecord.jokebear.fyi',
+    );
+
+    await repository.signUp('ada@example.com', 'secret123', ' Ada ', ' Ada ');
+
+    final request = httpClient.requests.single;
+    expect(request.url.path, '/auth/v1/signup');
+    expect(
+      request.url.queryParameters['redirect_to'],
+      'https://wecord.jokebear.fyi',
+    );
+  });
 }
 
 Future<SupabaseClient> _clientWithSession({

@@ -156,4 +156,26 @@ void main() {
     expect(edge, contains('data: deletedObjects'));
     expect(edge, contains('admin.storage.from(bucket).remove('));
   });
+
+  test('pushes check what each recipient can see, not the caller', () {
+    final sql = migration('202610160032');
+    final claim = RegExp(
+      r'create or replace function public\.claim_push_delivery\([\s\S]*?\n\$\$;',
+    ).firstMatch(sql)!.group(0)!;
+
+    // The push function calls it with the service role (no auth.uid()).
+    expect(claim, isNot(contains('conversation_member_can_view')));
+    expect(claim, isNot(contains('auth.uid()')));
+    expect(claim, contains('public.user_has_conversation_channel_permission('));
+    expect(claim, contains("'view_channel'"));
+    // Do Not Disturb, mutes and blocks still leave recipients out.
+    expect(claim, contains("coalesce(ups.presence_status, 'online') <> 'dnd'"));
+    expect(claim, contains('public.are_users_blocked('));
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.claim_push_delivery(uuid, uuid) to service_role',
+      ),
+    );
+  });
 }

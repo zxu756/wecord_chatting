@@ -19,6 +19,9 @@ class VoiceMemberState {
     this.serverDeaf = false,
     this.video = false,
     this.screen = false,
+    this.stageSpeaker = false,
+    this.stageInvited = false,
+    this.handRaisedAt,
   });
 
   factory VoiceMemberState.fromJson(Map<String, dynamic> json) {
@@ -43,6 +46,11 @@ class VoiceMemberState {
       serverDeaf: json['server_deaf'] == true,
       video: json['video'] == true,
       screen: json['screen'] == true,
+      stageSpeaker: json['stage_speaker'] == true,
+      stageInvited: json['stage_invited'] == true,
+      handRaisedAt: DateTime.tryParse(
+        json['hand_raised_at'] as String? ?? '',
+      )?.toUtc(),
     );
   }
 
@@ -68,6 +76,17 @@ class VoiceMemberState {
   final bool video;
   final bool screen;
 
+  /// On a stage: one of the speakers (the rest are the audience).
+  final bool stageSpeaker;
+
+  /// On a stage: a moderator invited them to speak.
+  final bool stageInvited;
+
+  /// On a stage: when they raised their hand to speak; null when it's down.
+  final DateTime? handRaisedAt;
+
+  bool get handRaised => handRaisedAt != null;
+
   /// Nickname, then display name, then username.
   String get name {
     for (final candidate in [nickname, displayName, username]) {
@@ -87,6 +106,8 @@ class VoiceConnectionDetails {
     required this.token,
     this.serverMute = false,
     this.serverDeaf = false,
+    this.stage = false,
+    this.stageSpeaker = false,
   });
 
   /// The LiveKit server, `wss://…`.
@@ -99,6 +120,10 @@ class VoiceConnectionDetails {
   /// can't publish their microphone.
   final bool serverMute;
   final bool serverDeaf;
+
+  /// A stage channel; unless [stageSpeaker], the token only listens.
+  final bool stage;
+  final bool stageSpeaker;
 }
 
 /// The current user's own voice state (`get_own_voice_state`).
@@ -111,6 +136,10 @@ class OwnVoiceState {
     this.serverMute = false,
     this.serverDeaf = false,
     this.disconnected = false,
+    this.stage = false,
+    this.stageSpeaker = false,
+    this.stageInvited = false,
+    this.handRaised = false,
   });
 
   factory OwnVoiceState.fromJson(Map<String, dynamic> json) {
@@ -125,6 +154,10 @@ class OwnVoiceState {
       serverMute: state?['server_mute'] == true,
       serverDeaf: state?['server_deaf'] == true,
       disconnected: json['disconnected'] == true,
+      stage: state?['channel_kind'] == 'stage',
+      stageSpeaker: state?['stage_speaker'] == true,
+      stageInvited: state?['stage_invited'] == true,
+      handRaised: state?['hand_raised_at'] != null,
     );
   }
 
@@ -138,6 +171,45 @@ class OwnVoiceState {
 
   /// A moderator disconnected them, and they haven't joined since.
   final bool disconnected;
+
+  /// They are on a stage: a speaker, invited to speak, or with their hand
+  /// raised.
+  final bool stage;
+  final bool stageSpeaker;
+  final bool stageInvited;
+  final bool handRaised;
+}
+
+/// A live stage in a stage channel (`list_stage_instances`).
+class StageInstance {
+  const StageInstance({
+    required this.channelId,
+    required this.circleId,
+    required this.topic,
+    required this.startedAt,
+    this.startedBy,
+  });
+
+  factory StageInstance.fromJson(Map<String, dynamic> json) {
+    return StageInstance(
+      channelId: json['channel_id'] as String,
+      circleId: json['circle_id'] as String,
+      topic: json['topic'] as String? ?? '',
+      startedBy: json['started_by'] as String?,
+      startedAt:
+          DateTime.tryParse(json['started_at'] as String? ?? '')?.toUtc() ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
+
+  /// Longest topic the server accepts.
+  static const maxTopicLength = 120;
+
+  final String channelId;
+  final String circleId;
+  final String topic;
+  final String? startedBy;
+  final DateTime startedAt;
 }
 
 /// Someone in a direct or group call (`list_active_direct_calls`).

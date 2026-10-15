@@ -540,6 +540,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               icon: switch (channel.kind) {
                 CircleChannelKind.forum => Icons.forum_outlined,
                 CircleChannelKind.voice => Icons.volume_up_outlined,
+                CircleChannelKind.stage => Icons.podcasts,
                 CircleChannelKind.text => Icons.tag,
               },
               label: channel.name,

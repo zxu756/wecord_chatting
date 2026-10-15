@@ -7,15 +7,21 @@
 // Server-muted or server-deafened members get a token that can't publish
 // their microphone, and a full voice channel answers 409 channel_full.
 //
+// On a stage channel only the speakers may publish; the audience's token
+// can only subscribe.
+//
 // {enforce: {channel_id, user_id}}, from a member who can mute, deafen or
-// move members, makes the channel's LiveKit room match the database for
-// that member: removes them when they are no longer in the channel (moved
-// or disconnected), otherwise updates what they may publish.
+// move members (or from the member themselves), makes the channel's
+// LiveKit room match the database for that member: removes them when they
+// are no longer in the channel (moved or disconnected), otherwise updates
+// what they may publish (so a new stage speaker can, without
+// reconnecting).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   buildAdminClaims,
   buildClaims,
   callRoomName,
+  canPublishIn,
   enforcementRequest,
   type EnforcementState,
   type LiveKitConfig,
@@ -50,6 +56,9 @@ interface VoiceAccess {
   full?: boolean;
   server_mute?: boolean;
   server_deaf?: boolean;
+  /// "voice" or "stage".
+  kind?: string;
+  stage_speaker?: boolean;
 }
 
 /// Calls LiveKit's RoomService; a participant who already left is fine.
@@ -182,6 +191,8 @@ Deno.serve(async (request) => {
   }
   const serverMute = channel?.server_mute === true;
   const serverDeaf = channel?.server_deaf === true;
+  const stage = channel?.kind === "stage";
+  const stageSpeaker = channel?.stage_speaker === true;
   const claims = buildClaims({
     apiKey: config.apiKey,
     identity: user.id,
@@ -191,11 +202,14 @@ Deno.serve(async (request) => {
     ),
     nowSeconds: Math.floor(Date.now() / 1000),
     publishSources: publishSourcesFor({ serverMute, serverDeaf }),
+    canPublish: canPublishIn({ kind: channel?.kind, stageSpeaker }),
   });
   return json({
     url: config.url,
     token: await signJwt(claims, config.apiSecret),
     server_mute: serverMute,
     server_deaf: serverDeaf,
+    stage,
+    stage_speaker: stageSpeaker,
   });
 });

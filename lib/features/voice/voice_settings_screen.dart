@@ -13,7 +13,7 @@ Future<void> openVoiceSettings(BuildContext context) {
 }
 
 /// Settings → Voice: input mode and push to talk key, microphone
-/// processing, and the volumes set for people.
+/// processing, the soundboard volume and the volumes set for people.
 class VoiceSettingsScreen extends ConsumerWidget {
   const VoiceSettingsScreen({super.key});
 
@@ -122,6 +122,47 @@ class VoiceSettingsScreen extends ConsumerWidget {
             subtitle: Text(tr('Evens out how loud your voice sends.')),
             value: settings.autoGainControl,
             onChanged: controller.setAutoGainControl,
+          ),
+          const Divider(height: 32),
+          heading(tr('Soundboard')),
+          Row(
+            children: [
+              Icon(
+                settings.soundboardVolume <= 0
+                    ? Icons.volume_off_outlined
+                    : Icons.volume_up_outlined,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              Expanded(
+                child: Slider(
+                  key: const ValueKey('voice-soundboard-volume'),
+                  value: settings.soundboardVolume,
+                  divisions: 20,
+                  label: '${(settings.soundboardVolume * 100).round()}%',
+                  semanticFormatterCallback: (value) =>
+                      '${(value * 100).round()}%',
+                  onChanged: controller.setSoundboardVolume,
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${(settings.soundboardVolume * 100).round()}%',
+                  key: const ValueKey('voice-soundboard-volume-value'),
+                  textAlign: TextAlign.end,
+                  style: theme.textTheme.labelMedium,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            tr(
+              'How loud sounds from the soundboard play for you. At 0% you '
+              "don't hear them.",
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           const Divider(height: 32),
           heading(tr('User volumes')),

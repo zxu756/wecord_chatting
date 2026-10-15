@@ -263,6 +263,8 @@ class SupabaseVoiceRepository implements VoiceRepository {
       token: data['token'] as String,
       serverMute: data['server_mute'] == true,
       serverDeaf: data['server_deaf'] == true,
+      stage: data['stage'] == true,
+      stageSpeaker: data['stage_speaker'] == true,
     );
   }
 

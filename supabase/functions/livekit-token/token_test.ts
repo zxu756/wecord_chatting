@@ -6,6 +6,7 @@ import {
   buildAdminClaims,
   buildClaims,
   callRoomName,
+  canPublishIn,
   enforcementRequest,
   liveKitHttpUrl,
   parseCallId,
@@ -232,4 +233,61 @@ Deno.test("call ids parse on their own and name their room", () => {
   assertEquals(parseChannelId({ call_id: channelId }), null);
   assertEquals(parseCallId({ call_id: "nope" }), null);
   assertEquals(callRoomName(channelId), `call-${channelId}`);
+});
+
+Deno.test("a stage's audience only listens; its speakers publish", () => {
+  assertEquals(canPublishIn({}), true);
+  assertEquals(canPublishIn({ kind: "voice" }), true);
+  assertEquals(canPublishIn({ kind: "stage" }), false);
+  assertEquals(canPublishIn({ kind: "stage", stageSpeaker: false }), false);
+  assertEquals(canPublishIn({ kind: "stage", stageSpeaker: true }), true);
+
+  const audience = buildClaims({
+    apiKey: "k",
+    identity: userId,
+    name: "n",
+    room: channelId,
+    nowSeconds: 0,
+    publishSources: ["camera"],
+    canPublish: false,
+  });
+  assertEquals(audience.video, {
+    room: channelId,
+    roomJoin: true,
+    canPublish: false,
+    canSubscribe: true,
+    canPublishData: false,
+  });
+
+  const state = {
+    channel_id: channelId,
+    user_id: userId,
+    in_channel: true,
+    server_mute: false,
+    server_deaf: false,
+    stage: true,
+    stage_speaker: false,
+  };
+  const listener = enforcementRequest(state).body.permission as Record<
+    string,
+    unknown
+  >;
+  assertEquals(listener.can_publish, false);
+  assertEquals(listener.can_publish_data, false);
+  assertEquals(listener.can_subscribe, true);
+  const speaker = enforcementRequest({ ...state, stage_speaker: true }).body
+    .permission as Record<string, unknown>;
+  assertEquals(speaker.can_publish, true);
+  assertEquals(speaker.can_publish_sources, []);
+  const mutedSpeaker = enforcementRequest({
+    ...state,
+    stage_speaker: true,
+    server_mute: true,
+  }).body.permission as Record<string, unknown>;
+  assertEquals(mutedSpeaker.can_publish, true);
+  assertEquals(mutedSpeaker.can_publish_sources, [
+    "CAMERA",
+    "SCREEN_SHARE",
+    "SCREEN_SHARE_AUDIO",
+  ]);
 });

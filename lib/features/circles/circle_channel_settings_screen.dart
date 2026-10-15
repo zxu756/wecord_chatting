@@ -314,7 +314,8 @@ class _CircleChannelSettingsScreenState
           ..._forumTagsSection(channel)
         else
           ..._slowmodeSection(channel),
-        if (channel.isVoice)
+        // Stages have no user limit.
+        if (channel.kind == CircleChannelKind.voice)
           VoiceUserLimitSection(
             key: ValueKey('voice-user-limit-${channel.id}'),
             circleId: widget.circleId,
@@ -920,6 +921,11 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
             CircleChannelKind.voice => tr(
               'Delete the voice channel {name}? Everyone in it is '
               'disconnected. This cannot be undone.',
+              {'name': name},
+            ),
+            CircleChannelKind.stage => tr(
+              'Delete the stage {name}? Everyone on it is disconnected. '
+              'This cannot be undone.',
               {'name': name},
             ),
             CircleChannelKind.text => tr(

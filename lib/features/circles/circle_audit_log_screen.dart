@@ -331,6 +331,11 @@ IconData circleAuditIcon(String action) {
     'member_voice_undeafen' => Icons.headset_outlined,
     'member_voice_disconnect' => Icons.call_end,
     'member_voice_move' => Icons.move_up,
+    'stage_start' => Icons.podcasts,
+    'stage_update' => Icons.edit_note,
+    'stage_end' => Icons.stop_circle_outlined,
+    'sound_create' => Icons.library_music_outlined,
+    'sound_delete' => Icons.music_off_outlined,
     'channel_update' => Icons.edit_note,
     'channel_delete' => Icons.delete_sweep_outlined,
     'category_create' => Icons.create_new_folder_outlined,
@@ -593,6 +598,17 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       {'old': oldName},
     ),
     'sticker_delete' => (tr('{actor} deleted sticker {target}'), {}),
+    'stage_start' => switch (changes['topic']) {
+      final String topic => (
+        tr('{actor} started a stage in {target}: {topic}'),
+        {'topic': topic},
+      ),
+      _ => (tr('{actor} started a stage in {target}'), {}),
+    },
+    'stage_update' => (tr('{actor} changed the stage topic in {target}'), {}),
+    'stage_end' => (tr('{actor} ended the stage in {target}'), {}),
+    'sound_create' => (tr('{actor} added sound {target}'), {}),
+    'sound_delete' => (tr('{actor} deleted sound {target}'), {}),
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),

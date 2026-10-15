@@ -84,6 +84,11 @@ class _CircleChannelCreationSheetState
                     icon: const Icon(Icons.forum_outlined),
                     label: Text(tr('Forum')),
                   ),
+                  ButtonSegment(
+                    value: CircleChannelKind.stage,
+                    icon: const Icon(Icons.podcasts),
+                    label: Text(tr('Stage')),
+                  ),
                 ],
                 selected: {_kind},
                 onSelectionChanged: _isSaving
@@ -97,6 +102,10 @@ class _CircleChannelCreationSheetState
                 ),
                 CircleChannelKind.voice => tr(
                   'Members talk, turn on video and share screens.',
+                ),
+                CircleChannelKind.stage => tr(
+                  'A few speakers talk while everyone else listens and can '
+                  'raise a hand to speak.',
                 ),
                 CircleChannelKind.text => tr(
                   'Members chat in one stream of messages.',

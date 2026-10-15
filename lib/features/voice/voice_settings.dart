@@ -20,8 +20,12 @@ enum VoiceInputMode {
 const minUserVolume = 0.0;
 const maxUserVolume = 2.0;
 
+/// How loud soundboard sounds play unless changed.
+const defaultSoundboardVolume = 0.8;
+
 /// Voice settings kept on this device: input mode and push to talk key,
-/// microphone processing, and how loud each person plays.
+/// microphone processing, how loud each person plays and how loud
+/// soundboard sounds play.
 @immutable
 class VoiceSettings {
   const VoiceSettings({
@@ -31,6 +35,7 @@ class VoiceSettings {
     this.echoCancellation = true,
     this.autoGainControl = true,
     this.userVolumes = const {},
+    this.soundboardVolume = defaultSoundboardVolume,
   });
 
   factory VoiceSettings.fromJson(Map<String, dynamic> json) {
@@ -49,6 +54,10 @@ class VoiceSettings {
             if (key is String && value is num)
               key: value.toDouble().clamp(minUserVolume, maxUserVolume),
       },
+      soundboardVolume: switch (json['soundboard_volume']) {
+        final num volume => volume.toDouble().clamp(0.0, 1.0),
+        _ => defaultSoundboardVolume,
+      },
     );
   }
 
@@ -63,6 +72,9 @@ class VoiceSettings {
   /// Volumes set for people, by user id: 1 is as sent, 0 silent, 2 twice
   /// as loud. People not listed play at 1.
   final Map<String, double> userVolumes;
+
+  /// How loud soundboard sounds play, 0 (off) to 1.
+  final double soundboardVolume;
 
   bool get pushToTalk => inputMode == VoiceInputMode.pushToTalk;
 
@@ -90,6 +102,7 @@ class VoiceSettings {
     bool? echoCancellation,
     bool? autoGainControl,
     Map<String, double>? userVolumes,
+    double? soundboardVolume,
   }) {
     return VoiceSettings(
       inputMode: inputMode ?? this.inputMode,
@@ -98,6 +111,7 @@ class VoiceSettings {
       echoCancellation: echoCancellation ?? this.echoCancellation,
       autoGainControl: autoGainControl ?? this.autoGainControl,
       userVolumes: userVolumes ?? this.userVolumes,
+      soundboardVolume: soundboardVolume ?? this.soundboardVolume,
     );
   }
 
@@ -108,6 +122,7 @@ class VoiceSettings {
     'echo_cancellation': echoCancellation,
     'auto_gain_control': autoGainControl,
     'user_volumes': userVolumes,
+    'soundboard_volume': soundboardVolume,
   };
 
   @override
@@ -118,7 +133,8 @@ class VoiceSettings {
         other.noiseSuppression == noiseSuppression &&
         other.echoCancellation == echoCancellation &&
         other.autoGainControl == autoGainControl &&
-        mapEquals(other.userVolumes, userVolumes);
+        mapEquals(other.userVolumes, userVolumes) &&
+        other.soundboardVolume == soundboardVolume;
   }
 
   @override
@@ -131,6 +147,7 @@ class VoiceSettings {
     Object.hashAllUnordered(
       userVolumes.entries.map((entry) => Object.hash(entry.key, entry.value)),
     ),
+    soundboardVolume,
   );
 }
 
@@ -235,6 +252,11 @@ class VoiceSettingsController extends Notifier<VoiceSettings> {
 
   Future<void> setAutoGainControl(bool enabled) {
     return update(state.copyWith(autoGainControl: enabled));
+  }
+
+  /// Sets how loud soundboard sounds play, 0 (off) to 1.
+  Future<void> setSoundboardVolume(double volume) {
+    return update(state.copyWith(soundboardVolume: volume.clamp(0.0, 1.0)));
   }
 
   /// Sets how loud [userId] plays for the current user; 1 forgets it.

@@ -3304,7 +3304,7 @@ void main() {
     final sql = effectiveMigrationSql();
     expect(
       functionBody(sql, 'create_circle_channel'),
-      contains("channel_kind not in ('text', 'forum', 'voice')"),
+      contains("channel_kind not in ('text', 'forum', 'voice', 'stage')"),
     );
     final send = functionBody(sql, 'check_channel_message_send');
     // Voice channels have their own text chat since 202610160005.
@@ -3349,7 +3349,7 @@ void main() {
       contains("interval '60 seconds'"),
     );
     final join = functionBody(sql, 'join_voice_state');
-    expect(join, contains("channel.kind <> 'voice'"));
+    expect(join, contains("channel.kind not in ('voice', 'stage')"));
     expect(join, contains("'connect_voice'"));
     expect(
       join,

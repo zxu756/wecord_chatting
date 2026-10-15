@@ -32,6 +32,11 @@ class FakeVoiceRepository implements VoiceRepository {
   bool tokenServerMute = false;
   bool tokenServerDeaf = false;
 
+  /// What the token answers about a stage: whether the channel is one and
+  /// whether the current user speaks on it.
+  bool tokenStage = false;
+  bool tokenStageSpeaker = false;
+
   /// Moderation calls, like `mute:user-2:true` or `move:user-2:ch-stage`.
   final moderation = <String>[];
 
@@ -129,6 +134,8 @@ class FakeVoiceRepository implements VoiceRepository {
       token: 'token',
       serverMute: tokenServerMute,
       serverDeaf: tokenServerDeaf,
+      stage: tokenStage,
+      stageSpeaker: tokenStageSpeaker,
     );
   }
 
@@ -407,6 +414,9 @@ VoiceMemberState voiceMember({
   bool screen = false,
   String? nickname,
   int? roleColor,
+  bool stageSpeaker = false,
+  bool stageInvited = false,
+  DateTime? handRaisedAt,
 }) {
   return VoiceMemberState(
     channelId: channelId,
@@ -423,5 +433,8 @@ VoiceMemberState voiceMember({
     serverDeaf: serverDeaf,
     video: video,
     screen: screen,
+    stageSpeaker: stageSpeaker,
+    stageInvited: stageInvited,
+    handRaisedAt: handRaisedAt,
   );
 }

@@ -20,26 +20,40 @@ final circleEmojiRepositoryProvider = Provider<CircleEmojiRepository>((ref) {
   }
 });
 
-/// A circle's emoji and stickers, for its management page.
+/// A circle's emoji and stickers, for its management page; reloads when
+/// someone changes them.
 final circleEmojisProvider = FutureProvider.autoDispose
     .family<List<CircleEmoji>, String>((ref, circleId) {
-      return ref
-          .watch(circleEmojiRepositoryProvider)
-          .listCircleEmojis(circleId);
+      final repository = ref.watch(circleEmojiRepositoryProvider);
+      _reloadOnChanges(ref, repository.emojiChanges(circleId: circleId));
+      return repository.listCircleEmojis(circleId);
     });
 
 /// The emoji and stickers of every circle the current user is in, kept for
-/// the session (refreshed when the user changes and after managing them).
-/// Failures leave the list empty, so messages fall back to `:name:`.
+/// the session (refreshed when the user changes, after managing them and
+/// when someone changes them in one of the user's circles). Failures leave
+/// the list empty, so messages fall back to `:name:`.
 final usableEmojisProvider = FutureProvider<List<CircleEmoji>>((ref) async {
   // Another account sees other circles.
   ref.watch(authStateProvider.select((state) => state.valueOrNull?.id));
+  final repository = ref.watch(circleEmojiRepositoryProvider);
+  _reloadOnChanges(ref, repository.emojiChanges());
   try {
-    return await ref.watch(circleEmojiRepositoryProvider).listUsableEmojis();
+    return await repository.listUsableEmojis();
   } catch (_) {
     return const [];
   }
 });
+
+/// Reloads the provider behind [ref] on every event of [changes] until it
+/// is disposed. A broken realtime connection only stops live updates.
+void _reloadOnChanges(Ref<Object?> ref, Stream<void> changes) {
+  final subscription = changes.listen(
+    (_) => ref.invalidateSelf(),
+    onError: (Object _) {},
+  );
+  ref.onDispose(subscription.cancel);
+}
 
 /// [usableEmojisProvider] by id; empty while loading.
 final usableEmojisByIdProvider = Provider<Map<String, CircleEmoji>>((ref) {
@@ -88,6 +102,12 @@ abstract interface class CircleEmojiRepository {
 
   /// A signed URL for an image in the `circle-emojis` bucket.
   Future<String> createEmojiUrl(String storagePath);
+
+  /// Fires when emoji or stickers are added, renamed or deleted in
+  /// [circleId], or in any circle the current user is in when it is null.
+  /// Deletes elsewhere may fire it too (realtime cannot tell whose they
+  /// are), so listeners just reload.
+  Stream<void> emojiChanges({String? circleId});
 }
 
 abstract interface class CircleEmojiDataSource {
@@ -107,6 +127,9 @@ abstract interface class CircleEmojiDataSource {
     required String path,
     required Duration expiresIn,
   });
+
+  /// See [CircleEmojiRepository.emojiChanges].
+  Stream<void> emojiChanges({String? circleId});
 }
 
 /// A refused upload, rename or limit, with a message to show.
@@ -231,6 +254,11 @@ class SupabaseCircleEmojiRepository implements CircleEmojiRepository {
     );
   }
 
+  @override
+  Stream<void> emojiChanges({String? circleId}) {
+    return _dataSource.emojiChanges(circleId: circleId);
+  }
+
   List<CircleEmoji> _emojis(Object? rows) {
     return (rows as List<dynamic>)
         .map((row) => CircleEmoji.fromJson(Map<String, dynamic>.from(row)))
@@ -299,6 +327,66 @@ class SupabaseCircleEmojiDataSource implements CircleEmojiDataSource {
         .from(bucket)
         .createSignedUrl(path, expiresIn.inSeconds);
   }
+
+  @override
+  Stream<void> emojiChanges({String? circleId}) {
+    late RealtimeChannel channel;
+    late StreamController<void> controller;
+    controller = StreamController<void>(
+      onListen: () {
+        void emit(PostgresChangePayload payload) {
+          controller.add(null);
+        }
+
+        if (circleId == null) {
+          // Row level security limits inserts and updates to the user's
+          // circles.
+          channel = _client
+              .channel('circle-emojis')
+              .onPostgresChanges(
+                event: PostgresChangeEvent.all,
+                schema: 'public',
+                table: 'circle_emojis',
+                callback: emit,
+              );
+        } else {
+          final inCircle = PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'circle_id',
+            value: circleId,
+          );
+          channel = _client
+              .channel('circle-emojis-$circleId')
+              .onPostgresChanges(
+                event: PostgresChangeEvent.insert,
+                schema: 'public',
+                table: 'circle_emojis',
+                filter: inCircle,
+                callback: emit,
+              )
+              .onPostgresChanges(
+                event: PostgresChangeEvent.update,
+                schema: 'public',
+                table: 'circle_emojis',
+                filter: inCircle,
+                callback: emit,
+              )
+              // Deletes carry only the id, so they cannot be filtered.
+              .onPostgresChanges(
+                event: PostgresChangeEvent.delete,
+                schema: 'public',
+                table: 'circle_emojis',
+                callback: emit,
+              );
+        }
+        channel.subscribe();
+      },
+      onCancel: () async {
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
+  }
 }
 
 class UninitializedCircleEmojiRepository implements CircleEmojiRepository {
@@ -339,6 +427,9 @@ class UninitializedCircleEmojiRepository implements CircleEmojiRepository {
   Future<String> createEmojiUrl(String storagePath) {
     throw StateError('Supabase must be initialized before loading emoji.');
   }
+
+  @override
+  Stream<void> emojiChanges({String? circleId}) => const Stream.empty();
 }
 
 /// A random version 4 UUID.

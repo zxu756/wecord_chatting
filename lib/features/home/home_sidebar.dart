@@ -166,7 +166,7 @@ class HomeSidebar extends ConsumerWidget {
                           tooltip: tr('New group'),
                           visualDensity: VisualDensity.compact,
                           iconSize: 18,
-                          onPressed: () => _createGroup(context, ref),
+                          onPressed: () => createGroupChat(context, ref),
                           icon: const Icon(Icons.add),
                         ),
                       ],
@@ -214,39 +214,38 @@ class HomeSidebar extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _createGroup(BuildContext context, WidgetRef ref) async {
-    final friends = await ref.read(friendsProvider.future);
-    if (!context.mounted) {
-      return;
-    }
-    if (friends.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(tr('Add at least two friends to start a group.')),
-        ),
-      );
-      return;
-    }
-    final result = await showModalBottomSheet<GroupCreationResult>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => GroupCreationSheet(friends: friends),
-    );
-    if (result == null || !context.mounted) {
-      return;
-    }
-    ref.invalidate(conversationsProvider);
-    openPage(
-      context,
-      '${ChatsScreen.path}/${result.conversationId}',
-      extra: ChatThreadRouteExtra(
-        title: result.title,
-        type: ConversationType.group,
-      ),
-    );
+/// Picks friends for a new group chat and opens it.
+Future<void> createGroupChat(BuildContext context, WidgetRef ref) async {
+  final friends = await ref.read(friendsProvider.future);
+  if (!context.mounted) {
+    return;
   }
+  if (friends.length < 2) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('Add at least two friends to start a group.'))),
+    );
+    return;
+  }
+  final result = await showModalBottomSheet<GroupCreationResult>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (context) => GroupCreationSheet(friends: friends),
+  );
+  if (result == null || !context.mounted) {
+    return;
+  }
+  ref.invalidate(conversationsProvider);
+  openPage(
+    context,
+    '${ChatsScreen.path}/${result.conversationId}',
+    extra: ChatThreadRouteExtra(
+      title: result.title,
+      type: ConversationType.group,
+    ),
+  );
 }
 
 class _DirectMessageRow extends ConsumerWidget {

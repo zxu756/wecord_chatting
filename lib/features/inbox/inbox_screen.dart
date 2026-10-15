@@ -71,6 +71,7 @@ class InboxScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: phoneHomeBackButton(context),
         title: Text(tr('Notifications')),
         actions: [
           IconButton(

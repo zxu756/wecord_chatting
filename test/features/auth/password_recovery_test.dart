@@ -228,7 +228,7 @@ void main() {
     expect(recovery.newPasswords, ['secret123']);
     expect(find.byType(SetNewPasswordScreen), findsNothing);
     expect(find.text('Your password was changed.'), findsOneWidget);
-    expect(find.text('Find or start a conversation'), findsOneWidget);
+    expect(find.byKey(const ValueKey('phone-home')), findsOneWidget);
   });
 
   testWidgets('a failed password change keeps the page with the error', (

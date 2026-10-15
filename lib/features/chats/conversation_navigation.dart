@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -15,6 +16,22 @@ void openPage(BuildContext context, String location, {Object? extra}) {
   } else {
     context.push(location, extra: extra);
   }
+}
+
+/// On phones, a back button to Home for pages opened directly (from a link
+/// or a notification) rather than pushed over Home; null otherwise, so the
+/// app bar shows its usual back button.
+Widget? phoneHomeBackButton(BuildContext context) {
+  final router = GoRouter.maybeOf(context);
+  // Like the app bar's own back button, follow the page's route so this
+  // updates as pages are pushed and popped.
+  final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
+  if (router == null ||
+      canPop ||
+      isWideLayout(MediaQuery.sizeOf(context).width)) {
+    return null;
+  }
+  return BackButton(onPressed: () => router.go(HomeScreen.path));
 }
 
 /// A circle's page, optionally with one of its channels (or a channel

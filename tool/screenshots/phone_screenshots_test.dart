@@ -215,9 +215,30 @@ void main() {
     await world.open(tester, '/home');
   });
 
-  screen('14b-messages', (tester, world) async {
-    await world.open(tester, '/chats');
+  screen('14b-home-small', (tester, world) async {
+    await world.open(tester, '/home');
+  }, viewport: smallPhone);
+
+  screen('14b2-home-large-text', (tester, world) async {
+    await world.open(tester, '/home');
+  }, viewport: notchedPhoneLargeText);
+
+  screen('14b3-home-scrolled', (tester, world) async {
+    await world.open(tester, '/home');
+    await tester.drag(
+      find.byKey(const ValueKey('phone-messages-list')),
+      const Offset(0, -600),
+    );
   });
+
+  screen('14b4-new-message-menu', (tester, world) async {
+    await world.open(tester, '/home');
+    await tester.tap(find.byKey(const ValueKey('phone-home-new')));
+  });
+
+  screen('08b-circle-mobile-home-small', (tester, world) async {
+    await world.open(tester, '/circles/circle-1');
+  }, viewport: smallPhone);
 
   screen('14c-notifications', (tester, world) async {
     await world.open(tester, '/notifications');

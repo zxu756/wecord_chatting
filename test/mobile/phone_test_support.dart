@@ -158,6 +158,18 @@ Future<void> showKeyboard(
   await settle(tester);
 }
 
+/// Hides the keyboard [showKeyboard] showed, giving the bottom safe area
+/// back.
+Future<void> hideKeyboard(WidgetTester tester, PhoneViewport viewport) async {
+  final ratio = viewport.devicePixelRatio;
+  tester.view.viewInsets = FakeViewPadding.zero;
+  tester.view.padding = FakeViewPadding(
+    top: viewport.topInset * ratio,
+    bottom: viewport.bottomInset * ratio,
+  );
+  await settle(tester);
+}
+
 /// Runs [body] once per phone viewport.
 void phoneTestWidgets(
   String description,

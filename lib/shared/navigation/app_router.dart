@@ -37,7 +37,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     authRouter.recoveringPassword = next;
   });
 
-  final pushedPageObserver = PushedPageObserver();
   final router = GoRouter(
     initialLocation: HomeScreen.path,
     refreshListenable: authRouter,
@@ -93,33 +92,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SetNewPasswordScreen(),
       ),
       ShellRoute(
-        observers: [pushedPageObserver],
         builder: (context, state, child) {
-          final placement = _placementFor(state);
-          final location = state.uri.toString();
-          if (placement.tab == WeCordTab.home) {
-            homeTabMemory.location = location;
-          }
           return ProfileBootstrapGate(
             child: WeCordShell(
-              placement: placement,
-              pushedPages: pushedPageObserver.pushedPages,
+              placement: _placementFor(state),
               onOpenVoice: (session) {
                 final path = voiceSessionPath(session);
                 if (state.uri.path != path) {
                   context.push(path);
-                }
-              },
-              onTabSelected: (tab) {
-                switch (tab) {
-                  case WeCordTab.home:
-                    context.go(homeTabMemory.location);
-                  case WeCordTab.messages:
-                    context.go(ChatsScreen.path);
-                  case WeCordTab.notifications:
-                    context.go(InboxScreen.path);
-                  case WeCordTab.you:
-                    context.go(SettingsScreen.path);
                 }
               },
               child: child,
@@ -134,9 +114,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: ChatsScreen.path,
             // Wide layouts list direct messages in the Home sidebar, so the
-            // page beside it shows the friends.
+            // page beside it shows the friends; phones list them on Home.
             builder: (context, state) =>
-                const _WideOr(wide: ContactsScreen(), narrow: ChatsScreen()),
+                const _WideOr(wide: ContactsScreen(), narrow: HomeScreen()),
           ),
           GoRoute(
             path: InboxScreen.path,
@@ -179,12 +159,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 title: title,
                 avatarUrl: avatarUrl,
                 conversationType: conversationType,
-                // Phones hide the tabs here, so offer the way back.
+                // Phones show the thread full screen, so offer the way back
+                // (to Home when it was opened from a link or notification).
                 onBack: wide
                     ? null
                     : () => context.canPop()
                           ? context.pop()
-                          : context.go(ChatsScreen.path),
+                          : context.go(HomeScreen.path),
               );
             },
           ),
@@ -329,16 +310,8 @@ String _withPendingLocation(String path, String? pendingLocation) {
   return Uri(path: path, queryParameters: {'from': pendingLocation}).toString();
 }
 
-/// Remembers where the phone Home tab was left (Home or a circle), so
-/// switching back to the tab returns there.
-final homeTabMemory = _HomeTabMemory();
-
-class _HomeTabMemory {
-  String location = HomeScreen.path;
-}
-
-/// Where [state]'s page sits in the navigation: which tab it is the root
-/// of, what the rail highlights and whether Home's sidebar shows.
+/// Where [state]'s page sits in the navigation: what the rail highlights
+/// and whether Home's sidebar shows (wide layouts).
 ShellPlacement _placementFor(GoRouterState state) {
   final segments = state.uri.pathSegments;
   final first = segments.isEmpty ? '' : segments.first;
@@ -348,14 +321,12 @@ ShellPlacement _placementFor(GoRouterState state) {
   switch ('/$first') {
     case HomeScreen.path:
       return const ShellPlacement(
-        tab: WeCordTab.home,
         homeSelected: true,
         homeSection: HomeSection.friends,
       );
     case ChatsScreen.path:
       if (rest == 1) {
         return const ShellPlacement(
-          tab: WeCordTab.messages,
           homeSelected: true,
           homeSection: HomeSection.friends,
         );
@@ -376,19 +347,14 @@ ShellPlacement _placementFor(GoRouterState state) {
       );
     case InboxScreen.path:
       return const ShellPlacement(
-        tab: WeCordTab.notifications,
         homeSelected: true,
         homeSection: HomeSection.inbox,
       );
-    case SettingsScreen.path:
-      return const ShellPlacement(tab: WeCordTab.you);
   }
   if (first == circles && rest >= 2) {
-    final circleHome = rest == 2;
     return ShellPlacement(
-      tab: circleHome ? WeCordTab.home : null,
       selectedCircleId: segments[1],
-      pageHasSidebar: circleHome,
+      pageHasSidebar: rest == 2,
     );
   }
   return const ShellPlacement();

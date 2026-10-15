@@ -515,6 +515,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         : currentActivity.onlineUserIds.any((id) {
             return id != currentUserId;
           });
+    // Direct peers also show Idle or Do Not Disturb.
+    final peerPresence = conversationType == ConversationType.direct
+        ? presenceOf(
+            directPeerId,
+            onlineUserIds: onlineUserIds,
+            statuses: ref.watch(presenceStatusesProvider).valueOrNull,
+          )
+        : null;
     final peerIsTyping = currentActivity.typingUserIds.any((id) {
       return id != currentUserId;
     });
@@ -705,7 +713,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         isThread
                             ? _threadSubtitle(conversationSummary)
                             : [
-                                peerIsOnline ? tr('Online') : tr('Offline'),
+                                peerPresence?.label ??
+                                    (peerIsOnline
+                                        ? tr('Online')
+                                        : tr('Offline')),
                                 if (conversationType == ConversationType.direct)
                                   ?activeCustomStatus(
                                     conversationSummary?.directCustomStatus,

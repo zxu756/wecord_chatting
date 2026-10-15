@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +20,7 @@ import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -107,12 +108,23 @@ class _FakePresenceRepository implements PresenceRepository {
   var listening = false;
 
   @override
-  Stream<Set<String>> onlineUserIds() {
-    late StreamController<Set<String>> controller;
-    controller = StreamController<Set<String>>(
+  Future<PresenceSettings> loadSettings() async => const PresenceSettings();
+
+  @override
+  Future<void> setStatus(PresenceStatus status) async {}
+
+  @override
+  Future<void> setShowOnlineStatus(bool show) async {}
+
+  @override
+  Stream<Map<String, PresenceStatus>> statuses(
+    ValueListenable<PresenceStatus?> ownStatus,
+  ) {
+    late StreamController<Map<String, PresenceStatus>> controller;
+    controller = StreamController<Map<String, PresenceStatus>>(
       onListen: () {
         listening = true;
-        controller.add({'user-1'});
+        controller.add({'user-1': PresenceStatus.online});
       },
       onCancel: () => listening = false,
     );

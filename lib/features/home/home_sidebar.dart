@@ -9,6 +9,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
@@ -16,6 +17,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 
 /// What Home shows beside its sidebar.
 enum HomeSection { friends, inbox, conversation }
@@ -63,6 +65,7 @@ class HomeSidebar extends ConsumerWidget {
     final conversations = ref.watch(conversationsProvider);
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+    final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
 
     final directMessages = [
       for (final conversation
@@ -188,9 +191,11 @@ class HomeSidebar extends ConsumerWidget {
                         selected:
                             section == HomeSection.conversation &&
                             conversation.id == selectedConversationId,
-                        online:
-                            conversation.directUserId != null &&
-                            onlineUserIds.contains(conversation.directUserId),
+                        presence: presenceOf(
+                          conversation.directUserId,
+                          onlineUserIds: onlineUserIds,
+                          statuses: presenceStatuses,
+                        ),
                       ),
                 ],
               ),
@@ -247,12 +252,14 @@ class _DirectMessageRow extends ConsumerWidget {
   const _DirectMessageRow({
     required this.conversation,
     required this.selected,
-    required this.online,
+    required this.presence,
   });
 
   final ConversationSummary conversation;
   final bool selected;
-  final bool online;
+
+  /// The other person's status; null while they're offline.
+  final PresenceStatus? presence;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -300,17 +307,9 @@ class _DirectMessageRow extends ConsumerWidget {
                       Positioned(
                         right: -2,
                         bottom: -2,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: online ? Colors.green : colorScheme.outline,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: colorScheme.surfaceContainerLow,
-                              width: 2,
-                            ),
-                          ),
+                        child: PresenceIndicator(
+                          status: presence,
+                          borderColor: colorScheme.surfaceContainerLow,
                         ),
                       ),
                   ],

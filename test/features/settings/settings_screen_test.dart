@@ -9,13 +9,17 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
+
+import '../presence/presence_repository_test.dart' as presence_fakes;
 
 void main() {
   testWidgets('edits and saves the current profile', (tester) async {
@@ -46,6 +50,53 @@ void main() {
         avatarUrl: 'avatars/existing.png',
       ),
     ]);
+  });
+
+  testWidgets('picks a status and hides online status', (tester) async {
+    final presence = presence_fakes.FakePresenceRepository();
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: FakeSettingsRepository(),
+        presenceRepository: presence,
+      ),
+    );
+    await tester.pump();
+
+    final tile = find.byKey(const ValueKey('presence-status-tile'));
+    expect(
+      find.descendant(of: tile, matching: find.text('Online')),
+      findsOneWidget,
+    );
+
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('presence-option-dnd')));
+    await tester.pumpAndSettle();
+
+    expect(presence.savedStatuses, [PresenceStatus.doNotDisturb]);
+    expect(
+      find.descendant(of: tile, matching: find.text('Do Not Disturb')),
+      findsOneWidget,
+    );
+
+    final showOnline = find.byKey(const ValueKey('show-online-status'));
+    await tester.scrollUntilVisible(
+      showOnline,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.widget<SwitchListTile>(showOnline).value, isTrue);
+    await tester.tap(showOnline);
+    await tester.pump();
+
+    expect(presence.savedShowOnline, [false]);
+    expect(tester.widget<SwitchListTile>(showOnline).value, isFalse);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: tile, matching: find.text('Invisible')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('switches between system, light and dark', (tester) async {
@@ -386,7 +437,11 @@ void main() {
 
     await tester.pumpWidget(_app(settingsRepository: settingsRepository));
     await tester.pump();
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.scrollUntilVisible(
+      find.text('Send test notification'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pump();
 
     expect(find.text('Notifications'), findsOneWidget);
@@ -491,9 +546,13 @@ Widget _app({
   FakeImagePickerService? imagePickerService,
   NotificationPreferencesRepository? notificationPreferencesRepository,
   LocalNotificationService? localNotificationService,
+  PresenceRepository? presenceRepository,
 }) {
   return ProviderScope(
     overrides: [
+      presenceRepositoryProvider.overrideWithValue(
+        presenceRepository ?? presence_fakes.FakePresenceRepository(),
+      ),
       settingsRepositoryProvider.overrideWithValue(settingsRepository),
       themeModeStoreProvider.overrideWithValue(
         themeModeStore ?? InMemoryThemeModeStore(),

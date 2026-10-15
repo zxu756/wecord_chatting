@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/circle_event.dart';
@@ -14,6 +15,7 @@ import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 
 final activeConversationIdProvider = StateProvider<String?>((ref) => null);
 
@@ -27,6 +29,9 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
     preferencesRepository: ref.watch(notificationPreferencesRepositoryProvider),
     notificationService: ref.watch(localNotificationServiceProvider),
     activeConversationId: () => ref.read(activeConversationIdProvider),
+    doNotDisturb: () =>
+        ref.read(presenceSettingsProvider).valueOrNull?.status ==
+        PresenceStatus.doNotDisturb,
   );
   ref.onDispose(coordinator.dispose);
   return coordinator;
@@ -34,7 +39,8 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
 
 /// Notifies about new messages while the app runs (polling the
 /// conversation list), and reminds the current user of events they are
-/// interested in [CircleEvent.reminderLead] before they start.
+/// interested in [CircleEvent.reminderLead] before they start. Nothing is
+/// shown while the user is in Do Not Disturb.
 class NotificationCoordinator {
   NotificationCoordinator({
     required AuthRepository authRepository,
@@ -43,6 +49,7 @@ class NotificationCoordinator {
     required NotificationPreferencesRepository preferencesRepository,
     required LocalNotificationService notificationService,
     required String? Function() activeConversationId,
+    bool Function()? doNotDisturb,
     DateTime Function()? now,
     Stream<void>? pollTicks,
   }) : _authRepository = authRepository,
@@ -51,6 +58,7 @@ class NotificationCoordinator {
        _preferencesRepository = preferencesRepository,
        _notificationService = notificationService,
        _activeConversationId = activeConversationId,
+       _doNotDisturb = doNotDisturb ?? _never,
        _now = now ?? DateTime.now,
        _pollTicks =
            pollTicks ?? Stream<void>.periodic(const Duration(seconds: 5));
@@ -61,6 +69,7 @@ class NotificationCoordinator {
   final NotificationPreferencesRepository _preferencesRepository;
   final LocalNotificationService _notificationService;
   final String? Function() _activeConversationId;
+  final bool Function() _doNotDisturb;
   final DateTime Function() _now;
   final Stream<void> _pollTicks;
 
@@ -174,7 +183,9 @@ class NotificationCoordinator {
       }
       for (final reminder in due) {
         _remindedEventKeys.add(_reminderKey(reminder));
-        if (reminder.notificationLevel == CircleNotificationLevel.none ||
+        // Silenced, not postponed: it doesn't pop up once DND ends.
+        if (_doNotDisturb() ||
+            reminder.notificationLevel == CircleNotificationLevel.none ||
             isCircleMutedAt(reminder.mutedUntil, now.toUtc())) {
           continue;
         }
@@ -307,7 +318,7 @@ class NotificationCoordinator {
       return;
     }
 
-    if (!preferences.enabled) {
+    if (!preferences.enabled || _doNotDisturb()) {
       return;
     }
 
@@ -467,3 +478,5 @@ class NotificationCoordinator {
     };
   }
 }
+
+bool _never() => false;

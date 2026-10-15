@@ -4,6 +4,9 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/presence/presence_status_sheet.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/features/push/push_settings_tile.dart';
@@ -11,6 +14,7 @@ import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
@@ -85,17 +89,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Center(
-                child: OutlinedButton.icon(
-                  onPressed: _uploadingAvatar ? null : _changeAvatar,
-                  icon: _uploadingAvatar
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.photo_camera_outlined),
-                  label: Text(tr('Change avatar')),
-                ),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _uploadingAvatar ? null : _changeAvatar,
+                    icon: _uploadingAvatar
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.photo_camera_outlined),
+                    label: Text(tr('Change avatar')),
+                  ),
+                  _PresenceButton(
+                    status: ref.watch(ownPresenceProvider),
+                    onPressed: () => showPresenceStatusSheet(context),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               _CustomStatusTile(
@@ -210,6 +223,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: Text(tr('Blocked users')),
                 subtitle: Text(tr('Manage people you have blocked')),
                 onTap: () => showBlockedUsersSheet(context, ref),
+              ),
+              SwitchListTile(
+                key: const ValueKey('show-online-status'),
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.visibility_outlined),
+                title: Text(tr('Show when you are online')),
+                subtitle: Text(
+                  tr('When off, everyone else sees you as offline.'),
+                ),
+                value:
+                    ref
+                        .watch(presenceSettingsProvider)
+                        .valueOrNull
+                        ?.showOnlineStatus ??
+                    true,
+                onChanged: _setShowOnlineStatus,
               ),
               const Divider(height: 32),
               SwitchListTile(
@@ -372,6 +401,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _setShowOnlineStatus(bool show) async {
+    try {
+      await ref
+          .read(presenceSettingsProvider.notifier)
+          .setShowOnlineStatus(show);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorText = tr('Could not save privacy settings. Try again.');
+        });
+      }
+    }
+  }
+
   Future<void> _signOut() async {
     await stopPushForSignOut(ref);
     await ref.read(authRepositoryProvider).signOut();
@@ -415,6 +458,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         });
       }
     }
+  }
+}
+
+/// The current user's Online / Idle / Do Not Disturb / Invisible status;
+/// opens the status picker.
+class _PresenceButton extends StatelessWidget {
+  const _PresenceButton({required this.status, required this.onPressed});
+
+  final PresenceStatus status;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      key: const ValueKey('presence-status-tile'),
+      onPressed: onPressed,
+      icon: PresenceIndicator(
+        status: status,
+        borderColor: Theme.of(context).colorScheme.surface,
+        size: 14,
+      ),
+      label: Text(status.label),
+    );
   }
 }
 

@@ -31,4 +31,29 @@ const zhStage = <String, String>{
   '{actor} started a stage in {target}': '{actor} 在 {target} 开始了舞台',
   '{actor} changed the stage topic in {target}': '{actor} 更改了 {target} 的舞台主题',
   '{actor} ended the stage in {target}': '{actor} 结束了 {target} 的舞台',
+
+  // Soundboard
+  'Soundboard': '音效板',
+  'Add sound': '添加音效',
+  'Delete sound': '删除音效',
+  'Delete {name} from the soundboard?': '要从音效板删除 {name} 吗？',
+  'No sounds yet.': '还没有音效。',
+  'No sounds yet. Add short clips (MP3, Ogg or WAV, up to 5 seconds) for everyone to play.':
+      '还没有音效。添加简短的音频（MP3、Ogg 或 WAV，最长 5 秒），供大家播放。',
+  "You can't play sounds here right now.": '你现在无法在这里播放音效。',
+  'Wait a moment before playing another sound.': '请稍等片刻再播放下一个音效。',
+  'Could not play the sound. Try again.': '无法播放音效，请重试。',
+  'Could not add the sound. Try again.': '无法添加音效，请重试。',
+  'Could not delete the sound. Try again.': '无法删除音效，请重试。',
+  'Could not load the soundboard.': '无法加载音效板。',
+  'Could not open the file.': '无法打开文件。',
+  'Choose an MP3, Ogg or WAV file.': '请选择 MP3、Ogg 或 WAV 文件。',
+  'Names are 1 to 32 characters.': '名称为 1 到 32 个字符。',
+  'Sounds can be at most 5 seconds long.': '音效最长 5 秒。',
+  'Sounds can be at most 512 KB.': '音效最大 512 KB。',
+  'This circle already has {count} sounds.': '此圈子已有 {count} 个音效。',
+  "How loud sounds from the soundboard play for you. At 0% you don't hear them.":
+      '音效板音效对你播放的音量。设为 0% 时不会听到。',
+  '{actor} added sound {target}': '{actor} 添加了音效 {target}',
+  '{actor} deleted sound {target}': '{actor} 删除了音效 {target}',
 };

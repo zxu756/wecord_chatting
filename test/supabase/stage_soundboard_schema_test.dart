@@ -115,6 +115,82 @@ void main() {
     );
   });
 
+  test('soundboard: sounds, storage, plays and the cooldown', () {
+    final sql = migration('202610160019');
+
+    expect(sql, contains('create table if not exists public.circle_sounds'));
+    expect(
+      sql,
+      contains("check (mime_type in ('audio/mpeg', 'audio/ogg', 'audio/wav'))"),
+    );
+    expect(sql, contains('duration_ms between 1 and 5000'));
+    expect(
+      sql,
+      contains(
+        'revoke insert, update, delete, truncate on public.circle_sounds '
+        'from authenticated;',
+      ),
+    );
+
+    // The bucket: private, 512 KB, audio only, managed like emoji.
+    expect(sql, contains("'circle-sounds',\n  false,\n  524288,"));
+    for (final policy in [
+      'circle_sounds_storage_select_member',
+      'circle_sounds_storage_insert_manager',
+      'circle_sounds_storage_delete_manager',
+    ]) {
+      expect(sql, contains('create policy $policy'));
+    }
+    expect(sql, contains(r'\.(mp3|ogg|wav)$'));
+
+    final create = functionBody(sql, 'create_circle_sound');
+    expect(create, contains("'manage_emojis'"));
+    expect(create, contains("o.bucket_id = 'circle-sounds'"));
+    expect(create, contains('>= 24'));
+    expect(create, contains("'sound_create'"));
+    expect(
+      functionBody(sql, 'delete_circle_sound'),
+      contains("'sound_delete'"),
+    );
+
+    expect(sql, contains('create table if not exists public.soundboard_plays'));
+    expect(
+      sql,
+      contains(
+        'alter publication supabase_realtime add table public.soundboard_plays;',
+      ),
+    );
+    expect(
+      functionBody(sql, 'soundboard_cooldown'),
+      contains("interval '2 seconds'"),
+    );
+    final play = functionBody(sql, 'play_soundboard_sound');
+    expect(play, contains("'connect_voice'"));
+    expect(play, contains('state.server_mute'));
+    expect(
+      play,
+      contains("channel.kind = 'stage' and not state.stage_speaker"),
+    );
+    expect(play, contains('pg_advisory_xact_lock'));
+    expect(play, contains("format('soundboard_cooldown_ms=%s'"));
+
+    for (final grant in [
+      'create_circle_sound(uuid, text, text, text, text, integer)',
+      'delete_circle_sound(uuid)',
+      'list_circle_sounds(uuid)',
+      'play_soundboard_sound(uuid, uuid)',
+    ]) {
+      expect(
+        sql,
+        contains('grant execute on function public.$grant to authenticated;'),
+      );
+      expect(
+        sql,
+        contains('revoke execute on function public.$grant from anon;'),
+      );
+    }
+  });
+
   test('livekit-token only lets stage speakers publish', () {
     final index = File(
       'supabase/functions/livekit-token/index.ts',

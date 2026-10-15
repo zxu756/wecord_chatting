@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
+import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
@@ -40,6 +41,7 @@ class VoiceChannelView extends ConsumerStatefulWidget {
     this.initialChatOpen = false,
     this.isStage = false,
     this.stageModerator = false,
+    this.canManageSounds = false,
     super.key,
   });
 
@@ -69,6 +71,10 @@ class VoiceChannelView extends ConsumerStatefulWidget {
 
   /// The current user moderates the stage (Mute Members and Move Members).
   final bool stageModerator;
+
+  /// The current user adds and deletes the circle's soundboard sounds
+  /// (Manage Emoji).
+  final bool canManageSounds;
 
   @override
   ConsumerState<VoiceChannelView> createState() => _VoiceChannelViewState();
@@ -195,8 +201,18 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                     circleId: widget.circleId,
                     channelId: channelId,
                     moderator: widget.stageModerator,
+                    soundboard: (
+                      circleId: widget.circleId,
+                      canManage: widget.canManageSounds,
+                    ),
                   )
-                : VoiceCallControls(session: session),
+                : VoiceCallControls(
+                    session: session,
+                    soundboard: (
+                      circleId: widget.circleId,
+                      canManage: widget.canManageSounds,
+                    ),
+                  ),
           ),
       ],
     );
@@ -633,13 +649,16 @@ class _Tile extends StatelessWidget {
   }
 }
 
-/// Microphone, deafen, camera, screen share (where the platform can) and
-/// disconnect; with push to talk on a phone (or without a key set), a
-/// button to hold while talking.
+/// Microphone, deafen, camera, screen share (where the platform can), the
+/// soundboard (in circle voice channels) and disconnect; with push to talk
+/// on a phone (or without a key set), a button to hold while talking.
 class VoiceCallControls extends ConsumerStatefulWidget {
-  const VoiceCallControls({required this.session, super.key});
+  const VoiceCallControls({required this.session, this.soundboard, super.key});
 
   final VoiceSession session;
+
+  /// The circle's soundboard; none in direct and group calls.
+  final SoundboardAccess? soundboard;
 
   @override
   ConsumerState<VoiceCallControls> createState() => _VoiceCallControlsState();
@@ -783,6 +802,19 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                   onPressed: () => _run(
                     _toggleScreenShare,
                     tr('Could not share the screen.'),
+                  ),
+                ),
+              if (widget.soundboard case final soundboard?
+                  when session.channelId != null)
+                toggle(
+                  key: const ValueKey('voice-control-soundboard'),
+                  tooltip: tr('Soundboard'),
+                  icon: Icons.music_note_outlined,
+                  on: false,
+                  onPressed: () => showSoundboard(
+                    context,
+                    access: soundboard,
+                    channelId: session.channelId!,
                   ),
                 ),
               IconButton.filled(

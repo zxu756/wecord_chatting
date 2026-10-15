@@ -9,6 +9,8 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
+import 'package:wecord/features/voice/soundboard_player.dart';
+import 'package:wecord/features/voice/soundboard_repository.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
@@ -61,6 +63,21 @@ final voiceSessionProvider =
       });
       ref.listen(voiceSettingsProvider, (previous, next) {
         unawaited(controller.updateSettings(next));
+      });
+      // Plays the soundboard sounds others play in the channel.
+      final soundboard = SoundboardPlayback(
+        repository: ref.watch(soundboardRepositoryProvider),
+        player: ref.watch(soundboardPlayerProvider),
+        volume: () => ref.read(voiceSettingsProvider).soundboardVolume,
+      );
+      final stopFollowing = controller.addListener(soundboard.follow);
+      ref.onDispose(() {
+        try {
+          stopFollowing();
+        } catch (_) {
+          // The controller went first.
+        }
+        soundboard.dispose();
       });
       // The push to talk key works anywhere in the app while connected.
       bool onKey(KeyEvent event) {

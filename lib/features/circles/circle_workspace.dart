@@ -382,6 +382,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
         chatBuilder: (context) => voiceChannelChat(widget.detail, channel),
         isStage: channel.isStage,
         stageModerator: widget.detail.canModerateStage(channel),
+        canManageSounds: widget.detail.canManageEmojis,
       );
     }
     return ChatThreadScreen(

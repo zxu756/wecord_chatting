@@ -181,6 +181,7 @@ class _CircleChannelThreadScreenState
                   chatBuilder: (context) => voiceChannelChat(detail, channel!),
                   isStage: channel.isStage,
                   stageModerator: detail.canModerateStage(channel),
+                  canManageSounds: detail.canManageEmojis,
                 )
               : null) ??
           (detail != null && channel != null && channel.isForum

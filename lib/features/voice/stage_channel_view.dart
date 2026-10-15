@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
+import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -821,6 +822,7 @@ class StageControls extends ConsumerStatefulWidget {
     required this.circleId,
     required this.channelId,
     required this.moderator,
+    this.soundboard,
     super.key,
   });
 
@@ -828,6 +830,9 @@ class StageControls extends ConsumerStatefulWidget {
   final String circleId;
   final String channelId;
   final bool moderator;
+
+  /// The circle's soundboard, which speakers can play into the stage.
+  final SoundboardAccess? soundboard;
 
   @override
   ConsumerState<StageControls> createState() => _StageControlsState();
@@ -982,6 +987,19 @@ class _StageControlsState extends ConsumerState<StageControls> {
                   onPressed: () => _run(
                     () => actions.invite(context, currentUserId),
                     tr('Could not change the stage. Try again.'),
+                  ),
+                ),
+              if (widget.soundboard case final soundboard?
+                  when session.stageSpeaker)
+                toggle(
+                  key: const ValueKey('voice-control-soundboard'),
+                  tooltip: tr('Soundboard'),
+                  icon: Icons.music_note_outlined,
+                  on: false,
+                  onPressed: () => showSoundboard(
+                    context,
+                    access: soundboard,
+                    channelId: widget.channelId,
                   ),
                 ),
               IconButton.filled(

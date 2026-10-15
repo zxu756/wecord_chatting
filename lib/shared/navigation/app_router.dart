@@ -5,6 +5,8 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/features/auth/set_new_password_screen.dart';
+import 'package:wecord/features/auth/two_factor.dart';
+import 'package:wecord/features/auth/two_factor_challenge_screen.dart';
 import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
@@ -36,6 +38,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen<bool>(passwordRecoveryPendingProvider, (previous, next) {
     authRouter.recoveringPassword = next;
   });
+  authRouter.twoFactorPending = ref.read(twoFactorPendingProvider);
+  ref.listen<bool>(twoFactorPendingProvider, (previous, next) {
+    authRouter.twoFactorPending = next;
+  });
 
   final pushedPageObserver = PushedPageObserver();
   final router = GoRouter(
@@ -65,12 +71,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (!signedIn && !onAuthRoute) {
         return _withPendingLocation(AuthScreen.path, pendingLocation);
       }
+      // Two-step verification: the code comes before anything else.
+      final onTwoFactorRoute = location == TwoFactorChallengeScreen.path;
+      if (signedIn && authRouter.twoFactorPending) {
+        return onTwoFactorRoute
+            ? null
+            : _withPendingLocation(
+                TwoFactorChallengeScreen.path,
+                pendingLocation,
+              );
+      }
       // Opened from a password reset link: choose a new password first.
       final onNewPasswordRoute = location == SetNewPasswordScreen.path;
       if (signedIn && authRouter.recoveringPassword) {
         return onNewPasswordRoute ? null : SetNewPasswordScreen.path;
       }
-      if (signedIn && (onAuthRoute || onLoadingRoute || onNewPasswordRoute)) {
+      if (signedIn &&
+          (onAuthRoute ||
+              onLoadingRoute ||
+              onNewPasswordRoute ||
+              onTwoFactorRoute)) {
         return pendingLocation ?? HomeScreen.path;
       }
       // Circles are listed in the rail; there is no page of them.
@@ -91,6 +111,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: SetNewPasswordScreen.path,
         builder: (context, state) => const SetNewPasswordScreen(),
+      ),
+      GoRoute(
+        path: TwoFactorChallengeScreen.path,
+        builder: (context, state) => const TwoFactorChallengeScreen(),
       ),
       ShellRoute(
         observers: [pushedPageObserver],
@@ -294,6 +318,19 @@ class AuthRouterNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  var _twoFactorPending = false;
+
+  /// See twoFactorPendingProvider.
+  bool get twoFactorPending => _twoFactorPending;
+
+  set twoFactorPending(bool value) {
+    if (value == _twoFactorPending) {
+      return;
+    }
+    _twoFactorPending = value;
+    notifyListeners();
+  }
+
   var _recoveringPassword = false;
 
   /// See passwordRecoveryPendingProvider.
@@ -309,10 +346,13 @@ class AuthRouterNotifier extends ChangeNotifier {
 }
 
 /// Invite links opened while signed out (or before auth resolves) ride along
-/// as `?from=` on /loading and /auth, and are reopened after sign-in.
+/// as `?from=` on /loading, /auth and /verify-sign-in, and are reopened
+/// after sign-in.
 String? _pendingLocation(Uri uri) {
   final candidate =
-      uri.path == AuthScreen.path || uri.path == LoadingScreen.path
+      uri.path == AuthScreen.path ||
+          uri.path == LoadingScreen.path ||
+          uri.path == TwoFactorChallengeScreen.path
       ? uri.queryParameters['from']
       : uri.path;
   if (candidate != null &&

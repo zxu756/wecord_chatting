@@ -134,4 +134,37 @@ const zhSafety = <String, String>{
   'Accept the circle rules to start chatting.': '请先接受圈子规则再开始聊天。',
   '{actor} updated the onboarding': '{actor} 更新了新成员引导',
   'Welcome message changed': '欢迎消息已更改',
+  // Two-step verification.
+  'Account': '账号',
+  'Two-step verification': '两步验证',
+  'Ask for a code from an authenticator app when signing in':
+      '登录时要求输入身份验证器应用中的验证码',
+  'Could not load two-step verification.': '无法加载两步验证。',
+  'Two-step verification is on': '两步验证已开启',
+  'Two-step verification is on.': '两步验证已开启。',
+  'Two-step verification is off.': '两步验证已关闭。',
+  'Signing in asks for a code from your authenticator app after your password.':
+      '登录时，输入密码后还需要输入身份验证器应用中的验证码。',
+  'Protect your account with a code': '用验证码保护你的账号',
+  'After your password, signing in will also ask for a code from an authenticator app on your phone.':
+      '开启后，登录时除密码外还需要输入手机上身份验证器应用中的验证码。',
+  'Set up an authenticator app': '设置身份验证器应用',
+  '1. Scan this QR code with your authenticator app': '1. 用身份验证器应用扫描此二维码',
+  "Can't scan it? Enter this key instead:": '无法扫描？请改为输入此密钥：',
+  'Copy key': '复制密钥',
+  '2. Enter the 6-digit code it shows': '2. 输入应用显示的 6 位验证码',
+  '6-digit code': '6 位验证码',
+  'Turn on': '开启',
+  'Turn off': '关闭',
+  'Turn off two-step verification?': '要关闭两步验证吗？',
+  'Enter a code from your authenticator app to confirm. Signing in will then only need your password.':
+      '请输入身份验证器应用中的验证码以确认。关闭后登录只需要密码。',
+  'Enter the {count}-digit code.': '请输入 {count} 位验证码。',
+  "That code didn't work. Enter the current code from your authenticator app.":
+      '验证码无效。请输入身份验证器应用中当前显示的验证码。',
+  'Two-step verification is not available on this server.': '此服务器未启用两步验证。',
+  'Enter the code from your authenticator app': '输入身份验证器应用中的验证码',
+  'Your account asks for a code when you sign in.': '你的账号在登录时需要输入验证码。',
+  '{email} asks for a code when signing in.': '{email} 登录时需要输入验证码。',
+  'Verify': '验证',
 };

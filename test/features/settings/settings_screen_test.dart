@@ -87,6 +87,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(showOnline);
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(showOnline).value, isTrue);
     await tester.tap(showOnline);
     await tester.pump();
@@ -533,6 +535,25 @@ void main() {
 
     expect(find.text('Ada'), findsOneWidget);
     expect(find.text('Unblock'), findsOneWidget);
+  });
+
+  testWidgets('settings open two-step verification', (tester) async {
+    await tester.pumpWidget(_app(settingsRepository: FakeSettingsRepository()));
+    await tester.pump();
+
+    final tile = find.byKey(const ValueKey('two-factor-settings-tile'));
+    await tester.scrollUntilVisible(
+      tile,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    // Without Supabase there is no authenticator, so it offers setup.
+    expect(find.text('Protect your account with a code'), findsOneWidget);
   });
 
   testWidgets('toggles notification preferences', (tester) async {

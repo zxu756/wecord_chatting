@@ -191,6 +191,37 @@ void main() {
     }
   });
 
+  test('account deletion removes the soundboard clips of its circles', () {
+    final sql = migration('202610160026');
+    final prepare = functionBody(sql, 'prepare_account_deletion');
+    expect(
+      prepare,
+      contains(
+        "where o.bucket_id in ('circle-emojis', 'chat-media', 'circle-sounds');",
+      ),
+    );
+    expect(
+      prepare,
+      contains('returns table (bucket_id text, object_path text)'),
+    );
+    expect(
+      prepare,
+      contains("'Transfer the circles you own to another member first'"),
+    );
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.prepare_account_deletion() '
+        'to authenticated;',
+      ),
+    );
+    // The Edge Function removes whatever buckets it is handed.
+    final function = File(
+      'supabase/functions/delete-account/index.ts',
+    ).readAsStringSync();
+    expect(function, contains('admin.storage.from(bucket).remove('));
+  });
+
   test('livekit-token only lets stage speakers publish', () {
     final index = File(
       'supabase/functions/livekit-token/index.ts',

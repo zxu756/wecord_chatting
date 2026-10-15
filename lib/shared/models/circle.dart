@@ -506,6 +506,14 @@ class CircleChannel {
 
   /// A stage: speakers talk, everyone else listens.
   bool get isStage => kind == CircleChannelKind.stage;
+
+  /// A text channel whose messages can be published to the channels that
+  /// follow it.
+  bool get isAnnouncement => kind == CircleChannelKind.announcement;
+
+  /// Holds a chat like a text channel (text and announcement channels).
+  bool get isTextLike =>
+      kind == CircleChannelKind.text || kind == CircleChannelKind.announcement;
 }
 
 /// What a channel holds: a chat, a voice call, forum posts or a stage.
@@ -513,7 +521,8 @@ enum CircleChannelKind {
   text('text'),
   voice('voice'),
   forum('forum'),
-  stage('stage');
+  stage('stage'),
+  announcement('announcement');
 
   const CircleChannelKind(this.value);
 

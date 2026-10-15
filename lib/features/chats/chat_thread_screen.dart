@@ -31,6 +31,8 @@ import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
+import 'package:wecord/features/circles/announcement_repository.dart';
+import 'package:wecord/features/circles/announcement_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -198,10 +200,15 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.topic,
     this.forumPost = false,
     this.onBack,
+    this.isAnnouncementChannel = false,
     super.key,
   });
 
   final String conversationId;
+
+  /// An announcement channel: its messages can be published to the
+  /// channels following it.
+  final bool isAnnouncementChannel;
   final String? title;
   final String? avatarUrl;
   final ConversationType? conversationType;
@@ -635,6 +642,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   message.senderId == currentUserId));
     }
 
+    // The author or a moderator publishes announcement posts once.
+    bool canPublish(ChatMessage message) {
+      return widget.isAnnouncementChannel &&
+          !isThread &&
+          message.type == MessageType.text &&
+          message.recalledAt == null &&
+          message.crosspost == null &&
+          !message.isPublished &&
+          (canModerateMessages || (message.isSentBy(currentUserId) && canSend));
+    }
+
     final pollActions = PollActions(
       onVote: _votePoll,
       onEnd: _endPoll,
@@ -1056,6 +1074,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           canStartThread: canStartThreads && canSend,
                           onOpenThread: _openOrCreateThread,
                           pollActions: pollActions,
+                          onPublish: canPublish(message)
+                              ? _publishMessage
+                              : null,
                         );
                       }
                       final highlighted = AnimatedContainer(
@@ -2321,6 +2342,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _publishMessage(ChatMessage message) async {
+    try {
+      final delivered = await ref
+          .read(announcementRepositoryProvider)
+          .publish(message.id);
+      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _showSnackBar(switch (delivered) {
+        0 => tr('Published. No channels follow this one yet.'),
+        1 => tr('Published to 1 channel.'),
+        _ => tr('Published to {count} channels.', {'count': delivered}),
+      });
+    } catch (_) {
+      _showSnackBar(tr('Could not publish the message. Try again.'));
+    }
+  }
+
   Future<void> _removeEmbed(ChatMessage message) async {
     try {
       await ref
@@ -2974,7 +3011,12 @@ class _MessageBubble extends StatelessWidget {
     this.pollActions,
     this.canModerate = false,
     this.circleId,
+    this.onPublish,
   });
+
+  /// Publishes this announcement to the following channels; null when the
+  /// current user cannot (or it is not an unpublished announcement).
+  final Future<void> Function(ChatMessage message)? onPublish;
 
   /// The circle of a channel or its thread, whose custom emoji the reaction
   /// picker lists first.
@@ -3495,6 +3537,16 @@ class _MessageBubble extends StatelessWidget {
                       unawaited(onPreviewImage(imageAttachment));
                     },
                   ),
+                if (onPublish case final publish?)
+                  ListTile(
+                    key: const ValueKey('message-publish'),
+                    leading: const Icon(Icons.campaign_outlined),
+                    title: Text(tr('Publish')),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      unawaited(publish(message));
+                    },
+                  ),
                 if (canPin)
                   ListTile(
                     leading: Icon(
@@ -3644,6 +3696,8 @@ class _MessageContent extends StatelessWidget {
     }
 
     final content = <Widget>[
+      if (message.crosspost case final crosspost?)
+        CrosspostOrigin(crosspost: crosspost, foregroundColor: textColor),
       if (message.replyPreview != null) ...[
         _QuotedReplyPreview(
           senderName: message.replyPreview!.senderName,
@@ -3700,6 +3754,10 @@ class _MessageContent extends StatelessWidget {
           ),
         ),
       );
+    }
+
+    if (message.isPublished) {
+      content.add(PublishedMarker(foregroundColor: textColor));
     }
 
     return Column(

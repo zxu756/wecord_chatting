@@ -553,6 +553,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                 CircleChannelKind.voice => Icons.volume_up_outlined,
                 CircleChannelKind.stage => Icons.podcasts,
                 CircleChannelKind.text => Icons.tag,
+                CircleChannelKind.announcement => Icons.campaign_outlined,
               },
               label: channel.name,
               locked: channel.isPrivate,

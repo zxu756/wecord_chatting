@@ -53,4 +53,49 @@ void main() {
       ),
     );
   });
+
+  test('reactions load per page and check membership once', () {
+    final sql = migration('202610160016');
+
+    expect(
+      sql,
+      contains(
+        'on public.message_reactions (conversation_id, message_id, emoji)',
+      ),
+    );
+    expect(sql, contains('include (user_id, created_at)'));
+
+    final page = RegExp(
+      r'create or replace function public\.list_conversation_reactions[\s\S]*?\n\$\$;',
+    ).firstMatch(sql)!.group(0)!;
+    expect(page, contains('security definer'));
+    expect(page, contains('set search_path = public'));
+    expect(
+      page,
+      contains(
+        'public.is_current_user_conversation_member(target_conversation_id)',
+      ),
+    );
+    expect(page, contains('m.recalled_at is null'));
+    expect(page, contains("'custom_name'"));
+    expect(
+      sql,
+      contains(
+        'revoke execute on function public.list_conversation_reactions(uuid) from anon',
+      ),
+    );
+
+    final field = RegExp(
+      r'create or replace function public\.reactions\([\s\S]*?\n\$\$;',
+    ).firstMatch(sql)!.group(0)!;
+    // Once per message, not once per reaction.
+    expect(
+      field,
+      contains(
+        'public.is_current_user_conversation_member(\n      message_row.conversation_id',
+      ),
+    );
+    expect(field, contains('mr.conversation_id = message_row.conversation_id'));
+    expect(field, contains('message_row.recalled_at is not null'));
+  });
 }

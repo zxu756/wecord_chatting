@@ -163,6 +163,14 @@ class CircleDetail {
     return permission.isGrantedBy(channelPermissionsOf(channel));
   }
 
+  /// Whether the current user moderates [channel], a stage: Mute Members
+  /// and Move Members there (as the server checks).
+  bool canModerateStage(CircleChannel channel) {
+    return channel.isStage &&
+        canInChannel(channel, CirclePermission.muteMembers) &&
+        canInChannel(channel, CirclePermission.moveMembers);
+  }
+
   /// The slowmode the current user waits out in [channel]: none with
   /// manage messages there.
   int slowmodeFor(CircleChannel channel) {
@@ -489,14 +497,20 @@ class CircleChannel {
 
   bool get isForum => kind == CircleChannelKind.forum;
 
-  bool get isVoice => kind == CircleChannelKind.voice;
+  /// Members connect to it to talk: a voice channel or a stage.
+  bool get isVoice =>
+      kind == CircleChannelKind.voice || kind == CircleChannelKind.stage;
+
+  /// A stage: speakers talk, everyone else listens.
+  bool get isStage => kind == CircleChannelKind.stage;
 }
 
-/// What a channel holds: a chat, a voice call or forum posts.
+/// What a channel holds: a chat, a voice call, forum posts or a stage.
 enum CircleChannelKind {
   text('text'),
   voice('voice'),
-  forum('forum');
+  forum('forum'),
+  stage('stage');
 
   const CircleChannelKind(this.value);
 

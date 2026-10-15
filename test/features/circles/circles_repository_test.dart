@@ -857,7 +857,8 @@ void main() {
     expect(legacy.topic, isNull);
     expect(legacy.kind, CircleChannelKind.text);
     expect(CircleChannelKind.fromJson('forum'), CircleChannelKind.forum);
-    expect(CircleChannelKind.fromJson('stage'), CircleChannelKind.text);
+    expect(CircleChannelKind.fromJson('stage'), CircleChannelKind.stage);
+    expect(CircleChannelKind.fromJson('later'), CircleChannelKind.text);
     expect(detail.canInChannel(readOnly, CirclePermission.viewChannel), isTrue);
     expect(
       detail.canInChannel(readOnly, CirclePermission.sendMessages),

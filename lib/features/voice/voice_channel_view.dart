@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_author.dart';
+import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -24,6 +25,7 @@ const voiceChatPanelWidth = 360.0;
 /// the call (video when they publish it, the shared screen larger) and the
 /// call controls; otherwise who is there and a Join button. The chat button
 /// opens the channel's own text chat, beside the call on wide screens.
+/// A stage shows its speakers above its audience instead ([StageView]).
 class VoiceChannelView extends ConsumerStatefulWidget {
   const VoiceChannelView({
     required this.circleId,
@@ -36,6 +38,8 @@ class VoiceChannelView extends ConsumerStatefulWidget {
     this.moderation,
     this.chatBuilder,
     this.initialChatOpen = false,
+    this.isStage = false,
+    this.stageModerator = false,
     super.key,
   });
 
@@ -59,6 +63,12 @@ class VoiceChannelView extends ConsumerStatefulWidget {
 
   /// Starts with the chat open beside the call (on wide screens).
   final bool initialChatOpen;
+
+  /// The channel is a stage.
+  final bool isStage;
+
+  /// The current user moderates the stage (Mute Members and Move Members).
+  final bool stageModerator;
 
   @override
   ConsumerState<VoiceChannelView> createState() => _VoiceChannelViewState();
@@ -108,7 +118,30 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
               0;
 
     final Widget body;
-    if (here && session.isConnected) {
+    if (widget.isStage && here && session.isConnected) {
+      body = StageView(
+        session: session,
+        circleId: widget.circleId,
+        channelId: channelId,
+        members: members,
+        moderator: widget.stageModerator,
+      );
+    } else if (widget.isStage && !here) {
+      body = StageLobby(
+        circleId: widget.circleId,
+        channelId: channelId,
+        members: members,
+        canConnect: widget.canConnect,
+        onJoin: () => joinVoiceChannel(
+          context,
+          ref,
+          circleId: widget.circleId,
+          channelId: channelId,
+          conversationId: widget.conversationId,
+          channelName: widget.channelName,
+        ),
+      );
+    } else if (here && session.isConnected) {
       body = VoiceCallGrid(
         session: session,
         moderation: widget.moderation,
@@ -156,7 +189,14 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
         if (here && session.isConnected)
           SizedBox(
             width: double.infinity,
-            child: VoiceCallControls(session: session),
+            child: widget.isStage
+                ? StageControls(
+                    session: session,
+                    circleId: widget.circleId,
+                    channelId: channelId,
+                    moderator: widget.stageModerator,
+                  )
+                : VoiceCallControls(session: session),
           ),
       ],
     );
@@ -196,7 +236,10 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                   ),
             title: Row(
               children: [
-                const Icon(Icons.volume_up_outlined, size: 20),
+                Icon(
+                  widget.isStage ? Icons.podcasts : Icons.volume_up_outlined,
+                  size: 20,
+                ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(

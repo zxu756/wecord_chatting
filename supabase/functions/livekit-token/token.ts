@@ -86,9 +86,19 @@ export interface LiveKitClaims {
 /// participant connected past it.
 export const TOKEN_TTL_SECONDS = 60 * 60;
 
+/// Whether someone may publish at all: everyone in voice channels and
+/// calls, only the speakers on a stage (the audience just listens).
+export function canPublishIn(access: {
+  kind?: string | null;
+  stageSpeaker?: boolean | null;
+}): boolean {
+  return access.kind !== "stage" || access.stageSpeaker === true;
+}
+
 /// Claims letting [identity] (the user id) join [room] (the channel id) as
 /// [name], valid from [nowSeconds] for an hour.
-/// [publishSources] limits what they may publish (see [publishSourcesFor]).
+/// [publishSources] limits what they may publish (see [publishSourcesFor]);
+/// [canPublish] false makes them a listener (a stage's audience).
 export function buildClaims(options: {
   apiKey: string;
   identity: string;
@@ -96,15 +106,17 @@ export function buildClaims(options: {
   room: string;
   nowSeconds: number;
   publishSources?: string[] | null;
+  canPublish?: boolean;
 }): LiveKitClaims {
+  const canPublish = options.canPublish ?? true;
   const video: VideoGrant = {
     room: options.room,
     roomJoin: true,
-    canPublish: true,
+    canPublish,
     canSubscribe: true,
-    canPublishData: true,
+    canPublishData: canPublish,
   };
-  if (options.publishSources) {
+  if (canPublish && options.publishSources) {
     video.canPublishSources = options.publishSources;
   }
   return {
@@ -169,11 +181,14 @@ export interface EnforcementState {
   in_channel: boolean;
   server_mute: boolean;
   server_deaf: boolean;
+  /// A stage channel, where only [stage_speaker]s publish.
+  stage?: boolean;
+  stage_speaker?: boolean;
 }
 
 /// The RoomService call that makes the room match [state]: remove a
 /// member who is no longer in the channel, otherwise set what they may
-/// publish. The body is Twirp JSON.
+/// publish (nothing for a stage's audience). The body is Twirp JSON.
 export function enforcementRequest(state: EnforcementState): {
   method: "RemoveParticipant" | "UpdateParticipant";
   body: Record<string, unknown>;
@@ -188,6 +203,10 @@ export function enforcementRequest(state: EnforcementState): {
     serverMute: state.server_mute,
     serverDeaf: state.server_deaf,
   });
+  const canPublish = canPublishIn({
+    kind: state.stage ? "stage" : "voice",
+    stageSpeaker: state.stage_speaker,
+  });
   return {
     method: "UpdateParticipant",
     body: {
@@ -195,8 +214,8 @@ export function enforcementRequest(state: EnforcementState): {
       identity: state.user_id,
       permission: {
         can_subscribe: true,
-        can_publish: true,
-        can_publish_data: true,
+        can_publish: canPublish,
+        can_publish_data: canPublish,
         // Empty allows every source.
         can_publish_sources: (sources ?? []).map((source) =>
           source.toUpperCase()

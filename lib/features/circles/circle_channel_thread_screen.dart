@@ -179,6 +179,8 @@ class _CircleChannelThreadScreenState
                   actions: actions,
                   moderation: VoiceModeration.forCircle(detail),
                   chatBuilder: (context) => voiceChannelChat(detail, channel!),
+                  isStage: channel.isStage,
+                  stageModerator: detail.canModerateStage(channel),
                 )
               : null) ??
           (detail != null && channel != null && channel.isForum

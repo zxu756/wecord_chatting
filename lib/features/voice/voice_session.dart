@@ -121,6 +121,10 @@ class VoiceSession {
     this.transmitting = false,
     this.serverMute = false,
     this.serverDeaf = false,
+    this.stage = false,
+    this.stageSpeaker = false,
+    this.stageInvited = false,
+    this.handRaised = false,
   });
 
   /// The circle and voice channel, for a voice channel; null in a call.
@@ -157,12 +161,28 @@ class VoiceSession {
   final bool serverMute;
   final bool serverDeaf;
 
+  /// The channel is a stage, where only speakers talk.
+  final bool stage;
+
+  /// On a stage: the current user is one of the speakers.
+  final bool stageSpeaker;
+
+  /// On a stage: a moderator invited the current user to speak.
+  final bool stageInvited;
+
+  /// On a stage: the current user raised their hand to speak.
+  final bool handRaised;
+
+  /// In a stage's audience, where the microphone stays off.
+  bool get stageListener => stage && !stageSpeaker;
+
   /// Whether the microphone should be sending now.
   bool get microphoneWanted =>
       !selfMute &&
       !selfDeaf &&
       !serverMute &&
       !serverDeaf &&
+      !stageListener &&
       (!pushToTalk || transmitting);
 
   /// Whether the others should be heard now.
@@ -186,6 +206,10 @@ class VoiceSession {
     bool? transmitting,
     bool? serverMute,
     bool? serverDeaf,
+    bool? stage,
+    bool? stageSpeaker,
+    bool? stageInvited,
+    bool? handRaised,
   }) {
     return VoiceSession(
       circleId: circleId,
@@ -204,6 +228,10 @@ class VoiceSession {
       transmitting: transmitting ?? this.transmitting,
       serverMute: serverMute ?? this.serverMute,
       serverDeaf: serverDeaf ?? this.serverDeaf,
+      stage: stage ?? this.stage,
+      stageSpeaker: stageSpeaker ?? this.stageSpeaker,
+      stageInvited: stageInvited ?? this.stageInvited,
+      handRaised: handRaised ?? this.handRaised,
     );
   }
 }
@@ -291,6 +319,8 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       state = state?.copyWith(
         serverMute: details.serverMute,
         serverDeaf: details.serverDeaf,
+        stage: details.stage,
+        stageSpeaker: details.stageSpeaker,
       );
       call = await _connect(details);
       if (attempt != _attempt) {
@@ -381,8 +411,12 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     return _connector.connect(
       url: details.url,
       token: details.token,
-      // Server-muted tokens can't publish the microphone.
-      microphoneEnabled: !details.serverMute && !details.serverDeaf,
+      // Server-muted tokens can't publish the microphone, and a stage's
+      // audience can't publish at all.
+      microphoneEnabled:
+          !details.serverMute &&
+          !details.serverDeaf &&
+          (!details.stage || details.stageSpeaker),
       audio: _settings.audioProcessing,
       userVolumes: _settings.userVolumes,
     );
@@ -410,7 +444,8 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     final local = _localParticipant(call);
     final current = state;
     final serverSilenced =
-        current != null && (current.serverMute || current.serverDeaf);
+        current != null &&
+        (current.serverMute || current.serverDeaf || current.stageListener);
     state = current?.copyWith(
       status: VoiceSessionStatus.connected,
       // Without a working microphone the user starts muted; server-muted,
@@ -493,6 +528,13 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       await _moveTo(own, current);
       return;
     }
+    if (current.stage &&
+        (own.stageSpeaker != current.stageSpeaker ||
+            own.stageInvited != current.stageInvited ||
+            own.handRaised != current.handRaised)) {
+      await _followStageRole(own, current);
+      return;
+    }
     if (own.serverMute == current.serverMute &&
         own.serverDeaf == current.serverDeaf) {
       return;
@@ -512,6 +554,60 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       );
     }
   }
+
+  /// Follows the current user's place on a stage: becoming a speaker
+  /// starts muted, and going back to the audience turns the microphone,
+  /// camera and screen off. Either way the voice server is asked to match,
+  /// so publishing is allowed or stopped without reconnecting.
+  Future<void> _followStageRole(OwnVoiceState own, VoiceSession current) async {
+    final promoted = own.stageSpeaker && !current.stageSpeaker;
+    final demoted = !own.stageSpeaker && current.stageSpeaker;
+    state = current.copyWith(
+      serverMute: own.serverMute,
+      serverDeaf: own.serverDeaf,
+      stageSpeaker: own.stageSpeaker,
+      stageInvited: own.stageInvited,
+      handRaised: own.handRaised,
+      selfMute: promoted ? true : null,
+      video: demoted ? false : null,
+      screen: demoted ? false : null,
+      transmitting: false,
+    );
+    final call = _call;
+    if (!promoted && !demoted) {
+      return;
+    }
+    final channelId = current.channelId;
+    final userId = call == null ? null : _localParticipant(call)?.userId;
+    if (channelId != null && userId != null) {
+      try {
+        await _repository.enforceVoiceState(
+          channelId: channelId,
+          userId: userId,
+        );
+      } catch (_) {
+        // A moderator's client asks too.
+      }
+    }
+    if (demoted && call != null) {
+      try {
+        if (current.video) {
+          await call.setCameraEnabled(false);
+        }
+        if (current.screen) {
+          await call.setScreenShareEnabled(false);
+        }
+      } catch (_) {
+        // The voice server stops them anyway.
+      }
+    }
+    await _applyMicrophone();
+    await _pushFlags();
+  }
+
+  /// Reloads the current user's own voice state now, after a stage action,
+  /// rather than waiting for its change event.
+  Future<void> syncOwnState() => _syncOwnState();
 
   /// Reconnects to the channel a moderator moved the current user to,
   /// keeping their own mute and deafen.
@@ -541,6 +637,10 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       if (attempt != _attempt) {
         return;
       }
+      state = state?.copyWith(
+        stage: details.stage,
+        stageSpeaker: details.stageSpeaker,
+      );
       call = await _connect(details);
       if (attempt != _attempt) {
         await call.disconnect();

@@ -72,4 +72,25 @@ const zhCirclesExtra = <String, String>{
   'Create circle': '创建圈子',
   'Could not create the circle. Try again.': '无法创建圈子，请重试。',
   'From {circle}': '来自 {circle}',
+  // Circle tags.
+  'Circle tag': '圈子标签',
+  'Members can show this tag next to their name everywhere. Leaving the circle removes it.':
+      '成员可以在自己的名字旁显示这个标签。离开圈子后标签会被移除。',
+  'Tag': '标签',
+  '2 to 4 characters': '2 到 4 个字符',
+  'Badge': '徽章',
+  'Save tag': '保存标签',
+  'Turn off tag': '关闭标签',
+  'A tag is 2 to 4 characters.': '标签为 2 到 4 个字符。',
+  'Use letters and digits only.': '只能使用字母和数字。',
+  'Circle tag saved.': '圈子标签已保存。',
+  'Circle tag removed.': '圈子标签已关闭。',
+  'Could not save the tag. Try again.': '无法保存标签，请重试。',
+  'Show the tag of one of your circles next to your name': '在你的名字旁显示一个圈子的标签',
+  'Could not change your tag. Try again.': '无法更改你的标签，请重试。',
+  'Only circles you are in that turned on a tag are listed. Leaving the circle removes it.':
+      '这里只列出你加入且开启了标签的圈子。离开圈子后标签会被移除。',
+  'Could not load your circles.': '无法加载你的圈子。',
+  'No tag': '不显示标签',
+  'None of your circles has a tag yet.': '你的圈子都还没有标签。',
 };

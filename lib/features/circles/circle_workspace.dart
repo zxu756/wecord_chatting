@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_channel_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
@@ -928,14 +929,21 @@ class _MemberRow extends ConsumerWidget {
               ),
             ],
           ),
-          title: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: switch (roleColor) {
-              final color? => TextStyle(color: circleRoleColor(color)),
-              null => null,
-            },
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: switch (roleColor) {
+                    final color? => TextStyle(color: circleRoleColor(color)),
+                    null => null,
+                  },
+                ),
+              ),
+              ProfileNameBadges(userId: profile.id),
+            ],
           ),
           subtitle: activeCustomStatus(profile.customStatus) == null
               ? null

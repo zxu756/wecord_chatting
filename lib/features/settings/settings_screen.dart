@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
@@ -182,6 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 minLines: 3,
                 maxLines: 5,
               ),
+              const CircleTagSettingTile(),
               if (_errorText != null) ...[
                 const SizedBox(height: 12),
                 Text(

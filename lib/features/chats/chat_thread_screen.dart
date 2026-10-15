@@ -33,6 +33,7 @@ import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -2936,6 +2937,7 @@ _MessageSender _senderFor(
         : tr('Unknown member'),
     avatarUrl: message.senderCircleAvatarUrl ?? profile?.avatarUrl,
     roleColor: message.senderRoleColor,
+    userId: message.senderId,
   );
 }
 
@@ -2945,10 +2947,15 @@ class _MessageSender {
     this.avatarUrl,
     this.roleColor,
     this.isBot = false,
+    this.userId,
   });
 
   final String name;
   final String? avatarUrl;
+
+  /// The member behind the name (not set for webhooks), whose circle tag
+  /// shows next to it.
+  final String? userId;
 
   /// A webhook, marked with a BOT tag.
   final bool isBot;
@@ -3311,6 +3318,8 @@ class _MessageBubble extends StatelessWidget {
                   const SizedBox(width: 6),
                   const MessageBotTag(),
                 ],
+                if (sender.userId case final userId?)
+                  ProfileNameBadges(userId: userId),
               ],
             ),
           ),

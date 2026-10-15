@@ -141,4 +141,44 @@ void main() {
       expect(build, contains('usage_count = t.usage_count + 1'));
     });
   });
+  group('circle tags', () {
+    final sql = migration('202610160029');
+
+    test('tags are short and badges come from a fixed set', () {
+      expect(sql, contains('char_length(tag) between 2 and 4'));
+      expect(sql, contains("'leaf', 'star', 'flame', 'heart', 'bolt',"));
+      expect(sql, contains('check ((tag is null) = (tag_badge is null))'));
+    });
+
+    test('only members show a tag, and leaving clears it', () {
+      final check = function(sql, 'check_display_circle_tag');
+      expect(check, contains('cm.user_id = new.id'));
+      expect(check, contains('c.tag is not null'));
+      expect(
+        sql,
+        contains(
+          'before insert or update of display_circle_tag_id on public.profiles',
+        ),
+      );
+      expect(sql, contains('after delete on public.circle_members'));
+      final clear = function(sql, 'clear_display_circle_tag_on_leave');
+      expect(clear, contains('p.display_circle_tag_id = old.circle_id'));
+    });
+
+    test(
+      'setting the tag needs manage_circle and turning it off clears choices',
+      () {
+        final set = function(sql, 'set_circle_tag');
+        expect(set, contains("'manage_circle'"));
+        expect(set, contains('set display_circle_tag_id = null'));
+        expect(set, contains("'circle_tag_update'"));
+      },
+    );
+
+    test('badge lookups are bounded', () {
+      final badges = function(sql, 'list_profile_badges');
+      expect(badges, contains('> 200'));
+      expect(badges, contains('c.tag is not null'));
+    });
+  });
 }

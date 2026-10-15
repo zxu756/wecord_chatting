@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -44,6 +45,13 @@ class CircleSettingsScreen extends ConsumerWidget {
                 key: ValueKey('circle-template-$circleId'),
                 circleId: circleId,
               ),
+            if (detail.canManageCircle) ...[
+              const Divider(height: 32),
+              CircleTagSection(
+                key: ValueKey('circle-tag-$circleId'),
+                circleId: circleId,
+              ),
+            ],
           ],
         ),
       ),

@@ -251,9 +251,21 @@ void main() {
       await store.putPreview('client-1', Uint8List.fromList([9, 9]));
       expect(await store.readPreview('client-1'), [9, 9]);
       expect(await store.readPreview('missing'), isNull);
+      expect(await store.hasOriginal('client-1'), isFalse);
+      await store.putOriginal('client-1', Stream.value([8, 8, 8]));
+      expect(await store.hasOriginal('client-1'), isTrue);
+      expect(
+        <int>[
+          await for (final chunk in store.openReadOriginal('client-1'))
+            ...chunk,
+        ],
+        [8, 8, 8],
+      );
+      // The original is not a file of its own.
       expect(await store.clientIds(), {'client-1'});
 
       await store.delete('client-1');
+      expect(await store.hasOriginal('client-1'), isFalse);
       expect(await store.length('client-1'), isNull);
       expect(await store.readPreview('client-1'), isNull);
       expect(await store.clientIds(), isEmpty);

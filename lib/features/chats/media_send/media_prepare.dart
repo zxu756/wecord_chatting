@@ -45,6 +45,10 @@ Future<MediaToQueue> _prepare(
         height: prepared.height > 0 ? prepared.height : draft.height,
         blurhash: prepared.blurhash,
         preview: draft.thumbnail ?? await makeThumbnail(prepared.bytes),
+        original: () => Stream.value(bytes),
+        originalFileName: draft.name,
+        originalMimeType: draft.mimeType,
+        originalQuality: original,
       );
     case DraftKind.video:
       final poster = draft.thumbnail;
@@ -57,6 +61,7 @@ Future<MediaToQueue> _prepare(
         height: draft.height,
         blurhash: poster == null ? null : await photoBlurHash(poster),
         preview: poster,
+        originalQuality: original,
       );
     case DraftKind.file:
       return MediaToQueue(
@@ -64,6 +69,7 @@ Future<MediaToQueue> _prepare(
         fileName: draft.name,
         mimeType: draft.mimeType,
         data: draft.file.openRead,
+        originalQuality: original,
       );
   }
 }

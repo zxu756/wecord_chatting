@@ -31,6 +31,10 @@ class OutboxMedia {
     this.groupId,
     this.groupIndex = 0,
     this.hasPreview = false,
+    this.hasOriginal = false,
+    this.originalName,
+    this.originalMimeType,
+    this.originalQuality = false,
   });
 
   factory OutboxMedia.fromJson(Map<String, dynamic> json) {
@@ -45,6 +49,10 @@ class OutboxMedia {
       groupId: json['group_id'] as String?,
       groupIndex: (json['group_index'] as num?)?.toInt() ?? 0,
       hasPreview: json['has_preview'] == true,
+      hasOriginal: json['has_original'] == true,
+      originalName: json['original_name'] as String?,
+      originalMimeType: json['original_mime_type'] as String?,
+      originalQuality: json['original_quality'] == true,
     );
   }
 
@@ -66,6 +74,18 @@ class OutboxMedia {
 
   /// A small picture was kept in the store for the bubble.
   final bool hasPreview;
+
+  /// The file as the sender chose it was kept in the store too (a picture
+  /// is scaled and cleaned before upload), until the attachment is sent or
+  /// dropped, so "Edit and resend" can give it back.
+  final bool hasOriginal;
+
+  /// The chosen file's name and type, when they differ from the sent ones.
+  final String? originalName;
+  final String? originalMimeType;
+
+  /// The sender had "Original quality" on.
+  final bool originalQuality;
 
   /// The storage bucket: pictures and everything else live apart.
   String get bucket =>
@@ -113,6 +133,10 @@ class OutboxMedia {
       'group_id': groupId,
       'group_index': groupIndex,
       'has_preview': hasPreview,
+      if (hasOriginal) 'has_original': true,
+      'original_name': ?originalName,
+      'original_mime_type': ?originalMimeType,
+      if (originalQuality) 'original_quality': true,
     };
   }
 }

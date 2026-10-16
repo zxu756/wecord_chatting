@@ -33,14 +33,41 @@ class FilePendingMediaStore implements PendingMediaStore {
     return _resolved = directory;
   }
 
-  Future<File> _file(String clientId, {bool preview = false}) async {
+  Future<File> _file(
+    String clientId, {
+    bool preview = false,
+    bool original = false,
+  }) async {
     final safe = clientId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-    return File('${(await _dir()).path}/$safe${preview ? '.preview' : ''}');
+    final suffix = preview
+        ? '.preview'
+        : original
+        ? '.original'
+        : '';
+    return File('${(await _dir()).path}/$safe$suffix');
   }
 
   @override
   Future<int> put(String clientId, Stream<List<int>> data) async {
-    final file = await _file(clientId);
+    return _write(await _file(clientId), data);
+  }
+
+  @override
+  Future<void> putOriginal(String clientId, Stream<List<int>> data) async {
+    await _write(await _file(clientId, original: true), data);
+  }
+
+  @override
+  Stream<List<int>> openReadOriginal(String clientId) async* {
+    yield* (await _file(clientId, original: true)).openRead();
+  }
+
+  @override
+  Future<bool> hasOriginal(String clientId) async {
+    return (await _file(clientId, original: true)).exists();
+  }
+
+  Future<int> _write(File file, Stream<List<int>> data) async {
     // Written beside it and renamed, so a crash never leaves half a file
     // that looks whole.
     final partial = File('${file.path}.part');
@@ -86,6 +113,7 @@ class FilePendingMediaStore implements PendingMediaStore {
     for (final file in [
       await _file(clientId),
       await _file(clientId, preview: true),
+      await _file(clientId, original: true),
     ]) {
       try {
         if (await file.exists()) {
@@ -104,6 +132,7 @@ class FilePendingMediaStore implements PendingMediaStore {
       await for (final entity in directory.list())
         if (entity is File &&
             !entity.path.endsWith('.preview') &&
+            !entity.path.endsWith('.original') &&
             !entity.path.endsWith('.part'))
           entity.uri.pathSegments.last,
     };

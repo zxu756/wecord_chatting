@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart' show XFile;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_controller.dart';
@@ -67,6 +68,10 @@ class MediaToQueue {
     this.height,
     this.blurhash,
     this.preview,
+    this.original,
+    this.originalFileName,
+    this.originalMimeType,
+    this.originalQuality = false,
   });
 
   final OutboxMediaKind kind;
@@ -79,6 +84,16 @@ class MediaToQueue {
 
   /// A small picture for the bubble while it uploads.
   final Uint8List? preview;
+
+  /// The file as the sender chose it, when [data] is a processed copy of it
+  /// (a scaled picture); kept until the attachment is sent or dropped so
+  /// "Edit and resend" can put it back.
+  final Stream<List<int>> Function()? original;
+  final String? originalFileName;
+  final String? originalMimeType;
+
+  /// The sender had "Original quality" on.
+  final bool originalQuality;
 }
 
 class OutboxNotifier extends Notifier<List<OutboxEntry>> {
@@ -299,6 +314,10 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
         if (preview != null) {
           await store.putPreview(clientId, preview);
         }
+        final original = item.original;
+        if (original != null) {
+          await store.putOriginal(clientId, original());
+        }
         entries.add(
           OutboxEntry(
             clientId: clientId,
@@ -319,6 +338,10 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
               groupId: groupId,
               groupIndex: index,
               hasPreview: preview != null,
+              hasOriginal: original != null,
+              originalName: original == null ? null : item.originalFileName,
+              originalMimeType: original == null ? null : item.originalMimeType,
+              originalQuality: item.originalQuality,
             ),
           ),
         );
@@ -402,21 +425,45 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
           other,
     ]..sort((a, b) => a.media!.groupIndex.compareTo(b.media!.groupIndex));
     final files = <XFile>[];
+    final posters = <XFile, Uint8List>{};
     var caption = '';
+    var original = false;
+    // Read everything before discarding: dropping an entry deletes its
+    // files.
     for (final item in failed) {
       final media = item.media!;
       try {
+        // The file as it was chosen (a picture is scaled before upload),
+        // else the one that was to be sent.
+        final chosen =
+            media.hasOriginal && await store.hasOriginal(item.clientId);
         final builder = BytesBuilder(copy: false);
-        await for (final chunk in store.openRead(item.clientId)) {
+        await for (final chunk
+            in chosen
+                ? store.openReadOriginal(item.clientId)
+                : store.openRead(item.clientId)) {
           builder.add(chunk);
         }
-        files.add(
-          XFile.fromData(
-            builder.takeBytes(),
-            name: media.fileName,
-            mimeType: media.mimeType,
-          ),
+        final name = chosen
+            ? media.originalName ?? media.fileName
+            : media.fileName;
+        final file = XFile.fromData(
+          builder.takeBytes(),
+          name: name,
+          // dart:io derives the name from the path.
+          path: kIsWeb ? null : name,
+          mimeType: chosen
+              ? media.originalMimeType ?? media.mimeType
+              : media.mimeType,
         );
+        files.add(file);
+        if (media.kind == OutboxMediaKind.video) {
+          final poster = await store.readPreview(item.clientId);
+          if (poster != null) {
+            posters[file] = poster;
+          }
+        }
+        original = original || media.originalQuality;
         if (caption.isEmpty) {
           caption = item.body;
         }
@@ -428,7 +475,12 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     if (files.isNotEmpty) {
       await ref
           .read(mediaTrayProvider(entry.conversationId).notifier)
-          .restore(files, caption: caption);
+          .restore(
+            files,
+            caption: caption,
+            posters: posters,
+            original: original,
+          );
     }
   }
 

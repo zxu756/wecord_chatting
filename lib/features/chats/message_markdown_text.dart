@@ -5,7 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:wecord/features/browser/in_app_browser_screen.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -211,6 +213,39 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
               semanticLabel: ':${emoji.name}:',
               fallback: Text(':$name:'),
             ),
+          ),
+        );
+      case MarkdownTimeToken(:final token):
+        // Flows with the sentence like a mention: the time in the reader's
+        // zone with a hint, and a tap opens "Add to calendar".
+        final now = ref.watch(timeTokenClockProvider).value ?? DateTime.now();
+        final label = timeTokenLabel(
+          token,
+          now: now,
+          use24Hour: MediaQuery.alwaysUse24HourFormatOf(context),
+        );
+        final recognizer = TapGestureRecognizer()
+          ..onTap = () => showTimeTokenSheet(
+            context,
+            token: token,
+            eventTitle: calendarTitleFromMessage(widget.body),
+          );
+        _recognizers.add(recognizer);
+        final hint = label.hint == null ? '' : ' · ${label.hint}';
+        return TextSpan(
+          text: '\u00A0${label.text}$hint\u00A0',
+          recognizer: recognizer,
+          mouseCursor: SystemMouseCursors.click,
+          semanticsLabel: label.hint == null
+              ? tr('Time: {time}', {'time': label.text})
+              : tr('Time: {time}, {hint}', {
+                  'time': label.text,
+                  'hint': label.hint,
+                }),
+          style: TextStyle(
+            color: palette.accentText,
+            backgroundColor: palette.accentSoft,
+            fontWeight: FontWeight.w700,
           ),
         );
       case MarkdownMention(:final text, :final mention):

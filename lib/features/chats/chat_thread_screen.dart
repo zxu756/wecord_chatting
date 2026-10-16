@@ -55,6 +55,7 @@ import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
+import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
@@ -1589,6 +1590,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   child: ChatTypingIndicator(name: typingName),
                 ),
               ),
+            if (canSend)
+              TimePhraseSuggestion(
+                controller: _composerController,
+                horizontalPadding: desktop ? 24 : 16,
+                onConverted: () =>
+                    _handleComposerChanged(_composerController.text),
+              ),
             if (!canSend)
               _ReadOnlyComposerNotice(
                 timedOutUntil: widget.timedOutUntil,
@@ -1642,6 +1650,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    onInsertTime: _insertTime,
                     onPickSticker: _pickAndSendSticker,
                     onPickGif: _pickAndSendGif,
                     onInsertEmoji: _pickAndInsertEmoji,
@@ -3052,6 +3061,33 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         offset: selection.start + emoji.length,
       ),
     );
+    _handleComposerChanged(text);
+  }
+
+  /// Picks a date and time and puts it in the composer at the cursor as a
+  /// time token that every reader sees in their own time zone.
+  Future<void> _insertTime() async {
+    final token = await showInsertTimeSheet(context);
+    if (token == null || !mounted) {
+      return;
+    }
+    final markup = token.markup;
+    final value = _composerController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final text = value.text.replaceRange(
+      selection.start,
+      selection.end,
+      markup,
+    );
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: selection.start + markup.length,
+      ),
+    );
+    _composerFocus.requestFocus();
     _handleComposerChanged(text);
   }
 
@@ -5845,6 +5881,7 @@ class _Composer extends StatelessWidget {
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
+    required this.onInsertTime,
     required this.onPickSticker,
     required this.onPickGif,
     required this.onInsertEmoji,
@@ -5906,6 +5943,8 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
+  final Future<void> Function() onInsertTime;
+
   final Future<void> Function() onPickSticker;
   final Future<void> Function() onPickGif;
   final Future<void> Function() onInsertEmoji;
@@ -5972,6 +6011,11 @@ class _Composer extends StatelessWidget {
                     icon: Icons.poll_outlined,
                     label: tr('Create poll'),
                     onSelected: () => unawaited(onCreatePoll()),
+                  ),
+                  GlassMenuEntry(
+                    icon: Icons.schedule_rounded,
+                    label: tr('Insert time'),
+                    onSelected: () => unawaited(onInsertTime()),
                   ),
                   GlassMenuEntry(
                     icon: Icons.sticky_note_2_outlined,

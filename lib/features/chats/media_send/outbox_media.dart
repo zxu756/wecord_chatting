@@ -31,6 +31,7 @@ class OutboxMedia {
     this.groupId,
     this.groupIndex = 0,
     this.hasPreview = false,
+    this.viewOnce = false,
   });
 
   factory OutboxMedia.fromJson(Map<String, dynamic> json) {
@@ -45,6 +46,7 @@ class OutboxMedia {
       groupId: json['group_id'] as String?,
       groupIndex: (json['group_index'] as num?)?.toInt() ?? 0,
       hasPreview: json['has_preview'] == true,
+      viewOnce: json['view_once'] == true,
     );
   }
 
@@ -67,6 +69,10 @@ class OutboxMedia {
   /// A small picture was kept in the store for the bubble.
   final bool hasPreview;
 
+  /// The recipients can open it once. It has no blurhash and no preview
+  /// picture, so nothing of it shows before it is opened.
+  final bool viewOnce;
+
   /// The storage bucket: pictures and everything else live apart.
   String get bucket =>
       kind == OutboxMediaKind.image ? 'chat-images' : 'chat-files';
@@ -78,6 +84,16 @@ class OutboxMedia {
 
   /// The attachment JSON the stored message carries.
   Map<String, dynamic> attachmentJson(String path) {
+    final json = _attachmentJson(path);
+    if (viewOnce) {
+      json
+        ..remove('blurhash')
+        ..['view_once'] = true;
+    }
+    return json;
+  }
+
+  Map<String, dynamic> _attachmentJson(String path) {
     return switch (kind) {
       OutboxMediaKind.image => ImageAttachment(
         bucket: bucket,
@@ -113,6 +129,7 @@ class OutboxMedia {
       'group_id': groupId,
       'group_index': groupIndex,
       'has_preview': hasPreview,
+      if (viewOnce) 'view_once': true,
     };
   }
 }

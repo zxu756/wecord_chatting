@@ -12,6 +12,7 @@ class MediaTrayState {
     this.items = const [],
     this.caption = '',
     this.original = false,
+    this.viewOnce = false,
     this.loading = 0,
     this.leftOut = 0,
     this.preparing,
@@ -22,6 +23,9 @@ class MediaTrayState {
 
   /// "Original quality": photos are sent without scaling or re-compression.
   final bool original;
+
+  /// Send each photo or video to be opened once by whoever receives it.
+  final bool viewOnce;
 
   /// Files being looked at (the tray shows placeholders for them).
   final int loading;
@@ -41,6 +45,13 @@ class MediaTrayState {
 
   bool get hasImages => items.any((item) => item.kind == DraftKind.image);
 
+  /// Only photos and videos can be view-once, not files.
+  bool get canViewOnce =>
+      items.isNotEmpty && items.every((item) => item.kind != DraftKind.file);
+
+  /// Whether the next send is view-once (the switch is on and applies).
+  bool get sendsViewOnce => viewOnce && canViewOnce;
+
   /// Items over the 50 MB limit; sending waits until they are removed.
   List<DraftAttachment> get tooBig => [
     for (final item in items)
@@ -59,6 +70,7 @@ class MediaTrayState {
     List<DraftAttachment>? items,
     String? caption,
     bool? original,
+    bool? viewOnce,
     int? loading,
     int? leftOut,
     Object? preparing = _keep,
@@ -67,6 +79,7 @@ class MediaTrayState {
       items: items ?? this.items,
       caption: caption ?? this.caption,
       original: original ?? this.original,
+      viewOnce: viewOnce ?? this.viewOnce,
       loading: loading ?? this.loading,
       leftOut: leftOut ?? this.leftOut,
       preparing: identical(preparing, _keep)
@@ -153,6 +166,10 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     state = state.copyWith(original: value);
   }
 
+  void setViewOnce(bool value) {
+    state = state.copyWith(viewOnce: value);
+  }
+
   void setPreparing((int, int)? progress) {
     state = state.copyWith(preparing: progress);
   }
@@ -164,7 +181,7 @@ class MediaTrayController extends Notifier<MediaTrayState> {
   }
 
   /// Empties the tray (after sending, or when the reader closes it). The
-  /// quality switch stays as it was.
+  /// quality switch stays as it was; view-once never carries over.
   void clear() {
     state = MediaTrayState(original: state.original);
   }

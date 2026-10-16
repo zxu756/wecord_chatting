@@ -41,6 +41,12 @@ String messageSpokenContent(ChatMessage message, {required String senderName}) {
   if (message.recalledAt != null) {
     return message.deletedLabel;
   }
+  if (message.isViewOnce) {
+    // Not the file's name, which would give the picture away.
+    return message.type == MessageType.image
+        ? tr('View-once photo')
+        : tr('View-once video');
+  }
   final body = message.body.trim();
   final text = switch (message.type) {
     MessageType.text when gifUrlIn(body) != null => tr('GIF'),

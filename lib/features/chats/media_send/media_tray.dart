@@ -20,6 +20,7 @@ class MediaTray extends ConsumerStatefulWidget {
     required this.onAddMore,
     this.desktop = false,
     this.sendEnabled = true,
+    this.allowViewOnce = false,
     super.key,
   });
 
@@ -34,6 +35,9 @@ class MediaTray extends ConsumerStatefulWidget {
 
   /// False while something else keeps the reader from sending (slowmode).
   final bool sendEnabled;
+
+  /// Offers "View once" for photos and videos (direct chats and groups).
+  final bool allowViewOnce;
 
   @override
   ConsumerState<MediaTray> createState() => _MediaTrayState();
@@ -222,6 +226,13 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
               ],
             ),
           ),
+          if (widget.allowViewOnce && state.canViewOnce) ...[
+            const SizedBox(height: 8),
+            _ViewOnceRow(
+              value: state.viewOnce,
+              onChanged: state.isPreparing ? null : _controller.setViewOnce,
+            ),
+          ],
           if (state.tooBig.isNotEmpty) ...[
             const SizedBox(height: 8),
             _Notice(
@@ -260,7 +271,7 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
                   child: TextField(
                     key: const ValueKey('media-tray-caption'),
                     controller: _caption,
-                    enabled: !state.isPreparing,
+                    enabled: !state.isPreparing && !state.sendsViewOnce,
                     minLines: 1,
                     maxLines: 4,
                     textInputAction: TextInputAction.send,
@@ -281,7 +292,9 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
                       focusedBorder: InputBorder.none,
                       filled: false,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      hintText: tr('Add a caption…'),
+                      hintText: state.sendsViewOnce
+                          ? tr('No caption on view-once media')
+                          : tr('Add a caption…'),
                       hintStyle: TextStyle(color: c.subtle),
                     ),
                   ),
@@ -559,6 +572,66 @@ class _Notice extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The "View once" switch under the tray's thumbnails, with what it means
+/// (and does not) while it is on.
+class _ViewOnceRow extends StatelessWidget {
+  const _ViewOnceRow({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.timelapse_rounded,
+            size: 18,
+            color: value ? c.accentText : c.muted,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('View once'),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: c.ink,
+                ),
+              ),
+              Text(
+                value
+                    ? tr(
+                        'Each person can open it one time. Screenshots and screen recordings can\'t be blocked.',
+                      )
+                    : tr('Let people open each photo or video one time.'),
+                key: const ValueKey('media-tray-view-once-note'),
+                style: TextStyle(fontSize: 11.5, height: 1.3, color: c.muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        WeCordSwitch(
+          key: const ValueKey('media-tray-view-once'),
+          compact: true,
+          semanticLabel: tr('View once'),
+          value: value,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

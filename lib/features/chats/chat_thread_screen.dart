@@ -56,6 +56,7 @@ import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
+import 'package:wecord/features/chats/view_once.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
@@ -1711,6 +1712,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       conversationId: widget.conversationId,
                       desktop: desktop,
                       sendEnabled: slowmodeRemaining <= 0,
+                      allowViewOnce: isDirectOrGroup,
                       onSend: _sendTray,
                       onAddMore: _showAddMoreMenu,
                     ),
@@ -2898,6 +2900,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         replyPreview: replyingTo == null
             ? null
             : _replyPreviewForMessage(replyingTo),
+        viewOnce: tray.sendsViewOnce,
       );
       if (!mounted) {
         return;
@@ -4676,7 +4679,7 @@ class _MessageBubble extends StatelessWidget {
             message.interaction == null &&
             firstLinkInMarkdown(message.body, mentions: message.mentions) ==
                 null,
-      MessageType.image => message.album == null,
+      MessageType.image => message.album == null && !message.isViewOnce,
       MessageType.system || MessageType.sticker => true,
     };
   }
@@ -4750,6 +4753,7 @@ class _MessageBubble extends StatelessWidget {
   /// its bubble.
   bool get _mediaOnly {
     if (_isRecalled ||
+        message.isViewOnce ||
         message.replyPreview != null ||
         message.forwardPreview != null ||
         message.crosspost != null ||
@@ -5239,7 +5243,10 @@ class _MessageBubble extends StatelessWidget {
 
   /// What can be done with this message, in menu order.
   List<MessageAction> _actions(BuildContext context) {
-    final imageAttachment = _isRecalled ? null : message.imageAttachment;
+    // View-once media is neither previewed nor forwarded.
+    final imageAttachment = _isRecalled || message.isViewOnce
+        ? null
+        : message.imageAttachment;
     return [
       if (canCompose)
         MessageAction(
@@ -5260,7 +5267,8 @@ class _MessageBubble extends StatelessWidget {
       // forwarded; stickers belong to circles the recipients may not be
       // in.
       if (message.type != MessageType.poll &&
-          message.type != MessageType.sticker)
+          message.type != MessageType.sticker &&
+          !message.isViewOnce)
         MessageAction(
           slot: MessageActionSlot.forward,
           icon: Icons.shortcut_rounded,
@@ -5565,7 +5573,11 @@ class _MessageContent extends StatelessWidget {
       ],
     ];
 
-    if (message.album != null || MessageMediaGroup.isTile(message)) {
+    if (message.isViewOnce) {
+      content.add(
+        ViewOnceMessageContent(message: message, textColor: textColor),
+      );
+    } else if (message.album != null || MessageMediaGroup.isTile(message)) {
       content.add(
         MessageMediaGroup(
           messages: message.album ?? [message],

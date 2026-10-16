@@ -255,25 +255,28 @@ class ChatThreadHeader extends StatelessWidget {
               const SizedBox(width: 12),
             ],
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: c.ink,
+              child: _topicButton(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: c.ink,
+                      ),
                     ),
-                  ),
-                  DefaultTextStyle.merge(
-                    style: TextStyle(fontSize: 12, color: c.muted),
-                    child: subtitle,
-                  ),
-                ],
+                    DefaultTextStyle.merge(
+                      style: TextStyle(fontSize: 12, color: c.muted),
+                      child: subtitle,
+                    ),
+                  ],
+                ),
+                alignStart: true,
               ),
             ),
           ],

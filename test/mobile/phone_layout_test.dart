@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -339,7 +340,7 @@ void main() {
       await reveal(tester, image);
       await tester.tap(image.first);
       await settle(tester);
-      expect(find.text('Image preview'), findsOneWidget);
+      expect(find.byType(FilePreviewScreen), findsOneWidget);
       await popTopRoute(tester);
 
       await longPressMessage(tester, 'Forwarding');

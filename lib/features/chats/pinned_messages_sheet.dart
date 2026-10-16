@@ -5,11 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
+import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final pinnedMessagesProvider = FutureProvider.autoDispose
     .family<List<PinnedMessage>, String>((ref, conversationId) {
@@ -165,13 +168,34 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
         ],
       ),
-      trailing: canManagePins
-          ? IconButton(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (PreviewFile.fromMessage(item.message, senderName: authorName)
+              case final file?)
+            WeCordIconButton(
+              key: ValueKey('pinned-preview-${item.message.id}'),
+              icon: Icons.visibility_outlined,
+              tooltip: tr('Preview'),
+              variant: WeCordButtonVariant.ghost,
+              size: 36,
+              onPressed: () => unawaited(
+                openFilePreview(
+                  context,
+                  file: file,
+                  gallery: [file],
+                  conversationId: item.message.conversationId,
+                ),
+              ),
+            ),
+          if (canManagePins)
+            IconButton(
               tooltip: tr('Unpin'),
               icon: const Icon(Icons.close),
               onPressed: onUnpin,
-            )
-          : null,
+            ),
+        ],
+      ),
       onTap: onOpen,
     );
   }
@@ -184,7 +208,7 @@ String pinnedMessagePreview(ChatMessage message) {
       body.isEmpty ? tr('Message') : plainTextFromMarkdown(body),
     MessageType.system => body.isEmpty ? tr('Message') : body,
     MessageType.image => tr('Image'),
-    MessageType.file => tr('File'),
+    MessageType.file => message.fileAttachment?.name ?? tr('File'),
     MessageType.voice => tr('Voice message'),
     MessageType.poll => pollPreviewText(body),
     MessageType.sticker => stickerPreviewText(body),

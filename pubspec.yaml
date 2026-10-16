@@ -17,7 +17,7 @@ dependencies:
   go_router: ^14.8.1
   supabase_flutter: ^2.18.3
   image_picker: ^1.2.4
-  flutter_local_notifications: ^21.0.0
+  flutter_local_notifications: ^22.3.2
   shared_preferences: ^2.5.6
   web: ^1.1.1
   record: ^7.1.2

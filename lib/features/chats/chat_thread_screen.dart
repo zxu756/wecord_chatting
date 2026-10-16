@@ -1489,7 +1489,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 builder: (context, slowmodeRemaining) => _Composer(
                   desktop: desktop,
                   bottomGap: composerBottomGap,
-                  hint: tr('Message'),
+                  hint: composerHint(conversationType, title),
                   slowmodeSeconds: slowmodeSeconds,
                   slowmodeRemainingSeconds: slowmodeRemaining,
                   controller: _composerController,
@@ -3528,6 +3528,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       conversationId: widget.conversationId,
     );
   }
+}
+
+/// The composer's placeholder: "Message #general" in a channel, "Message
+/// @Ada" in a direct chat and "Message Weekend crew" in a group or thread;
+/// plain "Message" while the name is unknown.
+String composerHint(ConversationType? type, String title) {
+  var name = title.trim();
+  if (type == ConversationType.channel) {
+    // Channel routes pass "# general".
+    name = name.replaceFirst(RegExp(r'^#\s*'), '');
+  }
+  if (name.isEmpty || name == tr('Conversation')) {
+    return tr('Message');
+  }
+  return switch (type) {
+    ConversationType.channel => tr('Message #{name}', {'name': name}),
+    ConversationType.direct => tr('Message @{name}', {'name': name}),
+    _ => tr('Message {name}', {'name': name}),
+  };
 }
 
 /// "in #channel" (or "in Group") under a thread's title.
@@ -5617,6 +5636,7 @@ class _Composer extends StatelessWidget {
               ),
               decoration: InputDecoration(
                 hintText: hint,
+                hintMaxLines: 1,
                 hintStyle: TextStyle(
                   fontSize: desktop ? 15 : 16,
                   color: c.subtle,

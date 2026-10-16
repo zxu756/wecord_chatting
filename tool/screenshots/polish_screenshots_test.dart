@@ -202,4 +202,37 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('phone-new-group')));
     }
   });
+
+  // 2. Composer hints.
+  screen('composer-direct', (tester, world, desktop) async {
+    await openThread(tester, world);
+  });
+
+  screen('composer-channel', (tester, world, desktop) async {
+    world.chats.messages = richMessages(withThread: true);
+    if (desktop) {
+      await world.open(tester, '/circles/circle-1');
+    } else {
+      await world.open(
+        tester,
+        '/circles/circle-1/channels/conv-general',
+        extra: const ChatThreadRouteExtra(
+          title: '# general',
+          type: ConversationType.channel,
+          circleId: 'circle-1',
+        ),
+      );
+    }
+  });
+
+  screen('composer-group', (tester, world, desktop) async {
+    await openThread(
+      tester,
+      world,
+      id: 'group-1',
+      title: groupDetail.title,
+      type: ConversationType.group,
+    );
+  }, desktop: false);
+  // MARKER: more screens
 }

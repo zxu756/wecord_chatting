@@ -4,12 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:wecord/features/voice/ai_noise_filter.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_volume.dart';
 
 /// Connects to LiveKit rooms.
 class LiveKitVoiceCallConnector implements VoiceCallConnector {
-  const LiveKitVoiceCallConnector();
+  /// [noiseBackend] makes the AI noise filter; tests swap in a fake.
+  const LiveKitVoiceCallConnector({this.noiseBackend = openKrispBackend});
+
+  final AiNoiseBackendFactory noiseBackend;
+
+  @override
+  Future<bool> aiNoiseSupported() => krispSupportedHere();
 
   @override
   Future<VoiceCall> connect({
@@ -19,17 +26,26 @@ class LiveKitVoiceCallConnector implements VoiceCallConnector {
     VoiceAudioProcessing audio = const VoiceAudioProcessing(),
     Map<String, double> userVolumes = const {},
   }) async {
+    // Null when the device, browser or LiveKit project can't run it: the
+    // call then uses the standard noise suppression, as before.
+    final filter = await AiNoiseFilter.open(
+      noiseBackend,
+      url: url,
+      token: token,
+    );
     final room = lk.Room(
       roomOptions: lk.RoomOptions(
         adaptiveStream: true,
         dynacast: true,
-        defaultAudioCaptureOptions: _captureOptions(
+        defaultAudioCaptureOptions: liveKitCaptureOptions(
           const lk.AudioCaptureOptions(),
           audio,
+          filter: filter,
         ),
       ),
     );
-    final call = LiveKitVoiceCall._(room).._volumes = Map.of(userVolumes);
+    final call = LiveKitVoiceCall._(room, filter, audio)
+      .._volumes = Map.of(userVolumes);
     try {
       await room.connect(url, token);
     } catch (_) {
@@ -47,12 +63,28 @@ class LiveKitVoiceCallConnector implements VoiceCallConnector {
   }
 }
 
-lk.AudioCaptureOptions _captureOptions(
+/// The microphone options for [audio].
+///
+/// With an AI noise [filter] that still works it is attached as the audio
+/// processor and the "Noise suppression" setting switches it (see
+/// [AiNoiseFilter.setEnabled]). WebRTC's own noise suppression is then
+/// turned off on iOS and macOS, so the voice is not processed twice. In
+/// browsers the filter switches it off itself once it is running, and
+/// leaving it on until then means a browser where the filter doesn't start
+/// still has noise suppression. Apple's voice isolation follows the
+/// setting either way, as it is a choice the user makes for the system.
+/// Without a filter, or once it has failed, the standard noise suppression
+/// applies as it always did.
+lk.AudioCaptureOptions liveKitCaptureOptions(
   lk.AudioCaptureOptions options,
-  VoiceAudioProcessing audio,
-) {
+  VoiceAudioProcessing audio, {
+  AiNoiseFilter? filter,
+  bool web = kIsWeb,
+}) {
+  final ai = filter != null && filter.working;
   return options.copyWith(
-    noiseSuppression: audio.noiseSuppression,
+    processor: filter,
+    noiseSuppression: audio.noiseSuppression && (web || !ai),
     voiceIsolation: audio.noiseSuppression,
     echoCancellation: audio.echoCancellation,
     autoGainControl: audio.autoGainControl,
@@ -75,13 +107,19 @@ Future<VoiceScreenSource?> pickLiveKitScreenSource(BuildContext context) async {
 }
 
 class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
-  LiveKitVoiceCall._(this._room) {
+  LiveKitVoiceCall._(this._room, this._filter, this._audio) {
     _listener = _room.createListener();
     _listener.listen(_onEvent);
     _room.addListener(_changed);
+    _filter?.addListener(_filterChanged);
+    unawaited(_filter?.setEnabled(_audio.noiseSuppression));
   }
 
   final lk.Room _room;
+  final AiNoiseFilter? _filter;
+  var _audio = const VoiceAudioProcessing();
+  var _filterFallbackDone = false;
+  Timer? _filterFallback;
   late final lk.EventsListener<lk.RoomEvent> _listener;
   final _disconnected = Completer<void>();
   var _closing = false;
@@ -105,10 +143,42 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
         if (volume != null) {
           unawaited(_applyVolume(track, volume));
         }
+      case lk.LocalTrackPublishedEvent(:final publication)
+          when publication.kind == lk.TrackType.AUDIO:
+        if (_filter?.working == false) {
+          unawaited(_fallBackToStandardNoise());
+        }
       default:
         break;
     }
     _changed();
+  }
+
+  /// The AI filter broke. The microphone is restarted without it shortly,
+  /// as it is often in the middle of starting when this happens.
+  void _filterChanged() {
+    _filterFallback?.cancel();
+    _filterFallback = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_fallBackToStandardNoise());
+    });
+    _changed();
+  }
+
+  /// Puts WebRTC's own noise suppression back on the microphone. Waits for
+  /// the microphone to exist if it doesn't yet.
+  Future<void> _fallBackToStandardNoise() async {
+    if (_closed || _filterFallbackDone || _room.localParticipant == null) {
+      return;
+    }
+    if (_room.localParticipant!.audioTrackPublications.isEmpty) {
+      return;
+    }
+    _filterFallbackDone = true;
+    try {
+      await _applyAudioProcessing(_audio, force: true);
+    } catch (_) {
+      // The microphone keeps the filter-free options on its next start.
+    }
   }
 
   void _changed() {
@@ -167,6 +237,10 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   }
 
   @override
+  VoiceNoiseMode get noiseMode =>
+      _filter?.working == true ? VoiceNoiseMode.ai : VoiceNoiseMode.standard;
+
+  @override
   VoiceConnectionQuality get quality {
     return switch (_room.localParticipant?.connectionQuality) {
       lk.ConnectionQuality.excellent => VoiceConnectionQuality.excellent,
@@ -218,7 +292,17 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   }
 
   @override
-  Future<void> setAudioProcessing(VoiceAudioProcessing audio) async {
+  Future<void> setAudioProcessing(VoiceAudioProcessing audio) {
+    return _applyAudioProcessing(audio);
+  }
+
+  Future<void> _applyAudioProcessing(
+    VoiceAudioProcessing audio, {
+    bool force = false,
+  }) async {
+    _audio = audio;
+    // Switching the AI filter needs no restart.
+    await _filter?.setEnabled(audio.noiseSuppression);
     final local = _room.localParticipant;
     if (local == null) {
       return;
@@ -228,13 +312,21 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       if (track == null) {
         continue;
       }
-      track.currentOptions = _captureOptions(track.currentOptions, audio);
+      final before = track.currentOptions;
+      final after = liveKitCaptureOptions(before, audio, filter: _filter);
+      track.currentOptions = after;
+      final changed =
+          before.noiseSuppression != after.noiseSuppression ||
+          before.voiceIsolation != after.voiceIsolation ||
+          before.echoCancellation != after.echoCancellation ||
+          before.autoGainControl != after.autoGainControl;
       // A muted microphone picks the options up when it unmutes; restarting
       // it now could start sending.
-      if (!publication.muted) {
+      if ((changed || force) && !publication.muted) {
         await track.restartTrack();
       }
     }
+    _changed();
   }
 
   @override
@@ -269,14 +361,17 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       return;
     }
     _closing = true;
+    _filterFallback?.cancel();
     try {
       await _room.disconnect();
     } finally {
       _closed = true;
+      _filter?.removeListener(_filterChanged);
       disposeRemoteAudioVolumes();
       _room.removeListener(_changed);
       await _listener.dispose();
       await _room.dispose();
+      _filter?.dispose();
       super.dispose();
     }
   }

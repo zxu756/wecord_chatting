@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/ai/ai_catch_up.dart';
+import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
@@ -407,6 +409,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _composerController = TextEditingController();
   final _searchController = TextEditingController();
+  final _catchUpController = AiCatchUpController();
 
   /// Focus of the message box; the jump-to-message-box shortcut uses it.
   final _composerFocus = FocusNode(debugLabel: 'message box');
@@ -634,6 +637,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
     _composerController.dispose();
     _searchController.dispose();
+    _catchUpController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -926,6 +930,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: () => _setThreadArchived(threadId, !threadArchived),
           )
         : null;
+    final summarizeAction = ref.watch(aiAvailableProvider(circleId))
+        ? ChatThreadAction(
+            tooltip: tr('Summarize'),
+            icon: Icons.auto_awesome_outlined,
+            onPressed: _catchUpController.requestSummary,
+          )
+        : null;
     // Search comes first: phones keep it next to the primary action.
     final appBarActions = [
       searchAction,
@@ -941,6 +952,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       ?groupDetailsAction,
       ?archiveAction,
+      ?summarizeAction,
       ...widget.extraActions,
     ];
     // Next to search on phones: the circle's member list, a direct call,
@@ -1138,6 +1150,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onOpenFullSearch: _openFullSearch,
                 )
               : null,
+        );
+        final catchUpBanner = AiCatchUpBanner(
+          key: ValueKey('ai-catch-up-${widget.conversationId}'),
+          conversationId: widget.conversationId,
+          circleId: circleId,
+          controller: _catchUpController,
+          unreadCount: conversationSummary?.unreadCount,
+          readMarker: _initialReadMarker,
+          firstUnreadId: _newMessageDividerId,
+          desktop: desktop,
+          onJumpToMessage: (id) => unawaited(_scrollToMessage(id)),
         );
         final banners = <Widget>[
           const ConnectivityBanner(
@@ -1694,6 +1717,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             children: [
               header,
               ...banners,
+              catchUpBanner,
               Expanded(
                 child: Stack(
                   children: [
@@ -1756,6 +1780,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
                               child: banner,
                             ),
+                          catchUpBanner,
                         ],
                       ),
                     ),

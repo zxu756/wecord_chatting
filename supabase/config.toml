@@ -444,6 +444,14 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/gif-search/index.ts"
 
+[functions.ai]
+enabled = true
+# Signed-in users only; the function reads chat as the caller and counts
+# their requests. Needs the AI_BASE_URL, AI_API_KEY and AI_MODEL secrets
+# (docs/ai-setup.md).
+verify_jwt = true
+entrypoint = "./functions/ai/index.ts"
+
 [functions.bot-api]
 enabled = true
 # Public: bots authenticate with `Authorization: Bot <token>`, which the

@@ -28,6 +28,7 @@ import 'package:wecord/shared/l10n/zh/zh_redesign_voice.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_settings.dart';
 import 'package:wecord/shared/l10n/zh/zh_stage.dart';
 import 'package:wecord/shared/l10n/zh/zh_safety.dart';
+import 'package:wecord/shared/l10n/zh/zh_search.dart';
 import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
 
 /// Every area's map, for checks.
@@ -59,6 +60,7 @@ const zhAreas = <Map<String, String>>[
   zhBackendFixes,
   zhDiscovery,
   zhOffline,
+  zhSearch,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

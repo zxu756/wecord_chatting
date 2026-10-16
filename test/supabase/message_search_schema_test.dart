@@ -31,10 +31,7 @@ void main() {
       sql,
       contains('create table if not exists public.message_search_entries'),
     );
-    expect(
-      sql,
-      contains('references public.messages(id) on delete cascade'),
-    );
+    expect(sql, contains('references public.messages(id) on delete cascade'));
     expect(
       sql,
       contains(
@@ -64,7 +61,10 @@ void main() {
       contains('after insert or update of type, body, attachment, recalled_at'),
     );
     final sync = functionBody(sql, 'sync_message_search_entry');
-    expect(sync, contains("new.recalled_at is not null or new.type = 'system'"));
+    expect(
+      sync,
+      contains("new.recalled_at is not null or new.type = 'system'"),
+    );
     expect(sync, contains('on conflict (message_id) do update'));
     expect(sql, contains('insert into public.message_search_entries ('));
     // CJK characters become words of their own for phrase search.
@@ -78,7 +78,10 @@ void main() {
     ]) {
       expect(functionBody(sql, name), contains('immutable'));
     }
-    expect(sql, contains('drop index if exists public.messages_body_search_idx'));
+    expect(
+      sql,
+      contains('drop index if exists public.messages_body_search_idx'),
+    );
   });
 
   test('search_messages only reads what the caller can read', () {

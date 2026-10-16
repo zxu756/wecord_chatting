@@ -98,17 +98,18 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     final sender = repository as OutboxMessageSender;
     final store = ref.watch(pendingMediaStoreProvider);
     _store = store;
+    late final OutboxEngine engine;
     final media = repository is MediaMessageSender
         ? MediaSendPipeline(
             store: store,
             uploader: ref.watch(chatMediaUploaderProvider),
             sender: repository as MediaMessageSender,
             progress: ref.watch(uploadProgressTrackerProvider),
+            albumHasWaiting: (entry) => _albumHasWaiting(engine, entry),
           )
         : null;
     _media = media;
     var knownMedia = <String>{};
-    late final OutboxEngine engine;
     engine = OutboxEngine(
       send: (entry) {
         if (entry.media != null) {
@@ -173,6 +174,20 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     );
     unawaited(_restore(engine, cache, userId));
     return const [];
+  }
+
+  /// Whether other attachments of [entry]'s album are still due to be sent.
+  static bool _albumHasWaiting(OutboxEngine engine, OutboxEntry entry) {
+    final groupId = entry.media?.groupId;
+    if (groupId == null) {
+      return false;
+    }
+    return engine.entries.any(
+      (other) =>
+          other.clientId != entry.clientId &&
+          other.media?.groupId == groupId &&
+          other.state == OutboxState.sending,
+    );
   }
 
   Future<void> _restore(

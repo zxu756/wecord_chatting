@@ -20,6 +20,21 @@ bool isAlbumMember(ChatMessage message) {
       (message.type == MessageType.image || message.type == MessageType.file);
 }
 
+/// How many messages [messages] are to a reader: each album counts as one,
+/// however many pictures, videos and files it holds ("3 new messages", not
+/// "9" for a 7 photo album).
+int countMessagesFoldingAlbums(Iterable<ChatMessage> messages) {
+  var count = 0;
+  final albums = <String>{};
+  for (final message in messages) {
+    if (!isAlbumMember(message) ||
+        albums.add('${message.senderId}:${message.attachmentGroupId}')) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 /// Folds runs of consecutive messages of one sender that share an album id
 /// into their first message. A run of one stays as it is (the rest of its
 /// album is not loaded, or was deleted); a message in between from someone

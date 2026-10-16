@@ -1280,7 +1280,7 @@ void main() {
       expect(calls.map((call) => call['body']), ['Trip', '']);
       expect(calls.map((call) => call['group']).toSet(), hasLength(1));
       expect(calls.first['group'], isNotNull);
-      expect(calls.map((call) => call['notify']), [true, false]);
+      expect(calls.map((call) => call['notify']), [false, true]);
       final attachment = calls.first['attachment']! as Map<String, dynamic>;
       expect(attachment['width'], 40);
       expect(attachment['height'], 30);
@@ -3906,6 +3906,10 @@ ChatMessage _message({
 class OutboxChatsRepository extends FakeChatsRepository
     implements OutboxMessageSender, MediaMessageSender {
   final mediaSender = FakeMediaMessageSender();
+
+  @override
+  Future<void> notifyMessageSent(String messageId) =>
+      mediaSender.notifyMessageSent(messageId);
 
   @override
   Future<String?> sendQueuedTextMessage({

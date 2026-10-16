@@ -111,4 +111,35 @@ void main() {
     expect(folded.clientId, 'client-1');
     expect(folded.attachmentGroupId, 'g');
   });
+
+  group('countMessagesFoldingAlbums', () {
+    test('an album counts as one message', () {
+      expect(
+        countMessagesFoldingAlbums([
+          _message('1', type: MessageType.text),
+          _message('2', group: 'g'),
+          _message('3', group: 'g'),
+          _message('4', group: 'g'),
+          _message('5'),
+          _message('6', group: 'h', sender: 'b'),
+          _message('7', group: 'h', sender: 'b'),
+        ]),
+        4,
+      );
+    });
+
+    test('a deleted album item is a message of its own', () {
+      expect(
+        countMessagesFoldingAlbums([
+          _message('1', group: 'g'),
+          _message('2', group: 'g', recalledAt: DateTime.utc(2026, 10, 17)),
+        ]),
+        2,
+      );
+    });
+
+    test('nothing is nothing', () {
+      expect(countMessagesFoldingAlbums(const []), 0);
+    });
+  });
 }

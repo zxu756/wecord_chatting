@@ -75,9 +75,6 @@ class OutboxMedia {
 
   bool get isVisual => kind != OutboxMediaKind.file;
 
-  /// Only the first message of an album notifies.
-  bool get notifies => groupId == null || groupIndex == 0;
-
   /// The attachment JSON the stored message carries.
   Map<String, dynamic> attachmentJson(String path) {
     return switch (kind) {

@@ -2043,10 +2043,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (seenIndex == -1) {
       return;
     }
-    _unseenMessageCount = oldestToNewest
-        .skip(seenIndex + 1)
-        .where((message) => !message.isSentBy(currentUserId))
-        .length;
+    // An album is one new message, not one per picture.
+    _unseenMessageCount = countMessagesFoldingAlbums(
+      oldestToNewest
+          .skip(seenIndex + 1)
+          .where((message) => !message.isSentBy(currentUserId)),
+    );
   }
 
   void _handleScroll() {

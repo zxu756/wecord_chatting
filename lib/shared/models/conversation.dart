@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show immutable;
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -36,6 +37,44 @@ enum ConversationType {
   }
 }
 
+/// What the latest album of a conversation holds: pictures, videos and
+/// files, as the server counts them (`last_message_album`).
+@immutable
+class ConversationAlbum {
+  const ConversationAlbum({this.images = 0, this.videos = 0, this.files = 0});
+
+  /// Reads the server's `{"images": 2, "videos": 1, "files": 0}`; null for
+  /// anything else.
+  static ConversationAlbum? maybeFromJson(Object? json) {
+    if (json is! Map) {
+      return null;
+    }
+    int count(String key) => (json[key] as num?)?.toInt() ?? 0;
+    final album = ConversationAlbum(
+      images: count('images'),
+      videos: count('videos'),
+      files: count('files'),
+    );
+    return album.total >= 2 ? album : null;
+  }
+
+  final int images;
+  final int videos;
+  final int files;
+
+  int get total => images + videos + files;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ConversationAlbum &&
+      other.images == images &&
+      other.videos == videos &&
+      other.files == files;
+
+  @override
+  int get hashCode => Object.hash(images, videos, files);
+}
+
 class ConversationSummary {
   const ConversationSummary({
     required this.id,
@@ -49,6 +88,7 @@ class ConversationSummary {
     this.lastMessageType,
     this.lastMessageWebhookName,
     this.lastMessageAttachmentKind,
+    this.lastMessageAlbum,
     this.pinnedAt,
     this.mutedUntil,
     this.isMuted = false,
@@ -87,6 +127,9 @@ class ConversationSummary {
       lastMessageWebhookName: json['last_message_webhook_name'] as String?,
       lastMessageAttachmentKind:
           json['last_message_attachment_kind'] as String?,
+      lastMessageAlbum: ConversationAlbum.maybeFromJson(
+        json['last_message_album'],
+      ),
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       pinnedAt: _parseOptionalTimestamp(json['pinned_at']),
       mutedUntil: _parseOptionalTimestamp(json['muted_until']),
@@ -142,6 +185,11 @@ class ConversationSummary {
   /// What a file message carries: 'video' or 'file' (null for other
   /// messages, and from servers that don't say).
   final String? lastMessageAttachmentKind;
+
+  /// What the latest message's album holds, when the latest message is one
+  /// of two or more sent together (null for other messages, and from
+  /// servers that don't say).
+  final ConversationAlbum? lastMessageAlbum;
 
   /// Whether the latest message is a video file.
   bool get lastMessageIsVideo =>
@@ -213,6 +261,7 @@ class ConversationSummary {
     Object? lastMessageType = _sentinel,
     Object? lastMessageWebhookName = _sentinel,
     Object? lastMessageAttachmentKind = _sentinel,
+    Object? lastMessageAlbum = _sentinel,
     int? unreadCount,
     Object? pinnedAt = _sentinel,
     Object? mutedUntil = _sentinel,
@@ -254,6 +303,9 @@ class ConversationSummary {
       lastMessageAttachmentKind: identical(lastMessageAttachmentKind, _sentinel)
           ? this.lastMessageAttachmentKind
           : lastMessageAttachmentKind as String?,
+      lastMessageAlbum: identical(lastMessageAlbum, _sentinel)
+          ? this.lastMessageAlbum
+          : lastMessageAlbum as ConversationAlbum?,
       unreadCount: unreadCount ?? this.unreadCount,
       pinnedAt: identical(pinnedAt, _sentinel)
           ? this.pinnedAt

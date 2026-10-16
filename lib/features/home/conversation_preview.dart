@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/features/chats/gif_search.dart';
+import 'package:wecord/features/chats/media_send/album_label.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -34,7 +35,15 @@ ConversationPreview? conversationPreview(
   if (body == 'Message deleted') {
     return (icon: null, text: tr('Message deleted'));
   }
+  final album = conversation.lastMessageAlbum;
   final (IconData? icon, String text) = switch (type ?? MessageType.text) {
+    // Pictures, videos and files sent together read as one message.
+    MessageType.image || MessageType.file when album != null => (
+      album.images + album.videos > 0
+          ? Icons.photo_library_outlined
+          : Icons.attach_file_rounded,
+      conversationAlbumLabel(album),
+    ),
     MessageType.text when gifUrlIn(body) != null => (
       Icons.gif_box_outlined,
       tr('GIF'),

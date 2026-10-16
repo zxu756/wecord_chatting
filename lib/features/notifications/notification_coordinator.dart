@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/media_send/album_label.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
@@ -454,6 +455,9 @@ class NotificationCoordinator {
           ? null
           : switch (conversation.lastMessageType ?? MessageType.text) {
               MessageType.text => plainTextFromMarkdown(body).trim(),
+              MessageType.image || MessageType.file
+                  when conversation.lastMessageAlbum != null =>
+                conversationAlbumLabel(conversation.lastMessageAlbum!),
               MessageType.poll => pollPreviewText(body),
               MessageType.sticker => stickerPreviewText(body),
               _ => body,

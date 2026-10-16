@@ -144,8 +144,9 @@ abstract interface class MediaMessageSender {
   /// by an earlier try (or AutoMod dropped it quietly).
   ///
   /// [attachment] is the attachment JSON; [type] is image or file. The
-  /// messages of one album share [attachmentGroupId]; only the first of
-  /// them ([notify]) sends a push notification.
+  /// messages of one album share [attachmentGroupId]; only one of them
+  /// ([notify], the last one stored) sends a push notification, which
+  /// says what the whole album holds.
   Future<String?> sendQueuedMediaMessage({
     required String conversationId,
     required String clientId,
@@ -157,4 +158,9 @@ abstract interface class MediaMessageSender {
     ReplyPreview? replyPreview,
     bool notify = true,
   });
+
+  /// Sends the push notification for [messageId], a stored message of an
+  /// album that was sent without one ([notify] false) because more of it
+  /// was still to come; for when the rest of the album could not be sent.
+  Future<void> notifyMessageSent(String messageId);
 }

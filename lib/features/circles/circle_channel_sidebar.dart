@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1832,7 +1834,10 @@ class CircleChannelRow extends StatelessWidget {
         ? FontWeight.w600
         : FontWeight.w500;
     final radius = BorderRadius.circular(wide ? WeCordRadii.sm : 12);
-    final height = touch ? minTouchTargetSize : (wide ? 34.0 : 40.0);
+    // Touch screens keep 44 at any density.
+    final height = touch
+        ? math.max(minTouchTargetSize, context.density.rowHeight(40))
+        : context.density.rowHeight(wide ? 34 : 40);
 
     return Padding(
       padding: EdgeInsets.only(left: indent + 2, right: 2, top: 1, bottom: 1),

@@ -203,6 +203,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `showWeCordSheet` / `WeCordSheet` | Bottom sheets: 28 corners, grabber, optional title; `detents` (e.g. `[0.5, 0.92]`) make it a snapping draggable sheet. |
 | `WeCordMotion` / `WeCordSpring` / `SpringCurve` / `WeCordHaptics` | Motion and haptics above. |
 | `MacosTitleBarFrame` / `MacosWindowDragArea` / `macosTitleBarInset` | The macOS window under a transparent title bar (below). |
+| `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,
 `OutlinedButton` = secondary raised pill (no outline), `TextButton` =
@@ -237,13 +238,26 @@ the WeCord components in new and restyled screens.
 
 - Rail 72 (`WeCordSizes.railDesktop`), items 44 squircles radius 14, a 4×30
   ink pill at the left edge marks the selection.
-- Sidebar 272–292 on `sidebar`, top-left radius 22, starting 10 below the
-  window top; selected row = white with `hairline` shadow.
+- Sidebar on `sidebar`, top-left radius 22, starting 10 below the
+  window top; selected row = white with `hairline` shadow. Home's direct
+  messages and a circle's channels share one width: 292, resizable
+  220–420.
 - Content on `panel` with a 1px `lineSoft` left edge; header 58 with a
   hairline bottom border, 36 icon buttons, a raised search field (200 wide).
-- Optional right panel 248–300 on `sidebar` (profile, members).
+- Optional right panel on `sidebar`: the circle member list (248,
+  resizable 200–360) or a direct chat's profile (300, resizable 240–420).
+  The header toggle opens and closes it.
+- **Resizing**: drag a column's edge (`ResizableDivider`); ←/→ move it by
+  16, Home/End go to the limits, double-click or Enter resets. Past the
+  range the edge resists and springs back; a right panel dragged 60 below
+  its minimum snaps shut. Widths and closed panels are kept per device
+  (`panelLayoutProvider`). The centre content keeps at least 420
+  (`WeCordSizes.contentMin`): when the window is too narrow, right panels
+  close first (and come back when there is room, unless the user closed
+  them), then the sidebar shrinks toward 220. The rail stays 72.
 - Floating user panel: glass, 58 tall, radius 29, 14 above the bottom,
-  spanning rail + sidebar (left −62 relative to the sidebar, right 10).
+  spanning rail + sidebar (left −62 relative to the sidebar, right 10) and
+  following the sidebar's width.
 - Settings opens as a centered window (radius 28, `dialog` shadow) over the
   blurred app: nav column 248 + content with 24/800 title.
 
@@ -267,8 +281,11 @@ the WeCord components in new and restyled screens.
   `subtle`, for body copy.
 - **Glass effects off switch**: Settings → Appearance (persisted like the
   theme mode, `glassEffectsProvider`).
-- **Density**: the desktop settings mockup has a Density control
-  (Comfortable / Default / Compact); not built yet.
+- **Density**: Settings → Appearance → Density (Comfortable / Default /
+  Compact, kept per device, `densityProvider`). `context.density`
+  (`WeCordDensityScale`) scales list rows (direct messages, channels,
+  members), message gaps and card avatars. On touch screens Compact only
+  tightens a little and rows stay at least 44.
 - **Chinese**: the CJK fallback renders Chinese in the platform font;
   Chinese titles keep the same sizes and weights (letter-spacing is
   harmless).

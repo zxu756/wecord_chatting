@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/home/user_panel.dart';
@@ -9,6 +8,7 @@ import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/layout/resizable_panels.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Where the current page sits in the app's navigation.
@@ -40,9 +40,10 @@ class ShellPlacement {
 
 /// The signed-in app frame. Wide layouts keep the circle rail on the left
 /// on the rail color; beside it, 10 below the window's top, the Home
-/// sidebar (with a 22 top-left corner) and the page on a white panel. The
-/// glass user panel floats across the rail and the sidebar (Home's, or a
-/// circle's channels). Phones show pages full screen: the phone home (and
+/// sidebar (with a 22 top-left corner; its right edge resizes it) and the
+/// page on a white panel. The glass user panel floats across the rail and
+/// the sidebar (Home's, or a circle's channels) and follows its width.
+/// Phones show pages full screen: the phone home (and
 /// a circle's channels) bring the rail and the floating user panel
 /// themselves, other pages stack on top with a back button.
 class WeCordShell extends StatelessWidget {
@@ -81,38 +82,31 @@ class WeCordShell extends StatelessWidget {
 
     final c = context.tokens.colors;
     final homeSection = placement.homeSection;
-    // The sidebar the user panel spans with the rail.
-    final sidebarWidth = homeSection != null
-        ? HomeSidebar.defaultWidth
-        : placement.pageHasSidebar
-        ? CircleChannelSidebar.defaultWidth
-        : null;
+    // Whether the user panel spans the rail and a sidebar (Home's, or a
+    // circle's channels; both share one width).
+    final spansSidebar = homeSection != null || placement.pageHasSidebar;
     const radius = BorderRadius.only(topLeft: Radius.circular(WeCordRadii.xl));
 
     final Widget content = homeSection != null
         ? ClipRRect(
             borderRadius: radius,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ColoredBox(
-                  color: c.sidebar,
-                  child: HomeSidebar(
-                    section: homeSection,
-                    selectedConversationId: placement.selectedConversationId,
-                    onOpenVoice: onOpenVoice,
-                  ),
+            child: ResizableSidebarRow(
+              sidebar: ColoredBox(
+                color: c.sidebar,
+                child: HomeSidebar(
+                  section: homeSection,
+                  selectedConversationId: placement.selectedConversationId,
+                  onOpenVoice: onOpenVoice,
+                  width: null,
                 ),
-                Expanded(
-                  child: DecoratedBox(
-                    position: DecorationPosition.foreground,
-                    decoration: BoxDecoration(
-                      border: Border(left: BorderSide(color: c.lineSoft)),
-                    ),
-                    child: ColoredBox(color: c.panel, child: shellChild),
-                  ),
+              ),
+              content: DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: BoxDecoration(
+                  border: Border(left: BorderSide(color: c.lineSoft)),
                 ),
-              ],
+                child: ColoredBox(color: c.panel, child: shellChild),
+              ),
             ),
           )
         : PanelSurface(topLeftRadius: WeCordRadii.xl, child: shellChild);
@@ -128,7 +122,7 @@ class WeCordShell extends StatelessWidget {
                 CircleRail(
                   homeSelected: placement.homeSelected,
                   selectedCircleId: placement.selectedCircleId,
-                  showVoiceIndicator: sidebarWidth == null,
+                  showVoiceIndicator: !spansSidebar,
                   onOpenVoice: onOpenVoice,
                 ),
                 Expanded(
@@ -140,12 +134,16 @@ class WeCordShell extends StatelessWidget {
               ],
             ),
           ),
-          if (sidebarWidth != null)
-            Positioned(
-              left: 10,
-              bottom: UserPanel.bottomGap,
-              width: CircleRail.width + sidebarWidth - 20,
-              child: const UserPanel(),
+          if (spansSidebar)
+            // Follows the sidebar while it is resized.
+            SidebarWidthBuilder(
+              available: MediaQuery.sizeOf(context).width - CircleRail.width,
+              builder: (context, sidebarWidth) => Positioned(
+                left: 10,
+                bottom: UserPanel.bottomGap,
+                width: CircleRail.width + sidebarWidth - 20,
+                child: const UserPanel(),
+              ),
             ),
         ],
       ),

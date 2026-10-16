@@ -25,7 +25,8 @@ import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
-import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/layout/panel_layout.dart';
+import 'package:wecord/shared/layout/resizable_panels.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -67,8 +68,10 @@ Widget voiceChannelChat(CircleDetail detail, CircleChannel channel) {
 }
 
 /// Wide-screen circle layout beside the shell's rail: channel sidebar, the
-/// selected channel or feed, and a toggleable member list. An open thread takes the
-/// member list's place until closed.
+/// selected channel or feed, and a toggleable member list. The sidebar
+/// (sharing Home's width) and the member list resize by their edges; the
+/// member list closes first when the window gets narrow. An open thread
+/// takes the member list's place until closed.
 class CircleWorkspace extends ConsumerStatefulWidget {
   const CircleWorkspace({
     required this.detail,
@@ -78,9 +81,6 @@ class CircleWorkspace extends ConsumerStatefulWidget {
     this.threadViewBuilder,
     super.key,
   });
-
-  /// Below this width the member list starts hidden.
-  static const memberListBreakpoint = 1280.0;
 
   /// Width of the thread panel.
   static const threadPanelWidth = 400.0;
@@ -103,7 +103,9 @@ class CircleWorkspace extends ConsumerStatefulWidget {
 class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   /// Selected channel id, or null for the feed.
   String? _selectedChannelId;
-  bool? _showMembers;
+
+  /// The member list was opened while there wasn't room for it.
+  var _membersForced = false;
 
   /// The thread open in the right-hand panel.
   ThreadTarget? _openThread;
@@ -194,16 +196,11 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
   @override
   Widget build(BuildContext context) {
     final detail = widget.detail;
-    final showMembers =
-        _showMembers ??
-        MediaQuery.sizeOf(context).width >=
-            CircleWorkspace.memberListBreakpoint;
-    final memberToggle = ChatThreadAction(
-      tooltip: showMembers ? tr('Hide member list') : tr('Show member list'),
-      isSelected: showMembers,
-      icon: Icons.people_outline,
-      selectedIcon: Icons.people,
-      onPressed: () => setState(() => _showMembers = !showMembers),
+    final layout = ref.watch(
+      panelLayoutProvider.select(
+        (layout) =>
+            (width: layout.membersWidth, collapsed: layout.membersCollapsed),
+      ),
     );
     final closeThread = ChatThreadAction(
       tooltip: tr('Close thread'),
@@ -243,7 +240,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       ),
       child: CircleChannelSidebar(
         detail: detail,
-        width: WeCordSizes.sidebarMin,
+        width: null,
         onChangeNickname: _changeNickname,
         onChanged: widget.onChanged,
         selectedChannelId: selectedChannel?.id,
@@ -270,98 +267,140 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       ),
     );
 
+    // Everything right of the sidebar: the member list closes first when
+    // the window is too narrow for the chosen widths.
+    final main = LayoutBuilder(
+      builder: (context, constraints) {
+        SidePanelPlacement place({
+          required bool collapsed,
+          bool forced = false,
+        }) => resolveSidePanel(
+          ResizablePanel.members,
+          width: layout.width,
+          collapsed: collapsed,
+          rowWidth: constraints.maxWidth,
+          forced: forced,
+        );
+        final fits = place(collapsed: false).shown;
+        if (fits) {
+          // There is room again; closing for lack of room applies again.
+          _membersForced = false;
+        }
+        final placement = place(
+          collapsed: layout.collapsed,
+          forced: _membersForced,
+        );
+        final showMembers = placement.shown;
+        final memberToggle = ChatThreadAction(
+          tooltip: showMembers
+              ? tr('Hide member list')
+              : tr('Show member list'),
+          isSelected: showMembers,
+          icon: Icons.people_outline,
+          selectedIcon: Icons.people,
+          onPressed: () => _toggleMembers(open: !showMembers, fits: fits),
+        );
+        final thread = _openThread;
+        return ResizableSidePanelRow(
+          panel: ResizablePanel.members,
+          placement: placement,
+          content: DecoratedBox(
+            decoration: BoxDecoration(
+              color: c.panel,
+              border: Border(left: edge),
+            ),
+            child: selectedChannel == null
+                ? Scaffold(
+                    backgroundColor: c.panel,
+                    appBar: AppBar(
+                      toolbarHeight: 58,
+                      titleSpacing: 22,
+                      shape: Border(bottom: BorderSide(color: c.lineSoft)),
+                      title: Row(
+                        children: [
+                          Icon(
+                            Icons.dynamic_feed_outlined,
+                            size: 18,
+                            color: c.muted,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            tr('Feed'),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: c.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        memberToggle.toIconButton(),
+                        const SizedBox(width: 10),
+                      ],
+                    ),
+                    body: CircleFeedView(
+                      circleId: detail.circle.id,
+                      posts: detail.posts,
+                      onChanged: widget.onChanged,
+                    ),
+                  )
+                : widget.channelViewBuilder?.call(context, selectedChannel, [
+                        ?followChannel?.toIconButton(),
+                        memberToggle.toIconButton(),
+                        ?channelSettings?.toIconButton(),
+                      ]) ??
+                      _defaultChannelView(selectedChannel, [
+                        ?followChannel,
+                        memberToggle,
+                        ?channelSettings,
+                      ]),
+          ),
+          fixedSideWidth: CircleWorkspace.threadPanelWidth,
+          fixedSide: thread == null
+              ? null
+              : DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: c.panel,
+                    border: Border(left: edge),
+                  ),
+                  child: SizedBox(
+                    key: const ValueKey('circle-thread-panel'),
+                    width: CircleWorkspace.threadPanelWidth,
+                    child:
+                        widget.threadViewBuilder?.call(context, thread, [
+                          closeThread.toIconButton(),
+                        ]) ??
+                        _defaultThreadView(thread, [closeThread]),
+                  ),
+                ),
+          side: DecoratedBox(
+            decoration: BoxDecoration(border: Border(left: edge)),
+            child: CircleMemberList(
+              detail: detail,
+              width: null,
+              onlineUserIds: onlineUserIds,
+              onChangeNickname: _changeNickname,
+            ),
+          ),
+        );
+      },
+    );
+
+    // The shell already keeps the gap above the sidebar.
     return Scaffold(
       backgroundColor: c.rail,
-      body: Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            sidebar,
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: c.panel,
-                  border: Border(left: edge),
-                ),
-                child: selectedChannel == null
-                    ? Scaffold(
-                        backgroundColor: c.panel,
-                        appBar: AppBar(
-                          toolbarHeight: 58,
-                          titleSpacing: 22,
-                          shape: Border(bottom: BorderSide(color: c.lineSoft)),
-                          title: Row(
-                            children: [
-                              Icon(
-                                Icons.dynamic_feed_outlined,
-                                size: 18,
-                                color: c.muted,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                tr('Feed'),
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: c.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            memberToggle.toIconButton(),
-                            const SizedBox(width: 10),
-                          ],
-                        ),
-                        body: CircleFeedView(
-                          circleId: detail.circle.id,
-                          posts: detail.posts,
-                          onChanged: widget.onChanged,
-                        ),
-                      )
-                    : widget.channelViewBuilder
-                              ?.call(context, selectedChannel, [
-                                ?followChannel?.toIconButton(),
-                                memberToggle.toIconButton(),
-                                ?channelSettings?.toIconButton(),
-                              ]) ??
-                          _defaultChannelView(selectedChannel, [
-                            ?followChannel,
-                            memberToggle,
-                            ?channelSettings,
-                          ]),
-              ),
-            ),
-            if (_openThread case final thread?)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: c.panel,
-                  border: Border(left: edge),
-                ),
-                child: SizedBox(
-                  key: const ValueKey('circle-thread-panel'),
-                  width: CircleWorkspace.threadPanelWidth,
-                  child:
-                      widget.threadViewBuilder?.call(context, thread, [
-                        closeThread.toIconButton(),
-                      ]) ??
-                      _defaultThreadView(thread, [closeThread]),
-                ),
-              )
-            else if (showMembers)
-              DecoratedBox(
-                decoration: BoxDecoration(border: Border(left: edge)),
-                child: CircleMemberList(
-                  detail: detail,
-                  onlineUserIds: onlineUserIds,
-                  onChangeNickname: _changeNickname,
-                ),
-              ),
-          ],
-        ),
-      ),
+      body: ResizableSidebarRow(sidebar: sidebar, content: main),
     );
+  }
+
+  /// Opens or closes the member list from the header. Opened while there
+  /// isn't room, it shows anyway (at its narrowest) until closed.
+  void _toggleMembers({required bool open, required bool fits}) {
+    setState(() => _membersForced = open && !fits);
+    ref
+        .read(panelLayoutProvider.notifier)
+        .setCollapsed(ResizablePanel.members, !open);
   }
 
   void _joinVoice(CircleChannel channel) {
@@ -715,7 +754,7 @@ class CircleMemberList extends ConsumerWidget {
     super.key,
   });
 
-  static const defaultWidth = 248.0;
+  static const defaultWidth = WeCordSizes.memberListDefault;
 
   final CircleDetail detail;
   final Set<String> onlineUserIds;
@@ -943,7 +982,8 @@ class _MemberRow extends ConsumerWidget {
       PresenceStatus.doNotDisturb => c.danger,
       _ => null,
     };
-    final avatarSize = compact ? 32.0 : 40.0;
+    final density = context.density;
+    final avatarSize = density.avatar(compact ? 32 : 40);
     final avatar = CircleNetworkAvatar(
       name: name,
       size: avatarSize,
@@ -953,7 +993,11 @@ class _MemberRow extends ConsumerWidget {
           : PresenceDot(
               key: ValueKey('member-online-${profile.id}'),
               color: presenceColor,
-              size: compact ? 12 : 14,
+              size: avatarSize < 30
+                  ? 10
+                  : compact
+                  ? 12
+                  : 14,
               ringColor: background,
             ),
     );
@@ -997,12 +1041,10 @@ class _MemberRow extends ConsumerWidget {
                 states.contains(WidgetState.pressed);
             return AnimatedContainer(
               duration: WeCordMotion.quick,
-              constraints: BoxConstraints(
-                minHeight: usesTouchInput(context) ? minTouchTargetSize : 0,
-              ),
+              constraints: BoxConstraints(minHeight: density.minRowHeight),
               padding: EdgeInsets.symmetric(
                 horizontal: 8,
-                vertical: compact ? 5 : 6,
+                vertical: density.space(compact ? 5 : 6),
               ),
               decoration: BoxDecoration(
                 color: hovered

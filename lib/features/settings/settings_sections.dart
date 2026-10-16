@@ -22,6 +22,7 @@ import 'package:wecord/features/voice/voice_settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/theme/density_controller.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -495,6 +496,92 @@ class GlassEffectsRow extends ConsumerWidget {
       ),
       value: ref.watch(glassEffectsProvider),
       onChanged: (value) => ref.read(glassEffectsProvider.notifier).set(value),
+    );
+  }
+}
+
+/// Comfortable, Default or Compact lists and messages: a segmented control
+/// beside its label in the desktop window, below it on phones.
+class DensityRow extends ConsumerWidget {
+  const DensityRow({this.showIcon = true, super.key});
+
+  final bool showIcon;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
+    final picker = WeCordSegmented<WeCordDensity>(
+      key: const ValueKey('density'),
+      expand: true,
+      semanticLabel: tr('Density'),
+      selected: ref.watch(densityProvider),
+      onChanged: (density) => ref.read(densityProvider.notifier).set(density),
+      segments: [
+        WeCordSegment(
+          key: const ValueKey('density-comfortable'),
+          value: WeCordDensity.comfortable,
+          label: tr('Comfortable'),
+        ),
+        WeCordSegment(
+          key: const ValueKey('density-standard'),
+          value: WeCordDensity.standard,
+          label: tr('Default'),
+        ),
+        WeCordSegment(
+          key: const ValueKey('density-compact'),
+          value: WeCordDensity.compact,
+          label: tr('Compact'),
+        ),
+      ],
+    );
+    final label = Row(
+      children: [
+        if (showIcon) ...[
+          const SettingsIconTile(icon: Icons.density_medium_rounded),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr('Density'),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: c.ink,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  tr('How much space lists and messages take.'),
+                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    return Padding(
+      key: const ValueKey('density-row'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 560
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [label, const SizedBox(height: 12), picker],
+              )
+            : Row(
+                children: [
+                  Expanded(child: label),
+                  const SizedBox(width: 16),
+                  SizedBox(width: 360, child: picker),
+                ],
+              ),
+      ),
     );
   }
 }

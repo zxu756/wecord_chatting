@@ -56,6 +56,8 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/layout/panel_layout.dart';
+import 'package:wecord/shared/layout/resizable_panels.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -450,9 +452,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   double? _topInset;
   double? _bottomInset;
 
-  /// Whether the desktop profile panel of a direct chat is open; null
-  /// follows the width.
-  bool? _showProfilePanel;
+  /// The desktop profile panel was opened while there wasn't room for it.
+  var _profileForced = false;
 
   @override
   void initState() {
@@ -625,6 +626,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
     final activity = ref.watch(chatActivityProvider(widget.conversationId));
+    final profileLayout = ref.watch(
+      panelLayoutProvider.select(
+        (layout) =>
+            (width: layout.profileWidth, collapsed: layout.profileCollapsed),
+      ),
+    );
     _voiceMessageRecorder = ref.watch(voiceMessageRecorderProvider);
     final conversationSummary = ref
         .watch(chatConversationSummaryProvider(widget.conversationId))
@@ -895,16 +902,32 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         final compact = isCompactWidth(constraints.maxWidth);
         // Desktop puts the search field in the header when there is room.
         final inlineSearch = desktop && constraints.maxWidth >= 760;
-        // Direct chats on desktop can show the other person's profile.
+        // Direct chats on desktop can show the other person's profile, in
+        // a resizable panel that closes first when the window gets narrow.
         final profileUserId =
-            desktop &&
-                conversationType == ConversationType.direct &&
-                constraints.maxWidth >= 860
+            desktop && conversationType == ConversationType.direct
             ? directPeerId
             : null;
-        final showProfile =
-            profileUserId != null &&
-            (_showProfilePanel ?? constraints.maxWidth >= 1040);
+        SidePanelPlacement placeProfile({
+          required bool collapsed,
+          bool forced = false,
+        }) => resolveSidePanel(
+          ResizablePanel.profile,
+          width: profileLayout.width,
+          collapsed: collapsed,
+          rowWidth: constraints.maxWidth,
+          forced: forced,
+        );
+        final profileFits = placeProfile(collapsed: false).shown;
+        if (profileFits) {
+          // There is room again; closing for lack of room applies again.
+          _profileForced = false;
+        }
+        final profilePlacement = placeProfile(
+          collapsed: profileLayout.collapsed || profileUserId == null,
+          forced: _profileForced,
+        );
+        final showProfile = profilePlacement.shown;
         final profileAction = profileUserId == null
             ? null
             : ChatThreadAction(
@@ -912,8 +935,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 icon: Icons.view_sidebar_outlined,
                 selectedIcon: Icons.view_sidebar_rounded,
                 isSelected: showProfile,
-                onPressed: () =>
-                    setState(() => _showProfilePanel = !showProfile),
+                onPressed: () {
+                  setState(() => _profileForced = !showProfile && !profileFits);
+                  ref
+                      .read(panelLayoutProvider.notifier)
+                      .setCollapsed(ResizablePanel.profile, showProfile);
+                },
               );
         final headerActions = [
           for (final action in appBarActions)
@@ -1486,20 +1513,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
           return Scaffold(
             backgroundColor: c.panel,
-            body: showProfile
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: chatColumn),
-                      ChatProfilePanel(
-                        userId: profileUserId,
-                        name: title,
-                        avatarUrl: avatarUrl,
-                        presence: presenceColor,
-                      ),
-                    ],
-                  )
-                : chatColumn,
+            body: profileUserId == null
+                ? chatColumn
+                : ResizableSidePanelRow(
+                    panel: ResizablePanel.profile,
+                    placement: profilePlacement,
+                    content: chatColumn,
+                    side: ChatProfilePanel(
+                      userId: profileUserId,
+                      name: title,
+                      avatarUrl: avatarUrl,
+                      presence: presenceColor,
+                    ),
+                  ),
           );
         }
         return Scaffold(
@@ -3787,7 +3813,7 @@ class _MessageBubble extends StatelessWidget {
     final avatarSize = desktop ? 32.0 : 30.0;
     final showAvatar = sender != null && !outgoing;
     final indent = showAvatar ? avatarSize + 8 : 0.0;
-    final gap = hasFollowUp ? 3.0 : 10.0;
+    final gap = context.density.space(hasFollowUp ? 3 : 10);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3962,7 +3988,8 @@ class _MessageBubble extends StatelessWidget {
         : message.reactions;
     final previewUrl = _previewUrl;
     final canShowActions = !_isRecalled;
-    final avatarSize = desktop ? 40.0 : 36.0;
+    final density = context.density;
+    final avatarSize = density.avatar(desktop ? 40 : 36);
     final side = desktop ? 24.0 : 14.0;
 
     final body = Column(
@@ -4117,9 +4144,9 @@ class _MessageBubble extends StatelessWidget {
           color: tint,
           padding: EdgeInsets.fromLTRB(
             side,
-            isFollowUp ? 2 : 10,
+            density.space(isFollowUp ? 2 : 10),
             side,
-            hasFollowUp ? 2 : 6,
+            density.space(hasFollowUp ? 2 : 6),
           ),
           child: Stack(
             clipBehavior: Clip.none,

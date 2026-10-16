@@ -40,7 +40,7 @@ class HomeSidebar extends ConsumerWidget {
     super.key,
   });
 
-  static const defaultWidth = WeCordSizes.sidebarMax;
+  static const defaultWidth = WeCordSizes.sidebarDefault;
 
   /// The selected entry; null on phones, where entries open full screen.
   final HomeSection? section;
@@ -359,7 +359,7 @@ class SidebarNavRow extends StatelessWidget {
         builder: (context, states) => AnimatedContainer(
           duration: WeCordMotion.quick,
           curve: WeCordMotion.standard,
-          height: 40,
+          height: context.density.rowHeight(40),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: sidebarRowDecoration(
             tokens,
@@ -410,6 +410,7 @@ class _DirectMessageRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final c = tokens.colors;
+    final density = context.density;
     final title = conversation.title?.trim().isNotEmpty == true
         ? conversation.title!
         : tr('Conversation');
@@ -469,7 +470,11 @@ class _DirectMessageRow extends ConsumerWidget {
             return AnimatedContainer(
               duration: WeCordMotion.quick,
               curve: WeCordMotion.standard,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              constraints: BoxConstraints(minHeight: density.minRowHeight),
+              padding: EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: density.space(7),
+              ),
               decoration: sidebarRowDecoration(
                 tokens,
                 selected: selected,
@@ -480,7 +485,7 @@ class _DirectMessageRow extends ConsumerWidget {
                   ResolvedAvatar(
                     name: title,
                     avatarUrl: conversation.avatarUrl,
-                    size: 36,
+                    size: density.avatar(36),
                     squircle: group,
                     showPresence: conversation.type == ConversationType.direct,
                     presence: presence,

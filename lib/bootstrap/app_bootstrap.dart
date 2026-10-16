@@ -7,9 +7,11 @@ import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/theme/density_controller.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
+import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/macos_title_bar.dart';
 
 Future<void> runWeCordApp() async {
@@ -34,6 +36,7 @@ class WeCordApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
     final glassEffects = ref.watch(glassEffectsProvider);
+    final density = ref.watch(densityProvider);
     final chinese = resolvesToChinese(ref.watch(appLanguageProvider));
     // Set before anything below builds, so every tr() sees it.
     AppStrings.isChinese = chinese;
@@ -61,9 +64,12 @@ class WeCordApp extends ConsumerWidget {
         value: WeCordTheme.overlayStyleFor(Theme.of(context).brightness),
         child: WeCordAppearance(
           glassEffects: glassEffects,
-          child: MacosTitleBarFrame(
-            child: PresenceActivityListener(
-              child: child ?? const SizedBox.shrink(),
+          child: WeCordDensityScope(
+            density: density,
+            child: MacosTitleBarFrame(
+              child: PresenceActivityListener(
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

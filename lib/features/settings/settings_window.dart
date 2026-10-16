@@ -465,7 +465,10 @@ class _SectionPage extends ConsumerWidget {
             const ThemeModePicker(large: true),
             SettingsGroup(
               header: tr('Display'),
-              children: const [GlassEffectsRow(showIcon: false)],
+              children: const [
+                GlassEffectsRow(showIcon: false),
+                DensityRow(showIcon: false),
+              ],
             ),
           ],
         );

@@ -491,7 +491,10 @@ class PhoneConversationRow extends ConsumerWidget {
           return AnimatedContainer(
             duration: WeCordMotion.quick,
             curve: WeCordMotion.standard,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: context.density.space(9),
+            ),
             decoration: BoxDecoration(
               color: background,
               borderRadius: BorderRadius.circular(WeCordRadii.lg),

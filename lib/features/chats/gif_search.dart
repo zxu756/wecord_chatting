@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
@@ -355,7 +356,7 @@ class _Message extends StatelessWidget {
 }
 
 /// A GIF message: the GIF itself, at most a bubble wide.
-class GifMessageImage extends StatelessWidget {
+class GifMessageImage extends StatefulWidget {
   const GifMessageImage({required this.url, this.textColor, super.key});
 
   final String url;
@@ -363,33 +364,110 @@ class GifMessageImage extends StatelessWidget {
   /// For the link shown when the GIF fails to load.
   final Color? textColor;
 
+  static const _maxSize = Size(280, 240);
+
+  @override
+  State<GifMessageImage> createState() => _GifMessageImageState();
+}
+
+class _GifMessageImageState extends State<GifMessageImage> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _listen();
+  }
+
+  @override
+  void didUpdateWidget(covariant GifMessageImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _listen();
+    }
+  }
+
+  /// Remembers the GIF's size once known, so it takes its space at once
+  /// the next time it is shown (scrolling back, reopening the chat).
+  void _listen() {
+    if (imageDimensionCache[widget.url] != null) {
+      _stopListening();
+      return;
+    }
+    final stream = NetworkImage(
+      widget.url,
+    ).resolve(createLocalImageConfiguration(context));
+    if (stream.key == _stream?.key) {
+      return;
+    }
+    _stopListening();
+    final url = widget.url;
+    final listener = ImageStreamListener((info, _) {
+      imageDimensionCache.remember(
+        url,
+        Size(info.image.width.toDouble(), info.image.height.toDouble()),
+      );
+      _stopListening();
+    }, onError: (error, stackTrace) => _stopListening());
+    _stream = stream;
+    _listener = listener;
+    stream.addListener(listener);
+  }
+
+  void _stopListening() {
+    final listener = _listener;
+    if (listener != null) {
+      _stream?.removeListener(listener);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  @override
+  void dispose() {
+    _stopListening();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final known = imageDimensionCache[widget.url];
+    final fitted = known == null
+        ? null
+        : applyBoxFit(
+            BoxFit.contain,
+            known,
+            GifMessageImage._maxSize,
+          ).destination;
+    final image = Image.network(
+      widget.url,
+      fit: BoxFit.contain,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : Container(
+              width: fitted?.width ?? 200,
+              height: fitted?.height ?? 150,
+              color: colorScheme.surfaceContainerHighest,
+            ),
+      errorBuilder: (context, error, stackTrace) => Text(
+        widget.url,
+        style: TextStyle(color: widget.textColor ?? colorScheme.primary),
+      ),
+    );
     return ConstrainedBox(
       key: const ValueKey('gif-message'),
-      constraints: const BoxConstraints(maxWidth: 280, maxHeight: 240),
+      constraints: BoxConstraints.loose(GifMessageImage._maxSize),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Semantics(
           label: tr('GIF'),
           image: true,
-          child: Image.network(
-            url,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            loadingBuilder: (context, child, progress) => progress == null
-                ? child
-                : Container(
-                    width: 200,
-                    height: 150,
-                    color: colorScheme.surfaceContainerHighest,
-                  ),
-            errorBuilder: (context, error, stackTrace) => Text(
-              url,
-              style: TextStyle(color: textColor ?? colorScheme.primary),
-            ),
-          ),
+          child: fitted == null
+              ? image
+              : SizedBox.fromSize(size: fitted, child: image),
         ),
       ),
     );

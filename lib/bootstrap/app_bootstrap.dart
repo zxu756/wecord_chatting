@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/offline/chat_cache.dart';
+import 'package:wecord/features/chats/offline/connectivity.dart';
+import 'package:wecord/features/chats/offline/offline_session.dart';
+import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -23,7 +27,20 @@ Future<void> runWeCordApp() async {
     anonKey: config.supabaseAnonKey,
   );
 
-  runApp(const ProviderScope(child: WeCordApp()));
+  // The offline copy of chats (SQLite, or IndexedDB on the web) and the
+  // device's connection; without them chats work online only.
+  final chatCache = await openPlatformChatCache();
+  runApp(
+    ProviderScope(
+      overrides: [
+        if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
+        deviceConnectivityProvider.overrideWith(
+          (ref) => platformDeviceConnectivity(),
+        ),
+      ],
+      child: const WeCordApp(),
+    ),
+  );
 }
 
 class WeCordApp extends ConsumerWidget {
@@ -32,6 +49,8 @@ class WeCordApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    // Wipes the offline copy of chats on sign-out.
+    ref.watch(offlineSessionGuardProvider);
     final themeMode = ref.watch(themeModeProvider);
     final glassEffects = ref.watch(glassEffectsProvider);
     final chinese = resolvesToChinese(ref.watch(appLanguageProvider));

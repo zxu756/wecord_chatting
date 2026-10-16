@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/message_history.dart';
+import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -267,6 +269,29 @@ abstract interface class ChatsDataSource {
 
   Future<List<Map<String, dynamic>>> listMessages(String conversationId);
 
+  /// A page of message rows with their reactions, oldest first (see
+  /// [MessageHistorySource.fetchMessageRows]).
+  Future<List<Map<String, dynamic>>> listMessagePage(
+    String conversationId, {
+    MessageCursor? before,
+    MessageCursor? after,
+    required int limit,
+  });
+
+  /// The rows of [messageIds] with their reactions, oldest first.
+  Future<List<Map<String, dynamic>>> listMessagesByIds(
+    String conversationId,
+    List<String> messageIds,
+  );
+
+  /// `{message_id, reactions}` rows for [messageIds].
+  Future<List<dynamic>> listMessageReactions(
+    String conversationId,
+    List<String> messageIds,
+  );
+
+  Stream<ThreadEvent> threadEvents(String conversationId);
+
   Future<List<Map<String, dynamic>>> listReadMarkers(String conversationId);
 
   Future<List<Map<String, dynamic>>> listGroupMembers(String conversationId);
@@ -324,7 +349,12 @@ abstract interface class ChatsDataSource {
   });
 }
 
-class SupabaseChatsRepository implements ChatsRepository {
+class SupabaseChatsRepository
+    implements
+        ChatsRepository,
+        MessageHistorySource,
+        ConversationRowsSource,
+        OutboxMessageSender {
   SupabaseChatsRepository(
     SupabaseClient client, {
     Future<void> Function(String messageId)? onMessageSent,
@@ -360,6 +390,106 @@ class SupabaseChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> listConversationRows() {
+    return _dataSource.listConversationSummaries();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchMessageRows(
+    String conversationId, {
+    MessageCursor? before,
+    MessageCursor? after,
+    int limit = messagePageSize,
+  }) {
+    return _dataSource.listMessagePage(
+      conversationId,
+      before: before,
+      after: after,
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchMessageRowsByIds(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) {
+      return const [];
+    }
+    return _dataSource.listMessagesByIds(conversationId, messageIds);
+  }
+
+  @override
+  Future<Map<String, List<dynamic>>> fetchReactions(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) {
+      return const {};
+    }
+    final rows = await _dataSource.listMessageReactions(
+      conversationId,
+      messageIds,
+    );
+    return {
+      for (final row in rows)
+        if (row is Map &&
+            row['message_id'] is String &&
+            row['reactions'] is List)
+          row['message_id'] as String: row['reactions'] as List<dynamic>,
+    };
+  }
+
+  @override
+  ChatMessage messageFromRow(Map<String, dynamic> row) {
+    return chatMessageFromRow(row);
+  }
+
+  @override
+  Stream<ThreadEvent> threadEvents(String conversationId) {
+    return _dataSource.threadEvents(conversationId);
+  }
+
+  @override
+  Future<String?> sendQueuedTextMessage({
+    required String conversationId,
+    required String clientId,
+    required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
+  }) async {
+    final params = {
+      'target_conversation_id': conversationId,
+      'body': body.trim(),
+      'reply_to_message_id': replyToMessageId,
+      'reply_preview': replyPreview?.toJson(),
+      'mentions': mentions.map((mention) => mention.toJson()).toList(),
+      'client_id': clientId,
+    };
+    try {
+      return await _send(
+        conversationId,
+        () => _dataSource.rpc('send_text_message', params),
+      );
+    } on PostgrestException catch (error) {
+      // A server without client ids yet (202610160047): send it the old
+      // way, without the protection against doubles.
+      if (error.code != 'PGRST202') {
+        rethrow;
+      }
+      return _send(
+        conversationId,
+        () => _dataSource.rpc(
+          'send_text_message',
+          {...params}..remove('client_id'),
+        ),
+      );
+    }
+  }
+
+  @override
   Future<ConversationSummary?> getConversationSummary(
     String conversationId,
   ) async {
@@ -375,7 +505,7 @@ class SupabaseChatsRepository implements ChatsRepository {
   @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {
     final rows = await _dataSource.listMessages(conversationId);
-    return rows.map(_chatMessageFromJson).toList(growable: false);
+    return rows.map(chatMessageFromRow).toList(growable: false);
   }
 
   @override
@@ -453,7 +583,8 @@ class SupabaseChatsRepository implements ChatsRepository {
 
   /// Runs a send, turning the server's slowmode, AutoMod and rules
   /// refusals into a [SlowmodeException] or a [SendRefusedException].
-  Future<void> _send(
+  /// Returns the stored message's id.
+  Future<String?> _send(
     String conversationId,
     Future<Object?> Function() send,
   ) async {
@@ -473,7 +604,7 @@ class SupabaseChatsRepository implements ChatsRepository {
     }
     if (messageId is String) {
       unawaited(_onMessageSent?.call(messageId));
-      return;
+      return messageId;
     }
     // AutoMod refuses some sends quietly, so that its alerts and timeouts
     // stay; it leaves a note of why.
@@ -481,11 +612,12 @@ class SupabaseChatsRepository implements ChatsRepository {
     try {
       notice = await _dataSource.takeAutoModNotice(conversationId);
     } catch (_) {
-      return;
+      return null;
     }
     if (notice != null) {
       throw AutoModBlockedException(notice['reason'] as String?);
     }
+    return null;
   }
 
   @override
@@ -1369,6 +1501,8 @@ class MessageSearchResult {
 class SupabaseChatsDataSource implements ChatsDataSource {
   const SupabaseChatsDataSource(this._client);
 
+  static const _conversationListChannel = 'conversation-list-changes';
+
   final SupabaseClient _client;
 
   @override
@@ -1410,6 +1544,277 @@ class SupabaseChatsDataSource implements ChatsDataSource {
       return select('reactions,$_messageColumns');
     }
     return withConversationReactions(rows, reactionRows);
+  }
+
+  /// The tie breaker of a keyset page: with `created_at` already at most
+  /// (or at least) the cursor's, a message is past the cursor when it is
+  /// strictly older (newer), or as old with a smaller (larger) id.
+  static String _keysetTieBreak(MessageCursor cursor, {required bool before}) {
+    final op = before ? 'lt' : 'gt';
+    return 'created_at.$op."${cursor.queryTimestamp}",id.$op.${cursor.id}';
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listMessagePage(
+    String conversationId, {
+    MessageCursor? before,
+    MessageCursor? after,
+    required int limit,
+  }) async {
+    Future<List<Map<String, dynamic>>> select(String columns) async {
+      var query = _client
+          .from('messages')
+          .select(columns)
+          .eq('conversation_id', conversationId);
+      // `created_at <= t` is the index range; the tie break filters the
+      // few rows at `t` itself (see 202610160046_message_pagination).
+      if (before != null) {
+        query = query
+            .lte('created_at', before.queryTimestamp)
+            .or(_keysetTieBreak(before, before: true));
+      } else if (after != null) {
+        query = query
+            .gte('created_at', after.queryTimestamp)
+            .or(_keysetTieBreak(after, before: false));
+      }
+      // Newest first for the latest page and older pages; oldest first
+      // for newer pages. Callers get oldest first either way.
+      final ascending = after != null;
+      final rows = await query
+          .order('created_at', ascending: ascending)
+          .order('id', ascending: ascending)
+          .limit(limit);
+      final cast = rows.cast<Map<String, dynamic>>();
+      return ascending ? cast : cast.reversed.toList(growable: false);
+    }
+
+    final rows = await select(_messageColumns);
+    final ids = [for (final row in rows) row['id'] as String];
+    final reactionRows = await _pageReactions(conversationId, ids);
+    if (reactionRows == null) {
+      // A server without list_conversation_reactions yet.
+      return select('reactions,$_messageColumns');
+    }
+    return withConversationReactions(rows, reactionRows);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listMessagesByIds(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    final rows = await _client
+        .from('messages')
+        .select(_messageColumns)
+        .eq('conversation_id', conversationId)
+        .inFilter('id', messageIds)
+        .order('created_at', ascending: true)
+        .order('id', ascending: true);
+    final cast = rows.cast<Map<String, dynamic>>();
+    final reactionRows = await _pageReactions(conversationId, messageIds);
+    return reactionRows == null
+        ? cast
+        : withConversationReactions(cast, reactionRows);
+  }
+
+  @override
+  Future<List<dynamic>> listMessageReactions(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    return await _pageReactions(conversationId, messageIds) ?? const [];
+  }
+
+  /// The reactions of [messageIds], from the page version of
+  /// list_conversation_reactions (202610160046), or the whole
+  /// conversation's on servers without it; null when neither exists.
+  Future<List<dynamic>?> _pageReactions(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) {
+      return const [];
+    }
+    try {
+      return await _client.rpc<List<dynamic>>(
+        'list_conversation_reactions',
+        params: {
+          'target_conversation_id': conversationId,
+          'target_message_ids': messageIds,
+        },
+      );
+    } on PostgrestException catch (error) {
+      if (error.code != 'PGRST202') {
+        rethrow;
+      }
+    }
+    try {
+      final wanted = messageIds.toSet();
+      final rows = await _client.rpc<List<dynamic>>(
+        'list_conversation_reactions',
+        params: {'target_conversation_id': conversationId},
+      );
+      return [
+        for (final row in rows)
+          if (row is Map && wanted.contains(row['message_id'])) row,
+      ];
+    } on PostgrestException {
+      return null;
+    }
+  }
+
+  @override
+  Stream<ThreadEvent> threadEvents(String conversationId) {
+    late RealtimeChannel channel;
+    late StreamController<ThreadEvent> controller;
+    final name = 'thread-events-$conversationId';
+    var failed = false;
+
+    String? idOf(Map<String, dynamic> record, String column) {
+      final value = record[column];
+      return value is String ? value : null;
+    }
+
+    void emit(ThreadEvent event) {
+      if (!controller.isClosed) {
+        controller.add(event);
+      }
+    }
+
+    PostgresChangeFilter byConversation([String column = 'conversation_id']) {
+      return PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: column,
+        value: conversationId,
+      );
+    }
+
+    void onRelated(ThreadEventKind kind, PostgresChangePayload payload) {
+      emit(
+        ThreadEvent(
+          kind,
+          messageId:
+              idOf(payload.newRecord, 'message_id') ??
+              idOf(payload.oldRecord, 'message_id'),
+        ),
+      );
+    }
+
+    controller = StreamController<ThreadEvent>(
+      onListen: () {
+        channel = _client
+            .channel(name)
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'messages',
+              filter: byConversation(),
+              callback: (payload) {
+                switch (payload.eventType) {
+                  case PostgresChangeEvent.insert:
+                    emit(
+                      ThreadEvent(
+                        ThreadEventKind.messageInserted,
+                        messageId: idOf(payload.newRecord, 'id'),
+                        clientId: idOf(payload.newRecord, 'client_id'),
+                      ),
+                    );
+                  case PostgresChangeEvent.delete:
+                    emit(
+                      ThreadEvent(
+                        ThreadEventKind.messageDeleted,
+                        messageId: idOf(payload.oldRecord, 'id'),
+                      ),
+                    );
+                  default:
+                    emit(
+                      ThreadEvent(
+                        ThreadEventKind.messageUpdated,
+                        messageId:
+                            idOf(payload.newRecord, 'id') ??
+                            idOf(payload.oldRecord, 'id'),
+                      ),
+                    );
+                }
+              },
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'message_reactions',
+              filter: byConversation(),
+              callback: (payload) =>
+                  onRelated(ThreadEventKind.reactionsChanged, payload),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'message_poll_votes',
+              filter: byConversation(),
+              callback: (payload) =>
+                  onRelated(ThreadEventKind.pollVotesChanged, payload),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'pinned_messages',
+              filter: byConversation(),
+              callback: (payload) =>
+                  onRelated(ThreadEventKind.pinsChanged, payload),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'conversation_members',
+              filter: byConversation(),
+              callback: (payload) =>
+                  emit(const ThreadEvent(ThreadEventKind.membersChanged)),
+            )
+            // Threads started here, and their activity (reply counts on
+            // root messages).
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'conversation_threads',
+              filter: byConversation('parent_conversation_id'),
+              callback: (payload) => emit(
+                ThreadEvent(
+                  ThreadEventKind.threadsChanged,
+                  messageId:
+                      idOf(payload.newRecord, 'root_message_id') ??
+                      idOf(payload.oldRecord, 'root_message_id'),
+                ),
+              ),
+            )
+            .subscribe((status, error) {
+              switch (status) {
+                case RealtimeSubscribeStatus.subscribed:
+                  realtimeStatusTracker.report(
+                    name,
+                    RealtimeChannelState.joined,
+                  );
+                  if (failed) {
+                    failed = false;
+                    emit(const ThreadEvent(ThreadEventKind.resubscribed));
+                  }
+                case RealtimeSubscribeStatus.channelError:
+                case RealtimeSubscribeStatus.timedOut:
+                  failed = true;
+                  realtimeStatusTracker.report(
+                    name,
+                    RealtimeChannelState.failed,
+                  );
+                case RealtimeSubscribeStatus.closed:
+                  realtimeStatusTracker.forget(name);
+              }
+            });
+      },
+      onCancel: () async {
+        realtimeStatusTracker.forget(name);
+        await _client.removeChannel(channel);
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -1529,7 +1934,7 @@ class SupabaseChatsDataSource implements ChatsDataSource {
         }
 
         channel = _client
-            .channel('conversation-list-changes')
+            .channel(_conversationListChannel)
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
@@ -1554,9 +1959,26 @@ class SupabaseChatsDataSource implements ChatsDataSource {
               table: 'conversation_threads',
               callback: emit,
             )
-            .subscribe();
+            .subscribe((status, error) {
+              switch (status) {
+                case RealtimeSubscribeStatus.subscribed:
+                  realtimeStatusTracker.report(
+                    _conversationListChannel,
+                    RealtimeChannelState.joined,
+                  );
+                case RealtimeSubscribeStatus.channelError:
+                case RealtimeSubscribeStatus.timedOut:
+                  realtimeStatusTracker.report(
+                    _conversationListChannel,
+                    RealtimeChannelState.failed,
+                  );
+                case RealtimeSubscribeStatus.closed:
+                  realtimeStatusTracker.forget(_conversationListChannel);
+              }
+            });
       },
       onCancel: () async {
+        realtimeStatusTracker.forget(_conversationListChannel);
         await _client.removeChannel(channel);
       },
     );
@@ -2225,7 +2647,8 @@ GroupMember _groupMemberFromJson(Map<String, dynamic> row) {
   });
 }
 
-ChatMessage _chatMessageFromJson(Map<String, dynamic> row) {
+/// Reads a message row (with its embedded sender) as the app shows it.
+ChatMessage chatMessageFromRow(Map<String, dynamic> row) {
   final sender = row['sender'];
   if (sender is! Map<String, dynamic> || sender['alias'] != null) {
     return ChatMessage.fromJson(row);

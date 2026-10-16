@@ -61,6 +61,7 @@ import '../features/contacts/contacts_screen_test.dart' as contact_fakes;
 import '../features/profile/user_profile_screen_test.dart' as profile_fakes;
 import '../features/settings/settings_screen_test.dart' as settings_fakes;
 import '../features/voice/voice_fakes.dart';
+import '../features/file_preview/file_preview_fakes.dart';
 
 /// Inbox with fixed [items].
 class FakeInboxRepository implements InboxRepository {
@@ -1689,8 +1690,12 @@ class PhoneWorld {
 
   late GoRouter router;
 
+  /// The file viewer's services: fakes that stay off the network.
+  List<Override> filePreview = filePreviewOverrides();
+
   List<Override> get overrides {
     return [
+      ...filePreview,
       authRepositoryProvider.overrideWithValue(auth),
       authStateProvider.overrideWith((ref) => Stream.value(auth.user)),
       chatsRepositoryProvider.overrideWithValue(chats),

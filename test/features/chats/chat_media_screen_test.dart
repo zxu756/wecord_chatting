@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/voice_message_player.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
@@ -15,6 +17,8 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
+
+import '../file_preview/file_preview_fakes.dart';
 
 void main() {
   testWidgets('chat media screen groups images voice and files', (
@@ -29,7 +33,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatsRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          ...filePreviewOverrides(),
+        ],
         child: const MaterialApp(
           home: ChatMediaScreen(conversationId: 'conversation-1'),
         ),
@@ -39,15 +46,44 @@ void main() {
 
     expect(find.text('Media'), findsOneWidget);
     expect(find.text('Images'), findsOneWidget);
-    expect(find.textContaining('Ada'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('media-tile-conversation-1/image.png')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Voice'));
     await tester.pumpAndSettle();
-    expect(find.text('[Voice]'), findsOneWidget);
+    expect(find.byType(VoiceMessagePlayer), findsOneWidget);
+    expect(find.textContaining('Ada'), findsOneWidget);
 
     await tester.tap(find.text('Files'));
     await tester.pumpAndSettle();
     expect(find.text('report.pdf'), findsOneWidget);
+  });
+
+  testWidgets('a photo in the media grid opens in the viewer', (tester) async {
+    final repository = FakeChatsRepository()
+      ..media = [_media(type: MessageType.image, body: '')];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(repository),
+          ...filePreviewOverrides(),
+        ],
+        child: const MaterialApp(
+          home: ChatMediaScreen(conversationId: 'conversation-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-tile-conversation-1/image.png')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(FilePreviewScreen), findsOneWidget);
+    expect(find.textContaining('Ada'), findsOneWidget);
   });
 }
 

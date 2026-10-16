@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import Quartz
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -45,7 +46,24 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    QuickLookPlugin.register(
+      with: flutterViewController.registrar(forPlugin: "QuickLookPlugin"))
+    QuickLookPlugin.shared?.attach(window: self)
 
     super.awakeFromNib()
+  }
+
+  // The Quick Look panel asks the responder chain for a controller; the
+  // window hands it to QuickLookPlugin while a preview is up.
+  override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+    QuickLookPlugin.shared?.hasItems ?? false
+  }
+
+  override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+    QuickLookPlugin.shared?.beginControl(panel)
+  }
+
+  override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+    QuickLookPlugin.shared?.endControl(panel)
   }
 }

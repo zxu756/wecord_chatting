@@ -30,13 +30,21 @@ dependencies:
   video_player: ^2.14.1
   mime: ^2.1.0
   qr_flutter: ^4.1.0
+  pdfrx: ^2.6.5
+  re_highlight: ^0.0.3
+  flutter_markdown_plus: ^1.0.12
+  share_plus: ^13.3.1
+  gal: ^2.3.3
+  path_provider: ^2.1.6
+  http: ^1.6.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  http: ^1.6.0
   webview_flutter_platform_interface: ^2.15.1
+  video_player_platform_interface: ^6.9.0
 
 flutter:
   uses-material-design: true
@@ -49,3 +57,9 @@ flutter:
     - family: Plus Jakarta Sans
       fonts:
         - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Variable.ttf
+    # JetBrains Mono (SIL OFL 1.1, see assets/fonts/jetbrains_mono/OFL.txt),
+    # JetBrainsMono[wght].ttf from google/fonts: code and plain text in the
+    # file viewer, the same on every platform.
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/jetbrains_mono/JetBrainsMono-Variable.ttf

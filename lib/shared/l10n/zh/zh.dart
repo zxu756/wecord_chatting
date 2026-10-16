@@ -12,6 +12,7 @@ import 'package:wecord/shared/l10n/zh/zh_circles_core.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_extra.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_design.dart';
+import 'package:wecord/shared/l10n/zh/zh_file_preview.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_phone_home.dart';
@@ -49,6 +50,7 @@ const zhAreas = <Map<String, String>>[
   zhRedesignCircles,
   zhRedesignVoice,
   zhRedesignSettings,
+  zhFilePreview,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

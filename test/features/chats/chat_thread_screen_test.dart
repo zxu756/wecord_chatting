@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
+import '../file_preview/file_preview_fakes.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +11,6 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
-import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
@@ -1188,7 +1189,7 @@ void main() {
     await tester.tap(find.byType(Image));
     await tester.pumpAndSettle();
 
-    expect(find.text('Image preview'), findsOneWidget);
+    expect(find.byType(FilePreviewScreen), findsOneWidget);
     // Test images never load, so the URL is signed once more (as when a
     // signed URL has expired) and then left alone.
     expect(repository.createdImageUrls, hasLength(2));
@@ -1670,7 +1671,6 @@ void main() {
     testWidgets('file messages show their name and size and open on tap', (
       tester,
     ) async {
-      final opened = <Uri>[];
       final repository = FakeChatsRepository()
         ..messages = [
           _message(
@@ -1689,18 +1689,18 @@ void main() {
             createdAt: DateTime.utc(2026, 10, 14, 9),
           ),
         ];
-      await tester.pumpWidget(
-        _app(repository, fileOpener: (url) async => opened.add(url)),
-      );
+      await tester.pumpWidget(_app(repository));
       await tester.pump();
 
       expect(find.text('notes.pdf'), findsOneWidget);
-      expect(find.text('2 KB'), findsOneWidget);
+      expect(find.text('2 KB · PDF'), findsOneWidget);
       await tester.tap(find.text('notes.pdf'));
       await tester.pumpAndSettle();
-      expect(opened, [
-        Uri.parse('https://files.test/conversation-1/seed-notes.pdf'),
-      ]);
+      expect(find.byType(FilePreviewScreen), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('file-preview-title'))).data,
+        'notes.pdf',
+      );
     });
 
     testWidgets('a timed-out member is told when they can talk again', (
@@ -3038,7 +3038,7 @@ void main() {
     await tester.tap(find.text('Preview'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Image preview'), findsOneWidget);
+    expect(find.byType(FilePreviewScreen), findsOneWidget);
   });
 
   testWidgets('empty composer does not send', (tester) async {
@@ -3205,7 +3205,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ChatMediaScreen), findsOneWidget);
 
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const ValueKey('paper-page-back')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatMediaScreen), findsNothing);
     expect(find.byType(ChatThreadScreen), findsOneWidget);
@@ -3509,7 +3509,6 @@ Widget _app(
   bool? canSendMessages,
   DateTime? timedOutUntil,
   ChatFilePickerService? filePicker,
-  Future<void> Function(Uri url)? fileOpener,
   int? slowmodeSeconds,
   String? topic,
 }) {
@@ -3524,7 +3523,7 @@ Widget _app(
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       if (filePicker != null)
         chatFilePickerServiceProvider.overrideWithValue(filePicker),
-      if (fileOpener != null) fileOpenerProvider.overrideWithValue(fileOpener),
+      ...filePreviewOverrides(),
       if (imagePickerService != null)
         imagePickerServiceProvider.overrideWithValue(imagePickerService),
       if (voiceMessageRecorder != null)

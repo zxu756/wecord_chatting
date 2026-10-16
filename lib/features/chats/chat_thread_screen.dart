@@ -46,6 +46,9 @@ import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/file_preview/file_preview_scope.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
+import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -1153,6 +1156,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 member.profile.id: member,
             };
             final sidePadding = cards ? 0.0 : (desktop ? 40.0 : 14.0);
+            _galleryFiles = () => [
+              for (final message in fullOldestToNewest)
+                if (PreviewFile.fromMessage(
+                      message,
+                      senderName: _senderFor(
+                        message,
+                        membersById,
+                        fallbackProfile: message.isSentBy(currentUserId)
+                            ? ownProfile
+                            : null,
+                      ).name,
+                    )
+                    case final file?)
+                  file,
+            ];
 
             final list = ListView.builder(
               key: const ValueKey('chat-message-list'),
@@ -1317,7 +1335,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             }
             return Stack(
               children: [
-                Positioned.fill(child: list),
+                Positioned.fill(
+                  child: FilePreviewScope(
+                    conversationId: widget.conversationId,
+                    files: _galleryFiles,
+                    child: list,
+                  ),
+                ),
                 if (showJumpToNewReplies)
                   Positioned(
                     right: 16,
@@ -3025,22 +3049,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     unawaited(_restoreDraft());
   }
 
+  /// The conversation's images and files (oldest first) for the viewer;
+  /// set while the messages are shown.
+  List<PreviewFile> Function() _galleryFiles = () => const [];
+
   Future<void> _previewImage(ImageAttachment attachment) async {
-    try {
-      final url = await ref
-          .read(chatsRepositoryProvider)
-          .createImageUrl(attachment);
-      if (!mounted) {
-        return;
-      }
-      showImagePreview(context, url);
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _sendError = tr('Could not open image preview. Try again.');
-        });
-      }
-    }
+    final file = PreviewFile.fromImageAttachment(
+      attachment,
+      conversationId: widget.conversationId,
+    );
+    final gallery = _galleryFiles();
+    final known = gallery.where((item) => item.key == file.key).firstOrNull;
+    await openFilePreview(
+      context,
+      file: known ?? file,
+      gallery: gallery,
+      conversationId: widget.conversationId,
+    );
   }
 }
 
@@ -4510,6 +4535,9 @@ class _MessageContent extends StatelessWidget {
               attachment: file,
               textColor: textColor,
               card: cards,
+              messageId: message.id,
+              conversationId: message.conversationId,
+              sentAt: message.createdAt,
             ),
           ),
         ),
@@ -4842,7 +4870,12 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
             );
           }
           return WeCordPressable(
-            onPressed: () => showImagePreview(context, url),
+            onPressed: () => unawaited(
+              openFilePreviewInScope(
+                context,
+                PreviewFile.fromImageAttachment(widget.attachment),
+              ),
+            ),
             shape: RoundedRectangleBorder(borderRadius: radius),
             pressedScale: 0.98,
             semanticLabel: tr('Image'),
@@ -4877,32 +4910,6 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
       ),
     );
   }
-}
-
-void showImagePreview(BuildContext context, String url) {
-  showDialog<void>(
-    context: context,
-    builder: (context) {
-      return Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(title: Text(tr('Image preview'))),
-          body: Center(
-            child: InteractiveViewer(
-              minScale: 0.8,
-              maxScale: 4,
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.broken_image_outlined, size: 48);
-                },
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }
 
 class _Composer extends StatelessWidget {

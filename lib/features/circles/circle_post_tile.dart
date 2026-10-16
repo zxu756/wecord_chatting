@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
+import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -324,13 +328,26 @@ class _PostImagePreview extends ConsumerWidget {
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(WeCordRadii.lg),
-          child: Image.network(
-            snapshot.data!,
-            height: 220,
-            width: double.infinity,
-            fit: BoxFit.cover,
+        return WeCordPressable(
+          onPressed: () => unawaited(
+            openFilePreview(
+              context,
+              file: PreviewFile.fromImageAttachment(attachment),
+            ),
+          ),
+          pressedScale: 0.98,
+          semanticLabel: tr('Image'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          builder: (context, states) => ClipRRect(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            child: Image.network(
+              snapshot.data!,
+              height: 220,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
           ),
         );
       },

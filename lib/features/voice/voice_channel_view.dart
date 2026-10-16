@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -269,6 +271,17 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                         badgeCount: chatBadge,
                         badgeKey: chatBadgeKey,
                         onPressed: () => _toggleChat(wide),
+                      ),
+                    if (connected)
+                      VoiceHeaderButton(
+                        key: const ValueKey('voice-call-link-button'),
+                        icon: Icons.link_rounded,
+                        tooltip: tr('Copy call link'),
+                        onPressed: () => showCallLinkSheet(
+                          context,
+                          target: CallLinkTarget.channel(channelId),
+                          name: widget.channelName,
+                        ),
                       ),
                     for (final action in widget.actions)
                       VoiceHeaderButton(

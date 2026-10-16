@@ -224,6 +224,22 @@ void main() {
     await world.close(tester);
   });
 
+  testWidgets('a connected call offers to copy its link', (tester) async {
+    useWideScreen(tester);
+    final world = voiceWorld();
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(channelRow('ch-lounge'));
+    await settle(tester);
+
+    await tester.tap(find.byKey(const ValueKey('voice-call-link-button')));
+    await settle(tester);
+
+    expect(find.text('Call link'), findsOneWidget);
+    expect(find.byKey(const ValueKey('call-link-create')), findsOneWidget);
+    expect(find.text('Copy call link'), findsWidgets);
+    await world.close(tester);
+  });
+
   testWidgets('a participant menu sets their volume for me', (tester) async {
     useWideScreen(tester);
     final world = voiceWorld();

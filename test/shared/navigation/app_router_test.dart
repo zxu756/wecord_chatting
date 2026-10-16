@@ -12,6 +12,7 @@ import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -459,6 +460,49 @@ void main() {
     expect(find.text('Book Club'), findsOneWidget);
   });
 
+  testWidgets('call links opened signed out return after sign-in', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    final authState = StreamController<AuthUser?>();
+    late GoRouter router;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(repository),
+          authStateProvider.overrideWith((ref) => authState.stream),
+          callLinksRepositoryProvider.overrideWithValue(_NoAccessCallLinks()),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            router = ref.watch(appRouterProvider);
+            return MaterialApp.router(routerConfig: router);
+          },
+        ),
+      ),
+    );
+
+    router.go('/call/abcd2345efgh');
+    await tester.pump();
+    authState.add(null);
+    await tester.pumpAndSettle();
+    expect(find.text('Create account'), findsOneWidget);
+    expect(
+      router.routerDelegate.currentConfiguration.uri.toString(),
+      '/auth?from=%2Fcall%2Fabcd2345efgh',
+    );
+
+    authState.add(const AuthUser(id: 'user-1', email: 'me@example.com'));
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      '/call/abcd2345efgh',
+    );
+    expect(find.text("You don't have access to this call"), findsOneWidget);
+  });
+
   testWidgets('signed-out redirects ignore non-invite locations', (
     tester,
   ) async {
@@ -491,6 +535,15 @@ void main() {
 
     expect(router.routerDelegate.currentConfiguration.uri.path, '/home');
   });
+}
+
+/// Every link leads somewhere the user may not go.
+class _NoAccessCallLinks extends UninitializedCallLinksRepository {
+  _NoAccessCallLinks();
+
+  @override
+  Future<CallLinkResolution> resolve(String code) async =>
+      const CallLinkResolution.problem(CallLinkProblem.noAccess);
 }
 
 class FakeAuthRepository implements AuthRepository {

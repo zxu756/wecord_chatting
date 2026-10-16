@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -105,6 +107,21 @@ class DirectCallBar extends ConsumerWidget {
                                               'direct-call-waiting',
                                             )
                                           : null,
+                                    ),
+                                  ),
+                                  VoiceControlButton(
+                                    key: const ValueKey(
+                                      'voice-call-link-button',
+                                    ),
+                                    icon: Icons.link_rounded,
+                                    tooltip: tr('Copy call link'),
+                                    size: 36,
+                                    onPressed: () => showCallLinkSheet(
+                                      context,
+                                      target: CallLinkTarget.conversation(
+                                        conversationId,
+                                      ),
+                                      name: title,
                                     ),
                                   ),
                                 ],

@@ -102,6 +102,31 @@ void main() {
       expect(find.byTooltip('Disconnect'), findsOneWidget);
       await leaveCall(tester);
     });
+
+    testWidgets('a call in progress offers to copy its link', (tester) async {
+      repository.calls = [_call()];
+      await tester.pumpWidget(
+        app(const DirectCallBar(conversationId: 'dm-bob', title: 'Bob')),
+      );
+      await tester.pump();
+      // The link is only offered once in the call.
+      expect(
+        find.byKey(const ValueKey('voice-call-link-button')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('direct-call-join')));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('voice-call-link-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Call link'), findsOneWidget);
+      expect(find.byKey(const ValueKey('call-link-create')), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await leaveCall(tester);
+    });
   });
 
   testWidgets('a long name is cut short, not the sentence', (tester) async {

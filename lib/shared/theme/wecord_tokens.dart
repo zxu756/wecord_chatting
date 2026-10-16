@@ -15,6 +15,7 @@ class WeCordTokens extends ThemeExtension<WeCordTokens> {
     required this.colors,
     required this.shadows,
     required this.glass,
+    this.highContrast = false,
   });
 
   static const light = WeCordTokens(
@@ -31,7 +32,29 @@ class WeCordTokens extends ThemeExtension<WeCordTokens> {
     glass: WeCordGlassStyle.dark,
   );
 
+  /// The light set for the platform's "Increase contrast" setting: darker
+  /// secondary text, visible lines and switch tracks, solid glass.
+  static const lightHighContrast = WeCordTokens(
+    brightness: Brightness.light,
+    colors: WeCordPalette.lightHighContrast,
+    shadows: WeCordShadows.light,
+    glass: WeCordGlassStyle.lightHighContrast,
+    highContrast: true,
+  );
+
+  /// The dark set for "Increase contrast".
+  static const darkHighContrast = WeCordTokens(
+    brightness: Brightness.dark,
+    colors: WeCordPalette.darkHighContrast,
+    shadows: WeCordShadows.dark,
+    glass: WeCordGlassStyle.darkHighContrast,
+    highContrast: true,
+  );
+
   final Brightness brightness;
+
+  /// Whether this is a high contrast set (see [lightHighContrast]).
+  final bool highContrast;
   final WeCordPalette colors;
   final WeCordShadows shadows;
   final WeCordGlassStyle glass;
@@ -52,12 +75,14 @@ class WeCordTokens extends ThemeExtension<WeCordTokens> {
     WeCordPalette? colors,
     WeCordShadows? shadows,
     WeCordGlassStyle? glass,
+    bool? highContrast,
   }) {
     return WeCordTokens(
       brightness: brightness ?? this.brightness,
       colors: colors ?? this.colors,
       shadows: shadows ?? this.shadows,
       glass: glass ?? this.glass,
+      highContrast: highContrast ?? this.highContrast,
     );
   }
 
@@ -71,6 +96,7 @@ class WeCordTokens extends ThemeExtension<WeCordTokens> {
       colors: WeCordPalette.lerp(colors, other.colors, t),
       shadows: WeCordShadows.lerp(shadows, other.shadows, t),
       glass: WeCordGlassStyle.lerp(glass, other.glass, t),
+      highContrast: t < 0.5 ? highContrast : other.highContrast,
     );
   }
 }
@@ -129,9 +155,9 @@ class WeCordPalette {
     well: Color(0xFFF7F6F3),
     ink: Color(0xFF17171A),
     onInk: Color(0xFFFFFFFF),
-    muted: Color(0xFF6B6A72),
-    subtle: Color(0xFF8A8891),
-    faint: Color(0xFFB3B1B8),
+    muted: Color(0xFF5F5E66),
+    subtle: Color(0xFF6F6D76),
+    faint: Color(0xFF8D8994),
     line: Color(0xFFE4E2DD),
     lineSoft: Color(0xFFEFEDE8),
     track: Color(0xFFD6D3CC),
@@ -139,16 +165,16 @@ class WeCordPalette {
     onAccent: Color(0xFFFFFFFF),
     accentSoft: Color(0xFFE9F0FF),
     accentText: Color(0xFF1F5FE0),
-    success: Color(0xFF30A46C),
+    success: Color(0xFF2E9D67),
     successSoft: Color(0xFFE3F3EA),
-    successText: Color(0xFF1F7A47),
-    warning: Color(0xFFE7A53B),
+    successText: Color(0xFF1F7846),
+    warning: Color(0xFFCA8619),
     warningSoft: Color(0xFFFFF6E6),
     warningText: Color(0xFF8A5A00),
-    danger: Color(0xFFE5484D),
+    danger: Color(0xFFE12F35),
     onDanger: Color(0xFFFFFFFF),
     dangerSoft: Color(0xFFFDECEC),
-    dangerText: Color(0xFFD92D20),
+    dangerText: Color(0xFFD12B1F),
     scrim: Color(0x5217171A),
   );
 
@@ -164,8 +190,8 @@ class WeCordPalette {
     ink: Color(0xFFF3F2EF),
     onInk: Color(0xFF111113),
     muted: Color(0xFFA3A1AA),
-    subtle: Color(0xFF85838C),
-    faint: Color(0xFF5C5B63),
+    subtle: Color(0xFF94929A),
+    faint: Color(0xFF706F78),
     line: Color(0xFF2C2C31),
     lineSoft: Color(0xFF242428),
     track: Color(0xFF3A3A40),
@@ -179,11 +205,82 @@ class WeCordPalette {
     warning: Color(0xFFE7A53B),
     warningSoft: Color(0xFF33291A),
     warningText: Color(0xFFF5C46B),
-    danger: Color(0xFFE5484D),
+    danger: Color(0xFFE12F35),
     onDanger: Color(0xFFFFFFFF),
     dangerSoft: Color(0xFF3B1E20),
     dangerText: Color(0xFFFF8A80),
     scrim: Color(0x80000000),
+  );
+
+  /// [light] for "Increase contrast": ink is black, secondary text clears
+  /// 7:1, borders and switch tracks clear 3:1 against what they sit on.
+  static const lightHighContrast = WeCordPalette(
+    paper: Color(0xFFF5F4F1),
+    rail: Color(0xFFECEAE5),
+    railItem: Color(0xFFFFFFFF),
+    sidebar: Color(0xFFFAF9F7),
+    panel: Color(0xFFFFFFFF),
+    raised: Color(0xFFF2F1EE),
+    raisedStrong: Color(0xFFECEAE5),
+    well: Color(0xFFF7F6F3),
+    ink: Color(0xFF000000),
+    onInk: Color(0xFFFFFFFF),
+    muted: Color(0xFF3F3E45),
+    subtle: Color(0xFF4A4950),
+    faint: Color(0xFF6B6A72),
+    line: Color(0xFF76747D),
+    lineSoft: Color(0xFF8A8892),
+    track: Color(0xFF8A867B),
+    accent: Color(0xFF1B49C9),
+    onAccent: Color(0xFFFFFFFF),
+    accentSoft: Color(0xFFE9F0FF),
+    accentText: Color(0xFF173FA8),
+    success: Color(0xFF1F7A47),
+    successSoft: Color(0xFFE3F3EA),
+    successText: Color(0xFF14602F),
+    warning: Color(0xFF946400),
+    warningSoft: Color(0xFFFFF6E6),
+    warningText: Color(0xFF6B4400),
+    danger: Color(0xFFC4161C),
+    onDanger: Color(0xFFFFFFFF),
+    dangerSoft: Color(0xFFFDECEC),
+    dangerText: Color(0xFFA8130F),
+    scrim: Color(0x8017171A),
+  );
+
+  /// [dark] for "Increase contrast".
+  static const darkHighContrast = WeCordPalette(
+    paper: Color(0xFF111113),
+    rail: Color(0xFF111113),
+    railItem: Color(0xFF1F1F23),
+    sidebar: Color(0xFF18181B),
+    panel: Color(0xFF1B1B1E),
+    raised: Color(0xFF26262A),
+    raisedStrong: Color(0xFF2C2C31),
+    well: Color(0xFF222226),
+    ink: Color(0xFFFFFFFF),
+    onInk: Color(0xFF000000),
+    muted: Color(0xFFD0CED6),
+    subtle: Color(0xFFC0BEC6),
+    faint: Color(0xFF9694A0),
+    line: Color(0xFF8A8893),
+    lineSoft: Color(0xFF6E6D78),
+    track: Color(0xFF7C7B86),
+    accent: Color(0xFF9DB8FF),
+    onAccent: Color(0xFF000000),
+    accentSoft: Color(0xFF23283A),
+    accentText: Color(0xFFB8CBFF),
+    success: Color(0xFF4CC38A),
+    successSoft: Color(0xFF1A2E23),
+    successText: Color(0xFF8FEBB8),
+    warning: Color(0xFFF2B94F),
+    warningSoft: Color(0xFF33291A),
+    warningText: Color(0xFFFFD58A),
+    danger: Color(0xFFFF6B70),
+    onDanger: Color(0xFF000000),
+    dangerSoft: Color(0xFF3B1E20),
+    dangerText: Color(0xFFFFA39B),
+    scrim: Color(0xB3000000),
   );
 
   /// The app background behind panels (phone settings, inbox, login).
@@ -401,8 +498,10 @@ class WeCordGlassStyle {
     required this.saturation,
   });
 
+  // The fills are strong enough that secondary text keeps 4.5:1 even over
+  // dark content (an ink bubble scrolling under the header).
   static const light = WeCordGlassStyle(
-    fill: Color(0xC2FFFFFF),
+    fill: Color(0xE0FFFFFF),
     solidFill: Color(0xFFFFFFFF),
     border: Color(0xE6FFFFFF),
     blur: 24,
@@ -410,11 +509,28 @@ class WeCordGlassStyle {
   );
 
   static const dark = WeCordGlassStyle(
-    fill: Color(0xB82C2C32),
+    fill: Color(0xE62C2C32),
     solidFill: Color(0xFF2A2A2F),
     border: Color(0x14FFFFFF),
     blur: 24,
     saturation: 1.6,
+  );
+
+  /// Solid glass with a visible edge, for "Increase contrast".
+  static const lightHighContrast = WeCordGlassStyle(
+    fill: Color(0xFFFFFFFF),
+    solidFill: Color(0xFFFFFFFF),
+    border: Color(0xFF76747D),
+    blur: 0,
+    saturation: 1,
+  );
+
+  static const darkHighContrast = WeCordGlassStyle(
+    fill: Color(0xFF2A2A2F),
+    solidFill: Color(0xFF2A2A2F),
+    border: Color(0xFF8A8893),
+    blur: 0,
+    saturation: 1,
   );
 
   final Color fill;

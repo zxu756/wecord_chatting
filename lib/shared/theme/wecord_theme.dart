@@ -66,9 +66,15 @@ class WeCordTheme {
     );
   }
 
-  static ThemeData light() => _build(WeCordTokens.light);
+  /// The light theme; [highContrast] is the set for the platform's
+  /// "Increase contrast" setting (the app hands it to
+  /// `MaterialApp.highContrastTheme`).
+  static ThemeData light({bool highContrast = false}) => _build(
+    highContrast ? WeCordTokens.lightHighContrast : WeCordTokens.light,
+  );
 
-  static ThemeData dark() => _build(WeCordTokens.dark);
+  static ThemeData dark({bool highContrast = false}) =>
+      _build(highContrast ? WeCordTokens.darkHighContrast : WeCordTokens.dark);
 
   static ColorScheme _colorScheme(WeCordTokens tokens) {
     final c = tokens.colors;

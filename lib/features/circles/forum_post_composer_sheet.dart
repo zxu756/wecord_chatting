@@ -156,7 +156,7 @@ class _ForumPostComposerSheetState
         : mentionCandidates(
             ref
                     .watch(groupDetailProvider(widget.channel.conversationId))
-                    .valueOrNull
+                    .value
                     ?.members ??
                 const [],
             query,

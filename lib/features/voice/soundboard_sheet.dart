@@ -236,7 +236,7 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
     final sounds = ref.watch(circleSoundsProvider(widget.circleId));
     final session = ref.watch(voiceSessionProvider);
     final canPlay = canPlaySoundsIn(session, widget.channelId);
-    final list = sounds.valueOrNull ?? const <CircleSound>[];
+    final list = sounds.value ?? const <CircleSound>[];
     final full = list.length >= maxCircleSounds;
 
     return SafeArea(

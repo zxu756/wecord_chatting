@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:wecord/shared/state/no_retry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
@@ -1777,7 +1779,11 @@ class PhoneWorld {
     Object? extra,
   }) async {
     await tester.pumpWidget(
-      ProviderScope(overrides: overrides, child: const WeCordApp()),
+      ProviderScope(
+        retry: noProviderRetry,
+        overrides: overrides,
+        child: const WeCordApp(),
+      ),
     );
     await tester.pump();
     final container = ProviderScope.containerOf(
@@ -1808,6 +1814,7 @@ Future<void> pumpStandalone(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
+      retry: noProviderRetry,
       overrides: [...world.overrides, ...extraOverrides],
       child: MaterialApp(
         theme: _theme(),

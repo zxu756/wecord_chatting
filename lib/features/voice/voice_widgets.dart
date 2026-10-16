@@ -46,7 +46,7 @@ class VoiceChannelMembers extends ConsumerWidget {
       ref.watch(voiceSessionProvider),
       channelId,
     );
-    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
+    final currentUserId = ref.watch(authStateProvider).value?.id;
     return Column(
       key: ValueKey('voice-channel-members-$channelId'),
       mainAxisSize: MainAxisSize.min,
@@ -514,5 +514,5 @@ List<VoiceMemberState> voiceMembersIn(
 
 /// Watches who is in the circle's voice channels; empty while loading.
 List<VoiceMemberState> watchVoiceStates(WidgetRef ref, String circleId) {
-  return ref.watch(voiceStatesProvider(circleId)).valueOrNull ?? const [];
+  return ref.watch(voiceStatesProvider(circleId)).value ?? const [];
 }

@@ -69,7 +69,9 @@ void main() {
       find.widgetWithText(WeCordTextField, 'Password'),
       'password123',
     );
-    await tester.ensureVisible(find.widgetWithText(WeCordButton, 'Create account'));
+    await tester.ensureVisible(
+      find.widgetWithText(WeCordButton, 'Create account'),
+    );
     await tester.pump();
     await tester.tap(find.widgetWithText(WeCordButton, 'Create account'));
     await tester.pump();
@@ -98,7 +100,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('auth-toggle-mode')));
     await tester.pump();
-    await tester.ensureVisible(find.widgetWithText(WeCordButton, 'Create account'));
+    await tester.ensureVisible(
+      find.widgetWithText(WeCordButton, 'Create account'),
+    );
     await tester.pump();
     await tester.tap(find.widgetWithText(WeCordButton, 'Create account'));
     await tester.pump();

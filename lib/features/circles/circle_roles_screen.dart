@@ -91,7 +91,7 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(circleDetailProvider(widget.circleId));
-    final loaded = detail.valueOrNull;
+    final loaded = detail.value;
 
     return CirclePageScaffold(
       title: tr('Roles'),
@@ -482,7 +482,7 @@ class _CircleRoleEditorSheetState extends ConsumerState<CircleRoleEditorSheet> {
     }
     return ref
             .watch(circleMentionableRoleIdsProvider(widget.detail.circle.id))
-            .valueOrNull
+            .value
             ?.contains(role.id) ??
         false;
   }

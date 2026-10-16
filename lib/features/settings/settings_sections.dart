@@ -684,10 +684,10 @@ class _NotificationSettingsGroupsState
   @override
   Widget build(BuildContext context) {
     final preferences =
-        ref.watch(currentNotificationPreferencesProvider).valueOrNull ??
+        ref.watch(currentNotificationPreferencesProvider).value ??
         NotificationPreferences.defaults;
     final permission =
-        ref.watch(currentNotificationPermissionStatusProvider).valueOrNull ??
+        ref.watch(currentNotificationPermissionStatusProvider).value ??
         NotificationPermissionStatus.notRequested;
     final granted = permission == NotificationPermissionStatus.granted;
     return Column(
@@ -715,7 +715,7 @@ class _NotificationSettingsGroupsState
                   : null,
             ),
             // Only where web push is available (the tile is empty elsewhere).
-            if (ref.watch(pushStatusProvider).valueOrNull case final push?
+            if (ref.watch(pushStatusProvider).value case final push?
                 when push != PushStatus.unsupported)
               const PushSettingsTile(),
           ],
@@ -810,7 +810,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
       AsyncData(:final value) => value != null,
       _ => null,
     };
-    final blockedCount = ref.watch(blockedUsersProvider).valueOrNull?.length;
+    final blockedCount = ref.watch(blockedUsersProvider).value?.length;
     return SettingsGroup(
       header: header,
       children: [
@@ -820,10 +820,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
           title: tr('Show when you are online'),
           subtitle: tr('When off, everyone else sees you as offline.'),
           value:
-              ref
-                  .watch(presenceSettingsProvider)
-                  .valueOrNull
-                  ?.showOnlineStatus ??
+              ref.watch(presenceSettingsProvider).value?.showOnlineStatus ??
               true,
           onChanged: (show) => _setShowOnline(context, ref, show),
         ),

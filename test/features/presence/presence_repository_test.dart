@@ -167,7 +167,7 @@ void main() {
 
       authState.add(null);
       await pumpEventQueue(times: 100);
-      expect(container.read(onlineUserIdsProvider).valueOrNull, <String>{});
+      expect(container.read(onlineUserIdsProvider).value, <String>{});
       expect(presence.listens, 0);
 
       authState.add(const AuthUser(id: 'user-1'));
@@ -178,12 +178,9 @@ void main() {
       });
       await pumpEventQueue(times: 100);
       expect(presence.listens, 1);
-      expect(container.read(onlineUserIdsProvider).valueOrNull, {
-        'user-1',
-        'user-2',
-      });
+      expect(container.read(onlineUserIdsProvider).value, {'user-1', 'user-2'});
       expect(
-        container.read(presenceStatusesProvider).valueOrNull?['user-2'],
+        container.read(presenceStatusesProvider).value?['user-2'],
         PresenceStatus.idle,
       );
     });
@@ -251,7 +248,7 @@ void main() {
         throwsStateError,
       );
       expect(
-        container.read(presenceSettingsProvider).valueOrNull?.status,
+        container.read(presenceSettingsProvider).value?.status,
         PresenceStatus.online,
       );
     });

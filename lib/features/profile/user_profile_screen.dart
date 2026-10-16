@@ -266,11 +266,11 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
         final summary = snapshot.data!;
         final profile = summary.profile;
         final onlineIds =
-            ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+            ref.watch(onlineUserIdsProvider).value ?? const <String>{};
         final presence = presenceOf(
           profile.id,
           onlineUserIds: onlineIds,
-          statuses: ref.watch(presenceStatusesProvider).valueOrNull,
+          statuses: ref.watch(presenceStatusesProvider).value,
         );
         final status = activeCustomStatus(profile.customStatus);
         final isSelf =

@@ -102,7 +102,7 @@ class VoiceAvatar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
-    final url = ref.watch(avatarDisplayUrlProvider(avatarUrl)).valueOrNull;
+    final url = ref.watch(avatarDisplayUrlProvider(avatarUrl)).value;
     Widget avatar = PersonAvatar(name: name, size: size);
     if (url != null) {
       avatar = Stack(

@@ -108,7 +108,7 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final template = ref.watch(circleTemplateProvider(widget.circleId));
-    final value = template.valueOrNull;
+    final value = template.value;
     final List<Widget> rows;
     if (template.isLoading && value == null) {
       rows = [

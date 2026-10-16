@@ -80,7 +80,7 @@ class _TwoFactorChallengeScreenState
     final theme = Theme.of(context);
     final c = context.tokens.colors;
     final email = ref.watch(
-      authStateProvider.select((state) => state.valueOrNull?.email),
+      authStateProvider.select((state) => state.value?.email),
     );
     WeCordFieldBorder border(Color color, double width) => WeCordFieldBorder(
       borderRadius: BorderRadius.circular(WeCordRadii.lg),

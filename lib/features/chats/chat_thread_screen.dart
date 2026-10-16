@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -709,7 +710,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _voiceMessageRecorder = ref.watch(voiceMessageRecorderProvider);
     final conversationSummary = ref
         .watch(chatConversationSummaryProvider(widget.conversationId))
-        .valueOrNull;
+        .value;
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
     final title = widget.title?.trim().isNotEmpty == true
         ? widget.title!.trim()
@@ -732,12 +733,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     // Group, channel and thread members feed sender names and @mention
     // candidates.
     final groupDetail = canStartThreads || isThread
-        ? ref.watch(groupDetailProvider(widget.conversationId)).valueOrNull
+        ? ref.watch(groupDetailProvider(widget.conversationId)).value
         : null;
     final threadId = isThread ? conversationSummary?.threadId : null;
     final canManageThread =
         threadId != null &&
-        (ref.watch(canManageThreadProvider(threadId)).valueOrNull ?? false);
+        (ref.watch(canManageThreadProvider(threadId)).value ?? false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
     final canSend =
         widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
@@ -753,34 +754,32 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           circleId != null &&
               conversationType == ConversationType.channel &&
               canSend
-          ? ref.watch(circleBotCommandsProvider(circleId)).valueOrNull ??
-                const []
+          ? ref.watch(circleBotCommandsProvider(circleId)).value ?? const []
           : const [],
     );
     _slowmodeUntil = slowmodeSeconds > 0
         ? _slowmodeEnd(
-            messages: thread.valueOrNull?.messages ?? const [],
+            messages: thread.value?.messages ?? const [],
             currentUserId: currentUserId,
             slowmodeSeconds: slowmodeSeconds,
             retryAt: _slowmodeRetryAt,
           )
         : null;
-    final currentActivity =
-        activity.valueOrNull ?? const ConversationActivity();
+    final currentActivity = activity.value ?? const ConversationActivity();
     // A direct peer is online when they have the app open anywhere; in
     // groups and channels this still means another member is viewing.
     final onlineUserIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
     final directPeerId = conversationType == ConversationType.direct
         ? conversationSummary?.directUserId ??
-              _directPeerId(thread.valueOrNull?.readMarkers, currentUserId)
+              _directPeerId(thread.value?.readMarkers, currentUserId)
         : null;
     _mentionTargets = canStartThreads || isThread
         ? ref
                   .watch(
                     conversationMentionTargetsProvider(widget.conversationId),
                   )
-                  .valueOrNull ??
+                  .value ??
               const MentionTargets()
         : const MentionTargets();
     _hereUserIds = _mentionTargets.canMentionEveryone
@@ -801,21 +800,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ? presenceOf(
             directPeerId,
             onlineUserIds: onlineUserIds,
-            statuses: ref.watch(presenceStatusesProvider).valueOrNull,
+            statuses: ref.watch(presenceStatusesProvider).value,
           )
         : null;
     final canPinMessages =
-        ref.watch(canPinMessagesProvider(widget.conversationId)).valueOrNull ??
-        false;
+        ref.watch(canPinMessagesProvider(widget.conversationId)).value ?? false;
     final canModeratePolls =
-        ref
-            .watch(canModeratePollsProvider(widget.conversationId))
-            .valueOrNull ??
+        ref.watch(canModeratePollsProvider(widget.conversationId)).value ??
         false;
     final canModerateMessages =
-        ref
-            .watch(canModerateMessagesProvider(widget.conversationId))
-            .valueOrNull ??
+        ref.watch(canModerateMessagesProvider(widget.conversationId)).value ??
         false;
     // Moderators delete others' messages; a webhook's creator deletes its
     // messages (they are sent as the creator).
@@ -1088,12 +1082,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               );
         final searchResultCount = _messageSearchQuery.trim().isEmpty
             ? null
-            : thread.valueOrNull == null
+            : thread.value == null
             ? null
             : ref
                   .read(chatsRepositoryProvider)
                   .searchThreadMessages(
-                    thread.valueOrNull!.messages,
+                    thread.value!.messages,
                     _messageSearchQuery,
                   )
                   .length;
@@ -1227,7 +1221,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             final showSenders = canStartThreads || isThread;
             // Messages without an embedded sender (still sending) fall
             // back to the current user's own profile.
-            final ownProfile = ref.watch(currentProfileProvider).valueOrNull;
+            final ownProfile = ref.watch(currentProfileProvider).value;
             final membersById = {
               for (final member
                   in groupDetail?.members ?? const <GroupMember>[])
@@ -1239,15 +1233,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             _galleryFiles = () => [
               for (final message in fullOldestToNewest)
                 ?PreviewFile.fromMessage(
-                      message,
-                      senderName: _senderFor(
-                        message,
-                        membersById,
-                        fallbackProfile: message.isSentBy(currentUserId)
-                            ? ownProfile
-                            : null,
-                      ).name,
-                    ),
+                  message,
+                  senderName: _senderFor(
+                    message,
+                    membersById,
+                    fallbackProfile: message.isSentBy(currentUserId)
+                        ? ownProfile
+                        : null,
+                  ).name,
+                ),
             ];
 
             Widget buildMessageItem(int index) {
@@ -2788,7 +2782,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return const [];
     }
     return customEmojiCandidates(
-      ref.watch(usableEmojisProvider).valueOrNull ?? const [],
+      ref.watch(usableEmojisProvider).value ?? const [],
       query,
       circleId: _circleId,
     );
@@ -2838,7 +2832,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String _encodeCustomEmoji(String text) {
     return _emojiDraft.encode(
       text,
-      usable: ref.read(usableEmojisProvider).valueOrNull ?? const [],
+      usable: ref.read(usableEmojisProvider).value ?? const [],
       circleId: _circleId,
     );
   }
@@ -3028,10 +3022,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         return KeyEventResult.handled;
       case ComposerShortcut.editLast:
         final message = lastEditableMessage(
-          ref
-                  .read(chatThreadProvider(widget.conversationId))
-                  .valueOrNull
-                  ?.messages ??
+          ref.read(chatThreadProvider(widget.conversationId)).value?.messages ??
               const [],
           ref.read(authRepositoryProvider).currentUser?.id,
         );
@@ -3431,10 +3422,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       chatThreadProvider(widget.conversationId).notifier,
     );
     final messages =
-        ref
-            .read(chatThreadProvider(widget.conversationId))
-            .valueOrNull
-            ?.messages ??
+        ref.read(chatThreadProvider(widget.conversationId)).value?.messages ??
         const <ChatMessage>[];
     if (!messages.any((message) => message.id == messageId)) {
       final found = notifier.isPaged && await notifier.jumpTo(messageId);
@@ -3507,7 +3495,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   void _openFullSearch() {
     final summary = ref
         .read(chatConversationSummaryProvider(widget.conversationId))
-        .valueOrNull;
+        .value;
     var title = (widget.title ?? summary?.title)?.trim();
     if (title != null && title.startsWith('# ')) {
       title = title.substring(2);
@@ -4757,7 +4745,7 @@ class _MessageBubble extends StatelessWidget {
     return ProviderScope.containerOf(
           context,
           listen: false,
-        ).read(linkPreviewProvider(url)).valueOrNull !=
+        ).read(linkPreviewProvider(url)).value !=
         null;
   }
 
@@ -6565,8 +6553,7 @@ class _ThreadLayout {
     // Messages still in the outbox follow the loaded ones, unless the
     // stored copy already arrived.
     final storedClientIds = {
-      for (final message in fullOldestToNewest)
-        ?message.clientId,
+      for (final message in fullOldestToNewest) ?message.clientId,
     };
     final pendingById = <String, OutboxEntry>{};
     final pendingMessages = <ChatMessage>[];

@@ -3368,7 +3368,7 @@ void main() {
     expect(
       container
           .read(avatarDisplayUrlProvider('profile-avatars/user-2/ada.png'))
-          .valueOrNull,
+          .value,
       'https://signed.example.com/profile-avatars/user-2/ada.png',
     );
   });

@@ -60,23 +60,19 @@ class HomeSidebar extends ConsumerWidget {
     final c = context.tokens.colors;
     final wide = isWideLayout(MediaQuery.sizeOf(context).width);
     final requestCount =
-        ref.watch(incomingFriendRequestsProvider).valueOrNull?.length ?? 0;
+        ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
     final unreadInbox =
-        ref
-            .watch(inboxProvider)
-            .valueOrNull
-            ?.where((item) => item.isUnread)
-            .length ??
+        ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
         0;
     final conversations = ref.watch(conversationsProvider);
     final onlineUserIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
-    final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
-    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
+    final presenceStatuses = ref.watch(presenceStatusesProvider).value;
+    final currentUserId = ref.watch(authStateProvider).value?.id;
 
     final directMessages = [
       for (final conversation
-          in conversations.valueOrNull ?? const <ConversationSummary>[])
+          in conversations.value ?? const <ConversationSummary>[])
         if (conversation.isDirectMessage) conversation,
     ];
 

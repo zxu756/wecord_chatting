@@ -47,10 +47,7 @@ final conversationsProvider =
       final userId = ref.watch(authRepositoryProvider).currentUser?.id;
 
       List<ConversationSummary> parse(List<Map<String, dynamic>> rows) {
-        return [
-          for (final row in rows)
-            ?_tryConversation(row),
-        ];
+        return [for (final row in rows) ?_tryConversation(row)];
       }
 
       void keep(List<Map<String, dynamic>> rows) {

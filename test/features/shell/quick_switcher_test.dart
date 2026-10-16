@@ -79,14 +79,12 @@ void main() {
     });
 
     test('prefixes narrow the kind', () {
-      expect(
-        searchQuickSwitchItems(items, '#').map((item) => item.id),
-        ['channel-general'],
-      );
-      expect(
-        searchQuickSwitchItems(items, '*gard').map((item) => item.id),
-        ['circle-1'],
-      );
+      expect(searchQuickSwitchItems(items, '#').map((item) => item.id), [
+        'channel-general',
+      ]);
+      expect(searchQuickSwitchItems(items, '*gard').map((item) => item.id), [
+        'circle-1',
+      ]);
       expect(
         searchQuickSwitchItems(items, '@').map((item) => item.id).toSet(),
         {'dm-ada', 'group-team'},
@@ -95,10 +93,10 @@ void main() {
 
     test('best matches first; circle names find their channels', () {
       expect(searchQuickSwitchItems(items, 'gen').first.id, 'channel-general');
-      expect(
-        searchQuickSwitchItems(items, 'garden').map((item) => item.id),
-        ['circle-1', 'channel-general'],
-      );
+      expect(searchQuickSwitchItems(items, 'garden').map((item) => item.id), [
+        'circle-1',
+        'channel-general',
+      ]);
     });
   });
 

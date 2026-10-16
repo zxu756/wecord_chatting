@@ -55,9 +55,10 @@ class ChatThreadData {
   final int windowVersion;
 }
 
-class ChatThreadController
-    extends AutoDisposeFamilyAsyncNotifier<ChatThreadData, String> {
-  late String _conversationId;
+class ChatThreadController extends AsyncNotifier<ChatThreadData> {
+  ChatThreadController(this._conversationId);
+
+  final String _conversationId;
   late ChatsRepository _repository;
   MessageHistorySource? _source;
   ChatCache _cache = const NoChatCache();
@@ -91,8 +92,8 @@ class ChatThreadController
   bool get isPaged => _source != null;
 
   @override
-  Future<ChatThreadData> build(String conversationId) async {
-    _conversationId = conversationId;
+  Future<ChatThreadData> build() async {
+    final conversationId = _conversationId;
     _generation++;
     _disposed = false;
     _ready = false;

@@ -96,12 +96,12 @@ enum NetworkStatus {
 /// when the device has no network, reconnecting while channels fail or
 /// rejoin after coming back, online otherwise.
 final networkStatusProvider = Provider<NetworkStatus>((ref) {
-  final device = ref.watch(deviceConnectivityProvider).valueOrNull ?? true;
+  final device = ref.watch(deviceConnectivityProvider).value ?? true;
   if (!device) {
     return NetworkStatus.offline;
   }
   final realtime =
-      ref.watch(realtimeHealthProvider).valueOrNull ?? RealtimeHealth.healthy;
+      ref.watch(realtimeHealthProvider).value ?? RealtimeHealth.healthy;
   if (realtime == RealtimeHealth.failing) {
     return NetworkStatus.reconnecting;
   }
@@ -110,19 +110,24 @@ final networkStatusProvider = Provider<NetworkStatus>((ref) {
 
 /// Counts the times the device came back online, so data loaded while
 /// offline can sync when it changes.
-final reconnectCountProvider = Provider<int>((ref) {
-  var count = 0;
-  var wasOnline = true;
-  ref.listen<bool>(
-    deviceConnectivityProvider.select((value) => value.valueOrNull ?? true),
-    (previous, online) {
-      if (online && !wasOnline) {
-        count++;
-        ref.state = count;
-      }
-      wasOnline = online;
-    },
-    fireImmediately: true,
-  );
-  return count;
-});
+final reconnectCountProvider = NotifierProvider<ReconnectCount, int>(
+  ReconnectCount.new,
+);
+
+class ReconnectCount extends Notifier<int> {
+  @override
+  int build() {
+    var wasOnline = true;
+    ref.listen<bool>(
+      deviceConnectivityProvider.select((value) => value.value ?? true),
+      (previous, online) {
+        if (online && !wasOnline) {
+          state++;
+        }
+        wasOnline = online;
+      },
+      fireImmediately: true,
+    );
+    return 0;
+  }
+}

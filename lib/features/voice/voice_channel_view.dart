@@ -121,7 +121,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
     final chatBuilder = widget.chatBuilder;
     final unread = chatBuilder == null
         ? 0
-        : (ref.watch(conversationsProvider).valueOrNull ??
+        : (ref.watch(conversationsProvider).value ??
                       const <ConversationSummary>[])
                   .where(
                     (conversation) => conversation.id == widget.conversationId,

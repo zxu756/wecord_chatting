@@ -22,8 +22,7 @@ abstract interface class LocalNotificationService {
 
 class FakeLocalNotificationService implements LocalNotificationService {
   FakeLocalNotificationService({
-    this._status =
-        NotificationPermissionStatus.notRequested,
+    this._status = NotificationPermissionStatus.notRequested,
   });
 
   final shownNotifications = <ShownMessageNotification>[];

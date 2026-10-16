@@ -66,7 +66,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             : _withPendingLocation(AuthScreen.path, pendingLocation);
       }
 
-      final signedIn = authState.valueOrNull != null;
+      final signedIn = authState.value != null;
 
       if (!signedIn && !onAuthRoute) {
         return _withPendingLocation(AuthScreen.path, pendingLocation);
@@ -312,7 +312,7 @@ class AuthRouterNotifier extends ChangeNotifier {
     final sameState =
         previous.isLoading == value.isLoading &&
         previous.hasError == value.hasError &&
-        previous.valueOrNull?.id == value.valueOrNull?.id;
+        previous.value?.id == value.value?.id;
     if (!sameState) {
       notifyListeners();
     }

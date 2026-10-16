@@ -35,7 +35,7 @@ class ChatProfilePanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
-    final summary = ref.watch(chatProfileSummaryProvider(userId)).valueOrNull;
+    final summary = ref.watch(chatProfileSummaryProvider(userId)).value;
     final profile = summary?.profile;
     final displayName = profile?.displayLabel.trim().isNotEmpty == true
         ? profile!.displayLabel

@@ -91,7 +91,7 @@ class _ResolvedAvatarState extends ConsumerState<ResolvedAvatar> {
   Widget build(BuildContext context) {
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     ImageProvider? image;
     if (displayUrl != null && displayUrl != _failedUrl) {
       image = NetworkImage(displayUrl);

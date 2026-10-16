@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
@@ -53,7 +54,7 @@ final voiceSessionProvider =
           }
         },
       );
-      ref.listen(authStateProvider.select((state) => state.valueOrNull?.id), (
+      ref.listen(authStateProvider.select((state) => state.value?.id), (
         previous,
         next,
       ) {

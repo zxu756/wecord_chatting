@@ -14,7 +14,7 @@ final authStateProvider = StreamProvider<AuthUser?>((ref) {
 
 final authProfileBootstrapProvider = FutureProvider<void>((ref) async {
   final authState = ref.watch(authStateProvider);
-  if (authState.valueOrNull == null) {
+  if (authState.value == null) {
     return;
   }
 

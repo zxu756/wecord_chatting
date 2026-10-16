@@ -29,7 +29,7 @@ class _FallbackAvatarState extends ConsumerState<FallbackAvatar> {
   Widget build(BuildContext context) {
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     final image = displayUrl == null || displayUrl == _failedUrl
         ? null
         : NetworkImage(displayUrl);

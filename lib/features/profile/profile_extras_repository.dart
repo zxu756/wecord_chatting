@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -14,7 +15,7 @@ final profileExtrasRepositoryProvider = Provider<ProfileExtrasRepository>((
       SupabaseProfileExtrasDataSource(client),
       currentUserId: () => client.auth.currentUser?.id,
     );
-  } on AssertionError {
+  } on ProviderException {
     return ProfileExtrasRepository(
       const _UninitializedProfileExtrasDataSource(),
       currentUserId: () => null,

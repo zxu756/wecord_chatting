@@ -266,9 +266,9 @@ class _IncomingCallListenerState extends ConsumerState<IncomingCallListener> {
 
   @override
   Widget build(BuildContext context) {
-    final signedIn = ref.watch(authStateProvider).valueOrNull != null;
+    final signedIn = ref.watch(authStateProvider).value != null;
     final calls = signedIn
-        ? ref.watch(activeDirectCallsProvider).valueOrNull ?? const []
+        ? ref.watch(activeDirectCallsProvider).value ?? const []
         : const <DirectCall>[];
     final session = ref.watch(voiceSessionProvider);
     final ringing = calls.where(
@@ -324,7 +324,7 @@ class _IncomingCallCard extends ConsumerWidget {
     final c = context.tokens.colors;
     ConversationSummary? conversation;
     for (final candidate
-        in ref.watch(conversationsProvider).valueOrNull ??
+        in ref.watch(conversationsProvider).value ??
             const <ConversationSummary>[]) {
       if (candidate.id == call.conversationId) {
         conversation = candidate;

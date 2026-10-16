@@ -159,7 +159,7 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final detail = ref.watch(circleDetailProvider(widget.circleId)).valueOrNull;
+    final detail = ref.watch(circleDetailProvider(widget.circleId)).value;
     final events = ref.watch(circleEventsProvider(_query));
     final canCreate =
         detail != null && detail.can(CirclePermission.manageEvents);
@@ -540,7 +540,7 @@ class CircleEventJoinVoiceButton extends ConsumerWidget {
         event.statusAt(now ?? DateTime.now()) != CircleEventStatus.ongoing) {
       return const SizedBox.shrink();
     }
-    final detail = ref.watch(circleDetailProvider(event.circleId)).valueOrNull;
+    final detail = ref.watch(circleDetailProvider(event.circleId)).value;
     CircleChannel? channel;
     for (final candidate in detail?.channels ?? const <CircleChannel>[]) {
       if (candidate.id == channelId && candidate.isVoice) {
@@ -862,12 +862,12 @@ class _CircleEventDetailScreenState
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    final detail = ref.watch(circleDetailProvider(widget.circleId)).valueOrNull;
+    final detail = ref.watch(circleDetailProvider(widget.circleId)).value;
     final latest = ref
         .watch(
           circleEventsProvider((circleId: widget.circleId, includePast: true)),
         )
-        .valueOrNull
+        .value
         ?.where((event) => event.id == _event.id)
         .firstOrNull;
     if (latest != null && !identical(latest, _event)) {
@@ -1148,7 +1148,7 @@ class CircleEventsEntry extends ConsumerWidget {
             .watch(
               circleEventsProvider((circleId: circleId, includePast: false)),
             )
-            .valueOrNull ??
+            .value ??
         const <CircleEvent>[];
     final now = DateTime.now();
     final active = events.where((event) => event.isActiveAt(now)).toList();

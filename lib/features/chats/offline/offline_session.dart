@@ -30,7 +30,7 @@ final offlineSessionGuardProvider = Provider<void>((ref) {
     if (!next.hasValue) {
       return;
     }
-    final nextUserId = next.valueOrNull?.id;
+    final nextUserId = next.value?.id;
     if (nextUserId == userId) {
       return;
     }

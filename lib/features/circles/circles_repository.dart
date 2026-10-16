@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -23,7 +24,7 @@ final circlesRepositoryProvider = Provider<CirclesRepository>((ref) {
     return SupabaseCirclesRepository(
       SupabaseCirclesDataSource(ref.watch(supabaseClientProvider)),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedCirclesRepository();
   }
 });

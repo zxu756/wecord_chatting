@@ -78,9 +78,9 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     );
     _engine = engine;
     ref.onDispose(engine.dispose);
-    engine.setOnline(ref.read(deviceConnectivityProvider).valueOrNull ?? true);
+    engine.setOnline(ref.read(deviceConnectivityProvider).value ?? true);
     ref.listen<bool>(
-      deviceConnectivityProvider.select((value) => value.valueOrNull ?? true),
+      deviceConnectivityProvider.select((value) => value.value ?? true),
       (previous, online) {
         engine.setOnline(online);
         if (online) {
@@ -102,10 +102,7 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
       if (!identical(_engine, engine) || saved.isEmpty) {
         return;
       }
-      engine.restore([
-        for (final json in saved)
-          ?_tryEntry(json),
-      ]);
+      engine.restore([for (final json in saved) ?_tryEntry(json)]);
       unawaited(engine.drain());
     } catch (_) {
       // Nothing kept.

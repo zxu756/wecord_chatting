@@ -31,8 +31,7 @@ final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
 /// rail's Home badge.
 final directUnreadCountProvider = Provider.autoDispose<int>((ref) {
   final conversations =
-      ref.watch(conversationsProvider).valueOrNull ??
-      const <ConversationSummary>[];
+      ref.watch(conversationsProvider).value ?? const <ConversationSummary>[];
   var count = 0;
   for (final conversation in conversations) {
     if (conversation.isDirectMessage && !conversation.isMuted) {
@@ -101,8 +100,7 @@ class CircleRail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final circles =
-        ref.watch(circleSummariesProvider).valueOrNull ??
-        const <CircleSummary>[];
+        ref.watch(circleSummariesProvider).value ?? const <CircleSummary>[];
     final directUnread = ref.watch(directUnreadCountProvider);
     final background = color ?? c.rail;
     final itemFill = itemColor ?? c.railItem;

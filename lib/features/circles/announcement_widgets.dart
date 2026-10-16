@@ -156,7 +156,7 @@ class FollowedChannelsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final follows = ref.watch(channelFollowsProvider(channel.id));
-    final list = follows.valueOrNull ?? const <ChannelFollow>[];
+    final list = follows.value ?? const <ChannelFollow>[];
     return Column(
       key: const ValueKey('followed-channels'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

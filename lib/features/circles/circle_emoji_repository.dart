@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -15,7 +16,7 @@ final circleEmojiRepositoryProvider = Provider<CircleEmojiRepository>((ref) {
     return SupabaseCircleEmojiRepository(
       SupabaseCircleEmojiDataSource(ref.watch(supabaseClientProvider)),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedCircleEmojiRepository();
   }
 });
@@ -35,7 +36,7 @@ final circleEmojisProvider = FutureProvider.autoDispose
 /// the list empty, so messages fall back to `:name:`.
 final usableEmojisProvider = FutureProvider<List<CircleEmoji>>((ref) async {
   // Another account sees other circles.
-  ref.watch(authStateProvider.select((state) => state.valueOrNull?.id));
+  ref.watch(authStateProvider.select((state) => state.value?.id));
   final repository = ref.watch(circleEmojiRepositoryProvider);
   _reloadOnChanges(ref, repository.emojiChanges());
   try {
@@ -47,7 +48,7 @@ final usableEmojisProvider = FutureProvider<List<CircleEmoji>>((ref) async {
 
 /// Reloads the provider behind [ref] on every event of [changes] until it
 /// is disposed. A broken realtime connection only stops live updates.
-void _reloadOnChanges(Ref<Object?> ref, Stream<void> changes) {
+void _reloadOnChanges(Ref ref, Stream<void> changes) {
   final subscription = changes.listen(
     (_) => ref.invalidateSelf(),
     onError: (Object _) {},
@@ -57,7 +58,7 @@ void _reloadOnChanges(Ref<Object?> ref, Stream<void> changes) {
 
 /// [usableEmojisProvider] by id; empty while loading.
 final usableEmojisByIdProvider = Provider<Map<String, CircleEmoji>>((ref) {
-  final emojis = ref.watch(usableEmojisProvider).valueOrNull ?? const [];
+  final emojis = ref.watch(usableEmojisProvider).value ?? const [];
   return {for (final emoji in emojis) emoji.id: emoji};
 });
 

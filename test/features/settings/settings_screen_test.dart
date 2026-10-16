@@ -462,7 +462,7 @@ void main() {
     expect(
       ProviderScope.containerOf(
         tester.element(avatar),
-      ).read(avatarDisplayUrlProvider('avatars/ada.png')).valueOrNull,
+      ).read(avatarDisplayUrlProvider('avatars/ada.png')).value,
       'https://signed.example.com/ada.png',
     );
   });
@@ -491,7 +491,7 @@ void main() {
     expect(
       container
           .read(avatarDisplayUrlProvider('https://example.com/ada.png'))
-          .valueOrNull,
+          .value,
       'https://example.com/ada.png',
     );
   });

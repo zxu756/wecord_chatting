@@ -117,7 +117,7 @@ class _CircleNotificationSettingsSheetState
     final loaded = ref.watch(
       circleNotificationSettingsProvider(widget.circleId),
     );
-    final settings = _saved ?? loaded.valueOrNull;
+    final settings = _saved ?? loaded.value;
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/voice/audio_clip.dart';
@@ -15,7 +16,7 @@ final soundboardRepositoryProvider = Provider<SoundboardRepository>((ref) {
     return SupabaseSoundboardRepository(
       SupabaseSoundboardDataSource(ref.watch(supabaseClientProvider)),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedSoundboardRepository();
   }
 });

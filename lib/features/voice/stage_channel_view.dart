@@ -20,7 +20,7 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// The live stage in [channelId], if any; null while loading too.
 StageInstance? watchStage(WidgetRef ref, String circleId, String channelId) {
-  return ref.watch(stageInstancesProvider(circleId)).valueOrNull?[channelId];
+  return ref.watch(stageInstancesProvider(circleId)).value?[channelId];
 }
 
 /// Runs stage actions and keeps the voice server and lists in step.
@@ -31,7 +31,7 @@ class StageActions {
   final String circleId;
   final String channelId;
 
-  String? get _currentUserId => ref.read(authStateProvider).valueOrNull?.id;
+  String? get _currentUserId => ref.read(authStateProvider).value?.id;
 
   StageRepository get _stages => ref.read(stageRepositoryProvider);
 
@@ -347,7 +347,7 @@ class StageView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final stage = watchStage(ref, circleId, channelId);
-    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
+    final currentUserId = ref.watch(authStateProvider).value?.id;
     final actions = StageActions(ref, circleId: circleId, channelId: channelId);
     final participants = {
       for (final participant in session.participants)
@@ -1039,7 +1039,7 @@ class _StageControlsState extends ConsumerState<StageControls> {
       circleId: widget.circleId,
       channelId: widget.channelId,
     );
-    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
+    final currentUserId = ref.watch(authStateProvider).value?.id;
     final hasKey = ref.watch(
       voiceSettingsProvider.select(
         (settings) => settings.pushToTalkKeyId != null,

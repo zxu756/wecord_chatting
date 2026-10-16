@@ -93,10 +93,7 @@ class AuthHeading extends StatelessWidget {
                 (compact
                         ? theme.textTheme.displaySmall
                         : theme.textTheme.displayMedium)
-                    ?.copyWith(
-              color: c.ink,
-              height: 1.15,
-            ),
+                    ?.copyWith(color: c.ink, height: 1.15),
           ),
         ),
         if (subtitle != null) ...[
@@ -286,8 +283,16 @@ class AuthAvatarCluster extends StatelessWidget {
                   ),
                   turns: 6 / 360,
                 ),
-                at(238, 14, PersonAvatar(name: 'A', size: 56, color: colors[1])),
-                at(276, 86, PersonAvatar(name: 'M', size: 58, color: c.warning)),
+                at(
+                  238,
+                  14,
+                  PersonAvatar(name: 'A', size: 56, color: colors[1]),
+                ),
+                at(
+                  276,
+                  86,
+                  PersonAvatar(name: 'M', size: 58, color: c.warning),
+                ),
               ],
             ),
           ),

@@ -93,10 +93,7 @@ class SqliteChatCache implements ChatCache {
     if (rows.isEmpty) {
       return null;
     }
-    return [
-      for (final row in rows)
-        ?_decode(row['row_json']),
-    ];
+    return [for (final row in rows) ?_decode(row['row_json'])];
   }
 
   @override
@@ -139,10 +136,7 @@ class SqliteChatCache implements ChatCache {
       whereArgs: [userId, conversationId],
       orderBy: 'created_at, id',
     );
-    return [
-      for (final row in rows)
-        ?_decode(row['row_json']),
-    ];
+    return [for (final row in rows) ?_decode(row['row_json'])];
   }
 
   @override
@@ -189,10 +183,7 @@ class SqliteChatCache implements ChatCache {
       whereArgs: [userId],
       orderBy: 'position',
     );
-    return [
-      for (final row in rows)
-        ?_decode(row['entry_json']),
-    ];
+    return [for (final row in rows) ?_decode(row['entry_json'])];
   }
 
   @override

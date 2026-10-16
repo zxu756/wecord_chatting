@@ -43,9 +43,7 @@ class ProfileBannerHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
-    final displayUrl = ref
-        .watch(avatarDisplayUrlProvider(bannerUrl))
-        .valueOrNull;
+    final displayUrl = ref.watch(avatarDisplayUrlProvider(bannerUrl)).value;
     final outer = avatarSize + _ring * 2;
     final fill = WeCordAvatarColors.forSeed(colorSeed);
     return SizedBox(

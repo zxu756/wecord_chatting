@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -26,7 +27,7 @@ final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
       ref.watch(supabaseClientProvider),
       onMessageSent: push.notifySent,
     );
-  } on AssertionError {
+  } on ProviderException {
     return const _UninitializedChatsRepository();
   }
 });

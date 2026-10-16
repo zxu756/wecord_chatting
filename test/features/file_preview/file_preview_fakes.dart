@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:wecord/features/file_preview/file_actions.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';

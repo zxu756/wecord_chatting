@@ -224,11 +224,10 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
   List<QuickSwitchItem> _results() {
     final items = quickSwitchItems(
       conversations:
-          ref.watch(conversationsProvider).valueOrNull ??
+          ref.watch(conversationsProvider).value ??
           const <ConversationSummary>[],
       circles:
-          ref.watch(circleSummariesProvider).valueOrNull ??
-          const <CircleSummary>[],
+          ref.watch(circleSummariesProvider).value ?? const <CircleSummary>[],
     );
     return searchQuickSwitchItems(items, _controller.text);
   }

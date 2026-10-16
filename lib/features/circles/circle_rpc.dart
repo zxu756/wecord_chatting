@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:wecord/shared/api/supabase_providers.dart';
 
 /// Calls a database function and returns its result.
@@ -13,7 +14,7 @@ final circleRpcProvider = Provider<CircleRpc>((ref) {
     try {
       final client = ref.read(supabaseClientProvider);
       return await client.rpc<Object?>(functionName, params: params);
-    } on AssertionError {
+    } on ProviderException {
       throw StateError('Supabase must be initialized first.');
     }
   };
@@ -31,7 +32,7 @@ final circleFunctionProvider = Provider<CircleFunction>((ref) {
       final client = ref.read(supabaseClientProvider);
       final response = await client.functions.invoke(functionName, body: body);
       return response.data;
-    } on AssertionError {
+    } on ProviderException {
       throw StateError('Supabase must be initialized first.');
     }
   };

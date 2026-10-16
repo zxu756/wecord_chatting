@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -10,7 +12,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 final presenceRepositoryProvider = Provider<PresenceRepository>((ref) {
   try {
     return SupabasePresenceRepository(ref.watch(supabaseClientProvider));
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedPresenceRepository();
   }
 });
@@ -27,7 +29,7 @@ class PresenceSettingsController extends AsyncNotifier<PresenceSettings> {
   @override
   Future<PresenceSettings> build() async {
     final userId = ref.watch(
-      authStateProvider.select((state) => state.valueOrNull?.id),
+      authStateProvider.select((state) => state.value?.id),
     );
     if (userId == null) {
       return const PresenceSettings();
@@ -60,7 +62,7 @@ class PresenceSettingsController extends AsyncNotifier<PresenceSettings> {
     PresenceSettings Function(PresenceSettings settings) change,
     Future<void> Function(PresenceRepository repository) save,
   ) async {
-    final previous = state.valueOrNull ?? const PresenceSettings();
+    final previous = state.value ?? const PresenceSettings();
     state = AsyncData(change(previous));
     try {
       await save(ref.read(presenceRepositoryProvider));
@@ -79,7 +81,7 @@ final presenceInactiveProvider = StateProvider<bool>((ref) => false);
 /// offline (Invisible, or online status hidden). Null until their settings
 /// have loaded.
 final broadcastPresenceProvider = Provider<PresenceStatus?>((ref) {
-  final settings = ref.watch(presenceSettingsProvider).valueOrNull;
+  final settings = ref.watch(presenceSettingsProvider).value;
   if (settings == null || settings.hidden) {
     return null;
   }
@@ -94,8 +96,7 @@ final broadcastPresenceProvider = Provider<PresenceStatus?>((ref) {
 /// others, Idle when away from the keyboard.
 final ownPresenceProvider = Provider<PresenceStatus>((ref) {
   final settings =
-      ref.watch(presenceSettingsProvider).valueOrNull ??
-      const PresenceSettings();
+      ref.watch(presenceSettingsProvider).value ?? const PresenceSettings();
   if (settings.hidden) {
     return PresenceStatus.invisible;
   }
@@ -108,7 +109,7 @@ final ownPresenceProvider = Provider<PresenceStatus>((ref) {
 final presenceStatusesProvider =
     StreamProvider.autoDispose<Map<String, PresenceStatus>>((ref) {
       final userId = ref.watch(
-        authStateProvider.select((state) => state.valueOrNull?.id),
+        authStateProvider.select((state) => state.value?.id),
       );
       if (userId == null) {
         return Stream.value(const <String, PresenceStatus>{});
@@ -125,7 +126,7 @@ final presenceStatusesProvider =
 /// Ids of users who have the app open right now (see
 /// [presenceStatusesProvider]).
 final onlineUserIdsProvider = StreamProvider.autoDispose<Set<String>>((ref) {
-  final statuses = ref.watch(presenceStatusesProvider).valueOrNull;
+  final statuses = ref.watch(presenceStatusesProvider).value;
   return statuses == null
       ? const Stream<Set<String>>.empty()
       : Stream.value(statuses.keys.toSet());
@@ -315,9 +316,7 @@ class SupabasePresenceDataSource implements PresenceDataSource {
     controller = StreamController<Map<String, PresenceStatus>>(
       onListen: () {
         // Until the first sync, only the current user is known to be here.
-        controller.add({
-          currentUserId: ?ownStatus.value,
-        });
+        controller.add({currentUserId: ?ownStatus.value});
         ownStatus.addListener(sync);
         channel = _client
             .channel(

@@ -28,7 +28,7 @@ class UserPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
-    final profile = ref.watch(currentProfileProvider).valueOrNull;
+    final profile = ref.watch(currentProfileProvider).value;
     // Invisible (or online status hidden) shows as such here, though
     // others see the user offline.
     final presence = ref.watch(ownPresenceProvider);

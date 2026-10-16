@@ -67,7 +67,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               : tr('Your friends,\nall in one place.'),
           subtitle: creating
               ? tr('Pick a username your friends can find you by.')
-              : tr('Sign in to WeCord for direct messages, groups and circles.'),
+              : tr(
+                  'Sign in to WeCord for direct messages, groups and circles.',
+                ),
         ),
         const SizedBox(height: 26),
         AutofillGroup(

@@ -1020,7 +1020,8 @@ Future<bool> joinVoiceChannel(
     messenger?.showSnackBar(
       SnackBar(content: Text(tr('This voice channel is full.'))),
     );
-  } catch (_) {
+  } catch (error, stackTrace) {
+    debugPrint('Voice join failed: $error\n$stackTrace');
     messenger?.showSnackBar(
       SnackBar(content: Text(tr('Could not connect to voice. Try again.'))),
     );

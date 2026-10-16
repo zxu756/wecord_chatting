@@ -19,6 +19,7 @@ class ChatThreadHeader extends StatelessWidget {
     required this.actions,
     required this.primaryAction,
     this.onSubtitleTap,
+    this.subtitleHint,
     this.onBack,
     this.channelIcon,
     this.searchField,
@@ -43,6 +44,9 @@ class ChatThreadHeader extends StatelessWidget {
 
   /// Taps on the title and subtitle (a channel's topic opens in full).
   final VoidCallback? onSubtitleTap;
+
+  /// What a tap on the title says it does, when not "Shows the topic".
+  final String? subtitleHint;
   final List<ChatThreadAction> actions;
   final ChatThreadAction primaryAction;
 
@@ -67,7 +71,10 @@ class ChatThreadHeader extends StatelessWidget {
     }
 
     if (!compact || actions.length <= 2) {
-      return [for (final action in actions) button(action)];
+      return [
+        for (final action in actions)
+          if (compact || !action.menuOnly) button(action),
+      ];
     }
     final search = actions.first;
     final overflow = [
@@ -119,7 +126,7 @@ class ChatThreadHeader extends StatelessWidget {
     return WeCordPressable(
       key: const ValueKey('chat-thread-topic'),
       onPressed: onTap,
-      hint: tr('Shows the topic'),
+      hint: subtitleHint ?? tr('Shows the topic'),
       pressedScale: 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(WeCordRadii.sm),

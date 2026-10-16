@@ -23,6 +23,7 @@ import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
+import 'package:wecord/features/chats/disappearing_messages.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/gif_search.dart';
@@ -141,7 +142,12 @@ class ChatThreadAction {
     required this.onPressed,
     this.selectedIcon,
     this.isSelected,
+    this.menuOnly = false,
   });
+
+  /// Only in the More menu: wide headers have no room for another button
+  /// (the title would be squeezed out) and reach it another way.
+  final bool menuOnly;
 
   /// Also the label in the More menu.
   final String tooltip;
@@ -612,6 +618,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _composerFocus.dispose();
     unawaited(_pasteSubscription?.cancel());
     _typingTimer?.cancel();
+    _expiryTimer?.cancel();
     _highlightTimer?.cancel();
     if (_isTypingShared) {
       unawaited(
@@ -764,6 +771,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         threadId != null &&
         (ref.watch(canManageThreadProvider(threadId)).value ?? false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
+    // Direct chats and groups can have messages that disappear.
+    final isDirectOrGroup =
+        conversationType == ConversationType.direct ||
+        conversationType == ConversationType.group;
+    final disappearingSeconds = isDirectOrGroup
+        ? ref.watch(disappearingSecondsProvider(widget.conversationId)).value
+        : null;
+    if (isDirectOrGroup) {
+      _refreshDisappearingOnNotice(thread.value?.messages);
+    }
     final canSend =
         widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
     final slowmodeSeconds =
@@ -905,6 +922,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
           )
         : null;
+    void openDisappearing() => unawaited(
+      showDisappearingSheet(
+        context,
+        conversationId: widget.conversationId,
+        isGroup: conversationType == ConversationType.group,
+        canChange:
+            conversationType == ConversationType.direct ||
+            (groupDetail?.canManageGroup ?? false),
+      ),
+    );
+    final disappearingAction = isDirectOrGroup
+        ? ChatThreadAction(
+            tooltip: tr('Disappearing messages'),
+            icon: Icons.timer_outlined,
+            selectedIcon: Icons.timer_rounded,
+            isSelected: disappearingSeconds != null,
+            menuOnly: true,
+            onPressed: openDisappearing,
+          )
+        : null;
     final groupDetailsAction = conversationType == ConversationType.group
         ? ChatThreadAction(
             tooltip: tr('Group details'),
@@ -932,6 +969,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ?callAction,
       ?videoCallAction,
       pinnedAction,
+      ?disappearingAction,
       ChatThreadAction(
         tooltip: tr('Media'),
         icon: Icons.photo_library_outlined,
@@ -1081,17 +1119,43 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               )
-            : Text(
-                isThread
-                    ? _threadSubtitle(conversationSummary)
-                    : [
-                        peerPresence?.label ??
-                            (peerIsOnline ? tr('Online') : tr('Offline')),
-                        if (conversationType == ConversationType.direct)
-                          ?activeCustomStatus(
-                            conversationSummary?.directCustomStatus,
-                          )?.label,
-                      ].join(' · '),
+            : Text.rich(
+                TextSpan(
+                  children: [
+                    if (disappearingSeconds != null)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Icon(
+                            Icons.timer_outlined,
+                            key: const ValueKey('chat-thread-timer'),
+                            size: 13,
+                            semanticLabel: tr(
+                              'Messages disappear after {time}',
+                              {'time': disappearingLabel(disappearingSeconds)},
+                            ),
+                          ),
+                        ),
+                      ),
+                    TextSpan(
+                      text: isThread
+                          ? _threadSubtitle(conversationSummary)
+                          : [
+                              peerPresence?.label ??
+                                  (peerIsOnline
+                                      ? tr('Online')
+                                      : tr('Offline')),
+                              if (conversationType == ConversationType.direct)
+                                ?activeCustomStatus(
+                                  conversationSummary?.directCustomStatus,
+                                )?.label,
+                              if (disappearingSeconds != null)
+                                disappearingShortLabel(disappearingSeconds),
+                            ].join(' · '),
+                    ),
+                  ],
+                ),
                 key: const ValueKey('chat-thread-subtitle'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1120,7 +1184,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           channelIcon: desktop && isChannel ? Icons.tag_rounded : null,
           title: title,
           subtitle: subtitle,
-          onSubtitleTap: topic == null ? null : () => _showTopic(title, topic),
+          onSubtitleTap: topic != null
+              ? () => _showTopic(title, topic)
+              : isDirectOrGroup
+              ? openDisappearing
+              : null,
+          subtitleHint: topic != null
+              ? null
+              : isDirectOrGroup
+              ? tr('Opens disappearing messages')
+              : null,
           actions: headerActions,
           primaryAction: identical(primaryAction, searchAction)
               ? pinnedAction
@@ -1820,6 +1893,87 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
+  List<ChatMessage>? _expirySource;
+  List<ChatMessage>? _expiryResult;
+  Timer? _expiryTimer;
+  String? _lastDisappearingNoticeId;
+
+  /// [messages] without the disappearing ones whose time has come, which
+  /// the server deletes a little later. The same list when none is due.
+  List<ChatMessage> _withoutExpired(List<ChatMessage> messages) {
+    final now = DateTime.now().toUtc();
+    DateTime? next;
+    var anyExpired = false;
+    for (final message in messages) {
+      final at = message.expiresAt;
+      if (at == null) {
+        continue;
+      }
+      if (at.isAfter(now)) {
+        if (next == null || at.isBefore(next)) {
+          next = at;
+        }
+      } else {
+        anyExpired = true;
+      }
+    }
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    if (next != null) {
+      // Looks again when the next message is due (at least every hour).
+      final wait = next.difference(now) + const Duration(milliseconds: 250);
+      _expiryTimer = Timer(
+        wait > const Duration(hours: 1) ? const Duration(hours: 1) : wait,
+        () {
+          if (mounted) {
+            setState(() {});
+          }
+        },
+      );
+    }
+    if (!anyExpired) {
+      return messages;
+    }
+    if (identical(_expirySource, messages) && _expiryResult != null) {
+      return _expiryResult!;
+    }
+    _expirySource = messages;
+    return _expiryResult = [
+      for (final message in messages)
+        if (message.expiresAt == null || message.expiresAt!.isAfter(now))
+          message,
+    ];
+  }
+
+  /// Reads the timer again when someone changes it (their notice arrives).
+  void _refreshDisappearingOnNotice(List<ChatMessage>? messages) {
+    if (messages == null) {
+      return;
+    }
+    String? latest;
+    DateTime? latestAt;
+    for (final message in messages) {
+      if (message.disappearingNoticeSeconds != null &&
+          (latestAt == null || message.createdAt.isAfter(latestAt))) {
+        latest = message.id;
+        latestAt = message.createdAt;
+      }
+    }
+    if (latest == _lastDisappearingNoticeId) {
+      return;
+    }
+    final first = _lastDisappearingNoticeId == null;
+    _lastDisappearingNoticeId = latest;
+    if (first && latest == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.invalidate(disappearingSecondsProvider(widget.conversationId));
+      }
+    });
+  }
+
   /// The layout of the loaded messages: sorted, searched, grouped. Worked
   /// out again only when they (or the search, the NEW divider or the
   /// outbox) change, not on every build.
@@ -1829,9 +1983,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     required String? currentUserId,
   }) {
     _threadData = data;
+    final messages = _withoutExpired(data.messages);
     final previous = _layout;
     if (previous != null &&
-        identical(previous.messages, data.messages) &&
+        identical(previous.messages, messages) &&
         identical(previous.readMarkers, data.readMarkers) &&
         identical(previous.pending, pending) &&
         previous.query == _messageSearchQuery &&
@@ -1840,7 +1995,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return previous;
     }
     final layout = _ThreadLayout.build(
-      messages: data.messages,
+      messages: messages,
       readMarkers: data.readMarkers,
       pending: pending,
       query: _messageSearchQuery,
@@ -4752,6 +4907,16 @@ class _MessageBubble extends StatelessWidget {
               0,
             ),
           if (reactions.isNotEmpty) extra(_reactionChips(), 0),
+          if (message.expiresAt case final expiresAt? when !_isRecalled)
+            extra(
+              Align(
+                alignment: outgoing
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: DisappearingMark(expiresAt: expiresAt),
+              ),
+              0,
+            ),
           if (showReadReceipt)
             Padding(
               padding: const EdgeInsets.only(right: 2, top: 2),
@@ -4926,6 +5091,11 @@ class _MessageBubble extends StatelessWidget {
           const SizedBox(height: 6),
           _reactionChips(),
         ],
+        if (message.expiresAt case final expiresAt? when !_isRecalled)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: DisappearingMark(expiresAt: expiresAt),
+          ),
         if (showReadReceipt)
           const Padding(
             padding: EdgeInsets.only(top: 4),
@@ -5274,10 +5444,13 @@ class _SystemMessageLine extends StatelessWidget {
     }
     final c = context.tokens.colors;
     final pinnedMessageId = message.pinnedMessageId;
+    final noticeSeconds = message.disappearingNoticeSeconds;
     final icon = pinnedMessageId != null
         ? Icons.push_pin_rounded
         : message.attachment?['kind'] == 'call'
         ? Icons.call_rounded
+        : noticeSeconds != null
+        ? Icons.timer_outlined
         : null;
     final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -5294,7 +5467,13 @@ class _SystemMessageLine extends StatelessWidget {
           ],
           Flexible(
             child: Text(
-              message.body,
+              noticeSeconds == null
+                  ? message.body
+                  : disappearingNoticeText(
+                      noticeSeconds,
+                      message.attachment?['actor_name'] as String? ??
+                          tr('Someone'),
+                    ),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,

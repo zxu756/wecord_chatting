@@ -467,6 +467,14 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/sound-upload/index.ts"
 
+[functions.expire-messages]
+enabled = true
+# Called by a scheduler with the service role key as the bearer token, which
+# the function compares itself (so it also works with non-JWT secret keys);
+# users never call it.
+verify_jwt = false
+entrypoint = "./functions/expire-messages/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

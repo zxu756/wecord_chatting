@@ -76,6 +76,7 @@ class ChatMessage {
     this.clientId,
     this.attachmentGroupId,
     this.album,
+    this.expiresAt,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -121,6 +122,7 @@ class ChatMessage {
       interaction: MessageInteraction.maybeFromJson(json['interaction']),
       clientId: json['client_id'] as String?,
       attachmentGroupId: json['attachment_group_id'] as String?,
+      expiresAt: _parseOptionalTimestamp(json['expires_at']),
     );
   }
 
@@ -189,6 +191,32 @@ class ChatMessage {
   /// The id the sender's app gave the message when it was written, so a
   /// send retried from the outbox is stored once.
   final String? clientId;
+
+  /// When a disappearing message is deleted; null for messages that stay.
+  final DateTime? expiresAt;
+
+  /// Whether the message disappears after a while.
+  bool get isDisappearing => expiresAt != null;
+
+  /// A photo or video its recipients can open once.
+  bool get isViewOnce {
+    final value = attachment;
+    return (type == MessageType.image || type == MessageType.file) &&
+        value != null &&
+        value['view_once'] == true;
+  }
+
+  /// For a "turned disappearing messages on/off" system line, the timer in
+  /// seconds (0 when it was turned off); null for any other message.
+  int? get disappearingNoticeSeconds {
+    final value = attachment;
+    if (type != MessageType.system ||
+        value == null ||
+        value['kind'] != 'disappearing') {
+      return null;
+    }
+    return (value['seconds'] as num?)?.toInt() ?? 0;
+  }
 
   /// Shared by the messages of one album (pictures, videos and files sent
   /// together); null for messages sent on their own.
@@ -321,6 +349,7 @@ class ChatMessage {
     Object? webhookAvatarUrl = _sentinel,
     Object? publishedAt = _sentinel,
     Object? album = _sentinel,
+    Object? expiresAt = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -389,6 +418,9 @@ class ChatMessage {
       publishedAt: identical(publishedAt, _sentinel)
           ? this.publishedAt
           : publishedAt as DateTime?,
+      expiresAt: identical(expiresAt, _sentinel)
+          ? this.expiresAt
+          : expiresAt as DateTime?,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
@@ -613,6 +614,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                 key: ValueKey('circle-channel-row-${channel.id}'),
                 icon: circleChannelIcon(channel.kind),
                 label: channel.name,
+                conversationId: channel.isVoice ? null : channel.conversationId,
                 locked: channel.isPrivate,
                 trailing: limitBadge,
                 selected: selected,
@@ -655,6 +657,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                               key: ValueKey('circle-thread-${thread.id}'),
                               icon: Icons.subdirectory_arrow_right_rounded,
                               label: thread.title ?? tr('Thread'),
+                              conversationId: thread.id,
                               indent: 18,
                               selected:
                                   thread.id ==
@@ -1784,11 +1787,16 @@ class CircleChannelRow extends StatelessWidget {
     this.locked = false,
     this.onContextMenu,
     this.longPressOpensMenu = true,
+    this.conversationId,
     super.key,
   });
 
   final IconData icon;
   final String label;
+
+  /// The channel's or thread's conversation, whose unsent composer text
+  /// shows after the name ("Draft half written").
+  final String? conversationId;
   final bool selected;
   final bool unread;
 
@@ -1889,15 +1897,18 @@ class CircleChannelRow extends StatelessWidget {
                   ),
                   SizedBox(width: wide ? 9 : 10),
                   Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: _ChannelRowLabel(
+                      label: label,
                       style: TextStyle(
                         color: foreground,
                         fontSize: indent > 0 ? 13.5 : (wide ? 14 : 15),
                         fontWeight: weight,
                       ),
+                      // The open channel's draft is right there in its
+                      // composer on desktop.
+                      draftConversationId: selected && wide
+                          ? null
+                          : conversationId,
                     ),
                   ),
                   ?trailing,
@@ -1930,6 +1941,84 @@ class CircleChannelRow extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// A channel row's name, then its draft when there is one: "Draft" in the
+/// danger color and the text, muted. The name keeps at least 55% of the
+/// row (all of it it needs when short); the draft takes the rest.
+class _ChannelRowLabel extends ConsumerWidget {
+  const _ChannelRowLabel({
+    required this.label,
+    required this.style,
+    required this.draftConversationId,
+  });
+
+  final String label;
+  final TextStyle style;
+  final String? draftConversationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final id = draftConversationId;
+    if (id == null) {
+      return name;
+    }
+    final draft = ref.watch(
+      composerDraftsProvider.select((drafts) => drafts[id]),
+    );
+    if (draft == null || !draft.hasText) {
+      return name;
+    }
+    final c = context.tokens.colors;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Row(
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth * 0.55,
+              ),
+              child: name,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text.rich(
+                key: const ValueKey('channel-draft'),
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: tr('Draft'),
+                      style: TextStyle(
+                        color: c.dangerText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(
+                      text:
+                          ' ${draft.text.trim().replaceAll(RegExp(r'\s+'), ' ')}',
+                    ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: (style.fontSize ?? 14) - 1.5,
+                  fontWeight: FontWeight.w400,
+                  color: c.muted,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -261,6 +262,16 @@ void main() {
             : conversation,
     ];
     await world.open(tester, ChatsScreen.path);
+  });
+
+  // 5. Drafts on channel rows.
+  screen('channel-drafts', (tester, world, desktop) async {
+    world.draftStore.drafts['user-1'] = {
+      'conv-general': const ComposerDraft(text: 'See you at the trailhead'),
+      'conv-ann': const ComposerDraft(text: 'Reminder: bring snacks'),
+      'conv-random': const ComposerDraft(text: 'that meme though'),
+    };
+    await world.open(tester, '/circles/circle-1');
   });
 
   // MARKER: more screens

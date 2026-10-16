@@ -404,6 +404,12 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/link-preview/index.ts"
 
+[functions.office-preview]
+enabled = true
+# Signed-in users only; the function reads the message with their JWT.
+verify_jwt = true
+entrypoint = "./functions/office-preview/index.ts"
+
 [functions.webhook]
 enabled = true
 # Public: external services post with the secret token in the URL, which

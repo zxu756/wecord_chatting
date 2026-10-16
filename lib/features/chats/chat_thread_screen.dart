@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
+import 'package:wecord/features/chats/chat_profile_panel.dart';
+import 'package:wecord/features/chats/chat_thread_header.dart';
+import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -22,6 +25,7 @@ import 'package:wecord/features/chats/mention_picker.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
@@ -57,7 +61,9 @@ import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final chatThreadProvider = FutureProvider.autoDispose
     .family<ChatThreadData, String>((ref, conversationId) async {
@@ -148,6 +154,7 @@ class ChatThreadAction {
   }
 }
 
+/// A group's announcement, as a soft card under the header.
 class _AnnouncementStrip extends StatelessWidget {
   const _AnnouncementStrip({required this.announcement});
 
@@ -155,35 +162,154 @@ class _AnnouncementStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      margin: chatUsesDesktopChrome(context)
+          ? const EdgeInsets.fromLTRB(20, 10, 20, 0)
+          : EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
+        color: c.accentSoft,
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.campaign_outlined,
-            size: 18,
-            color: theme.colorScheme.onSecondaryContainer,
-          ),
+          Icon(Icons.campaign_outlined, size: 18, color: c.accentText),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               announcement,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
+              style: TextStyle(fontSize: 13.5, height: 1.4, color: c.ink),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The search field that opens under the header (phones and narrow panes).
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({
+    required this.controller,
+    required this.onChanged,
+    required this.onClose,
+    this.resultLabel,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
+  final String? resultLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final desktop = chatUsesDesktopChrome(context);
+    final field = Container(
+      height: 44,
+      padding: const EdgeInsets.only(left: 14, right: 4),
+      decoration: BoxDecoration(
+        color: desktop ? c.raised : context.tokens.glass.solidFill,
+        borderRadius: BorderRadius.circular(22),
+        border: desktop ? null : Border.all(color: c.lineSoft),
+        boxShadow: desktop ? null : context.tokens.shadows.hairline,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: 18, color: c.subtle),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              onChanged: onChanged,
+              style: TextStyle(fontSize: 15, color: c.ink),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: tr('Search messages'),
+                hintStyle: TextStyle(fontSize: 15, color: c.subtle),
+              ),
+            ),
+          ),
+          if (resultLabel case final label?)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: c.muted,
+                ),
+              ),
+            ),
+          WeCordIconButton(
+            tooltip: tr('Close search'),
+            icon: Icons.close_rounded,
+            size: 32,
+            iconSize: 18,
+            variant: WeCordButtonVariant.ghost,
+            onPressed: onClose,
+          ),
+        ],
+      ),
+    );
+    return desktop
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+            child: field,
+          )
+        : field;
+  }
+}
+
+/// "3 new messages" floating over the bottom of the list.
+class _JumpPill extends StatelessWidget {
+  const _JumpPill({
+    required this.tooltip,
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String tooltip;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      semanticLabel: label,
+      builder: (context, states) => WeCordGlass(
+        borderRadius: BorderRadius.circular(WeCordRadii.pill),
+        padding: const EdgeInsets.fromLTRB(12, 9, 16, 9),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_downward_rounded, size: 17, color: c.accent),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: c.ink,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -316,6 +442,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// A restored draft's reply, picked up once the messages load.
   String? _pendingDraftReplyId;
 
+  /// Measured heights of the floating header (phones) and composer, which
+  /// the message list keeps clear of.
+  double? _topInset;
+  double? _bottomInset;
+
+  /// Whether the desktop profile panel of a direct chat is open; null
+  /// follows the width.
+  bool? _showProfilePanel;
+
   @override
   void initState() {
     super.initState();
@@ -440,48 +575,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
       _activeConversationController.state = conversationId;
     });
-  }
-
-  /// [actions] as app bar buttons. Phones keep the first one (search) and
-  /// [primary], and list the rest under More.
-  List<Widget> _appBarActions({
-    required bool compact,
-    required List<ChatThreadAction> actions,
-    required ChatThreadAction primary,
-  }) {
-    if (!compact || actions.length <= 2) {
-      return [for (final action in actions) action.toIconButton()];
-    }
-    final search = actions.first;
-    final overflow = [
-      for (final action in actions)
-        if (!identical(action, search) && !identical(action, primary)) action,
-    ];
-    return [
-      search.toIconButton(),
-      primary.toIconButton(),
-      PopupMenuButton<ChatThreadAction>(
-        tooltip: tr('More'),
-        icon: const Icon(Icons.more_vert),
-        onSelected: (action) => action.onPressed?.call(),
-        itemBuilder: (context) => [
-          for (final action in overflow)
-            PopupMenuItem(
-              value: action,
-              enabled: action.onPressed != null,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  action.isSelected == true
-                      ? action.selectedIcon ?? action.icon
-                      : action.icon,
-                ),
-                title: Text(action.tooltip),
-              ),
-            ),
-        ],
-      ),
-    ];
   }
 
   void _toggleMessageSearch() {
@@ -627,9 +720,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             statuses: ref.watch(presenceStatusesProvider).valueOrNull,
           )
         : null;
-    final peerIsTyping = currentActivity.typingUserIds.any((id) {
-      return id != currentUserId;
-    });
     final canPinMessages =
         ref.watch(canPinMessagesProvider(widget.conversationId)).valueOrNull ??
         false;
@@ -760,442 +850,532 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         archiveAction ??
         pinnedAction;
 
+    final tokens = context.tokens;
+    final c = tokens.colors;
+    final desktop = chatUsesDesktopChrome(context);
+    final isChannel = conversationType == ConversationType.channel;
+    // Circle channels (and their threads) read as cards; direct chats and
+    // groups as bubbles.
+    final cards = isChannel || (isThread && circleId != null);
+    final typingIds = [
+      for (final id in currentActivity.typingUserIds)
+        if (id != currentUserId) id,
+    ];
+    final typingName = typingIds.length != 1
+        ? null
+        : conversationType == ConversationType.direct
+        ? title
+        : switch (groupDetail?.members
+              .where((member) => member.profile.id == typingIds.single)
+              .firstOrNull) {
+            final member? => mentionName(member),
+            null => null,
+          };
+    final presenceColor = switch (peerPresence) {
+      PresenceStatus.online => c.success,
+      PresenceStatus.idle => c.warning,
+      PresenceStatus.doNotDisturb => c.danger,
+      _ => c.faint,
+    };
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final composerBottomGap = desktop
+        ? 18.0
+        : keyboardUp
+        ? 8.0
+        : math.max(safeBottom - 6, 10.0);
+
     // Measured here rather than from the screen, so a thread panel in the
-    // wide circle layout also gets the compact app bar.
+    // wide circle layout also gets the compact header.
     return LayoutBuilder(
-      builder: (context, constraints) => Scaffold(
-        appBar: AppBar(
-          leading: widget.onBack != null
-              ? IconButton(
-                  tooltip: tr('Back'),
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: widget.onBack,
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: isThread
-                      ? const CircleAvatar(child: Icon(Icons.forum_outlined))
-                      : FallbackAvatar(title: title, avatarUrl: avatarUrl),
-                ),
-          // With a back button in the leading slot, the avatar moves next to
-          // the title, where there is room for both.
-          title: Row(
-            children: [
-              if (widget.onBack != null &&
-                  !widget.forumPost &&
-                  !isCompactWidth(constraints.maxWidth)) ...[
-                isThread
-                    ? const CircleAvatar(
-                        radius: 16,
-                        child: Icon(Icons.forum_outlined, size: 18),
-                      )
-                    : FallbackAvatar(
-                        title: title,
-                        avatarUrl: avatarUrl,
-                        radius: 16,
-                      ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // A notch smaller than a plain app bar title, so long names
-                    // keep more of themselves next to the subtitle on phones.
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (topic != null)
-                      InkWell(
-                        key: const ValueKey('chat-thread-topic'),
-                        onTap: () => _showTopic(title, topic),
-                        child: Text(
-                          topic,
-                          key: const ValueKey('chat-thread-subtitle'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      )
-                    else
-                      Text(
-                        isThread
-                            ? _threadSubtitle(conversationSummary)
-                            : [
-                                peerPresence?.label ??
-                                    (peerIsOnline
-                                        ? tr('Online')
-                                        : tr('Offline')),
-                                if (conversationType == ConversationType.direct)
-                                  ?activeCustomStatus(
-                                    conversationSummary?.directCustomStatus,
-                                  )?.label,
-                              ].join(' · '),
-                        key: const ValueKey('chat-thread-subtitle'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: _appBarActions(
-            compact: isCompactWidth(constraints.maxWidth),
-            actions: appBarActions,
-            primary: primaryAction,
-          ),
-        ),
-        body: Column(
-          children: [
-            if (canCall)
-              DirectCallBar(
-                conversationId: widget.conversationId,
-                title: title,
-              ),
-            if (conversationType == ConversationType.group &&
-                conversationSummary?.announcement.trim().isNotEmpty == true)
-              _AnnouncementStrip(
-                announcement: conversationSummary!.announcement.trim(),
-              ),
-            if (_isSearchingMessages)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          border: const OutlineInputBorder(),
-                          labelText: tr('Search messages'),
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _messageSearchQuery = value;
-                          });
-                        },
-                      ),
-                    ),
-                    if (_messageSearchQuery.trim().isNotEmpty) ...[
-                      const SizedBox(width: 12),
-                      thread.maybeWhen(
-                        data: (data) {
-                          final resultCount = ref
-                              .read(chatsRepositoryProvider)
-                              .searchThreadMessages(
-                                data.messages,
-                                _messageSearchQuery,
-                              )
-                              .length;
-                          return Text(
-                            resultCount == 1
-                                ? tr('1 result')
-                                : tr('{count} results', {'count': resultCount}),
-                          );
-                        },
-                        orElse: () => const SizedBox.shrink(),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            Expanded(
-              child: thread.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stackTrace) => Center(
+      builder: (context, constraints) {
+        final compact = isCompactWidth(constraints.maxWidth);
+        // Desktop puts the search field in the header when there is room.
+        final inlineSearch = desktop && constraints.maxWidth >= 760;
+        // Direct chats on desktop can show the other person's profile.
+        final profileUserId =
+            desktop &&
+                conversationType == ConversationType.direct &&
+                constraints.maxWidth >= 860
+            ? directPeerId
+            : null;
+        final showProfile =
+            profileUserId != null &&
+            (_showProfilePanel ?? constraints.maxWidth >= 1040);
+        final profileAction = profileUserId == null
+            ? null
+            : ChatThreadAction(
+                tooltip: showProfile ? tr('Hide profile') : tr('Show profile'),
+                icon: Icons.view_sidebar_outlined,
+                selectedIcon: Icons.view_sidebar_rounded,
+                isSelected: showProfile,
+                onPressed: () =>
+                    setState(() => _showProfilePanel = !showProfile),
+              );
+        final headerActions = [
+          for (final action in appBarActions)
+            if (!inlineSearch || !identical(action, searchAction)) action,
+          ?profileAction,
+        ];
+        // Small phones keep more of the name.
+        final headerAvatarSize = desktop
+            ? 34.0
+            : constraints.maxWidth < 380
+            ? 34.0
+            : 40.0;
+        final headerAvatar = isThread
+            ? ChatAvatar(
+                name: title,
+                avatarUrl: null,
+                thing: true,
+                icon: Icons.forum_outlined,
+                size: headerAvatarSize,
+              )
+            : isChannel
+            // Channel titles may already start with their #.
+            ? (desktop || title.startsWith('#')
+                  ? null
+                  : ChatAvatar(
+                      name: title,
+                      avatarUrl: null,
+                      thing: true,
+                      icon: Icons.tag_rounded,
+                      size: headerAvatarSize,
+                    ))
+            : ChatAvatar(
+                name: title,
+                avatarUrl: avatarUrl,
+                thing: conversationType == ConversationType.group,
+                size: headerAvatarSize,
+                presence: conversationType == ConversationType.direct
+                    ? presenceColor
+                    : null,
+                ringColor: desktop ? c.panel : tokens.glass.solidFill,
+              );
+        final subtitle = topic != null
+            ? GestureDetector(
+                key: const ValueKey('chat-thread-topic'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showTopic(title, topic),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
                   child: Text(
-                    error.toString(),
+                    topic,
+                    key: const ValueKey('chat-thread-subtitle'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+            : Text(
+                isThread
+                    ? _threadSubtitle(conversationSummary)
+                    : [
+                        peerPresence?.label ??
+                            (peerIsOnline ? tr('Online') : tr('Offline')),
+                        if (conversationType == ConversationType.direct)
+                          ?activeCustomStatus(
+                            conversationSummary?.directCustomStatus,
+                          )?.label,
+                      ].join(' · '),
+                key: const ValueKey('chat-thread-subtitle'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              );
+        final searchResultCount = _messageSearchQuery.trim().isEmpty
+            ? null
+            : thread.valueOrNull == null
+            ? null
+            : ref
+                  .read(chatsRepositoryProvider)
+                  .searchThreadMessages(
+                    thread.valueOrNull!.messages,
+                    _messageSearchQuery,
+                  )
+                  .length;
+        final resultLabel = searchResultCount == null
+            ? null
+            : searchResultCount == 1
+            ? tr('1 result')
+            : tr('{count} results', {'count': searchResultCount});
+        final header = ChatThreadHeader(
+          desktop: desktop,
+          compact: compact,
+          onBack: widget.onBack,
+          avatar: headerAvatar,
+          channelIcon: desktop && isChannel ? Icons.tag_rounded : null,
+          title: title,
+          subtitle: subtitle,
+          actions: headerActions,
+          primaryAction: identical(primaryAction, searchAction)
+              ? pinnedAction
+              : primaryAction,
+          searchField: inlineSearch
+              ? ChatHeaderSearchField(
+                  controller: _searchController,
+                  hint: isChannel
+                      ? tr('Search this channel')
+                      : tr('Search this conversation'),
+                  resultLabel: resultLabel,
+                  onChanged: (value) {
+                    setState(() => _messageSearchQuery = value);
+                  },
+                )
+              : null,
+        );
+        final banners = <Widget>[
+          if (canCall)
+            DirectCallBar(conversationId: widget.conversationId, title: title),
+          if (conversationType == ConversationType.group &&
+              conversationSummary?.announcement.trim().isNotEmpty == true)
+            _AnnouncementStrip(
+              announcement: conversationSummary!.announcement.trim(),
+            ),
+          if (_isSearchingMessages && !inlineSearch)
+            _SearchBar(
+              controller: _searchController,
+              resultLabel: resultLabel,
+              onChanged: (value) {
+                setState(() => _messageSearchQuery = value);
+              },
+              onClose: _toggleMessageSearch,
+            ),
+        ];
+        final topInset = desktop
+            ? 0.0
+            : _topInset ?? MediaQuery.paddingOf(context).top + 64;
+        final bottomInset = _bottomInset ?? 76 + composerBottomGap;
+
+        final messagesArea = thread.when(
+          loading: () => Center(
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: c.muted),
+          ),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                error.toString(),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.dangerText),
+              ),
+            ),
+          ),
+          data: (data) {
+            final messages = data.messages;
+            final visibleMessages = ref
+                .read(chatsRepositoryProvider)
+                .searchThreadMessages(messages, _messageSearchQuery);
+            final messagesById = {
+              for (final message in messages) message.id: message,
+            };
+            final fullOldestToNewest = _messagesOldestToNewest(messages);
+            _captureNewMessageDivider(
+              fullOldestToNewest,
+              data.readMarkers,
+              currentUserId,
+            );
+            _trackUnseenMessages(fullOldestToNewest, currentUserId);
+            _markReadAfterLoad(messages);
+            _reconcileActiveMessageState(messagesById);
+            if (messages.isEmpty || visibleMessages.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
+                child: Center(
+                  child: Text(
+                    messages.isEmpty
+                        ? tr('No messages yet')
+                        : tr('No matching messages'),
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: c.muted,
                     ),
                   ),
                 ),
-                data: (data) {
-                  final messages = data.messages;
-                  final visibleMessages = ref
-                      .read(chatsRepositoryProvider)
-                      .searchThreadMessages(messages, _messageSearchQuery);
-                  final messagesById = {
-                    for (final message in messages) message.id: message,
-                  };
-                  final fullOldestToNewest = _messagesOldestToNewest(messages);
-                  _captureNewMessageDivider(
-                    fullOldestToNewest,
-                    data.readMarkers,
-                    currentUserId,
-                  );
-                  _trackUnseenMessages(fullOldestToNewest, currentUserId);
-                  _markReadAfterLoad(messages);
-                  _reconcileActiveMessageState(messagesById);
-                  if (messages.isEmpty) {
-                    return Center(child: Text(tr('No messages yet')));
-                  }
-                  if (visibleMessages.isEmpty) {
-                    return Center(child: Text(tr('No matching messages')));
-                  }
+              );
+            }
 
-                  final visibleOldestToNewest = _messagesOldestToNewest(
-                    visibleMessages,
-                  );
-                  // Chats list newest first from the bottom; forum posts read
-                  // top down from the opening post.
-                  final ordered = widget.forumPost
-                      ? visibleOldestToNewest
-                      : visibleOldestToNewest.reversed.toList(growable: false);
-                  final latestOutgoingReadState = _latestOutgoingReadState(
-                    messages: fullOldestToNewest,
-                    readMarkers: data.readMarkers,
-                    currentUserId: currentUserId,
-                  );
-                  // Grouping compares neighbours, which search results are not.
-                  final followUpIds = _messageSearchQuery.trim().isEmpty
-                      ? _followUpMessageIds(
-                          visibleOldestToNewest,
-                          newMessageDividerId: _newMessageDividerId,
-                        )
-                      : <String>{};
-                  // A forum post opens with its first message; replies start
-                  // their own group under it.
-                  final openingPostId = widget.forumPost
-                      ? fullOldestToNewest
-                            .where(
-                              (message) => message.type != MessageType.system,
-                            )
-                            .firstOrNull
-                            ?.id
-                      : null;
-                  if (openingPostId != null) {
-                    final index = visibleOldestToNewest.indexWhere(
-                      (message) => message.id == openingPostId,
-                    );
-                    if (index >= 0 &&
-                        index + 1 < visibleOldestToNewest.length) {
-                      followUpIds.remove(visibleOldestToNewest[index + 1].id);
-                    }
-                  }
-                  final showSenders = canStartThreads || isThread;
-                  // Messages without an embedded sender (still sending) fall
-                  // back to the current user's own profile.
-                  final ownProfile = ref
-                      .watch(currentProfileProvider)
-                      .valueOrNull;
-                  final membersById = {
-                    for (final member
-                        in groupDetail?.members ?? const <GroupMember>[])
-                      member.profile.id: member,
-                  };
+            final visibleOldestToNewest = _messagesOldestToNewest(
+              visibleMessages,
+            );
+            final searching = _messageSearchQuery.trim().isNotEmpty;
+            // Chats list newest first from the bottom; forum posts read
+            // top down from the opening post.
+            final ordered = widget.forumPost
+                ? visibleOldestToNewest
+                : visibleOldestToNewest.reversed.toList(growable: false);
+            final latestOutgoingReadState = _latestOutgoingReadState(
+              messages: fullOldestToNewest,
+              readMarkers: data.readMarkers,
+              currentUserId: currentUserId,
+            );
+            // Grouping compares neighbours, which search results are not.
+            final followUpIds = !searching
+                ? _followUpMessageIds(
+                    visibleOldestToNewest,
+                    newMessageDividerId: _newMessageDividerId,
+                  )
+                : <String>{};
+            // The first message of each day gets a day separator.
+            final dayStartIds = <String>{
+              if (!searching)
+                for (final (index, message) in visibleOldestToNewest.indexed)
+                  if (index == 0 ||
+                      !_isSameLocalDay(
+                        visibleOldestToNewest[index - 1].createdAt,
+                        message.createdAt,
+                      ))
+                    message.id,
+            };
+            // A forum post opens with its first message; replies start
+            // their own group under it.
+            final openingPostId = widget.forumPost
+                ? fullOldestToNewest
+                      .where((message) => message.type != MessageType.system)
+                      .firstOrNull
+                      ?.id
+                : null;
+            if (openingPostId != null) {
+              final index = visibleOldestToNewest.indexWhere(
+                (message) => message.id == openingPostId,
+              );
+              if (index >= 0 && index + 1 < visibleOldestToNewest.length) {
+                followUpIds.remove(visibleOldestToNewest[index + 1].id);
+              }
+            }
+            final showSenders = canStartThreads || isThread;
+            // Messages without an embedded sender (still sending) fall
+            // back to the current user's own profile.
+            final ownProfile = ref.watch(currentProfileProvider).valueOrNull;
+            final membersById = {
+              for (final member
+                  in groupDetail?.members ?? const <GroupMember>[])
+                member.profile.id: member,
+            };
+            final sidePadding = cards ? 0.0 : (desktop ? 40.0 : 14.0);
 
-                  final list = ListView.builder(
-                    key: const ValueKey('chat-message-list'),
-                    controller: _scrollController,
-                    reverse: !widget.forumPost,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: ordered.length,
-                    itemBuilder: (context, index) {
-                      final message = ordered[index];
-                      final Widget bubble;
-                      if (message.type == MessageType.system) {
-                        bubble = _SystemMessageLine(
-                          message: message,
-                          onOpenPinnedMessage: _scrollToMessage,
-                        );
-                      } else if (message.id == openingPostId) {
-                        bubble = _MessageBubble(
-                          message: message,
-                          messagesById: messagesById,
-                          isCurrentUser: message.isSentBy(currentUserId),
-                          sender: _senderFor(message, membersById),
-                          isOpeningPost: true,
-                          postTitle: title,
-                          replyCount: messages
-                              .where(
-                                (other) =>
-                                    other.id != message.id &&
-                                    other.type != MessageType.system &&
-                                    other.recalledAt == null,
-                              )
-                              .length,
-                          isFollowUp: false,
-                          hasFollowUp: false,
-                          showReadReceipt: false,
-                          canCompose: canSend,
-                          onReply: _startReply,
-                          onEdit: _startEdit,
-                          onForward: _showForwardSheet,
-                          onDelete: _deleteMessage,
-                          canModerate: canDeleteAsModerator(message),
-                          circleId: _circleId,
-                          onPreviewImage: _previewImage,
-                          onToggleReaction: _toggleReaction,
-                          onShowReactors: _showReactors,
-                          canPin: canPinMessages,
-                          onTogglePin: _togglePin,
-                          onRemoveEmbed: _removeEmbed,
-                          canStartThread: false,
-                          pollActions: pollActions,
-                        );
-                      } else {
-                        final isCurrentUser = message.isSentBy(currentUserId);
-                        final newerIndex = widget.forumPost
-                            ? index + 1
-                            : index - 1;
-                        final newerMessage =
-                            newerIndex < 0 || newerIndex >= ordered.length
-                            ? null
-                            : ordered[newerIndex];
-                        bubble = _MessageBubble(
-                          message: message,
-                          messagesById: messagesById,
-                          isCurrentUser: isCurrentUser,
-                          sender: _senderFor(
-                            message,
-                            membersById,
-                            fallbackProfile: isCurrentUser ? ownProfile : null,
-                          ),
-                          // Direct chats name the other person in the title.
-                          showSenderName: showSenders && !isCurrentUser,
-                          isFollowUp: followUpIds.contains(message.id),
-                          hasFollowUp:
-                              newerMessage != null &&
-                              followUpIds.contains(newerMessage.id),
-                          showReadReceipt:
-                              latestOutgoingReadState.latestOutgoingMessageId ==
-                                  message.id &&
-                              latestOutgoingReadState.isRead,
-                          canCompose: canSend,
-                          onReply: _startReply,
-                          onEdit: _startEdit,
-                          onForward: _showForwardSheet,
-                          onDelete: _deleteMessage,
-                          canModerate: canDeleteAsModerator(message),
-                          circleId: _circleId,
-                          onPreviewImage: _previewImage,
-                          onToggleReaction: _toggleReaction,
-                          onShowReactors: _showReactors,
-                          canPin: canPinMessages,
-                          onTogglePin: _togglePin,
-                          onRemoveEmbed: _removeEmbed,
-                          canStartThread: canStartThreads && canSend,
-                          onOpenThread: _openOrCreateThread,
-                          pollActions: pollActions,
-                          onPublish: canPublish(message)
-                              ? _publishMessage
-                              : null,
-                        );
-                      }
-                      final highlighted = AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        decoration: BoxDecoration(
-                          color: message.id == _highlightedMessageId
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.14)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: bubble,
-                      );
-                      return KeyedSubtree(
-                        key: _messageKeys.putIfAbsent(
-                          message.id,
-                          GlobalKey.new,
-                        ),
-                        child: message.id == _newMessageDividerId
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const _NewMessagesDivider(),
-                                  highlighted,
-                                ],
-                              )
-                            : highlighted,
-                      );
-                    },
-                  );
-                  final showJumpToLatest =
-                      !_isAtBottom && _unseenMessageCount > 0;
-                  final newRepliesId = _newMessageDividerId;
-                  final showJumpToNewReplies =
-                      widget.forumPost &&
-                      !showJumpToLatest &&
-                      !_isAtBottom &&
-                      !_newRepliesDismissed &&
-                      newRepliesId != null &&
-                      newRepliesId != openingPostId &&
-                      _messageSearchQuery.trim().isEmpty;
-                  if (widget.forumPost) {
-                    // Whether the post fits on screen is only known after
-                    // layout.
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        _handleScroll();
-                      }
-                    });
-                  }
-                  return Stack(
-                    children: [
-                      Positioned.fill(child: list),
-                      if (showJumpToNewReplies)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: FloatingActionButton.extended(
-                            key: const ValueKey('forum-jump-to-new-replies'),
-                            heroTag: null,
-                            tooltip: tr('Jump to new replies'),
-                            onPressed: () {
-                              setState(() => _newRepliesDismissed = true);
-                              unawaited(_scrollToMessage(newRepliesId));
-                            },
-                            icon: const Icon(Icons.arrow_downward),
-                            label: Text(tr('Jump to new replies')),
-                          ),
-                        ),
-                      if (showJumpToLatest)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: FloatingActionButton.extended(
-                            heroTag: null,
-                            tooltip: tr('Jump to latest'),
-                            onPressed: _jumpToLatest,
-                            icon: const Icon(Icons.arrow_downward),
-                            label: Text(
-                              _unseenMessageCount == 1
-                                  ? tr('1 new message')
-                                  : tr('{count} new messages', {
-                                      'count': _unseenMessageCount,
-                                    }),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+            final list = ListView.builder(
+              key: const ValueKey('chat-message-list'),
+              controller: _scrollController,
+              reverse: !widget.forumPost,
+              padding: EdgeInsets.fromLTRB(
+                sidePadding,
+                topInset + (desktop ? 18 : 10),
+                sidePadding,
+                bottomInset + 14,
               ),
-            ),
-            if (peerIsTyping)
+              itemCount: ordered.length,
+              itemBuilder: (context, index) {
+                final message = ordered[index];
+                final Widget bubble;
+                if (message.type == MessageType.system) {
+                  bubble = _SystemMessageLine(
+                    message: message,
+                    onOpenPinnedMessage: _scrollToMessage,
+                  );
+                } else if (message.id == openingPostId) {
+                  bubble = _MessageBubble(
+                    message: message,
+                    messagesById: messagesById,
+                    isCurrentUser: message.isSentBy(currentUserId),
+                    sender: _senderFor(message, membersById),
+                    isOpeningPost: true,
+                    postTitle: title,
+                    replyCount: messages
+                        .where(
+                          (other) =>
+                              other.id != message.id &&
+                              other.type != MessageType.system &&
+                              other.recalledAt == null,
+                        )
+                        .length,
+                    isFollowUp: false,
+                    hasFollowUp: false,
+                    showReadReceipt: false,
+                    desktop: desktop,
+                    cards: cards,
+                    canCompose: canSend,
+                    onReply: _startReply,
+                    onEdit: _startEdit,
+                    onForward: _showForwardSheet,
+                    onDelete: _deleteMessage,
+                    canModerate: canDeleteAsModerator(message),
+                    circleId: _circleId,
+                    onPreviewImage: _previewImage,
+                    onToggleReaction: _toggleReaction,
+                    onShowReactors: _showReactors,
+                    canPin: canPinMessages,
+                    onTogglePin: _togglePin,
+                    onRemoveEmbed: _removeEmbed,
+                    canStartThread: false,
+                    pollActions: pollActions,
+                  );
+                } else {
+                  final isCurrentUser = message.isSentBy(currentUserId);
+                  final newerIndex = widget.forumPost ? index + 1 : index - 1;
+                  final newerMessage =
+                      newerIndex < 0 || newerIndex >= ordered.length
+                      ? null
+                      : ordered[newerIndex];
+                  bubble = _MessageBubble(
+                    message: message,
+                    messagesById: messagesById,
+                    isCurrentUser: isCurrentUser,
+                    sender: _senderFor(
+                      message,
+                      membersById,
+                      fallbackProfile: isCurrentUser ? ownProfile : null,
+                    ),
+                    // Direct chats name the other person in the title.
+                    showSenderName: showSenders && !isCurrentUser,
+                    isFollowUp: followUpIds.contains(message.id),
+                    hasFollowUp:
+                        newerMessage != null &&
+                        followUpIds.contains(newerMessage.id),
+                    showReadReceipt:
+                        latestOutgoingReadState.latestOutgoingMessageId ==
+                            message.id &&
+                        latestOutgoingReadState.isRead,
+                    mentionsMe: _mentionsUser(message, currentUserId),
+                    desktop: desktop,
+                    cards: cards,
+                    canCompose: canSend,
+                    onReply: _startReply,
+                    onEdit: _startEdit,
+                    onForward: _showForwardSheet,
+                    onDelete: _deleteMessage,
+                    canModerate: canDeleteAsModerator(message),
+                    circleId: _circleId,
+                    onPreviewImage: _previewImage,
+                    onToggleReaction: _toggleReaction,
+                    onShowReactors: _showReactors,
+                    canPin: canPinMessages,
+                    onTogglePin: _togglePin,
+                    onRemoveEmbed: _removeEmbed,
+                    canStartThread: canStartThreads && canSend,
+                    onOpenThread: _openOrCreateThread,
+                    pollActions: pollActions,
+                    onPublish: canPublish(message) ? _publishMessage : null,
+                  );
+                }
+                final highlighted = AnimatedContainer(
+                  duration: WeCordMotion.durationOf(
+                    context,
+                    const Duration(milliseconds: 300),
+                  ),
+                  decoration: BoxDecoration(
+                    color: message.id == _highlightedMessageId
+                        ? c.accent.withValues(alpha: 0.12)
+                        : c.accent.withValues(alpha: 0),
+                    borderRadius: BorderRadius.circular(
+                      cards ? 0 : WeCordRadii.md,
+                    ),
+                  ),
+                  child: bubble,
+                );
+                final showDay =
+                    dayStartIds.contains(message.id) &&
+                    message.id != openingPostId;
+                final showNew = message.id == _newMessageDividerId;
+                return KeyedSubtree(
+                  key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
+                  child: showDay || showNew
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (showDay)
+                              ChatDaySeparator(time: message.createdAt),
+                            if (showNew)
+                              ChatNewMessagesDivider(
+                                inset: cards ? (desktop ? 24 : 14) : 0,
+                              ),
+                            highlighted,
+                          ],
+                        )
+                      : highlighted,
+                );
+              },
+            );
+            final showJumpToLatest = !_isAtBottom && _unseenMessageCount > 0;
+            final newRepliesId = _newMessageDividerId;
+            final showJumpToNewReplies =
+                widget.forumPost &&
+                !showJumpToLatest &&
+                !_isAtBottom &&
+                !_newRepliesDismissed &&
+                newRepliesId != null &&
+                newRepliesId != openingPostId &&
+                !searching;
+            if (widget.forumPost) {
+              // Whether the post fits on screen is only known after
+              // layout.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _handleScroll();
+                }
+              });
+            }
+            return Stack(
+              children: [
+                Positioned.fill(child: list),
+                if (showJumpToNewReplies)
+                  Positioned(
+                    right: 16,
+                    bottom: bottomInset + 10,
+                    child: _JumpPill(
+                      key: const ValueKey('forum-jump-to-new-replies'),
+                      tooltip: tr('Jump to new replies'),
+                      label: tr('Jump to new replies'),
+                      onPressed: () {
+                        setState(() => _newRepliesDismissed = true);
+                        unawaited(_scrollToMessage(newRepliesId));
+                      },
+                    ),
+                  ),
+                if (showJumpToLatest)
+                  Positioned(
+                    right: 16,
+                    bottom: bottomInset + 10,
+                    child: _JumpPill(
+                      tooltip: tr('Jump to latest'),
+                      label: _unseenMessageCount == 1
+                          ? tr('1 new message')
+                          : tr('{count} new messages', {
+                              'count': _unseenMessageCount,
+                            }),
+                      onPressed: _jumpToLatest,
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+
+        final composerArea = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (typingIds.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: EdgeInsets.fromLTRB(desktop ? 34 : 22, 0, 16, 6),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(tr('typing...')),
+                  child: ChatTypingIndicator(name: typingName),
                 ),
               ),
             if (!canSend)
-              _ReadOnlyComposerNotice(timedOutUntil: widget.timedOutUntil)
+              _ReadOnlyComposerNotice(
+                timedOutUntil: widget.timedOutUntil,
+                desktop: desktop,
+                bottomGap: composerBottomGap,
+              )
             else
               _SlowmodeGate(
                 until: _slowmodeUntil,
                 builder: (context, slowmodeRemaining) => _Composer(
+                  desktop: desktop,
+                  bottomGap: composerBottomGap,
+                  hint: tr('Message'),
                   slowmodeSeconds: slowmodeSeconds,
                   slowmodeRemainingSeconds: slowmodeRemaining,
                   controller: _composerController,
@@ -1226,6 +1406,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onCreatePoll: _openPollComposer,
                   onPickSticker: _pickAndSendSticker,
                   onPickGif: _pickAndSendGif,
+                  onInsertEmoji: _pickAndInsertEmoji,
                   gifAvailable: ref.watch(gifSearchAvailableProvider) != false,
                   isRecordingVoice: _isRecordingVoice,
                   isSendingVoice: _isSendingVoice,
@@ -1242,8 +1423,105 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ),
               ),
           ],
-        ),
-      ),
+        );
+        final floatingComposer = MeasureSize(
+          onChange: (size) {
+            if (mounted && size.height != _bottomInset) {
+              setState(() => _bottomInset = size.height);
+            }
+          },
+          // Lists in the suggestions popover would otherwise pad for the
+          // status bar.
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: composerArea,
+          ),
+        );
+
+        if (desktop) {
+          final chatColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              ...banners,
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: messagesArea),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: floatingComposer,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+          return Scaffold(
+            backgroundColor: c.panel,
+            body: showProfile
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: chatColumn),
+                      ChatProfilePanel(
+                        userId: profileUserId,
+                        name: title,
+                        avatarUrl: avatarUrl,
+                        presence: presenceColor,
+                      ),
+                    ],
+                  )
+                : chatColumn,
+          );
+        }
+        return Scaffold(
+          backgroundColor: c.panel,
+          body: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: tokens.isDark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark,
+            child: Stack(
+              children: [
+                Positioned.fill(child: messagesArea),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: MeasureSize(
+                    onChange: (size) {
+                      if (mounted && size.height != _topInset) {
+                        setState(() => _topInset = size.height);
+                      }
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        header,
+                        for (final banner in banners)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                            child: banner,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: floatingComposer,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1968,6 +2246,39 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
     setState(() => _emojiQuery = null);
+  }
+
+  /// Picks an emoji and puts it in the composer at the cursor.
+  Future<void> _pickAndInsertEmoji() async {
+    final emoji = await showEmojiReactionPicker(
+      context,
+      title: tr('Insert emoji'),
+    );
+    if (emoji == null || !mounted) {
+      return;
+    }
+    final value = _composerController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final text = value.text.replaceRange(selection.start, selection.end, emoji);
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: selection.start + emoji.length,
+      ),
+    );
+    _handleComposerChanged(text);
+  }
+
+  /// Whether [message] mentions [userId] by name, or everyone online.
+  bool _mentionsUser(ChatMessage message, String? userId) {
+    if (userId == null || message.isSentBy(userId)) {
+      return false;
+    }
+    return message.mentions.any(
+      (mention) => mention.isHere || mention.userId == userId,
+    );
   }
 
   /// [text] with picked (and typed) `:name:` of usable emoji as tokens.
@@ -2834,8 +3145,6 @@ class _ThreadChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final unread = summary.unreadCount > 0;
     final replies = switch (summary.replyCount) {
       0 => tr('No replies yet'),
@@ -2846,50 +3155,52 @@ class _ThreadChip extends StatelessWidget {
     final detail = summary.replyCount > 0 && lastReplyAt != null
         ? '$replies · ${formatThreadActivity(lastReplyAt)}'
         : replies;
-    return Material(
+    final c = context.tokens.colors;
+    return WeCordPressable(
       key: ValueKey('thread-chip-$messageId'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          // Title and activity sit on their own lines so neither is squeezed
-          // out on narrow screens.
+      onPressed: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      pressedScale: 0.98,
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+          decoration: BoxDecoration(
+            color: hovered ? c.raised : c.well,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c.lineSoft),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.forum_outlined, size: 16, color: colorScheme.primary),
+              Icon(Icons.forum_outlined, size: 15, color: c.subtle),
               const SizedBox(width: 8),
               Flexible(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      summary.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: unread
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                        fontWeight: unread ? FontWeight.w700 : null,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  summary.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: c.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: unread || summary.replyCount > 0
+                        ? c.accentText
+                        : c.subtle,
+                  ),
                 ),
               ),
               if (unread) ...[
@@ -2899,15 +3210,15 @@ class _ThreadChip extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: colorScheme.primary,
+                    color: c.accent,
                     shape: BoxShape.circle,
                   ),
                 ),
               ],
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2945,8 +3256,6 @@ String? _directPeerId(
 }
 
 const _bottomScrollThreshold = 48.0;
-
-const _senderAvatarSize = 32.0;
 
 /// Messages from the same sender this close together read as one group.
 const _messageGroupWindow = Duration(minutes: 7);
@@ -3043,31 +3352,6 @@ class _MessageSender {
   final int? roleColor;
 }
 
-class _NewMessagesDivider extends StatelessWidget {
-  const _NewMessagesDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.error;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: color, height: 1)),
-          const SizedBox(width: 8),
-          Text(
-            tr('NEW'),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -3080,6 +3364,9 @@ class _MessageBubble extends StatelessWidget {
     this.showSenderName = true,
     this.isFollowUp = false,
     this.hasFollowUp = false,
+    this.mentionsMe = false,
+    this.desktop = false,
+    this.cards = false,
     required this.onEdit,
     required this.onForward,
     required this.onDelete,
@@ -3126,20 +3413,29 @@ class _MessageBubble extends StatelessWidget {
   final int replyCount;
   final bool showReadReceipt;
 
-  /// Who sent the message, shown as an avatar beside the bubble (on the
-  /// right for the current user's own messages); null hides the avatar
-  /// column entirely.
+  /// Who sent the message, shown as an avatar beside incoming bubbles (and
+  /// every card).
   final _MessageSender? sender;
 
   /// Shows [sender]'s name above the first message of a group.
   final bool showSenderName;
 
-  /// Continues the previous message's group, so the avatar and name are
-  /// left out.
+  /// Continues the previous message's group, so the name (and on cards the
+  /// avatar) is left out.
   final bool isFollowUp;
 
-  /// The next message continues this one's group, so the gap below shrinks.
+  /// The next message continues this one's group: the gap below shrinks
+  /// and the avatar of a bubble run waits for its last message.
   final bool hasFollowUp;
+
+  /// Mentions the current user (or everyone online): cards are tinted.
+  final bool mentionsMe;
+
+  /// Desktop sizes, hover toolbar and right-click menu.
+  final bool desktop;
+
+  /// The card ("cozy") layout of circle channels instead of bubbles.
+  final bool cards;
 
   /// The composer is available, so replying and editing are offered.
   final bool canCompose;
@@ -3161,6 +3457,8 @@ class _MessageBubble extends StatelessWidget {
 
   /// Opens this message's thread, starting one first if needed.
   final Future<void> Function(ChatMessage message)? onOpenThread;
+
+  bool get _isRecalled => message.recalledAt != null;
 
   /// The link whose preview card shows under this message, if any.
   String? get _previewUrl {
@@ -3188,155 +3486,78 @@ class _MessageBubble extends StatelessWidget {
     }
   }
 
+  Color _nameColor(WeCordPalette c) => switch (sender?.roleColor) {
+    final color? => Color(0xFF000000 | color),
+    null => c.ink,
+  };
+
   Widget _buildOpeningPost(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isRecalled = message.recalledAt != null;
-    final image = _openingPostImage;
-    final sender = this.sender;
-    final previewUrl = _previewUrl;
-    final reactions = isRecalled
-        ? const <MessageReaction>[]
-        : message.reactions;
+    final c = context.tokens.colors;
+    final isRecalled = _isRecalled;
     final replies = switch (replyCount) {
       0 => tr('No replies yet'),
       1 => tr('1 reply'),
       final count => tr('{count} replies', {'count': count}),
     };
+    final side = cards ? (desktop ? 24.0 : 14.0) : 0.0;
 
     return Padding(
       key: const ValueKey('forum-opening-post'),
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.fromLTRB(side, 4, side, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            onLongPress: isRecalled ? null : () => _showActions(context, image),
-            onSecondaryTapDown: isRecalled
-                ? null
-                : (_) => _showActions(context, image),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (postTitle case final title?) ...[
-                    Text(
-                      title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
+          Builder(
+            builder: (cardContext) => GestureDetector(
+              onLongPress: isRecalled
+                  ? null
+                  : () => _openPhoneMenu(
+                      cardContext,
+                      preview: _liftedCard(context, _openingPostBody(context)),
+                      alignEnd: false,
+                    ),
+              onSecondaryTapDown: isRecalled
+                  ? null
+                  : (details) => _showContextMenu(
+                      context,
+                      Rect.fromLTWH(
+                        details.globalPosition.dx,
+                        details.globalPosition.dy,
+                        0,
+                        0,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  Row(
-                    children: [
-                      FallbackAvatar(
-                        title: sender?.name ?? '?',
-                        avatarUrl: sender?.avatarUrl,
-                        radius: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              sender?.name ?? tr('Someone'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: switch (sender?.roleColor) {
-                                  final color? => Color(0xFF000000 | color),
-                                  null => colorScheme.onSurface,
-                                },
-                              ),
-                            ),
-                            Text(
-                              formatThreadActivity(message.createdAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (isRecalled)
-                    Text(
-                      message.deletedLabel,
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    )
-                  else if (message.body.trim().isNotEmpty)
-                    DefaultTextStyle.merge(
-                      style: theme.textTheme.bodyLarge,
-                      child: MessageMarkdownText(
-                        body: message.body,
-                        mentions: message.mentions,
-                        color: colorScheme.onSurface,
-                        enlargeEmojiOnly: true,
-                      ),
-                    ),
-                  if (image != null) ...[
-                    const SizedBox(height: 12),
-                    _ImageMessageContent(attachment: image),
-                  ],
-                  if (message.editedAt != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      tr('edited'),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                  if (previewUrl != null)
-                    MessageLinkPreviewCard(url: previewUrl, bottomGap: 0),
-                  if (reactions.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    MessageReactionChips(
-                      reactions: reactions,
-                      onToggle: (emoji) =>
-                          unawaited(onToggleReaction(message, emoji)),
-                      onShowReactors: (reaction) =>
-                          onShowReactors(message, reaction),
-                    ),
-                  ],
-                ],
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: c.well,
+                  borderRadius: BorderRadius.circular(WeCordRadii.xl),
+                ),
+                child: _openingPostBody(context),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+            padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
             child: Row(
               children: [
                 Icon(
-                  Icons.chat_bubble_outline,
+                  Icons.chat_bubble_outline_rounded,
                   size: 16,
-                  color: colorScheme.onSurfaceVariant,
+                  color: c.subtle,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   replies,
                   key: const ValueKey('forum-opening-post-replies'),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: c.muted,
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Expanded(child: Divider()),
+                const SizedBox(width: 10),
+                Expanded(child: Container(height: 1, color: c.lineSoft)),
               ],
             ),
           ),
@@ -3345,181 +3566,585 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  Widget _openingPostBody(BuildContext context) {
+    final c = context.tokens.colors;
+    final isRecalled = _isRecalled;
+    final image = _openingPostImage;
+    final sender = this.sender;
+    final previewUrl = _previewUrl;
+    final reactions = isRecalled
+        ? const <MessageReaction>[]
+        : message.reactions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (postTitle case final title?) ...[
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: c.ink,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            ChatAvatar(
+              name: sender?.name ?? '?',
+              avatarUrl: sender?.avatarUrl,
+              size: 36,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sender?.name ?? tr('Someone'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: _nameColor(c),
+                    ),
+                  ),
+                  Text(
+                    formatThreadActivity(message.createdAt),
+                    style: TextStyle(fontSize: 12, color: c.subtle),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (isRecalled)
+          Text(
+            message.deletedLabel,
+            style: TextStyle(color: c.muted, fontStyle: FontStyle.italic),
+          )
+        else if (message.body.trim().isNotEmpty)
+          DefaultTextStyle.merge(
+            style: TextStyle(fontSize: desktop ? 15 : 16, height: 1.5),
+            child: MessageMarkdownText(
+              body: message.body,
+              mentions: message.mentions,
+              color: c.ink,
+              enlargeEmojiOnly: true,
+            ),
+          ),
+        if (image != null) ...[
+          const SizedBox(height: 12),
+          _ImageMessageContent(
+            attachment: image,
+            desktop: desktop,
+            framed: true,
+          ),
+        ],
+        if (message.editedAt != null) ...[
+          const SizedBox(height: 4),
+          _EditedMarker(color: c.muted),
+        ],
+        if (previewUrl != null) ...[
+          const SizedBox(height: 10),
+          MessageLinkPreviewCard(url: previewUrl, bottomGap: 0),
+        ],
+        if (reactions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _reactionChips(),
+        ],
+      ],
+    );
+  }
+
+  Widget _reactionChips() {
+    return MessageReactionChips(
+      reactions: message.reactions,
+      onToggle: (emoji) => unawaited(onToggleReaction(message, emoji)),
+      onShowReactors: (reaction) => onShowReactors(message, reaction),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isOpeningPost) {
       return _buildOpeningPost(context);
     }
-    final colorScheme = Theme.of(context).colorScheme;
-    final bubbleColor = isCurrentUser
-        ? colorScheme.primaryContainer
-        : colorScheme.surfaceContainerHighest;
-    final textColor = isCurrentUser
-        ? colorScheme.onPrimaryContainer
-        : colorScheme.onSurfaceVariant;
-    final isRecalled = message.recalledAt != null;
-    final imageAttachment = isRecalled ? null : message.imageAttachment;
-    final voiceAttachment = isRecalled ? null : message.voiceAttachment;
-    final stickerAttachment = isRecalled ? null : message.stickerAttachment;
-    final canShowActions = !isRecalled;
-    final reactions = isRecalled
+    final hoverable = desktop && !_isRecalled && !usesTouchInput(context);
+    return _MessageHover(
+      enabled: hoverable,
+      builder: (context, hovered) => cards
+          ? _buildCard(context, hovered)
+          : _buildBubbleRow(context, hovered),
+    );
+  }
+
+  /// Whether the message is only an image or GIF, shown edge to edge in
+  /// its bubble.
+  bool get _mediaOnly {
+    if (_isRecalled ||
+        message.replyPreview != null ||
+        message.forwardPreview != null ||
+        message.crosspost != null ||
+        message.interaction != null ||
+        message.editedAt != null ||
+        message.isPublished) {
+      return false;
+    }
+    return message.imageAttachment != null ||
+        (message.type == MessageType.text && gifUrlIn(message.body) != null);
+  }
+
+  Widget _content(BuildContext context, Color textColor) {
+    final isRecalled = _isRecalled;
+    return _MessageContent(
+      message: message,
+      messagesById: messagesById,
+      imageAttachment: isRecalled ? null : message.imageAttachment,
+      voiceAttachment: isRecalled ? null : message.voiceAttachment,
+      textColor: textColor,
+      isRecalled: isRecalled,
+      pollActions: pollActions,
+      outgoing: !cards && isCurrentUser,
+      desktop: desktop,
+      cards: cards,
+    );
+  }
+
+  /// The bubble itself; [lifted] adds the shadow of the long-press menu.
+  Widget _bubble(BuildContext context, {bool lifted = false}) {
+    final tokens = context.tokens;
+    final c = tokens.colors;
+    final outgoing = isCurrentUser;
+    final textColor = outgoing ? c.onInk : c.ink;
+    final media = _mediaOnly;
+    return Container(
+      padding: media
+          ? const EdgeInsets.all(4)
+          : const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: outgoing ? c.ink : c.raised,
+        borderRadius: lifted
+            ? BorderRadius.circular(WeCordRadii.bubble + 2)
+            : chatBubbleRadius(
+                outgoing: outgoing,
+                joinsAbove: isFollowUp,
+                joinsBelow: hasFollowUp,
+              ),
+        boxShadow: lifted ? tokens.shadows.menu : null,
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          fontSize: desktop ? 14.5 : 15.5,
+          height: 1.45,
+          color: textColor,
+        ),
+        child: _content(context, textColor),
+      ),
+    );
+  }
+
+  Widget _buildBubbleRow(BuildContext context, bool hovered) {
+    final c = context.tokens.colors;
+    final outgoing = isCurrentUser;
+    final sender = this.sender;
+    final stickerAttachment = _isRecalled ? null : message.stickerAttachment;
+    final reactions = _isRecalled
         ? const <MessageReaction>[]
         : message.reactions;
-    final gap = hasFollowUp ? 2.0 : 8.0;
-    final sender = this.sender;
     final previewUrl = _previewUrl;
+    final canShowActions = !_isRecalled;
+    final avatarSize = desktop ? 32.0 : 30.0;
+    final showAvatar = sender != null && !outgoing;
+    final indent = showAvatar ? avatarSize + 8 : 0.0;
+    final gap = hasFollowUp ? 3.0 : 10.0;
 
-    final column = Column(
-      crossAxisAlignment: isCurrentUser
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        if (sender != null && showSenderName && !isFollowUp)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    sender.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: switch (sender.roleColor) {
-                        final color? => Color(0xFF000000 | color),
-                        null => colorScheme.onSurface,
-                      },
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxBubble = math.min(
+          (constraints.maxWidth - indent) * (desktop ? 0.66 : 0.8),
+          desktop ? 560.0 : 520.0,
+        );
+        final Widget visual = stickerAttachment != null
+            ? Padding(
+                key: ValueKey('sticker-message-${message.id}'),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: StickerMessageContent(
+                  attachment: stickerAttachment,
+                  textColor: c.muted,
                 ),
-                if (sender.isBot) ...[
-                  const SizedBox(width: 6),
-                  const MessageBotTag(),
-                ],
-                if (sender.userId case final userId?)
-                  ProfileNameBadges(userId: userId),
-              ],
-            ),
-          ),
-        Align(
-          alignment: isCurrentUser
-              ? Alignment.centerRight
-              : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: GestureDetector(
-              onLongPress: canShowActions
-                  ? () => _showActions(context, imageAttachment)
-                  : null,
-              onSecondaryTapDown: canShowActions
-                  ? (_) => _showActions(context, imageAttachment)
-                  : null,
-              // Stickers show on their own, without a bubble.
-              child: stickerAttachment != null
-                  ? Padding(
-                      key: ValueKey('sticker-message-${message.id}'),
-                      padding: EdgeInsets.only(
-                        bottom: showReadReceipt || reactions.isNotEmpty
-                            ? 4
-                            : gap,
-                      ),
-                      child: StickerMessageContent(
-                        attachment: stickerAttachment,
-                        textColor: colorScheme.onSurfaceVariant,
-                      ),
-                    )
-                  : Container(
-                      margin: EdgeInsets.only(
-                        bottom: showReadReceipt || reactions.isNotEmpty
-                            ? 4
-                            : gap,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: bubbleColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _MessageContent(
-                        message: message,
-                        messagesById: messagesById,
-                        imageAttachment: imageAttachment,
-                        voiceAttachment: voiceAttachment,
-                        textColor: textColor,
-                        isRecalled: isRecalled,
-                        pollActions: pollActions,
-                      ),
+              )
+            : _bubble(context);
+        final bubble = Builder(
+          builder: (bubbleContext) => GestureDetector(
+            onLongPress: canShowActions
+                ? () => _openPhoneMenu(
+                    bubbleContext,
+                    preview: stickerAttachment != null
+                        ? visual
+                        : _bubble(context, lifted: true),
+                    alignEnd: outgoing,
+                  )
+                : null,
+            onSecondaryTapDown: canShowActions
+                ? (details) => _showContextMenu(
+                    context,
+                    Rect.fromLTWH(
+                      details.globalPosition.dx,
+                      details.globalPosition.dy,
+                      0,
+                      0,
                     ),
-            ),
+                  )
+                : null,
+            child: visual,
           ),
-        ),
-        if (previewUrl != null)
-          MessageLinkPreviewCard(
-            url: previewUrl,
-            bottomGap: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
-          ),
-        if (message.threadSummary case final thread? when onOpenThread != null)
-          Padding(
-            padding: EdgeInsets.only(
-              bottom: showReadReceipt || reactions.isNotEmpty ? 4 : gap,
-            ),
+        );
+        final toolbar = hovered
+            ? LayoutBuilder(
+                builder: (context, space) => space.maxWidth < 112
+                    ? const SizedBox.shrink()
+                    : Align(
+                        alignment: outgoing
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        heightFactor: 1,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: _hoverToolbar(context),
+                        ),
+                      ),
+              )
+            : const SizedBox.shrink();
+        Widget extra(Widget child, double bottom) => Padding(
+          padding: EdgeInsets.only(left: indent, bottom: bottom),
+          child: Align(
+            alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: _ThreadChip(
+              constraints: BoxConstraints(maxWidth: maxBubble),
+              child: child,
+            ),
+          ),
+        );
+        final afterBubble = [
+          if (previewUrl != null)
+            extra(MessageLinkPreviewCard(url: previewUrl, bottomGap: 0), 0),
+          if (message.threadSummary case final thread?
+              when onOpenThread != null)
+            extra(
+              _ThreadChip(
                 messageId: message.id,
                 summary: thread,
                 onTap: () => unawaited(onOpenThread!(message)),
               ),
+              0,
             ),
-          ),
-        if (reactions.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.only(bottom: showReadReceipt ? 4 : gap),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: MessageReactionChips(
-                reactions: reactions,
-                onToggle: (emoji) =>
-                    unawaited(onToggleReaction(message, emoji)),
-                onShowReactors: (reaction) => onShowReactors(message, reaction),
+          if (reactions.isNotEmpty) extra(_reactionChips(), 0),
+          if (showReadReceipt)
+            Padding(
+              padding: const EdgeInsets.only(right: 2, top: 2),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: const ChatReadReceipt(),
               ),
             ),
+        ];
+        return Padding(
+          padding: EdgeInsets.only(bottom: gap),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (sender != null && showSenderName && !isFollowUp)
+                Padding(
+                  padding: EdgeInsets.only(left: indent + 6, bottom: 3),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          sender.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: sender.roleColor == null
+                                ? c.muted
+                                : _nameColor(c),
+                          ),
+                        ),
+                      ),
+                      if (sender.isBot) ...[
+                        const SizedBox(width: 6),
+                        const MessageBotTag(),
+                      ],
+                      if (sender.userId case final userId?)
+                        ProfileNameBadges(userId: userId),
+                    ],
+                  ),
+                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (showAvatar) ...[
+                    SizedBox(
+                      width: avatarSize,
+                      child: hasFollowUp
+                          ? null
+                          : ChatAvatar(
+                              key: ValueKey('message-avatar-${message.id}'),
+                              name: sender.name,
+                              avatarUrl: sender.avatarUrl,
+                              size: avatarSize,
+                            ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (outgoing) Expanded(child: toolbar),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxBubble),
+                    child: bubble,
+                  ),
+                  if (!outgoing) Expanded(child: toolbar),
+                ],
+              ),
+              if (afterBubble.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                for (final (index, child) in afterBubble.indexed) ...[
+                  if (index > 0) const SizedBox(height: 4),
+                  child,
+                ],
+              ],
+            ],
           ),
+        );
+      },
+    );
+  }
+
+  /// A card (circle channels): avatar, name in the role color, time, then
+  /// the message without a bubble.
+  Widget _buildCard(BuildContext context, bool hovered) {
+    final c = context.tokens.colors;
+    final sender = this.sender;
+    final stickerAttachment = _isRecalled ? null : message.stickerAttachment;
+    final reactions = _isRecalled
+        ? const <MessageReaction>[]
+        : message.reactions;
+    final previewUrl = _previewUrl;
+    final canShowActions = !_isRecalled;
+    final avatarSize = desktop ? 40.0 : 36.0;
+    final side = desktop ? 24.0 : 14.0;
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!isFollowUp)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 1),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    sender?.name ?? tr('Someone'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: desktop ? 14.5 : 15,
+                      fontWeight: FontWeight.w700,
+                      color: _nameColor(c),
+                    ),
+                  ),
+                ),
+                if (sender?.isBot == true) ...[
+                  const SizedBox(width: 6),
+                  const MessageBotTag(),
+                ],
+                if (sender?.userId case final userId?)
+                  ProfileNameBadges(userId: userId),
+                const SizedBox(width: 8),
+                Text(
+                  chatClockTime(message.createdAt),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: c.subtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (stickerAttachment != null)
+          Padding(
+            key: ValueKey('sticker-message-${message.id}'),
+            padding: const EdgeInsets.only(top: 4),
+            child: StickerMessageContent(
+              attachment: stickerAttachment,
+              textColor: c.muted,
+            ),
+          )
+        else
+          DefaultTextStyle.merge(
+            style: TextStyle(
+              fontSize: desktop ? 14.5 : 15.5,
+              height: 1.5,
+              color: c.ink,
+            ),
+            child: _content(context, c.ink),
+          ),
+        if (previewUrl != null) ...[
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: MessageLinkPreviewCard(url: previewUrl, bottomGap: 0),
+          ),
+        ],
+        if (message.threadSummary case final thread?
+            when onOpenThread != null) ...[
+          const SizedBox(height: 6),
+          _ThreadChip(
+            messageId: message.id,
+            summary: thread,
+            onTap: () => unawaited(onOpenThread!(message)),
+          ),
+        ],
+        if (reactions.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _reactionChips(),
+        ],
         if (showReadReceipt)
-          Padding(
-            padding: EdgeInsets.only(right: 4, bottom: gap),
-            child: Text(
-              tr('Read'),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: ChatReadReceipt(),
           ),
       ],
     );
-    if (sender == null) {
-      return column;
-    }
-    final avatar = SizedBox(
-      width: _senderAvatarSize,
-      child: isFollowUp
-          ? null
-          : FallbackAvatar(
-              key: ValueKey('message-avatar-${message.id}'),
-              title: sender.name,
-              avatarUrl: sender.avatarUrl,
-              radius: _senderAvatarSize / 2,
-            ),
-    );
-    return Row(
+
+    Widget row(BuildContext context, {bool lifted = false}) => Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: isCurrentUser
-          ? [Expanded(child: column), const SizedBox(width: 8), avatar]
-          : [avatar, const SizedBox(width: 8), Expanded(child: column)],
+      children: [
+        SizedBox(
+          width: avatarSize,
+          child: isFollowUp
+              ? (hovered && !lifted
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          chatClockTime(message.createdAt),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 10.5, color: c.subtle),
+                        ),
+                      )
+                    : null)
+              : ChatAvatar(
+                  key: lifted ? null : ValueKey('message-avatar-${message.id}'),
+                  name: sender?.name ?? '?',
+                  avatarUrl: sender?.avatarUrl,
+                  size: avatarSize,
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: body),
+      ],
     );
+
+    final tint = mentionsMe
+        ? c.accentSoft.withValues(alpha: 0.6)
+        : hovered
+        ? c.raised.withValues(alpha: 0.6)
+        : c.raised.withValues(alpha: 0);
+
+    return Builder(
+      builder: (rowContext) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: canShowActions
+            ? () => _openPhoneMenu(
+                rowContext,
+                preview: _liftedCard(
+                  context,
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: row(context, lifted: true),
+                  ),
+                ),
+                alignEnd: false,
+              )
+            : null,
+        onSecondaryTapDown: canShowActions
+            ? (details) => _showContextMenu(
+                context,
+                Rect.fromLTWH(
+                  details.globalPosition.dx,
+                  details.globalPosition.dy,
+                  0,
+                  0,
+                ),
+              )
+            : null,
+        child: AnimatedContainer(
+          duration: WeCordMotion.quick,
+          color: tint,
+          padding: EdgeInsets.fromLTRB(
+            side,
+            isFollowUp ? 2 : 10,
+            side,
+            hasFollowUp ? 2 : 6,
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              row(context),
+              if (hovered)
+                Positioned(
+                  top: isFollowUp ? -6 : -4,
+                  right: 0,
+                  child: _hoverToolbar(context),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [child] on a panel card with the menu shadow: what a long-pressed
+  /// card or forum post lifts.
+  Widget _liftedCard(BuildContext context, Widget child) {
+    final tokens = context.tokens;
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.colors.panel,
+        borderRadius: BorderRadius.circular(WeCordRadii.xl),
+        boxShadow: tokens.shadows.menu,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _hoverToolbar(BuildContext context) {
+    return MessageHoverToolbar(
+      onReact: () => unawaited(_pickReaction(context)),
+      onReply: canCompose ? () => onReply(message) : null,
+      onMore: (buttonContext) =>
+          _showContextMenu(buttonContext, globalRectOf(buttonContext)),
+    );
+  }
+
+  Future<void> _pickReaction(BuildContext context) async {
+    final emoji = await showEmojiReactionPicker(
+      context,
+      includeCustom: true,
+      circleId: circleId,
+    );
+    if (emoji != null) {
+      await onToggleReaction(message, emoji);
+    }
   }
 
   bool _hasVisiblePreview(BuildContext context) {
@@ -3534,168 +4159,193 @@ class _MessageBubble extends StatelessWidget {
         null;
   }
 
-  void _showActions(BuildContext context, ImageAttachment? imageAttachment) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                QuickReactionBar(
-                  reactedEmojis: {
-                    for (final reaction in message.reactions)
-                      if (reaction.reactedByMe) reaction.emoji,
-                  },
-                  onSelect: (emoji) {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(onToggleReaction(message, emoji));
-                  },
-                  onMore: () async {
-                    Navigator.of(sheetContext).pop();
-                    final emoji = await showEmojiReactionPicker(
-                      context,
-                      includeCustom: true,
-                      circleId: circleId,
-                    );
-                    if (emoji != null) {
-                      await onToggleReaction(message, emoji);
-                    }
-                  },
-                ),
-                const Divider(height: 1),
-                if (canCompose)
-                  ListTile(
-                    leading: const Icon(Icons.reply_outlined),
-                    title: Text(tr('Reply')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onReply(message);
-                    },
-                  ),
-                if (onOpenThread != null &&
-                    (message.threadSummary != null ||
-                        (canStartThread && message.type != MessageType.system)))
-                  ListTile(
-                    leading: const Icon(Icons.forum_outlined),
-                    title: Text(
-                      message.threadSummary == null
-                          ? tr('Create thread')
-                          : tr('Open thread'),
-                    ),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onOpenThread!(message));
-                    },
-                  ),
-                // A poll's votes belong to the original, so polls are not
-                // forwarded; stickers belong to circles the recipients may
-                // not be in.
-                if (message.type != MessageType.poll &&
-                    message.type != MessageType.sticker)
-                  ListTile(
-                    leading: const Icon(Icons.forward_outlined),
-                    title: Text(tr('Forward')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onForward(message);
-                    },
-                  ),
-                if (canCompose &&
-                    isCurrentUser &&
-                    message.type == MessageType.text)
-                  ListTile(
-                    leading: const Icon(Icons.edit_outlined),
-                    title: Text(tr('Edit')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onEdit(message);
-                    },
-                  ),
-                if (imageAttachment != null)
-                  ListTile(
-                    leading: const Icon(Icons.visibility_outlined),
-                    title: Text(tr('Preview')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onPreviewImage(imageAttachment));
-                    },
-                  ),
-                if (onPublish case final publish?)
-                  ListTile(
-                    key: const ValueKey('message-publish'),
-                    leading: const Icon(Icons.campaign_outlined),
-                    title: Text(tr('Publish')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(publish(message));
-                    },
-                  ),
-                if (canPin)
-                  ListTile(
-                    leading: Icon(
-                      message.isPinned
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                    ),
-                    title: Text(message.isPinned ? tr('Unpin') : tr('Pin')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onTogglePin(message));
-                    },
-                  ),
-                if (canCompose && isCurrentUser && _hasVisiblePreview(context))
-                  ListTile(
-                    leading: const Icon(Icons.link_off),
-                    title: Text(tr('Remove embed')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onRemoveEmbed(message));
-                    },
-                  ),
-                if (message.type == MessageType.text)
-                  ListTile(
-                    leading: const Icon(Icons.copy_outlined),
-                    title: Text(tr('Copy')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(
-                        Clipboard.setData(ClipboardData(text: message.body)),
-                      );
-                    },
-                  ),
-                if (isCurrentUser)
-                  ListTile(
-                    iconColor: colorScheme.error,
-                    textColor: colorScheme.error,
-                    leading: const Icon(Icons.delete_outline),
-                    title: Text(tr('Delete')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onDelete(message));
-                    },
-                  )
-                else if (canModerate)
-                  ListTile(
-                    key: const ValueKey('message-moderator-delete'),
-                    iconColor: colorScheme.error,
-                    textColor: colorScheme.error,
-                    leading: const Icon(Icons.delete_outline),
-                    title: Text(tr('Delete message')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      unawaited(onDelete(message));
-                    },
-                  ),
-              ],
-            ),
-          ),
-        );
+  /// What can be done with this message, in menu order.
+  List<MessageAction> _actions(BuildContext context) {
+    final imageAttachment = _isRecalled ? null : message.imageAttachment;
+    return [
+      if (canCompose)
+        MessageAction(
+          slot: MessageActionSlot.reply,
+          icon: Icons.reply_rounded,
+          label: tr('Reply'),
+          onSelected: () => onReply(message),
+        ),
+      if (message.type == MessageType.text)
+        MessageAction(
+          slot: MessageActionSlot.copy,
+          icon: Icons.copy_rounded,
+          label: tr('Copy'),
+          onSelected: () =>
+              unawaited(Clipboard.setData(ClipboardData(text: message.body))),
+        ),
+      // A poll's votes belong to the original, so polls are not
+      // forwarded; stickers belong to circles the recipients may not be
+      // in.
+      if (message.type != MessageType.poll &&
+          message.type != MessageType.sticker)
+        MessageAction(
+          slot: MessageActionSlot.forward,
+          icon: Icons.shortcut_rounded,
+          label: tr('Forward'),
+          onSelected: () => onForward(message),
+        ),
+      if (canCompose && isCurrentUser && message.type == MessageType.text)
+        MessageAction(
+          icon: Icons.edit_outlined,
+          label: tr('Edit'),
+          onSelected: () => onEdit(message),
+        ),
+      if (canPin)
+        MessageAction(
+          icon: message.isPinned
+              ? Icons.push_pin_rounded
+              : Icons.push_pin_outlined,
+          label: message.isPinned ? tr('Unpin') : tr('Pin'),
+          onSelected: () => unawaited(onTogglePin(message)),
+        ),
+      if (onOpenThread != null &&
+          (message.threadSummary != null ||
+              (canStartThread && message.type != MessageType.system)))
+        MessageAction(
+          icon: Icons.forum_outlined,
+          label: message.threadSummary == null
+              ? tr('Create thread')
+              : tr('Open thread'),
+          onSelected: () => unawaited(onOpenThread!(message)),
+        ),
+      if (imageAttachment != null)
+        MessageAction(
+          icon: Icons.visibility_outlined,
+          label: tr('Preview'),
+          onSelected: () => unawaited(onPreviewImage(imageAttachment)),
+        ),
+      if (onPublish case final publish?)
+        MessageAction(
+          key: const ValueKey('message-publish'),
+          icon: Icons.campaign_outlined,
+          label: tr('Publish'),
+          onSelected: () => unawaited(publish(message)),
+        ),
+      if (canCompose && isCurrentUser && _hasVisiblePreview(context))
+        MessageAction(
+          icon: Icons.link_off_rounded,
+          label: tr('Remove embed'),
+          onSelected: () => unawaited(onRemoveEmbed(message)),
+        ),
+      if (isCurrentUser)
+        MessageAction(
+          icon: Icons.delete_outline_rounded,
+          label: tr('Delete'),
+          destructive: true,
+          onSelected: () => unawaited(onDelete(message)),
+        )
+      else if (canModerate)
+        MessageAction(
+          key: const ValueKey('message-moderator-delete'),
+          icon: Icons.delete_outline_rounded,
+          label: tr('Delete message'),
+          destructive: true,
+          onSelected: () => unawaited(onDelete(message)),
+        ),
+    ];
+  }
+
+  QuickReactionBar _quickReactions(
+    BuildContext context, {
+    required bool compact,
+  }) {
+    return QuickReactionBar(
+      compact: compact,
+      reactedEmojis: {
+        for (final reaction in message.reactions)
+          if (reaction.reactedByMe) reaction.emoji,
       },
+      onSelect: (emoji) {
+        Navigator.of(context).pop();
+        unawaited(onToggleReaction(message, emoji));
+      },
+      onMore: () {
+        Navigator.of(context).pop();
+        unawaited(_pickReaction(context));
+      },
+    );
+  }
+
+  /// The long-press menu: the message lifted over the blurred chat.
+  void _openPhoneMenu(
+    BuildContext messageContext, {
+    required Widget preview,
+    required bool alignEnd,
+  }) {
+    unawaited(
+      showMessageActionMenu(
+        messageContext,
+        messageRect: globalRectOf(messageContext),
+        alignEnd: alignEnd,
+        preview: preview,
+        reactions: _quickReactions(messageContext, compact: false),
+        actions: _actions(messageContext),
+      ),
+    );
+  }
+
+  /// The glass context menu (right-click, or the hover toolbar's More).
+  void _showContextMenu(BuildContext context, Rect anchor) {
+    unawaited(
+      showMessageContextMenu(
+        context,
+        anchor: anchor,
+        reactions: _quickReactions(context, compact: true),
+        actions: _actions(context),
+      ),
+    );
+  }
+}
+
+/// Tracks the pointer over a message on desktop, for its hover tint and
+/// toolbar.
+class _MessageHover extends StatefulWidget {
+  const _MessageHover({required this.enabled, required this.builder});
+
+  final bool enabled;
+  final Widget Function(BuildContext context, bool hovered) builder;
+
+  @override
+  State<_MessageHover> createState() => _MessageHoverState();
+}
+
+class _MessageHoverState extends State<_MessageHover> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return widget.builder(context, false);
+    }
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: widget.builder(context, _hovered),
+    );
+  }
+}
+
+/// The small "edited" after a message's text.
+class _EditedMarker extends StatelessWidget {
+  const _EditedMarker({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      tr('edited'),
+      style: TextStyle(
+        fontSize: 11.5,
+        height: 1.3,
+        fontWeight: FontWeight.w500,
+        color: color,
+      ),
     );
   }
 }
@@ -3714,41 +4364,49 @@ class _SystemMessageLine extends StatelessWidget {
     if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
       return AutoModAlertCard(alert: alert);
     }
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final pinnedMessageId = message.pinnedMessageId;
-    final text = Text(
-      message.body,
-      textAlign: TextAlign.center,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
+    final icon = pinnedMessageId != null
+        ? Icons.push_pin_rounded
+        : message.attachment?['kind'] == 'call'
+        ? Icons.call_rounded
+        : null;
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: c.well,
+        borderRadius: BorderRadius.circular(WeCordRadii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: c.muted),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Text(
+              message.body,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: c.muted,
+              ),
+            ),
+          ),
+        ],
       ),
     );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
       child: Center(
         child: pinnedMessageId == null
-            ? text
-            : InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap: () => unawaited(onOpenPinnedMessage(pinnedMessageId)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.push_pin_outlined,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(child: text),
-                    ],
-                  ),
-                ),
+            ? pill
+            : WeCordPressable(
+                onPressed: () =>
+                    unawaited(onOpenPinnedMessage(pinnedMessageId)),
+                builder: (context, states) => pill,
               ),
       ),
     );
@@ -3764,6 +4422,9 @@ class _MessageContent extends StatelessWidget {
     required this.textColor,
     required this.isRecalled,
     this.pollActions,
+    this.outgoing = false,
+    this.desktop = false,
+    this.cards = false,
   });
 
   final ChatMessage message;
@@ -3774,12 +4435,24 @@ class _MessageContent extends StatelessWidget {
   final bool isRecalled;
   final PollActions? pollActions;
 
+  /// In an outgoing (ink) bubble.
+  final bool outgoing;
+  final bool desktop;
+
+  /// In a card rather than a bubble: attachments get their own rounded
+  /// cards.
+  final bool cards;
+
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     if (isRecalled) {
       return Text(
         message.deletedLabel,
-        style: TextStyle(color: textColor, fontStyle: FontStyle.italic),
+        style: TextStyle(
+          color: textColor.withValues(alpha: 0.7),
+          fontStyle: FontStyle.italic,
+        ),
       );
     }
 
@@ -3793,35 +4466,92 @@ class _MessageContent extends StatelessWidget {
           senderName: message.replyPreview!.senderName,
           body: _displayBodyForReplyPreview(message.replyPreview!),
           foregroundColor: textColor,
+          cards: cards,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
       ],
       if (message.forwardPreview != null) ...[
         _ForwardedPreview(
           preview: message.forwardPreview!,
           foregroundColor: textColor,
+          cards: cards,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
       ],
     ];
 
     final attachment = imageAttachment;
     if (attachment != null) {
-      content.add(_ImageMessageContent(attachment: attachment));
+      content.add(
+        _ImageMessageContent(
+          attachment: attachment,
+          desktop: desktop,
+          framed: cards,
+        ),
+      );
     } else if (voiceAttachment != null) {
-      content.add(VoiceMessagePlayer(attachment: voiceAttachment!));
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 4 : 0),
+          child: VoiceMessagePlayer(
+            attachment: voiceAttachment!,
+            foregroundColor: cards ? c.ink : textColor,
+            card: cards,
+          ),
+        ),
+      );
     } else if (message.fileAttachment case final file?) {
-      content.add(FileMessageContent(attachment: file, textColor: textColor));
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: cards ? 420 : 300),
+            child: FileMessageContent(
+              attachment: file,
+              textColor: textColor,
+              card: cards,
+            ),
+          ),
+        ),
+      );
     } else if (message.type == MessageType.poll) {
       content.add(
-        PollMessageContent(
-          message: message,
-          textColor: textColor,
-          actions: pollActions,
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: cards
+              ? ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: c.well,
+                      borderRadius: BorderRadius.circular(WeCordRadii.lg),
+                      border: Border.all(color: c.lineSoft),
+                    ),
+                    child: PollMessageContent(
+                      message: message,
+                      textColor: c.ink,
+                      actions: pollActions,
+                    ),
+                  ),
+                )
+              : PollMessageContent(
+                  message: message,
+                  textColor: textColor,
+                  actions: pollActions,
+                ),
         ),
       );
     } else if (gifUrlIn(message.body) case final gifUrl?) {
-      content.add(GifMessageImage(url: gifUrl, textColor: textColor));
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            child: GifMessageImage(url: gifUrl, textColor: textColor),
+          ),
+        ),
+      );
     } else {
       content.add(
         MessageMarkdownText(
@@ -3834,16 +4564,8 @@ class _MessageContent extends StatelessWidget {
     }
 
     if (message.editedAt != null) {
-      content.add(const SizedBox(height: 4));
-      content.add(
-        Text(
-          tr('edited'),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: textColor.withValues(alpha: 0.72),
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      );
+      content.add(const SizedBox(height: 2));
+      content.add(_EditedMarker(color: textColor.withValues(alpha: 0.55)));
     }
 
     if (message.isPublished) {
@@ -3878,40 +4600,62 @@ class _ForwardedPreview extends StatelessWidget {
   const _ForwardedPreview({
     required this.preview,
     required this.foregroundColor,
+    this.cards = false,
   });
 
   final ForwardPreview preview;
   final Color foregroundColor;
+  final bool cards;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      width: cards ? null : double.infinity,
+      constraints: cards ? const BoxConstraints(maxWidth: 440) : null,
+      padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        color: foregroundColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        color: cards ? c.well : foregroundColor.withValues(alpha: 0.08),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            tr('Forwarded from {name}', {'name': preview.senderName}),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: foregroundColor,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.shortcut_rounded,
+                size: 13,
+                color: foregroundColor.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  tr('Forwarded from {name}', {'name': preview.senderName}),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: foregroundColor.withValues(alpha: 0.75),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 2),
           Text(
             _displayBodyForForwardPreview(preview),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: foregroundColor),
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: foregroundColor.withValues(alpha: 0.85),
+            ),
           ),
         ],
       ),
@@ -3924,20 +4668,23 @@ class _QuotedReplyPreview extends StatelessWidget {
     required this.senderName,
     required this.body,
     required this.foregroundColor,
+    this.cards = false,
   });
 
   final String senderName;
   final String body;
   final Color foregroundColor;
+  final bool cards;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    final c = context.tokens.colors;
+    final quote = Container(
+      width: cards ? null : double.infinity,
+      padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
       decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: foregroundColor, width: 3)),
-        color: foregroundColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        color: cards ? c.well : foregroundColor.withValues(alpha: 0.1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3947,21 +4694,42 @@ class _QuotedReplyPreview extends StatelessWidget {
             senderName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: foregroundColor,
-              fontWeight: FontWeight.w600,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.3,
+              color: foregroundColor.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w700,
             ),
           ),
           Text(
             body,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: foregroundColor),
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.35,
+              color: foregroundColor.withValues(alpha: 0.75),
+            ),
           ),
         ],
       ),
+    );
+    if (!cards) {
+      return quote;
+    }
+    // Cards point at the quoted message with a small elbow.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.subdirectory_arrow_right_rounded, size: 16, color: c.faint),
+        const SizedBox(width: 4),
+        Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: quote,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -3981,9 +4749,17 @@ String _displayBodyForForwardPreview(ForwardPreview preview) {
 }
 
 class _ImageMessageContent extends ConsumerStatefulWidget {
-  const _ImageMessageContent({required this.attachment});
+  const _ImageMessageContent({
+    required this.attachment,
+    this.desktop = false,
+    this.framed = false,
+  });
 
   final ImageAttachment attachment;
+  final bool desktop;
+
+  /// On its own (cards) rather than inside a bubble: adds a hairline.
+  final bool framed;
 
   @override
   ConsumerState<_ImageMessageContent> createState() =>
@@ -4034,40 +4810,71 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String>(
-      future: _imageUrl,
-      builder: (context, snapshot) {
-        final url = snapshot.data;
-        if (url == null) {
-          return const SizedBox(
-            width: 220,
-            height: 160,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        return InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: () => showImagePreview(context, url),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.network(
-              url,
-              width: 220,
-              height: 160,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                _resignAfterError();
-                return const SizedBox(
-                  width: 220,
-                  height: 160,
-                  child: Icon(Icons.broken_image_outlined),
-                );
-              },
+    final c = context.tokens.colors;
+    final width = widget.desktop ? 300.0 : 228.0;
+    final height = widget.desktop ? 188.0 : 156.0;
+    final radius = BorderRadius.circular(WeCordRadii.lg);
+    Widget placeholder(Widget? child) => Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: widget.framed ? c.raised : c.well,
+        borderRadius: radius,
+      ),
+      child: child,
+    );
+    return Padding(
+      padding: EdgeInsets.only(top: widget.framed ? 6 : 0),
+      child: FutureBuilder<String>(
+        future: _imageUrl,
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+          if (url == null) {
+            return placeholder(
+              SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: c.faint,
+                ),
+              ),
+            );
+          }
+          return WeCordPressable(
+            onPressed: () => showImagePreview(context, url),
+            shape: RoundedRectangleBorder(borderRadius: radius),
+            pressedScale: 0.98,
+            semanticLabel: tr('Image'),
+            builder: (context, states) => DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: widget.framed ? Border.all(color: c.lineSoft) : null,
+              ),
+              child: ClipRRect(
+                borderRadius: radius,
+                child: Image.network(
+                  url,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    _resignAfterError();
+                    return placeholder(
+                      Icon(
+                        Icons.broken_image_outlined,
+                        color: c.faint,
+                        size: 28,
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -4100,6 +4907,9 @@ void showImagePreview(BuildContext context, String url) {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    required this.desktop,
+    required this.bottomGap,
+    required this.hint,
     required this.slowmodeSeconds,
     required this.slowmodeRemainingSeconds,
     required this.controller,
@@ -4128,6 +4938,7 @@ class _Composer extends StatelessWidget {
     required this.onCreatePoll,
     required this.onPickSticker,
     required this.onPickGif,
+    required this.onInsertEmoji,
     required this.gifAvailable,
     required this.isRecordingVoice,
     required this.isSendingVoice,
@@ -4139,6 +4950,12 @@ class _Composer extends StatelessWidget {
     required this.availableHeight,
   });
 
+  /// Desktop sizes: a 22 radius pill, a send button that is always there.
+  final bool desktop;
+
+  /// Space under the pill (the home indicator on phones).
+  final double bottomGap;
+  final String hint;
   final TextEditingController controller;
   final bool isSending;
   final bool isPickingImage;
@@ -4176,6 +4993,7 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onCreatePoll;
   final Future<void> Function() onPickSticker;
   final Future<void> Function() onPickGif;
+  final Future<void> Function() onInsertEmoji;
 
   /// False once the server said GIF search isn't set up.
   final bool gifAvailable;
@@ -4187,7 +5005,7 @@ class _Composer extends StatelessWidget {
   final VoidCallback onCancelReply;
   final VoidCallback onCancelEdit;
 
-  /// Height of the thread above the keyboard, app bar included.
+  /// Height of the thread above the keyboard, header included.
   final double availableHeight;
 
   /// The channel's slowmode for the current user (0 when off) and how long
@@ -4197,280 +5015,403 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final tokens = context.tokens;
+    final c = tokens.colors;
     final isBusy = isSending || isSendingImage || isSendingVoice;
     // Edits are not new messages, so slowmode leaves them alone.
     final isSlowed = slowmodeRemainingSeconds > 0 && !isEditing;
     final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
+    final buttonSize = desktop ? 40.0 : 44.0;
+    final canAttach = !isBusy && !isEditing && !isRecordingVoice && !isSlowed;
+    final hasSuggestions =
+        slashCommands.isNotEmpty ||
+        botSlashCommands.isNotEmpty ||
+        emojiCandidates.isNotEmpty ||
+        specialMentionCandidates.isNotEmpty ||
+        mentionCandidates.isNotEmpty;
 
-    return SafeArea(
-      top: false,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-        ),
-        // On short screens with the keyboard up, banners and suggestions
-        // scroll above the text field instead of pushing the messages out.
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: availableHeight * 0.5),
-          child: SingleChildScrollView(
-            reverse: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (errorText != null) ...[
-                    Text(
-                      errorText!,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (replyPreviewText != null) ...[
-                    _ComposerModeBanner(
-                      text: tr('Replying to {message}', {
-                        'message': replyPreviewText,
-                      }),
-                      tooltip: tr('Cancel reply'),
-                      icon: Icons.close,
-                      onPressed: onCancelReply,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (isEditing) ...[
-                    _ComposerModeBanner(
-                      text: tr('Editing message'),
-                      tooltip: tr('Cancel edit'),
-                      icon: Icons.close,
-                      onPressed: onCancelEdit,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (slowmodeSeconds > 0) ...[
-                    _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
-                    const SizedBox(height: 8),
-                  ],
-                  if (slashCommands.isNotEmpty ||
-                      botSlashCommands.isNotEmpty) ...[
-                    SlashCommandList(
-                      commands: slashCommands,
-                      botCommands: botSlashCommands,
-                      onSelectBot: onSelectBotSlashCommand,
-                      highlightedIndex: highlightedSlashIndex,
-                      onSelect: onSelectSlashCommand,
-                      maxHeight: math.min(240, availableHeight * 0.3),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (emojiCandidates.isNotEmpty) ...[
-                    CustomEmojiCandidateList(
-                      candidates: emojiCandidates,
-                      onSelect: onSelectEmoji,
-                      maxHeight: math.min(220, availableHeight * 0.3),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (specialMentionCandidates.isNotEmpty) ...[
-                    SpecialMentionCandidateList(
-                      candidates: specialMentionCandidates,
-                      onSelect: onSelectSpecialMention,
-                      maxHeight: math.min(150, availableHeight * 0.2),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (mentionCandidates.isNotEmpty) ...[
-                    MentionCandidateList(
-                      candidates: mentionCandidates,
-                      onSelect: onSelectMention,
-                      maxHeight: math.min(180, availableHeight * 0.25),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Row(
-                    children: [
-                      if (isSendingImage)
-                        IconButton(
-                          tooltip: tr('Sending image'),
-                          onPressed: null,
-                          icon: const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      else
-                        PopupMenuButton<_ComposerAttachment>(
-                          key: const ValueKey('composer-attach-button'),
-                          tooltip: tr('Attach'),
-                          enabled:
-                              !isBusy &&
-                              !isEditing &&
-                              !isRecordingVoice &&
-                              !isSlowed,
-                          icon: const Icon(Icons.add_circle_outline),
-                          onSelected: (choice) => unawaited(switch (choice) {
-                            _ComposerAttachment.image => onPickImage(),
-                            _ComposerAttachment.file => onPickFile(),
-                            _ComposerAttachment.poll => onCreatePoll(),
-                            _ComposerAttachment.sticker => onPickSticker(),
-                            _ComposerAttachment.gif => onPickGif(),
-                          }),
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: _ComposerAttachment.image,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.image_outlined),
-                                title: Text(tr('Send image')),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: _ComposerAttachment.file,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.attach_file),
-                                title: Text(tr('Send file or video')),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: _ComposerAttachment.poll,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.poll_outlined),
-                                title: Text(tr('Create poll')),
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: _ComposerAttachment.sticker,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(
-                                  Icons.sticky_note_2_outlined,
-                                ),
-                                title: Text(tr('Send sticker')),
-                              ),
-                            ),
-                            // Wider screens have a GIF button of their own.
-                            if (compact)
-                              PopupMenuItem(
-                                value: _ComposerAttachment.gif,
-                                enabled: gifAvailable,
-                                child: ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(Icons.gif_box_outlined),
-                                  title: Text(tr('Send GIF')),
-                                ),
-                              ),
-                          ],
-                        ),
-                      const SizedBox(width: 8),
-                      if (isRecordingVoice)
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.mic,
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(tr('Recording...'))),
-                            ],
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: Focus(
-                            canRequestFocus: false,
-                            skipTraversal: true,
-                            onKeyEvent: onComposerKey,
-                            child: TextField(
-                              key: const ValueKey('chat-composer-field'),
-                              controller: controller,
-                              minLines: 1,
-                              maxLines: 4,
-                              textInputAction: TextInputAction.send,
-                              decoration: InputDecoration(
-                                hintText: tr('Message'),
-                                border: const OutlineInputBorder(),
-                              ),
-                              onChanged: onChanged,
-                              onSubmitted: (_) {
-                                unawaited(onSend());
-                              },
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      if (isRecordingVoice) ...[
-                        IconButton(
-                          tooltip: tr('Cancel voice message'),
-                          onPressed: isSendingVoice
-                              ? null
-                              : () => unawaited(onCancelVoiceRecording()),
-                          icon: const Icon(Icons.close),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.filled(
-                          tooltip: tr('Send voice message'),
-                          onPressed: isSendingVoice
-                              ? null
-                              : () => unawaited(onSendVoiceRecording()),
-                          icon: isSendingVoice
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.send),
-                        ),
-                      ] else ...[
-                        if (!compact) ...[
-                          IconButton(
-                            key: const ValueKey('composer-gif-button'),
-                            tooltip: gifAvailable
-                                ? tr('Send GIF')
-                                : tr(
-                                    "GIF search isn't set up on this server "
-                                    'yet.',
-                                  ),
-                            onPressed:
-                                !gifAvailable || isBusy || isEditing || isSlowed
-                                ? null
-                                : () => unawaited(onPickGif()),
-                            icon: const Icon(Icons.gif_box_outlined),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        IconButton(
-                          tooltip: tr('Record voice message'),
-                          onPressed: isBusy || isEditing || isSlowed
-                              ? null
-                              : () => unawaited(onStartVoiceRecording()),
-                          icon: const Icon(Icons.mic_none_outlined),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.filled(
-                          tooltip: isEditing ? tr('Save edit') : tr('Send'),
-                          onPressed: isBusy || isSlowed
-                              ? null
-                              : () => unawaited(onSend()),
-                          icon: isSending
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.send),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+    final attach = isSendingImage
+        ? Tooltip(
+            message: tr('Sending image'),
+            child: Container(
+              width: buttonSize,
+              height: buttonSize,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: c.raised,
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: c.muted,
+                ),
               ),
             ),
+          )
+        : Builder(
+            builder: (buttonContext) => WeCordIconButton(
+              key: const ValueKey('composer-attach-button'),
+              tooltip: tr('Attach'),
+              icon: Icons.add_rounded,
+              size: buttonSize,
+              iconSize: 24,
+              onPressed: canAttach
+                  ? () => showGlassMenu(
+                      buttonContext,
+                      anchor: globalRectOf(buttonContext),
+                      width: 232,
+                      entries: [
+                        GlassMenuEntry(
+                          icon: Icons.image_outlined,
+                          label: tr('Send image'),
+                          onSelected: () => unawaited(onPickImage()),
+                        ),
+                        GlassMenuEntry(
+                          icon: Icons.attach_file_rounded,
+                          label: tr('Send file or video'),
+                          onSelected: () => unawaited(onPickFile()),
+                        ),
+                        GlassMenuEntry(
+                          icon: Icons.poll_outlined,
+                          label: tr('Create poll'),
+                          onSelected: () => unawaited(onCreatePoll()),
+                        ),
+                        GlassMenuEntry(
+                          icon: Icons.sticky_note_2_outlined,
+                          label: tr('Send sticker'),
+                          onSelected: () => unawaited(onPickSticker()),
+                        ),
+                        // Wider screens have a GIF button of their own.
+                        if (compact)
+                          GlassMenuEntry(
+                            icon: Icons.gif_box_outlined,
+                            label: tr('Send GIF'),
+                            onSelected: gifAvailable
+                                ? () => unawaited(onPickGif())
+                                : null,
+                          ),
+                      ],
+                    )
+                  : null,
+            ),
+          );
+
+    final field = isRecordingVoice
+        ? Row(
+            children: [
+              const _RecordingDot(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr('Recording...'),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink,
+                  ),
+                ),
+              ),
+            ],
+          )
+        : Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: onComposerKey,
+            child: TextField(
+              key: const ValueKey('chat-composer-field'),
+              controller: controller,
+              minLines: 1,
+              maxLines: 5,
+              textInputAction: TextInputAction.send,
+              style: TextStyle(
+                fontSize: desktop ? 15 : 16,
+                height: 1.35,
+                color: c.ink,
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(
+                  fontSize: desktop ? 15 : 16,
+                  color: c.subtle,
+                ),
+                isDense: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              onChanged: onChanged,
+              onSubmitted: (_) {
+                unawaited(onSend());
+              },
+            ),
+          );
+
+    final gif = _GifButton(
+      size: desktop ? 36 : 40,
+      tooltip: gifAvailable
+          ? tr('Send GIF')
+          : tr("GIF search isn't set up on this server yet."),
+      onPressed: !gifAvailable || isBusy || isEditing || isSlowed
+          ? null
+          : () => unawaited(onPickGif()),
+    );
+    final emoji = WeCordIconButton(
+      key: const ValueKey('composer-emoji-button'),
+      tooltip: tr('Insert emoji'),
+      icon: Icons.sentiment_satisfied_alt_rounded,
+      size: desktop ? 36 : 40,
+      iconSize: 22,
+      variant: WeCordButtonVariant.ghost,
+      onPressed: isRecordingVoice ? null : () => unawaited(onInsertEmoji()),
+    );
+    Widget sendButton() => WeCordIconButton(
+      key: const ValueKey('composer-send-button'),
+      tooltip: isEditing ? tr('Save edit') : tr('Send'),
+      icon: isEditing ? Icons.check_rounded : Icons.arrow_upward_rounded,
+      size: buttonSize,
+      iconSize: 22,
+      variant: WeCordButtonVariant.accent,
+      onPressed: isBusy || isSlowed
+          ? null
+          : () {
+              WeCordHaptics.light();
+              unawaited(onSend());
+            },
+    );
+    final mic = WeCordIconButton(
+      key: const ValueKey('composer-mic-button'),
+      tooltip: tr('Record voice message'),
+      icon: Icons.mic_none_rounded,
+      size: desktop ? 36 : buttonSize,
+      iconSize: 22,
+      variant: desktop ? WeCordButtonVariant.ghost : WeCordButtonVariant.accent,
+      onPressed: isBusy || isEditing || isSlowed
+          ? null
+          : () {
+              WeCordHaptics.medium();
+              unawaited(onStartVoiceRecording());
+            },
+    );
+    final sending = isSending
+        ? Container(
+            width: buttonSize,
+            height: buttonSize,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+            child: SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: c.onAccent,
+              ),
+            ),
+          )
+        : null;
+
+    final trailing = isRecordingVoice
+        ? <Widget>[
+            WeCordIconButton(
+              tooltip: tr('Cancel voice message'),
+              icon: Icons.close_rounded,
+              size: desktop ? 36 : 40,
+              variant: WeCordButtonVariant.ghost,
+              onPressed: isSendingVoice
+                  ? null
+                  : () => unawaited(onCancelVoiceRecording()),
+            ),
+            const SizedBox(width: 2),
+            isSendingVoice
+                ? Container(
+                    width: buttonSize,
+                    height: buttonSize,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: c.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: c.onAccent,
+                      ),
+                    ),
+                  )
+                : WeCordIconButton(
+                    tooltip: tr('Send voice message'),
+                    icon: Icons.arrow_upward_rounded,
+                    size: buttonSize,
+                    iconSize: 22,
+                    variant: WeCordButtonVariant.accent,
+                    onPressed: () {
+                      WeCordHaptics.light();
+                      unawaited(onSendVoiceRecording());
+                    },
+                  ),
+          ]
+        : desktop
+        ? <Widget>[
+            gif,
+            emoji,
+            mic,
+            const SizedBox(width: 2),
+            sending ?? sendButton(),
+          ]
+        : <Widget>[
+            emoji,
+            gif,
+            const SizedBox(width: 2),
+            // Phones show the microphone until there is something to send.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (sending != null) {
+                  return sending;
+                }
+                final hasText = value.text.trim().isNotEmpty;
+                return hasText || isEditing ? sendButton() : mic;
+              },
+            ),
+          ];
+
+    final pill = WeCordGlass(
+      key: const ValueKey('chat-composer'),
+      borderRadius: BorderRadius.circular(desktop ? 22 : WeCordRadii.xxl),
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          attach,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: buttonSize),
+                child: Align(alignment: Alignment.centerLeft, child: field),
+              ),
+            ),
+          ),
+          ...trailing,
+        ],
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        desktop ? 24 : 10,
+        0,
+        desktop ? 24 : 10,
+        bottomGap,
+      ),
+      // On short screens with the keyboard up, banners and suggestions
+      // scroll above the text field instead of pushing the messages out.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: availableHeight * 0.5),
+        child: SingleChildScrollView(
+          reverse: true,
+          clipBehavior: Clip.none,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (errorText != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+                    decoration: BoxDecoration(
+                      color: c.dangerSoft,
+                      borderRadius: BorderRadius.circular(WeCordRadii.md),
+                    ),
+                    child: Text(
+                      errorText!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: c.dangerText,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (hasSuggestions) ...[
+                WeCordGlass(
+                  key: const ValueKey('composer-suggestions'),
+                  elevation: GlassElevation.menu,
+                  borderRadius: BorderRadius.circular(WeCordRadii.xl),
+                  padding: const EdgeInsets.all(6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (slashCommands.isNotEmpty ||
+                          botSlashCommands.isNotEmpty)
+                        SlashCommandList(
+                          commands: slashCommands,
+                          botCommands: botSlashCommands,
+                          onSelectBot: onSelectBotSlashCommand,
+                          highlightedIndex: highlightedSlashIndex,
+                          onSelect: onSelectSlashCommand,
+                          maxHeight: math.min(240, availableHeight * 0.3),
+                          framed: false,
+                        ),
+                      if (emojiCandidates.isNotEmpty)
+                        CustomEmojiCandidateList(
+                          candidates: emojiCandidates,
+                          onSelect: onSelectEmoji,
+                          maxHeight: math.min(220, availableHeight * 0.3),
+                          framed: false,
+                        ),
+                      if (specialMentionCandidates.isNotEmpty)
+                        SpecialMentionCandidateList(
+                          candidates: specialMentionCandidates,
+                          onSelect: onSelectSpecialMention,
+                          maxHeight: math.min(150, availableHeight * 0.2),
+                          framed: false,
+                        ),
+                      if (mentionCandidates.isNotEmpty)
+                        MentionCandidateList(
+                          candidates: mentionCandidates,
+                          onSelect: onSelectMention,
+                          maxHeight: math.min(180, availableHeight * 0.25),
+                          framed: false,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (replyPreviewText != null) ...[
+                _ComposerModeBanner(
+                  icon: Icons.reply_rounded,
+                  text: tr('Replying to {message}', {
+                    'message': replyPreviewText,
+                  }),
+                  tooltip: tr('Cancel reply'),
+                  onPressed: onCancelReply,
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (isEditing) ...[
+                _ComposerModeBanner(
+                  icon: Icons.edit_outlined,
+                  text: tr('Editing message'),
+                  tooltip: tr('Cancel edit'),
+                  onPressed: onCancelEdit,
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (slowmodeSeconds > 0) ...[
+                _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
+                const SizedBox(height: 6),
+              ],
+              pill,
+            ],
           ),
         ),
       ),
@@ -4478,7 +5419,87 @@ class _Composer extends StatelessWidget {
   }
 }
 
-enum _ComposerAttachment { image, file, poll, sticker, gif }
+/// The GIF button: the word in a round ghost button.
+class _GifButton extends StatelessWidget {
+  const _GifButton({
+    required this.size,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final double size;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      key: const ValueKey('composer-gif-button'),
+      onPressed: onPressed,
+      tooltip: tooltip,
+      semanticLabel: tooltip,
+      shape: const CircleBorder(),
+      pressedScale: 0.92,
+      builder: (context, states) {
+        final hovered =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return AnimatedOpacity(
+          duration: WeCordMotion.quick,
+          opacity: onPressed == null ? 0.4 : 1,
+          child: SizedBox.square(
+            dimension: math.max(size, WeCordSizes.touchTarget),
+            child: Center(
+              child: AnimatedContainer(
+                duration: WeCordMotion.quick,
+                width: size,
+                height: size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hovered && onPressed != null
+                      ? c.raised
+                      : c.raised.withValues(alpha: 0),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  'GIF',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: c.ink,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The red dot while a voice message records.
+class _RecordingDot extends StatelessWidget {
+  const _RecordingDot();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: c.danger,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: c.danger.withValues(alpha: 0.35), blurRadius: 6),
+        ],
+      ),
+    );
+  }
+}
 
 /// Rebuilds [builder] every second until [until], with the whole seconds
 /// left (0 once it has passed or without [until]).
@@ -4555,31 +5576,38 @@ class _SlowmodeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = theme.colorScheme.onSurfaceVariant;
-    return Row(
-      key: const ValueKey('composer-slowmode'),
-      children: [
-        Icon(Icons.timer_outlined, size: 16, color: color),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            tr('Slowmode is enabled'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(color: color),
-          ),
-        ),
-        if (remainingSeconds > 0)
-          Text(
-            formatSlowmodeCountdown(remainingSeconds),
-            key: const ValueKey('composer-slowmode-countdown'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
+    final c = context.tokens.colors;
+    final style = TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w600,
+      color: c.muted,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        key: const ValueKey('composer-slowmode'),
+        children: [
+          Icon(Icons.timer_outlined, size: 15, color: c.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              tr('Slowmode is enabled'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
             ),
           ),
-      ],
+          if (remainingSeconds > 0)
+            Text(
+              formatSlowmodeCountdown(remainingSeconds),
+              key: const ValueKey('composer-slowmode-countdown'),
+              style: style.copyWith(
+                color: c.ink,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -4627,59 +5655,61 @@ DateTime? _slowmodeEnd({
 
 /// Takes the composer's place where the current user may not send.
 class _ReadOnlyComposerNotice extends StatelessWidget {
-  const _ReadOnlyComposerNotice({this.timedOutUntil});
+  const _ReadOnlyComposerNotice({
+    required this.desktop,
+    required this.bottomGap,
+    this.timedOutUntil,
+  });
 
   final DateTime? timedOutUntil;
+  final bool desktop;
+  final double bottomGap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return SafeArea(
-      top: false,
-      child: DecoratedBox(
+    final c = context.tokens.colors;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        desktop ? 24 : 10,
+        0,
+        desktop ? 24 : 10,
+        bottomGap,
+      ),
+      child: WeCordGlass(
         key: const ValueKey('chat-read-only-notice'),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          child: Row(
-            children: [
-              Icon(
-                timedOutUntil == null
-                    ? Icons.lock_outline
-                    : Icons.timer_outlined,
-                size: 18,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  switch (timedOutUntil) {
-                    final until? => tr(
-                      "You're timed out until {time}. "
-                      'You can read, but not send messages or react.',
-                      {'time': formatTimeoutEnd(until)},
-                    ),
-                    null => tr(
-                      "You don't have permission to send messages in this "
-                      'channel',
-                    ),
-                  },
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+        borderRadius: BorderRadius.circular(desktop ? 22 : WeCordRadii.xxl),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          children: [
+            Icon(
+              timedOutUntil == null
+                  ? Icons.lock_outline_rounded
+                  : Icons.timer_outlined,
+              size: 18,
+              color: c.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(switch (timedOutUntil) {
+                final until? => tr(
+                  "You're timed out until {time}. "
+                  'You can read, but not send messages or react.',
+                  {'time': formatTimeoutEnd(until)},
                 ),
-              ),
-            ],
-          ),
+                null => tr(
+                  "You don't have permission to send messages in this "
+                  'channel',
+                ),
+              }, style: TextStyle(fontSize: 14, height: 1.4, color: c.muted)),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// Replying to or editing a message: a glass strip over the composer.
 class _ComposerModeBanner extends StatelessWidget {
   const _ComposerModeBanner({
     required this.text,
@@ -4695,27 +5725,45 @@ class _ComposerModeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+    final c = context.tokens.colors;
+    return WeCordGlass(
+      borderRadius: BorderRadius.circular(WeCordRadii.xl),
+      padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: c.accentSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 16, color: c.accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: c.ink,
+              ),
             ),
           ),
-        ),
-        IconButton(
-          tooltip: tooltip,
-          // Full size on touch screens, so it stays easy to hit.
-          visualDensity: usesTouchInput(context) ? null : VisualDensity.compact,
-          onPressed: onPressed,
-          icon: Icon(icon),
-        ),
-      ],
+          WeCordIconButton(
+            tooltip: tooltip,
+            icon: Icons.close_rounded,
+            size: 32,
+            iconSize: 18,
+            variant: WeCordButtonVariant.ghost,
+            onPressed: onPressed,
+          ),
+        ],
+      ),
     );
   }
 }

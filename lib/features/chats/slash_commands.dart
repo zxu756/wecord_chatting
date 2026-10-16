@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 
 /// Picks `/roll` results; tests override it with a seeded generator.
@@ -355,6 +356,7 @@ class SlashCommandList extends StatelessWidget {
     required this.highlightedIndex,
     required this.onSelect,
     required this.maxHeight,
+    this.framed = true,
     this.botCommands = const [],
     this.onSelectBot,
     super.key,
@@ -372,13 +374,17 @@ class SlashCommandList extends StatelessWidget {
   final ValueChanged<SlashCommand> onSelect;
   final double maxHeight;
 
+  /// Draws its own rounded fill; off inside the composer's glass popover.
+  final bool framed;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
       key: const ValueKey('slash-command-list'),
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
+      type: framed ? MaterialType.canvas : MaterialType.transparency,
+      color: framed ? context.tokens.colors.raised : null,
+      borderRadius: framed ? BorderRadius.circular(WeCordRadii.lg) : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: ListView(
@@ -389,9 +395,7 @@ class SlashCommandList extends StatelessWidget {
                 key: ValueKey('slash-command-${command.name}'),
                 dense: true,
                 selected: index == highlightedIndex,
-                selectedTileColor: theme.colorScheme.primary.withValues(
-                  alpha: 0.12,
-                ),
+                selectedTileColor: context.tokens.colors.accentSoft,
                 leading: const Icon(Icons.keyboard_command_key, size: 18),
                 title: Text.rich(
                   TextSpan(
@@ -424,9 +428,7 @@ class SlashCommandList extends StatelessWidget {
                 key: ValueKey('bot-command-${command.name}'),
                 dense: true,
                 selected: commands.length + index == highlightedIndex,
-                selectedTileColor: theme.colorScheme.primary.withValues(
-                  alpha: 0.12,
-                ),
+                selectedTileColor: context.tokens.colors.accentSoft,
                 leading: const Icon(Icons.smart_toy_outlined, size: 18),
                 title: Text.rich(
                   TextSpan(

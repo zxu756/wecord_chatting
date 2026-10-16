@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 const _textColor = Color(0xFF123456);
 
@@ -168,7 +169,7 @@ void main() {
 
     final context = tester.element(find.byType(MessageMarkdownText));
     final mention = effectiveStyle(tester, '@alice');
-    expect(mention.color, Theme.of(context).colorScheme.primary);
+    expect(mention.color, context.tokens.colors.accentText);
     expect(mention.fontWeight, FontWeight.w700);
     expect(effectiveStyle(tester, 'hi ').fontWeight, FontWeight.w700);
   });

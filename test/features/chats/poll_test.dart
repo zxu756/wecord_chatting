@@ -423,6 +423,7 @@ void main() {
         find.byKey(const ValueKey('chat-composer-field')),
         '/poll',
       );
+      await tester.pump();
       await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('poll-question-field')), findsOneWidget);

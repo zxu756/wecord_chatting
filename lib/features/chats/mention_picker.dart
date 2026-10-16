@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -219,6 +220,7 @@ class MentionCandidateList extends StatelessWidget {
     required this.candidates,
     required this.onSelect,
     required this.maxHeight,
+    this.framed = true,
     super.key,
   });
 
@@ -226,11 +228,15 @@ class MentionCandidateList extends StatelessWidget {
   final ValueChanged<GroupMember> onSelect;
   final double maxHeight;
 
+  /// Draws its own rounded fill; off inside the composer's glass popover.
+  final bool framed;
+
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
+      type: framed ? MaterialType.canvas : MaterialType.transparency,
+      color: framed ? context.tokens.colors.raised : null,
+      borderRadius: framed ? BorderRadius.circular(WeCordRadii.lg) : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: ListView(
@@ -240,9 +246,7 @@ class MentionCandidateList extends StatelessWidget {
               ListTile(
                 key: ValueKey('mention-candidate-${member.profile.id}'),
                 dense: true,
-                leading: CircleAvatar(
-                  child: Text(_initials(mentionName(member))),
-                ),
+                leading: PersonAvatar(name: mentionName(member), size: 32),
                 title: Text(mentionName(member)),
                 subtitle: Text('@${member.profile.username}'),
                 onTap: () => onSelect(member),
@@ -252,18 +256,4 @@ class MentionCandidateList extends StatelessWidget {
       ),
     );
   }
-}
-
-String _initials(String value) {
-  final parts = value
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  final first = parts.first.characters.first;
-  final second = parts.length > 1 ? parts.last.characters.first : '';
-  return '$first$second'.toUpperCase();
 }

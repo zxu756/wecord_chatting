@@ -176,7 +176,13 @@ void main() {
     expect(world.circles.forumCalls.single, 'upload conv-help sunrise.png');
     // The new post opens.
     expect(find.byKey(const ValueKey('forum-post-list')), findsNothing);
-    expect(find.widgetWithText(AppBar, 'Sunrise spots'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-thread-header')),
+        matching: find.text('Sunrise spots'),
+      ),
+      findsOneWidget,
+    );
     await world.close(tester);
   });
 

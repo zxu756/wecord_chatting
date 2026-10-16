@@ -13,6 +13,7 @@ import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
 import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
@@ -79,7 +80,11 @@ void main() {
       await tester.drag(list, const Offset(0, 150));
       await tester.pump();
     }
-    await tester.ensureVisible(finder.first);
+    // Centered, so the floating header and composer don't cover it.
+    await Scrollable.ensureVisible(
+      tester.element(finder.first),
+      alignment: 0.5,
+    );
     await settle(tester);
   }
 
@@ -185,8 +190,8 @@ void main() {
         greaterThan(120),
       );
       final toolbarButtons = find.descendant(
-        of: find.byType(AppBar),
-        matching: find.byType(IconButton),
+        of: find.byKey(const ValueKey('chat-thread-header')),
+        matching: find.byType(WeCordIconButton),
       );
       // Back, search, one context action and More.
       expect(toolbarButtons, findsNWidgets(4));
@@ -279,13 +284,13 @@ void main() {
       await tester.tap(find.text('Reply'));
       await settle(tester);
       expect(find.textContaining('Replying to'), findsOneWidget);
-      expectTouchTargets(tester, iconButtonWithTooltip('Cancel reply'));
+      expectTouchTargets(tester, _weCordButtonWithTooltip('Cancel reply'));
 
       await longPressMessage(tester, 'Supercalifragilistic');
       await tester.tap(find.text('Edit'));
       await settle(tester);
       expect(find.text('Editing message'), findsOneWidget);
-      expectTouchTargets(tester, iconButtonWithTooltip('Cancel edit'));
+      expectTouchTargets(tester, _weCordButtonWithTooltip('Cancel edit'));
       await tester.tap(find.byTooltip('Cancel edit'));
       await settle(tester);
 
@@ -304,6 +309,10 @@ void main() {
       await tester.tap(find.widgetWithText(TextField, 'Message'));
       await showKeyboard(tester, viewport);
       expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+      // Phones show the microphone until there is something to send.
+      expectFullyVisible(tester, find.byTooltip('Record voice message'));
+      await tester.enterText(find.widgetWithText(TextField, 'Message'), 'Hi');
+      await settle(tester);
       expectFullyVisible(tester, find.byTooltip('Send'));
     });
 
@@ -431,7 +440,8 @@ void main() {
         'o2': [me, bart, grace, linus],
       };
       final viewVotes = find.byKey(const ValueKey('poll-view-votes-poll-open'));
-      await tester.ensureVisible(viewVotes);
+      // Centered, clear of the floating composer.
+      await Scrollable.ensureVisible(tester.element(viewVotes), alignment: 0.5);
       await settle(tester);
       await tester.tap(viewVotes);
       await settle(tester);
@@ -1284,30 +1294,24 @@ void main() {
         ValueKey('sticker-image-${emoji_fakes.shipItStickerId}'),
       );
       expectFullyVisible(tester, ownSticker);
-      // Own stickers sit on the right, without a bubble, next to the
-      // sender's avatar.
-      expect(
-        tester.getTopRight(ownSticker).dx,
-        greaterThan(tester.getSize(find.byType(Scaffold).first).width - 80),
-      );
+      // Channels read as cards: own stickers sit under the sender's name,
+      // without a bubble, beside the avatar.
+      expect(tester.getTopLeft(ownSticker).dx, lessThan(80));
       final placeholder = find.byKey(const ValueKey('sticker-placeholder'));
-      await tester.ensureVisible(placeholder);
-      await settle(tester);
+      await _centerOn(tester, placeholder);
       expectFullyVisible(tester, placeholder);
       expectFullyVisible(tester, find.text('[Sticker] secret_handshake'));
 
       final jumbo = find.byKey(
         ValueKey('custom-emoji-${emoji_fakes.catThumbsId}'),
       );
-      await tester.ensureVisible(jumbo);
-      await settle(tester);
+      await _centerOn(tester, jumbo);
       expect(tester.getSize(jumbo), const Size.square(48));
 
       final chip = find.byKey(
         ValueKey('reaction-chip-custom:${emoji_fakes.partyParrotId}'),
       );
-      await tester.ensureVisible(chip);
-      await settle(tester);
+      await _centerOn(tester, chip);
       expectFullyVisible(tester, chip);
       expectTouchTargets(tester, chip);
       final far = find.text(':far_away_mountain_goat:');
@@ -2044,4 +2048,19 @@ void main() {
       expect(find.text('Unblock'), findsWidgets);
     });
   });
+}
+
+/// The whole tappable area of the WeCord icon button with [tooltip].
+Finder _weCordButtonWithTooltip(String tooltip) {
+  return find.ancestor(
+    of: find.byTooltip(tooltip),
+    matching: find.byType(WeCordIconButton),
+  );
+}
+
+/// Scrolls [finder] to the middle of its list, clear of the floating chat
+/// header and composer.
+Future<void> _centerOn(WidgetTester tester, Finder finder) async {
+  await Scrollable.ensureVisible(tester.element(finder.first), alignment: 0.5);
+  await settle(tester);
 }

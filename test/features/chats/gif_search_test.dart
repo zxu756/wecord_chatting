@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import 'chat_thread_screen_test.dart' as chat_fakes;
 
@@ -152,7 +153,7 @@ void main() {
     Navigator.of(tester.element(find.byType(GifPickerSheet))).pop();
     await tester.pumpAndSettle();
 
-    final button = tester.widget<IconButton>(
+    final button = tester.widget<WeCordPressable>(
       find.byKey(const ValueKey('composer-gif-button')),
     );
     expect(button.onPressed, isNull);

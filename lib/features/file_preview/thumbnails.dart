@@ -14,13 +14,17 @@ import 'package:wecord/features/file_preview/preview_platform_io.dart'
     as platform;
 
 /// Small pictures for file cards: a PDF's first page and a video's poster
-/// frame. Rendered once, then kept in memory and (on iOS and macOS) on
-/// disk.
+/// frame (rendered once, then kept in memory and, on iOS and macOS, on
+/// disk), and an SVG's own document, which the card draws.
 abstract interface class ThumbnailService {
-  /// Encoded image bytes (PNG or JPEG), or null when there is no picture
-  /// for this file.
+  /// Encoded image bytes (PNG or JPEG) for a PDF or video; the SVG source
+  /// for an SVG file; null when there is no picture for this file.
   Future<Uint8List?> thumbnailFor(PreviewFile file);
 }
+
+/// SVGs past this size get their typed tile in the chat instead of a
+/// drawing: the card would have to download all of it to draw a thumbnail.
+const maxSvgThumbnailBytes = 512 * 1024;
 
 /// PDFs past this size get their typed tile instead of a rendered page in
 /// the chat (rendering would download most of them).
@@ -56,7 +60,9 @@ class RenderingThumbnailService implements ThumbnailService {
   @override
   Future<Uint8List?> thumbnailFor(PreviewFile file) {
     final kind = file.kind;
-    if (kind != PreviewKind.pdf && kind != PreviewKind.video) {
+    if (kind != PreviewKind.pdf &&
+        kind != PreviewKind.video &&
+        kind != PreviewKind.svg) {
       return Future.value();
     }
     final key = 'v1:${file.key}';
@@ -65,13 +71,22 @@ class RenderingThumbnailService implements ThumbnailService {
       _memory[key] = bytes;
       return Future.value(bytes);
     }
-    return _inFlight[key] ??= _load(
-      key,
-      file,
-    ).whenComplete(() => _inFlight.remove(key));
+    return _inFlight[key] ??= _load(key, file).whenComplete(() {
+      _inFlight.remove(key);
+    });
   }
 
   Future<Uint8List?> _load(String key, PreviewFile file) async {
+    if (file.kind == PreviewKind.svg) {
+      Uint8List? source;
+      try {
+        source = await _readSvg(file);
+      } on Object {
+        source = null;
+      }
+      _remember(key, source);
+      return source;
+    }
     var bytes = await platform.readThumbnail(key);
     if (bytes == null) {
       await _acquire();
@@ -88,11 +103,30 @@ class RenderingThumbnailService implements ThumbnailService {
         unawaited(platform.writeThumbnail(key, bytes));
       }
     }
+    _remember(key, bytes);
+    return bytes;
+  }
+
+  void _remember(String key, Uint8List? bytes) {
     _memory[key] = bytes;
     while (_memory.length > _memoryLimit) {
       _memory.remove(_memory.keys.first);
     }
-    return bytes;
+  }
+
+  /// The SVG document, or null when it is too big to draw in a card.
+  Future<Uint8List?> _readSvg(PreviewFile file) async {
+    await _acquire();
+    try {
+      final fetched = await fetcher.readBytes(
+        file,
+        url: () => service.fileUrl(file),
+        maxBytes: maxSvgThumbnailBytes,
+      );
+      return fetched.truncated ? null : fetched.bytes;
+    } finally {
+      _release();
+    }
   }
 
   /// At most two renders at once, so a chat full of PDFs stays smooth.

@@ -129,7 +129,9 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
       await controller.initialize();
       await controller.setPlaybackSpeed(_speed);
       await controller.setVolume(_muted ? 0 : 1);
-      if (mounted && widget.active) {
+      // With reduced motion the video waits on its first frame until the
+      // play button is pressed.
+      if (mounted && widget.active && !WeCordMotion.reduceMotion(context)) {
         await controller.play();
       }
       if (mounted) {

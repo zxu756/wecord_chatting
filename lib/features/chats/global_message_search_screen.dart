@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1424,22 +1425,29 @@ class _ResultsSummary extends StatelessWidget {
                   child: Text(option.label),
                 ),
             ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.swap_vert_rounded, size: 16, color: c.accentText),
-                  const SizedBox(width: 4),
-                  Text(
-                    sort.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: context.touchTargetSize),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.swap_vert_rounded,
+                      size: 16,
                       color: c.accentText,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      sort.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: c.accentText,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1536,7 +1544,12 @@ class _DiscoveryStrip extends StatelessWidget {
       children: [
         SettingsSectionHeader(tr('People and places')),
         SizedBox(
-          height: 88,
+          height:
+              88 +
+              math.max(
+                0,
+                MediaQuery.textScalerOf(context).scale(12.5 * 1.3) - 16.25,
+              ),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: results.length,

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/motion_safe_image.dart';
 
 /// A GIF from the `gif-search` Edge Function.
 class GifResult {
@@ -260,8 +261,11 @@ class _GifPickerSheetState extends ConsumerState<GifPickerSheet> {
               onTap: () => Navigator.of(context).pop(gif),
               child: Tooltip(
                 message: gif.title.isEmpty ? tr('GIF') : gif.title,
-                child: Image.network(
+                // Still pictures under reduced motion; picking one sends it.
+                child: MotionSafeImage.network(
                   gif.previewUrl,
+                  animated: true,
+                  playButton: false,
                   fit: BoxFit.cover,
                   gaplessPlayback: true,
                   errorBuilder: (context, error, stackTrace) => Icon(
@@ -443,8 +447,10 @@ class _GifMessageImageState extends State<GifMessageImage> {
             known,
             GifMessageImage._maxSize,
           ).destination;
-    final image = Image.network(
+    // Holds its first frame under a play button when motion is reduced.
+    final image = MotionSafeImage.network(
       widget.url,
+      animated: true,
       fit: BoxFit.contain,
       gaplessPlayback: true,
       loadingBuilder: (context, child, progress) => progress == null

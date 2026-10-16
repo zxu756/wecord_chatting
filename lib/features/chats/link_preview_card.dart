@@ -66,8 +66,10 @@ class MessageLinkPreviewCard extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (imageUrl != null)
-                    Image.network(
+                    // A decorative picture: still under reduced motion.
+                    MotionSafeImage.network(
                       imageUrl,
+                      playButton: false,
                       height: 150,
                       width: double.infinity,
                       fit: BoxFit.cover,

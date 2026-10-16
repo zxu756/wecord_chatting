@@ -443,9 +443,17 @@ class _DirectMessageRow extends ConsumerWidget {
     return GestureDetector(
       key: ValueKey('home-dm-${conversation.id}'),
       onSecondaryTap: () => showConversationActions(context, ref, conversation),
+      excludeFromSemantics: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 0.5),
         child: WeCordPressable(
+          semanticLabel: conversationRowLabel(
+            conversation,
+            title: title,
+            presence: presence,
+            preview: preview?.text,
+          ),
+          excludeSemantics: true,
           onPressed: () => openConversation(context, conversation),
           onLongPress: () =>
               showConversationActions(context, ref, conversation),

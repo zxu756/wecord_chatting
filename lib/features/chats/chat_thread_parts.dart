@@ -180,13 +180,16 @@ class ChatDaySeparator extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
       child: Center(
-        child: Text(
-          '${chatDayLabel(time)} ${chatClockTime(time)}',
-          key: const ValueKey('chat-day-separator'),
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: c.muted,
+        child: Semantics(
+          header: true,
+          child: Text(
+            '${chatDayLabel(time)} ${chatClockTime(time)}',
+            key: const ValueKey('chat-day-separator'),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: c.muted,
+            ),
           ),
         ),
       ),
@@ -214,12 +217,16 @@ class ChatNewMessagesDivider extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            tr('NEW'),
-            style: TextStyle(
-              color: c.danger,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
+          Semantics(
+            label: tr('New messages'),
+            excludeSemantics: true,
+            child: Text(
+              tr('NEW'),
+              style: TextStyle(
+                color: c.dangerText,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -313,25 +320,31 @@ class ChatTypingIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final style = TextStyle(fontSize: 12, color: c.muted);
-    return Row(
-      key: const ValueKey('chat-typing-indicator'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const TypingDots(),
-        const SizedBox(width: 6),
-        if (name case final name?) ...[
-          Flexible(
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: style.copyWith(fontWeight: FontWeight.w700),
+    // A live region: screen readers say who starts typing without being
+    // asked, and the dots stay silent.
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Row(
+        key: const ValueKey('chat-typing-indicator'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ExcludeSemantics(child: TypingDots()),
+          const SizedBox(width: 6),
+          if (name case final name?) ...[
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
+            const SizedBox(width: 4),
+          ],
+          Text(tr('typing...'), style: style),
         ],
-        Text(tr('typing...'), style: style),
-      ],
+      ),
     );
   }
 }
@@ -508,7 +521,8 @@ class GlassMenuPanel extends StatelessWidget {
                 header,
                 const SizedBox(height: 4),
               ],
-              for (final entry in entries) GlassMenuRow(entry: entry),
+              for (final (index, entry) in entries.indexed)
+                GlassMenuRow(entry: entry, autofocus: index == 0),
             ],
           ),
         ),
@@ -519,10 +533,18 @@ class GlassMenuPanel extends StatelessWidget {
 
 /// A row of a glass menu: icon and label, a soft tint on hover.
 class GlassMenuRow extends StatelessWidget {
-  const GlassMenuRow({required this.entry, this.height, super.key});
+  const GlassMenuRow({
+    required this.entry,
+    this.height,
+    this.autofocus = false,
+    super.key,
+  });
 
   final GlassMenuEntry entry;
   final double? height;
+
+  /// Starts with keyboard focus (the first row of a menu).
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -531,7 +553,10 @@ class GlassMenuRow extends StatelessWidget {
     final touch = usesTouchInput(context);
     return WeCordPressable(
       key: entry.key,
+      autofocus: autofocus && entry.onSelected != null,
       onPressed: entry.onSelected,
+      semanticLabel: entry.label,
+      excludeSemantics: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(WeCordRadii.md),
       ),
@@ -543,8 +568,8 @@ class GlassMenuRow extends StatelessWidget {
         return AnimatedContainer(
           duration: WeCordMotion.quick,
           curve: WeCordMotion.standard,
-          height: height ?? (touch ? 46 : 38),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          constraints: BoxConstraints(minHeight: height ?? (touch ? 46 : 38)),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: active
                 ? (entry.destructive
@@ -562,7 +587,10 @@ class GlassMenuRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     entry.label,
-                    maxLines: 1,
+                    // Two lines once the text size is large.
+                    maxLines: MediaQuery.textScalerOf(context).scale(10) > 13
+                        ? 2
+                        : 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: touch ? 15 : 14,
@@ -621,13 +649,19 @@ class _GlassMenuRoute extends PopupRoute<void> {
   ) {
     final padding = MediaQuery.paddingOf(context);
     return capturedThemes.wrap(
-      CustomSingleChildLayout(
-        delegate: _AnchoredMenuLayout(
-          anchor: anchor,
-          width: width,
-          padding: padding,
+      Semantics(
+        scopesRoute: true,
+        namesRoute: true,
+        explicitChildNodes: true,
+        label: tr('Menu'),
+        child: CustomSingleChildLayout(
+          delegate: _AnchoredMenuLayout(
+            anchor: anchor,
+            width: width,
+            padding: padding,
+          ),
+          child: Builder(builder: builder),
         ),
-        child: Builder(builder: builder),
       ),
     );
   }

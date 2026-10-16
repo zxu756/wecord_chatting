@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
@@ -17,7 +18,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 /// An app-wide shortcut.
-enum AppShortcut { quickSwitcher, shortcutsHelp, previous, next }
+enum AppShortcut { quickSwitcher, shortcutsHelp, previous, next, focusComposer }
 
 /// Whether Cmd (rather than Ctrl) is the shortcut key here.
 bool get usesCommandKey =>
@@ -43,6 +44,10 @@ AppShortcut? appShortcutFor(
   }
   if (primary && !alt && key == LogicalKeyboardKey.slash) {
     return AppShortcut.shortcutsHelp;
+  }
+  // Past a long message list, straight to the message box.
+  if (primary && !alt && !shift && key == LogicalKeyboardKey.keyJ) {
+    return AppShortcut.focusComposer;
   }
   if (alt && !primary && !shift) {
     if (key == LogicalKeyboardKey.arrowUp) {
@@ -159,6 +164,9 @@ class _AppKeyboardShortcutsState extends ConsumerState<AppKeyboardShortcuts> {
         unawaited(_step(-1));
       case AppShortcut.next:
         unawaited(_step(1));
+      case AppShortcut.focusComposer:
+        // Without a chat open the key goes on to whatever has focus.
+        return ComposerFocusRegistry.focus();
       case null:
         return false;
     }
@@ -225,6 +233,7 @@ List<String> _keys(AppShortcut? shortcut, {String? single}) {
     AppShortcut.shortcutsHelp => [primary, '/'],
     AppShortcut.previous => [alt, '↑'],
     AppShortcut.next => [alt, '↓'],
+    AppShortcut.focusComposer => [primary, 'J'],
     null => [?single],
   };
 }
@@ -243,6 +252,8 @@ List<(List<String>, String)> keyboardShortcutRows() {
       _keys(null, single: '↑'),
       tr('Edit your last message (in an empty message field)'),
     ),
+    (_keys(AppShortcut.focusComposer), tr('Jump to the message box')),
+    (['Shift', 'F10'], tr('Open the menu of the message in focus')),
     (_keys(AppShortcut.shortcutsHelp), tr('Show keyboard shortcuts')),
   ];
 }

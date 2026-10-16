@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -51,4 +52,31 @@ ChatMessage? lastEditableMessage(
     }
   }
   return latest;
+}
+
+/// Where the open chat's message box is, so the "jump to the message box"
+/// shortcut (Ctrl/Cmd+J) can reach it from anywhere in the app — the
+/// keyboard's way past a long message list.
+abstract final class ComposerFocusRegistry {
+  static FocusNode? _node;
+
+  /// Called by the chat that is on screen.
+  static void attach(FocusNode node) => _node = node;
+
+  /// Called when that chat goes away.
+  static void detach(FocusNode node) {
+    if (identical(_node, node)) {
+      _node = null;
+    }
+  }
+
+  /// Moves focus into the message box; false when no chat is open.
+  static bool focus() {
+    final node = _node;
+    if (node == null || !node.canRequestFocus || node.context == null) {
+      return false;
+    }
+    node.requestFocus();
+    return true;
+  }
 }

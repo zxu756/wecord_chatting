@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/features/search/search_query.dart';
@@ -163,8 +165,10 @@ class SearchFilterBar extends StatelessWidget {
             onPressed: () => onAdd(operator),
           ),
     ];
+    // Chips are 32 to look at; on touch screens they reach the platform's
+    // touch target, so the bar leaves room for it.
     return SizedBox(
-      height: 40,
+      height: 8 + math.max(32.0, context.touchTargetSize),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

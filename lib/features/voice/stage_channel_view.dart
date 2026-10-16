@@ -637,13 +637,23 @@ class _MenuTarget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: (details) => onMenu(details.globalPosition),
-        onSecondaryTapUp: (details) => onMenu(details.globalPosition),
-        child: child,
+    return GestureDetector(
+      excludeFromSemantics: true,
+      onSecondaryTapUp: (details) => onMenu(details.globalPosition),
+      child: Builder(
+        builder: (context) => WeCordPressable(
+          onPressed: () {
+            final box = context.findRenderObject()! as RenderBox;
+            onMenu(box.localToGlobal(box.size.center(Offset.zero)));
+          },
+          hint: tr('Opens the menu'),
+          pressedScale: 1,
+          minTapSize: Size.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          builder: (context, states) => child,
+        ),
       ),
     );
   }

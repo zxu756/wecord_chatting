@@ -18,6 +18,7 @@ class ChatThreadHeader extends StatelessWidget {
     required this.subtitle,
     required this.actions,
     required this.primaryAction,
+    this.onSubtitleTap,
     this.onBack,
     this.channelIcon,
     this.searchField,
@@ -39,6 +40,9 @@ class ChatThreadHeader extends StatelessWidget {
 
   /// Status or topic under (desktop channels: beside) the title.
   final Widget subtitle;
+
+  /// Taps on the title and subtitle (a channel's topic opens in full).
+  final VoidCallback? onSubtitleTap;
   final List<ChatThreadAction> actions;
   final ChatThreadAction primaryAction;
 
@@ -105,13 +109,36 @@ class ChatThreadHeader extends StatelessWidget {
     return desktop ? _buildDesktop(context) : _buildPhone(context);
   }
 
+  /// [child] as a button that shows the topic, when there is one; a tap
+  /// target as tall as the header's row so it stays easy to hit.
+  Widget _topicButton(Widget child, {required bool alignStart}) {
+    final onTap = onSubtitleTap;
+    if (onTap == null) {
+      return child;
+    }
+    return WeCordPressable(
+      key: const ValueKey('chat-thread-topic'),
+      onPressed: onTap,
+      hint: tr('Shows the topic'),
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.sm),
+      ),
+      builder: (context, states) => Align(
+        alignment: alignStart ? Alignment.centerLeft : Alignment.center,
+        widthFactor: 1,
+        child: child,
+      ),
+    );
+  }
+
   Widget _buildPhone(BuildContext context) {
     final c = context.tokens.colors;
     final top = MediaQuery.paddingOf(context).top;
     return WeCordGlass(
       key: const ValueKey('chat-thread-header'),
       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-      padding: EdgeInsets.fromLTRB(4, top + 6, 6, 8),
+      padding: EdgeInsets.fromLTRB(0, top + 6, 2, 8),
       child: Row(
         children: [
           if (onBack != null)
@@ -126,29 +153,31 @@ class ChatThreadHeader extends StatelessWidget {
             const SizedBox(width: 6),
           if (avatar case final avatar?) ...[avatar, const SizedBox(width: 10)],
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: c.ink,
-                    letterSpacing: -0.2,
+            child: _topicButton(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                      letterSpacing: -0.2,
+                    ),
                   ),
-                ),
-                DefaultTextStyle.merge(
-                  style: TextStyle(fontSize: 12, color: c.muted),
-                  child: subtitle,
-                ),
-              ],
+                  DefaultTextStyle.merge(
+                    style: TextStyle(fontSize: 12, color: c.muted),
+                    child: subtitle,
+                  ),
+                ],
+              ),
+              alignStart: true,
             ),
           ),
-          const SizedBox(width: 4),
           ..._buttons(context, 40),
         ],
       ),
@@ -160,7 +189,7 @@ class ChatThreadHeader extends StatelessWidget {
     final channel = channelIcon;
     return Container(
       key: const ValueKey('chat-thread-header'),
-      height: 58,
+      constraints: const BoxConstraints(minHeight: 58),
       padding: EdgeInsets.fromLTRB(onBack != null ? 10 : 20, 0, 14, 0),
       decoration: BoxDecoration(
         color: c.panel,
@@ -205,9 +234,12 @@ class ChatThreadHeader extends StatelessWidget {
             Container(width: 1, height: 18, color: c.line),
             const SizedBox(width: 10),
             Expanded(
-              child: DefaultTextStyle.merge(
-                style: TextStyle(fontSize: 13, color: c.muted),
-                child: subtitle,
+              child: _topicButton(
+                DefaultTextStyle.merge(
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                  child: subtitle,
+                ),
+                alignStart: true,
               ),
             ),
           ] else ...[

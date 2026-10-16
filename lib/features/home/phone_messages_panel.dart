@@ -64,12 +64,17 @@ class PhoneMessagesPanel extends ConsumerWidget {
                 Expanded(
                   child: Semantics(
                     header: true,
-                    child: Text(
-                      tr('Messages'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.headlineLarge?.copyWith(
-                        color: c.ink,
+                    // At large text sizes the title shrinks to its row instead
+                    // of being cut off.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        tr('Messages'),
+                        maxLines: 1,
+                        style: theme.textTheme.headlineLarge?.copyWith(
+                          color: c.ink,
+                        ),
                       ),
                     ),
                   ),
@@ -96,7 +101,10 @@ class PhoneMessagesPanel extends ConsumerWidget {
         ),
         SliverToBoxAdapter(
           child: SizedBox(
-            height: 102,
+            // 58 tile + the label, which grows with the text size.
+            height:
+                86 +
+                MediaQuery.textScalerOf(context).scale(12 * 1.3).clamp(16, 80),
             child: ListView.separated(
               key: const ValueKey('phone-friends-row'),
               scrollDirection: Axis.horizontal,
@@ -471,8 +479,17 @@ class PhoneConversationRow extends ConsumerWidget {
 
     return GestureDetector(
       onSecondaryTap: () => showConversationActions(context, ref, conversation),
+      excludeFromSemantics: true,
       child: WeCordPressable(
         key: ValueKey('home-dm-${conversation.id}'),
+        semanticLabel: conversationRowLabel(
+          conversation,
+          title: title,
+          presence: presence,
+          preview: preview?.text,
+          draft: hasDraft ? draft.text : null,
+        ),
+        excludeSemantics: true,
         onPressed: () => openConversation(context, conversation),
         onLongPress: () => showConversationActions(context, ref, conversation),
         pressedScale: 0.98,

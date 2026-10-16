@@ -202,7 +202,13 @@ class QuickReactionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 32.0 : 44.0;
+    // Seven finger-sized buttons share the width of a narrow phone: 48 where
+    // there is room (Material's touch target), a little less on 360 wide.
+    final size = compact
+        ? 32.0
+        : ((MediaQuery.sizeOf(context).width - 44) /
+                  (quickReactionEmojis.length + 1))
+              .clamp(40.0, 48.0);
     final row = Row(
       mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: compact
@@ -224,6 +230,7 @@ class QuickReactionBar extends StatelessWidget {
           tooltip: tr('More reactions'),
           semanticLabel: tr('More reactions'),
           shape: const CircleBorder(),
+          minTapSize: Size.zero,
           pressedScale: 0.9,
           builder: (context, states) {
             final c = context.tokens.colors;
@@ -277,10 +284,11 @@ class _QuickEmojiButton extends StatelessWidget {
     return WeCordPressable(
       onPressed: onTap,
       selected: isSelected,
-      semanticLabel: emoji,
+      semanticLabel: tr('React with {emoji}', {'emoji': emoji}),
       excludeSemantics: true,
       pressedScale: 0.85,
       shape: const CircleBorder(),
+      minTapSize: Size.zero,
       builder: (context, states) {
         final hovered = states.contains(WidgetState.hovered);
         return AnimatedContainer(
@@ -296,7 +304,13 @@ class _QuickEmojiButton extends StatelessWidget {
                 ? c.ink.withValues(alpha: 0.06)
                 : c.ink.withValues(alpha: 0),
           ),
-          child: Text(emoji, style: TextStyle(fontSize: size * 0.56)),
+          // The emoji is a picture in a fixed button: it keeps its size
+          // when the text size grows.
+          child: Text(
+            emoji,
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(fontSize: size * 0.56),
+          ),
         );
       },
     );
@@ -313,7 +327,7 @@ class _EmojiButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return _QuickEmojiButton(
       emoji: emoji,
-      size: 44,
+      size: 48,
       isSelected: false,
       onTap: onTap,
     );

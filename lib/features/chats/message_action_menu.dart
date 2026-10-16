@@ -131,7 +131,7 @@ class _MessageMenuRoute extends PopupRoute<void> {
   Duration get reverseTransitionDuration =>
       reduceMotion ? Duration.zero : WeCordMotion.base;
 
-  static const _reactionsHeight = 56.0;
+  static const _reactionsHeight = 60.0;
   static const _gap = 10.0;
 
   @override
@@ -191,40 +191,46 @@ class _MessageMenuRoute extends PopupRoute<void> {
       ],
     );
     return capturedThemes.wrap(
-      Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: FadeTransition(
-                opacity: animation,
-                child: _Backdrop(glass: glass),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: CustomSingleChildLayout(
-              delegate: _MessageMenuLayout(
-                messageRect: messageRect,
-                alignEnd: alignEnd,
-                padding: padding,
-                lead: reactions == null ? 0 : _reactionsHeight + _gap,
-              ),
-              child: FadeTransition(
-                opacity: CurvedAnimation(
-                  parent: animation,
-                  curve: const Interval(0, 0.5),
-                ),
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.96, end: 1).animate(lift),
-                  alignment: alignEnd
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: content,
+      Semantics(
+        scopesRoute: true,
+        namesRoute: true,
+        explicitChildNodes: true,
+        label: tr('Message actions'),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: FadeTransition(
+                  opacity: animation,
+                  child: _Backdrop(glass: glass),
                 ),
               ),
             ),
-          ),
-        ],
+            Positioned.fill(
+              child: CustomSingleChildLayout(
+                delegate: _MessageMenuLayout(
+                  messageRect: messageRect,
+                  alignEnd: alignEnd,
+                  padding: padding,
+                  lead: reactions == null ? 0 : _reactionsHeight + _gap,
+                ),
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: const Interval(0, 0.5),
+                  ),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.96, end: 1).animate(lift),
+                    alignment: alignEnd
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: content,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -356,7 +362,12 @@ class _MessageMenuCard extends StatelessWidget {
                     for (final (index, action) in tiles.indexed) ...[
                       if (index > 0) const SizedBox(width: 8),
                       Expanded(
-                        child: _ActionTile(action: action, fill: inner),
+                        child: _ActionTile(
+                          action: action,
+                          fill: inner,
+                          // The keyboard starts on the first action.
+                          autofocus: index == 0,
+                        ),
                       ),
                     ],
                   ],
@@ -375,8 +386,12 @@ class _MessageMenuCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        for (final action in rows)
-                          GlassMenuRow(height: 46, entry: action.toEntry()),
+                        for (final (index, action) in rows.indexed)
+                          GlassMenuRow(
+                            height: 46,
+                            entry: action.toEntry(),
+                            autofocus: tiles.isEmpty && index == 0,
+                          ),
                       ],
                     ),
                   ),
@@ -390,16 +405,22 @@ class _MessageMenuCard extends StatelessWidget {
 }
 
 class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.action, required this.fill});
+  const _ActionTile({
+    required this.action,
+    required this.fill,
+    this.autofocus = false,
+  });
 
   final MessageAction action;
   final Color fill;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     return WeCordPressable(
       key: action.key,
+      autofocus: autofocus,
       onPressed: action.onSelected,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       builder: (context, states) {

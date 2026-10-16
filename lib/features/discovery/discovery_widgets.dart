@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -177,8 +178,15 @@ class DiscoveryCircleCard extends StatelessWidget {
     super.key,
   });
 
-  /// The card's height in grids and rows.
-  static const height = 262.0;
+  /// The card's height at the normal text size.
+  static const baseHeight = 262.0;
+
+  /// The card's height in grids and rows: [baseHeight], taller as the text
+  /// size grows (the card's text takes about 110 of it).
+  static double heightOf(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    return baseHeight + (scale > 1 ? (scale - 1) * 110 : 0);
+  }
 
   final DiscoverableCircle circle;
   final VoidCallback onOpen;
@@ -293,7 +301,12 @@ class DiscoveryCircleCard extends StatelessWidget {
                       if (circle.tags.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         SizedBox(
-                          height: 22,
+                          height:
+                              22 *
+                              math.max(
+                                1,
+                                MediaQuery.textScalerOf(context).scale(10) / 10,
+                              ),
                           child: ClipRect(
                             child: Wrap(
                               spacing: 6,

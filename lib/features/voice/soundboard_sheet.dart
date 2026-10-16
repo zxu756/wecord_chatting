@@ -400,10 +400,15 @@ class SoundboardTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     return GestureDetector(
-      onLongPressStart: (details) => onMenu(details.globalPosition),
+      excludeFromSemantics: true,
       onSecondaryTapUp: (details) => onMenu(details.globalPosition),
       child: WeCordPressable(
         onPressed: onPressed,
+        onLongPress: () {
+          final box = context.findRenderObject()! as RenderBox;
+          onMenu(box.localToGlobal(box.size.center(Offset.zero)));
+        },
+        hint: tr('Long press for more options'),
         semanticLabel: sound.name,
         excludeSemantics: true,
         shape: RoundedSuperellipseBorder(

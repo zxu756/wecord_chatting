@@ -340,7 +340,7 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
               alignment: Alignment.centerLeft,
               child: SizedBox(
                 width: 320,
-                height: DiscoveryCircleCard.height,
+                height: DiscoveryCircleCard.heightOf(context),
                 child: DiscoveryCircleCard(
                   circle: DiscoverableCircle(
                     id: circle.id,

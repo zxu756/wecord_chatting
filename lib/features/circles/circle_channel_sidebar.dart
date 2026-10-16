@@ -1121,7 +1121,12 @@ class CircleBannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final circle = detail.circle;
-    final fill = WeCordAvatarColors.forSeed(circle.name);
+    // A shade deeper than the avatar color, so the white counts clear 4.5:1
+    // even across the stripes.
+    final fill = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.1),
+      WeCordAvatarColors.forSeed(circle.name),
+    );
     final memberCount = detail.members.length;
     final subtitle = [
       tr('{count} members', {'count': memberCount}),
@@ -1191,7 +1196,7 @@ class CircleBannerCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.92),
+                          color: Colors.white,
                           fontSize: compact ? 11.5 : 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1467,6 +1472,7 @@ class CircleVoiceLiveCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
       child: GestureDetector(
+        excludeFromSemantics: true,
         onSecondaryTapUp: onContextMenu == null
             ? null
             : (details) => onContextMenu!(details.globalPosition),
@@ -1671,6 +1677,7 @@ class CircleCategoryHeader extends StatelessWidget {
     final touch = usesTouchInput(context);
 
     return GestureDetector(
+      excludeFromSemantics: true,
       onSecondaryTapUp: hasMenu
           ? (details) => _showMenu(context, details.globalPosition)
           : null,
@@ -1849,6 +1856,7 @@ class CircleChannelRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(left: indent + 2, right: 2, top: 1, bottom: 1),
       child: GestureDetector(
+        excludeFromSemantics: true,
         onSecondaryTapUp: onContextMenu == null
             ? null
             : (details) => onContextMenu!(details.globalPosition),

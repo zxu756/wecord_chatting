@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/voice/voice_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -285,22 +286,27 @@ class VoiceParticipantMenuRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      key: ValueKey('voice-participant-menu-region-${person.userId}'),
-      behavior: HitTestBehavior.opaque,
-      onSecondaryTapUp: (details) => showVoiceParticipantMenu(
-        context,
-        globalPosition: details.globalPosition,
-        person: person,
-        moderation: moderation,
+    void open(Offset position) => showVoiceParticipantMenu(
+      context,
+      globalPosition: position,
+      person: person,
+      moderation: moderation,
+    );
+    return Semantics(
+      customSemanticsActions: {
+        CustomSemanticsAction(label: tr('More options')): () {
+          final box = context.findRenderObject()! as RenderBox;
+          open(box.localToGlobal(box.size.center(Offset.zero)));
+        },
+      },
+      child: GestureDetector(
+        key: ValueKey('voice-participant-menu-region-${person.userId}'),
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onSecondaryTapUp: (details) => open(details.globalPosition),
+        onLongPressStart: (details) => open(details.globalPosition),
+        child: child,
       ),
-      onLongPressStart: (details) => showVoiceParticipantMenu(
-        context,
-        globalPosition: details.globalPosition,
-        person: person,
-        moderation: moderation,
-      ),
-      child: child,
     );
   }
 }

@@ -85,6 +85,7 @@ class PersonAvatar extends StatelessWidget {
     this.ringColor,
     this.badge,
     this.semanticLabel,
+    this.onImageError,
     super.key,
   });
 
@@ -106,6 +107,9 @@ class PersonAvatar extends StatelessWidget {
 
   final String? semanticLabel;
 
+  /// Called when [image] fails to load (e.g. to fall back to the initial).
+  final ImageErrorListener? onImageError;
+
   @override
   Widget build(BuildContext context) {
     final fill = color ?? WeCordAvatarColors.forSeed(name);
@@ -118,7 +122,11 @@ class PersonAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         image: image == null
             ? null
-            : DecorationImage(image: image!, fit: BoxFit.cover),
+            : DecorationImage(
+                image: image!,
+                fit: BoxFit.cover,
+                onError: onImageError,
+              ),
       ),
       child: image == null
           ? Text(
@@ -174,6 +182,7 @@ class ThingAvatar extends StatelessWidget {
     this.radius,
     this.badge,
     this.semanticLabel,
+    this.onImageError,
     super.key,
   });
 
@@ -194,6 +203,9 @@ class ThingAvatar extends StatelessWidget {
   final Widget? badge;
   final String? semanticLabel;
 
+  /// Called when [image] fails to load (e.g. to fall back to the initial).
+  final ImageErrorListener? onImageError;
+
   @override
   Widget build(BuildContext context) {
     final fill = color ?? WeCordAvatarColors.forSeed(label);
@@ -210,7 +222,11 @@ class ThingAvatar extends StatelessWidget {
         shape: shape,
         image: image == null
             ? null
-            : DecorationImage(image: image!, fit: BoxFit.cover),
+            : DecorationImage(
+                image: image!,
+                fit: BoxFit.cover,
+                onError: onImageError,
+              ),
       ),
       child: image != null
           ? null

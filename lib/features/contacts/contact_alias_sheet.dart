@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class ContactAliasSheet extends ConsumerStatefulWidget {
   const ContactAliasSheet({required this.profile, super.key});
@@ -34,7 +35,9 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return SafeArea(
+      top: false,
       child: Padding(
         // Lifts the sheet above the keyboard, so the content scrolls
         // within the space left instead of hiding behind it.
@@ -42,23 +45,29 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                tr('Edit alias'),
-                style: Theme.of(context).textTheme.titleLarge,
+              Semantics(
+                header: true,
+                child: Text(
+                  tr('Edit alias'),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: c.ink,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-              TextField(
+              WeCordTextField(
                 controller: _aliasController,
                 enabled: !_isSaving,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Alias'),
-                ),
+                hint: tr('Alias'),
+                errorText: _errorText,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) {
                   if (!_isSaving) {
@@ -66,25 +75,14 @@ class _ContactAliasSheetState extends ConsumerState<ContactAliasSheet> {
                   }
                 },
               ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _errorText!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
               const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  onPressed: _isSaving ? null : _save,
-                  child: _isSaving
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(tr('Save')),
-                ),
+              WeCordButton(
+                key: const ValueKey('contact-alias-save'),
+                label: tr('Save'),
+                size: WeCordButtonSize.large,
+                expand: true,
+                loading: _isSaving,
+                onPressed: _save,
               ),
             ],
           ),

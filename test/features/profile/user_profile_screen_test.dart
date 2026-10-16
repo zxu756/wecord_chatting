@@ -19,6 +19,10 @@ void main() {
     expect(find.text('Ada'), findsOneWidget);
     expect(find.text('@ada'), findsOneWidget);
     expect(find.text('Message'), findsOneWidget);
+
+    // Block and Report wait behind More.
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
     expect(find.text('Block'), findsOneWidget);
     expect(find.text('Report'), findsOneWidget);
   });
@@ -54,10 +58,17 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('🏖️ On holiday'), findsOneWidget);
+    // The status sits in a pill beside the avatar, above the name.
     expect(
-      tester.getTopLeft(find.text('@ada')).dy,
-      lessThan(tester.getTopLeft(find.text('🏖️ On holiday')).dy),
+      find.descendant(
+        of: find.byKey(const ValueKey('profile-status-pill')),
+        matching: find.text('🏖️ On holiday'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getTopLeft(find.text('🏖️ On holiday')).dy,
+      lessThan(tester.getTopLeft(find.text('@ada')).dy),
     );
   });
 
@@ -112,9 +123,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('1 MUTUAL CIRCLE'), findsOneWidget);
+    expect(find.text('1 mutual circle'), findsOneWidget);
     expect(find.text('Hikers'), findsOneWidget);
-    expect(find.text('2 MUTUAL FRIENDS'), findsOneWidget);
+    expect(find.text('2 mutual friends'), findsOneWidget);
     expect(find.text('Grace'), findsOneWidget);
   });
 

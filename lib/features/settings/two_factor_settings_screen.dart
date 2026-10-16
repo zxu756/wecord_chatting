@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wecord/features/auth/two_factor.dart';
+import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void openTwoFactorSettings(BuildContext context) {
   Navigator.of(context).push(
@@ -176,206 +178,298 @@ class _TwoFactorSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final factor = ref.watch(twoFactorFactorProvider);
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Two-step verification'))),
-      body: factor.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return SettingsPage(
+      key: const ValueKey('two-factor-settings-screen'),
+      title: tr('Two-step verification'),
+      maxWidth: 560,
+      children: [
+        const SizedBox(height: 12),
+        ...factor.when(
+          loading: () => const [
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ],
+          error: (error, stackTrace) => [
+            _Card(
               children: [
-                Text(tr('Could not load two-step verification.')),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => ref.invalidate(twoFactorFactorProvider),
-                  child: Text(tr('Try again')),
+                Text(
+                  tr('Could not load two-step verification.'),
+                  style: TextStyle(fontSize: 15, color: c.ink),
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: WeCordButton(
+                    label: tr('Try again'),
+                    onPressed: () => ref.invalidate(twoFactorFactorProvider),
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
+          data: (factorId) => [
+            if (_error case final error?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 12),
+                child: Text(
+                  error,
+                  key: const ValueKey('two-factor-error'),
+                  style: TextStyle(fontSize: 13.5, color: c.dangerText),
+                ),
+              ),
+            if (factorId != null)
+              _enabled(factorId)
+            else if (_setup case final setup?)
+              _settingUp(setup)
+            else
+              _disabled(),
+          ],
         ),
-        data: (factorId) => Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (_error case final error?) ...[
-                  Text(
-                    error,
-                    key: const ValueKey('two-factor-error'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (factorId != null)
-                  ..._enabled(factorId)
-                else if (_setup case final setup?)
-                  ..._settingUp(setup)
-                else
-                  ..._disabled(),
-              ],
-            ),
-          ),
-        ),
-      ),
+      ],
     );
   }
 
-  List<Widget> _enabled(String factorId) {
-    final theme = Theme.of(context);
-    return [
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(Icons.verified_user, color: theme.colorScheme.primary),
-        title: Text(tr('Two-step verification is on')),
-        subtitle: Text(
-          tr(
+  Widget _enabled(String factorId) {
+    return _Card(
+      children: [
+        _Intro(
+          icon: Icons.verified_user_outlined,
+          tone: SettingsTone.success,
+          title: tr('Two-step verification is on'),
+          body: tr(
             'Signing in asks for a code from your authenticator app after '
             'your password.',
           ),
         ),
-      ),
-      const SizedBox(height: 16),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          key: const ValueKey('two-factor-turn-off'),
-          onPressed: _busy ? null : () => _turnOff(factorId),
-          icon: const Icon(Icons.lock_open_outlined),
-          label: Text(tr('Turn off')),
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: WeCordButton(
+            key: const ValueKey('two-factor-turn-off'),
+            label: tr('Turn off'),
+            icon: Icons.lock_open_outlined,
+            variant: WeCordButtonVariant.secondary,
+            onPressed: _busy ? null : () => _turnOff(factorId),
+          ),
         ),
-      ),
-    ];
+      ],
+    );
   }
 
-  List<Widget> _disabled() {
-    return [
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: const Icon(Icons.phonelink_lock_outlined),
-        title: Text(tr('Protect your account with a code')),
-        subtitle: Text(
-          tr(
+  Widget _disabled() {
+    return _Card(
+      children: [
+        _Intro(
+          icon: Icons.phonelink_lock_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Protect your account with a code'),
+          body: tr(
             'After your password, signing in will also ask for a code from '
             'an authenticator app on your phone.',
           ),
         ),
-      ),
-      const SizedBox(height: 16),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: FilledButton.icon(
-          key: const ValueKey('two-factor-set-up'),
-          onPressed: _busy ? null : _startSetup,
-          icon: const Icon(Icons.qr_code_2),
-          label: Text(tr('Set up an authenticator app')),
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: WeCordButton(
+            key: const ValueKey('two-factor-set-up'),
+            label: tr('Set up an authenticator app'),
+            icon: Icons.qr_code_2_rounded,
+            loading: _busy,
+            onPressed: _startSetup,
+          ),
         ),
-      ),
-    ];
+      ],
+    );
   }
 
-  List<Widget> _settingUp(TwoFactorSetup setup) {
-    final theme = Theme.of(context);
-    return [
-      Text(
-        tr('1. Scan this QR code with your authenticator app'),
-        style: theme.textTheme.titleMedium,
-      ),
-      const SizedBox(height: 12),
-      Center(
-        child: Container(
-          key: const ValueKey('two-factor-qr'),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            // Scanners need dark modules on a light background, in either
-            // theme.
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: QrImageView(
-            data: setup.uri,
-            size: 200,
-            backgroundColor: Colors.white,
-          ),
+  Widget _settingUp(TwoFactorSetup setup) {
+    final c = context.tokens.colors;
+    final step = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      color: c.ink,
+    );
+    return _Card(
+      children: [
+        Text(
+          tr('1. Scan this QR code with your authenticator app'),
+          style: step,
         ),
-      ),
-      const SizedBox(height: 16),
-      Text(
-        tr("Can't scan it? Enter this key instead:"),
-        style: theme.textTheme.bodyMedium,
-      ),
-      const SizedBox(height: 4),
-      Row(
-        children: [
-          Expanded(
-            child: SelectableText(
-              setup.secret,
-              key: const ValueKey('two-factor-secret'),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontFamily: 'monospace',
-                letterSpacing: 1.5,
-              ),
+        const SizedBox(height: 14),
+        Center(
+          child: Container(
+            key: const ValueKey('two-factor-qr'),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              // Scanners need dark modules on a light background, in either
+              // theme.
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              border: Border.all(color: c.line),
+            ),
+            child: QrImageView(
+              data: setup.uri,
+              size: 200,
+              backgroundColor: Colors.white,
             ),
           ),
-          IconButton(
-            tooltip: tr('Copy key'),
-            icon: const Icon(Icons.copy),
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: setup.secret));
-              if (mounted) {
-                ScaffoldMessenger.maybeOf(
-                  context,
-                )?.showSnackBar(SnackBar(content: Text(tr('Copied'))));
-              }
-            },
-          ),
-        ],
-      ),
-      const SizedBox(height: 24),
-      Text(
-        tr('2. Enter the 6-digit code it shows'),
-        style: theme.textTheme.titleMedium,
-      ),
-      const SizedBox(height: 8),
-      TextField(
-        key: const ValueKey('two-factor-setup-code'),
-        controller: _code,
-        enabled: !_busy,
-        keyboardType: TextInputType.number,
-        maxLength: twoFactorCodeLength,
-        autofillHints: const [AutofillHints.oneTimeCode],
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: InputDecoration(
-          labelText: tr('6-digit code'),
-          counterText: '',
         ),
-        onSubmitted: (_) => _confirmSetup(),
-      ),
-      const SizedBox(height: 16),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          FilledButton(
-            key: const ValueKey('two-factor-confirm'),
-            onPressed: _busy ? null : _confirmSetup,
-            child: Text(tr('Turn on')),
+        const SizedBox(height: 16),
+        Text(
+          tr("Can't scan it? Enter this key instead:"),
+          style: TextStyle(fontSize: 14, color: c.muted),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+          decoration: BoxDecoration(
+            color: c.well,
+            borderRadius: BorderRadius.circular(WeCordRadii.md),
           ),
-          TextButton(
-            onPressed: _busy ? null : _cancelSetup,
-            child: Text(tr('Cancel')),
+          child: Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  setup.secret,
+                  key: const ValueKey('two-factor-secret'),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.5,
+                    color: c.ink,
+                  ),
+                ),
+              ),
+              WeCordIconButton(
+                icon: Icons.copy_rounded,
+                tooltip: tr('Copy key'),
+                variant: WeCordButtonVariant.ghost,
+                size: 36,
+                iconSize: 18,
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: setup.secret));
+                  if (mounted) {
+                    ScaffoldMessenger.maybeOf(
+                      context,
+                    )?.showSnackBar(SnackBar(content: Text(tr('Copied'))));
+                  }
+                },
+              ),
+            ],
           ),
-        ],
+        ),
+        const SizedBox(height: 22),
+        Text(tr('2. Enter the 6-digit code it shows'), style: step),
+        const SizedBox(height: 10),
+        WeCordTextField(
+          fieldKey: const ValueKey('two-factor-setup-code'),
+          controller: _code,
+          enabled: !_busy,
+          hint: tr('6-digit code'),
+          keyboardType: TextInputType.number,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(twoFactorCodeLength),
+          ],
+          onSubmitted: (_) => _confirmSetup(),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            WeCordButton(
+              key: const ValueKey('two-factor-confirm'),
+              label: tr('Turn on'),
+              loading: _busy,
+              onPressed: _confirmSetup,
+            ),
+            WeCordButton(
+              label: tr('Cancel'),
+              variant: WeCordButtonVariant.secondary,
+              onPressed: _busy ? null : _cancelSetup,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A white card of the two-step verification page.
+class _Card extends StatelessWidget {
+  const _Card({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.tokens.colors.panel,
+        borderRadius: BorderRadius.circular(WeCordRadii.xl),
       ),
-    ];
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+}
+
+/// An icon tile with a title and explanation.
+class _Intro extends StatelessWidget {
+  const _Intro({
+    required this.icon,
+    required this.tone,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final SettingsTone tone;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SettingsIconTile(icon: icon, tone: tone, size: 44),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: c.ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: TextStyle(fontSize: 14, height: 1.45, color: c.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -411,45 +505,48 @@ class _DisableDialogState extends State<_DisableDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return AlertDialog(
       scrollable: true,
       title: Text(tr('Turn off two-step verification?')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             tr(
               'Enter a code from your authenticator app to confirm. Signing '
               'in will then only need your password.',
             ),
+            style: TextStyle(fontSize: 14, height: 1.45, color: c.muted),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('two-factor-disable-code'),
+          const SizedBox(height: 14),
+          WeCordTextField(
+            fieldKey: const ValueKey('two-factor-disable-code'),
             controller: _code,
             autofocus: true,
+            hint: tr('6-digit code'),
+            errorText: _error,
             keyboardType: TextInputType.number,
-            maxLength: twoFactorCodeLength,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: tr('6-digit code'),
-              counterText: '',
-              errorText: _error,
-            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(twoFactorCodeLength),
+            ],
             onSubmitted: (_) => _submit(),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.secondary,
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        WeCordButton(
           key: const ValueKey('two-factor-disable-confirm'),
+          label: tr('Turn off'),
+          variant: WeCordButtonVariant.danger,
           onPressed: _submit,
-          child: Text(tr('Turn off')),
         ),
       ],
     );

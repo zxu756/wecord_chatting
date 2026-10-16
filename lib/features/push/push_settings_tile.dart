@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Settings switch for push notifications on this browser; nothing where
 /// web push isn't available.
@@ -58,15 +59,13 @@ class _PushSettingsTileState extends ConsumerState<PushSettingsTile> {
     if (status == null || status == PushStatus.unsupported) {
       return const SizedBox.shrink();
     }
-    return SwitchListTile(
+    return SettingsRow.toggle(
       key: const ValueKey('push-notifications'),
-      contentPadding: EdgeInsets.zero,
-      title: Text(tr('Push notifications')),
-      subtitle: Text(
-        status == PushStatus.denied
-            ? tr("Notifications are blocked in this browser's settings.")
-            : tr('Get notified on this browser even when WeCord is closed.'),
-      ),
+      icon: Icons.phonelink_ring_outlined,
+      title: tr('Push notifications'),
+      subtitle: status == PushStatus.denied
+          ? tr("Notifications are blocked in this browser's settings.")
+          : tr('Get notified on this browser even when WeCord is closed.'),
       value: status == PushStatus.on,
       onChanged: _busy || status == PushStatus.denied
           ? null

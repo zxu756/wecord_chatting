@@ -12,6 +12,7 @@ import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
@@ -374,7 +375,8 @@ void main() {
     router.go('/profile/user-2');
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.byType(UserProfileScreen), findsOneWidget);
+    expect(find.text('@ada'), findsOneWidget);
   });
 
   testWidgets('invite links opened signed out return after sign-in', (

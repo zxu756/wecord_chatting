@@ -390,6 +390,12 @@ ShellPlacement _placementFor(GoRouterState state) {
         homeSelected: true,
         homeSection: HomeSection.inbox,
       );
+    // Wide layouts show settings as a window over Home.
+    case SettingsScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.friends,
+      );
   }
   if (first == circles && rest >= 2) {
     return ShellPlacement(

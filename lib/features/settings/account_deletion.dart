@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// The account still owns a circle with other members in it.
 class AccountOwnsCirclesException implements Exception {
@@ -98,13 +99,14 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     final matches = _controller.text.trim() == widget.username;
+    final body = TextStyle(fontSize: 14, height: 1.45, color: c.muted);
     return AlertDialog(
       scrollable: true,
       title: Text(tr('Delete account')),
       content: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
@@ -112,6 +114,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               'This deletes your login, profile, friends and avatar and takes '
               'you out of every circle and group. It cannot be undone.',
             ),
+            style: body.copyWith(color: c.ink),
           ),
           const SizedBox(height: 8),
           Text(
@@ -120,34 +123,35 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               '"Deleted User". Circles you own with other members must be '
               'transferred first; circles with only you in them are deleted.',
             ),
+            style: body,
           ),
           const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('delete-account-username'),
+          WeCordTextField(
+            fieldKey: const ValueKey('delete-account-username'),
             controller: _controller,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: tr('Type {username} to confirm', {
-                'username': widget.username,
-              }),
-            ),
+            label: tr('Type {username} to confirm', {
+              'username': widget.username,
+            }),
             onChanged: (_) => setState(() {}),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.secondary,
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        WeCordButton(
           key: const ValueKey('delete-account-confirm'),
-          style: FilledButton.styleFrom(
-            backgroundColor: colorScheme.error,
-            foregroundColor: colorScheme.onError,
-          ),
-          onPressed: matches ? () => Navigator.of(context).pop(true) : null,
-          child: Text(tr('Delete account')),
+          label: tr('Delete account'),
+          variant: WeCordButtonVariant.danger,
+          onPressed: matches
+              ? () {
+                  WeCordHaptics.heavy();
+                  Navigator.of(context).pop(true);
+                }
+              : null,
         ),
       ],
     );

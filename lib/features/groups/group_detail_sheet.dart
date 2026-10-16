@@ -7,9 +7,12 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/groups/group_creation_sheet.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final groupDetailProvider = FutureProvider.autoDispose
     .family<GroupDetail, String>((ref, conversationId) {
@@ -58,6 +61,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     final detail = ref.watch(groupDetailProvider(widget.conversationId));
 
     return SafeArea(
+      top: false,
       child: Padding(
         // Keeps the focused field above the keyboard.
         padding: EdgeInsets.only(
@@ -69,137 +73,147 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
           minChildSize: 0.5,
           maxChildSize: 0.95,
           builder: (context, scrollController) {
-            return detail.when(
-              loading: () => const _LoadingDetail(),
-              error: (error, stackTrace) => _ErrorDetail(
-                title: widget.title.trim().isEmpty
-                    ? widget.conversationId
-                    : widget.title.trim(),
-                errorText: error.toString(),
+            return WeCordSheet(
+              expand: true,
+              child: Expanded(
+                child: detail.when(
+                  loading: () => const _LoadingDetail(),
+                  error: (error, stackTrace) => _ErrorDetail(
+                    title: widget.title.trim().isEmpty
+                        ? widget.conversationId
+                        : widget.title.trim(),
+                    errorText: error.toString(),
+                  ),
+                  data: (detail) =>
+                      _buildDetail(context, detail, scrollController),
+                ),
               ),
-              data: (detail) {
-                _syncControllers(detail);
-                return ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _Header(
-                      detail: detail,
-                      avatarUrl: _pendingAvatarUrl.isEmpty
-                          ? detail.avatarUrl
-                          : _pendingAvatarUrl,
-                      onPickAvatar: detail.canManageGroup
-                          ? () => _pickAvatar(detail)
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _titleController,
-                      enabled: detail.canManageGroup && !_isSaving,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        labelText: tr('Group name'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _announcementController,
-                      enabled: detail.canManageGroup && !_isSaving,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        labelText: tr('Announcement'),
-                      ),
-                    ),
-                    if (_announcementMetaText(detail) case final metaText?) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        metaText,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (_errorText != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _errorText!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: detail.canManageGroup && !_isSaving
-                              ? () => _save(detail)
-                              : null,
-                          icon: _isSaving
-                              ? const SizedBox.square(
-                                  dimension: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.save_outlined),
-                          label: Text(tr('Save')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: detail.canManageGroup && !_isSaving
-                              ? () => _showInviteSheet(detail)
-                              : null,
-                          icon: const Icon(Icons.person_add_alt_1_outlined),
-                          label: Text(tr('Invite friends')),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _isSaving
-                              ? null
-                              : () => _leaveGroup(detail),
-                          icon: const Icon(Icons.logout_outlined),
-                          label: Text(tr('Leave group')),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      tr('Group members'),
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _memberSearchController,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        labelText: tr('Search members'),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _query = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    for (final member in _filteredMembers(detail.members))
-                      _MemberTile(
-                        member: member,
-                        canRemove: _canRemove(detail, member),
-                        onOpenProfile: () {
-                          context.push('/profile/${member.profile.id}');
-                        },
-                        onRemove: () => _removeMember(detail, member),
-                      ),
-                  ],
-                );
-              },
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildDetail(
+    BuildContext context,
+    GroupDetail detail,
+    ScrollController scrollController,
+  ) {
+    final c = context.tokens.colors;
+    _syncControllers(detail);
+    final canManage = detail.canManageGroup;
+    final members = _filteredMembers(detail.members);
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      children: [
+        _Header(
+          detail: detail,
+          avatarUrl: _pendingAvatarUrl.isEmpty
+              ? detail.avatarUrl
+              : _pendingAvatarUrl,
+          onPickAvatar: canManage ? () => _pickAvatar(detail) : null,
+        ),
+        const SizedBox(height: 20),
+        WeCordTextField(
+          controller: _titleController,
+          enabled: canManage && !_isSaving,
+          label: tr('Group name'),
+        ),
+        const SizedBox(height: 14),
+        WeCordTextField(
+          controller: _announcementController,
+          enabled: canManage && !_isSaving,
+          minLines: 2,
+          maxLines: 4,
+          label: tr('Announcement'),
+        ),
+        if (_announcementMetaText(detail) case final metaText?)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+            child: Text(
+              metaText,
+              style: TextStyle(fontSize: 12.5, color: c.muted),
+            ),
+          ),
+        if (_errorText != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+            child: Text(_errorText!, style: TextStyle(color: c.dangerText)),
+          ),
+        if (canManage) ...[
+          const SizedBox(height: 14),
+          WeCordButton(
+            key: const ValueKey('group-detail-save'),
+            label: tr('Save'),
+            icon: Icons.check_rounded,
+            expand: true,
+            loading: _isSaving,
+            onPressed: () => _save(detail),
+          ),
+        ],
+        const SizedBox(height: 16),
+        SettingsGroup(
+          color: c.well,
+          children: [
+            if (canManage)
+              SettingsRow(
+                key: const ValueKey('group-detail-invite'),
+                icon: Icons.person_add_alt_1_outlined,
+                tone: SettingsTone.accent,
+                title: tr('Invite friends'),
+                onTap: _isSaving ? null : () => _showInviteSheet(detail),
+              ),
+            SettingsRow(
+              key: const ValueKey('group-detail-leave'),
+              icon: Icons.logout_rounded,
+              title: tr('Leave group'),
+              destructive: true,
+              showChevron: false,
+              onTap: _isSaving ? null : () => _leaveGroup(detail),
+            ),
+          ],
+        ),
+        SettingsSectionHeader(
+          tr('Group members'),
+          trailing: Text(
+            '${detail.memberCount}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: c.subtle,
+            ),
+          ),
+        ),
+        WeCordTextField(
+          controller: _memberSearchController,
+          hint: tr('Search members'),
+          prefixIcon: Icons.search_rounded,
+          onChanged: (value) {
+            setState(() {
+              _query = value;
+            });
+          },
+        ),
+        const SizedBox(height: 10),
+        if (members.isNotEmpty)
+          SettingsGroup(
+            color: c.well,
+            separatorIndent: 66,
+            children: [
+              for (final member in members)
+                _MemberTile(
+                  member: member,
+                  canRemove: _canRemove(detail, member),
+                  onOpenProfile: () {
+                    context.push('/profile/${member.profile.id}');
+                  },
+                  onRemove: () => _removeMember(detail, member),
+                ),
+            ],
+          ),
+      ],
     );
   }
 
@@ -322,15 +336,19 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     final existingIds = {
       for (final member in detail.members) member.profile.id,
     };
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
+    await showWeCordSheet<void>(
+      context,
+      title: tr('Invite friends'),
+      builder: (context, scrollController) {
         return FutureBuilder<List<Profile>>(
           future: ref.read(contactsRepositoryProvider).listFriends(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const SafeArea(
-                child: Center(child: CircularProgressIndicator()),
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
               );
             }
             final friends = snapshot.data!
@@ -338,51 +356,68 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                 .toList(growable: false);
             return StatefulBuilder(
               builder: (context, setSheetState) {
+                final c = context.tokens.colors;
                 return SafeArea(
+                  top: false,
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          tr('Invite friends'),
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
                         if (friends.isEmpty)
-                          Text(tr('No friends available to invite.'))
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              tr('No friends available to invite.'),
+                              style: TextStyle(fontSize: 14, color: c.muted),
+                            ),
+                          )
                         else
                           Flexible(
-                            child: ListView(
-                              shrinkWrap: true,
-                              children: [
-                                for (final friend in friends)
-                                  CheckboxListTile(
-                                    value: selected.contains(friend.id),
-                                    title: Text(friend.displayLabel),
-                                    subtitle: Text('@${friend.username}'),
-                                    onChanged: (value) {
-                                      setSheetState(() {
-                                        if (value ?? false) {
-                                          selected.add(friend.id);
-                                        } else {
-                                          selected.remove(friend.id);
-                                        }
-                                      });
-                                    },
-                                  ),
-                              ],
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: c.well,
+                                borderRadius: BorderRadius.circular(
+                                  WeCordRadii.xl,
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: ListView(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                children: [
+                                  for (final friend in friends)
+                                    FriendPickerRow(
+                                      profile: friend,
+                                      selected: selected.contains(friend.id),
+                                      onChanged: (value) {
+                                        setSheetState(() {
+                                          if (value) {
+                                            selected.add(friend.id);
+                                          } else {
+                                            selected.remove(friend.id);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        const SizedBox(height: 12),
-                        FilledButton.icon(
+                        const SizedBox(height: 16),
+                        WeCordButton(
+                          label: tr('Add selected'),
+                          icon: Icons.person_add_alt_1_outlined,
+                          size: WeCordButtonSize.large,
+                          expand: true,
                           onPressed: selected.isEmpty
                               ? null
                               : () {
                                   Navigator.of(context).pop();
                                 },
-                          icon: const Icon(Icons.person_add_alt_1_outlined),
-                          label: Text(tr('Add selected')),
                         ),
                       ],
                     ),
@@ -467,25 +502,31 @@ class _ErrorDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
           Text(
-            errorText,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: c.ink,
+            ),
           ),
+          const SizedBox(height: 12),
+          Text(errorText, style: TextStyle(color: c.dangerText)),
         ],
       ),
     );
   }
 }
 
-class _Header extends ConsumerWidget {
+class _Header extends StatelessWidget {
   const _Header({
     required this.detail,
     required this.avatarUrl,
@@ -497,49 +538,170 @@ class _Header extends ConsumerWidget {
   final VoidCallback? onPickAvatar;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final displayUrl = ref.watch(avatarDisplayUrlProvider(avatarUrl));
-    final image = displayUrl.valueOrNull == null
-        ? null
-        : NetworkImage(displayUrl.valueOrNull!);
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final role = detail.currentUserRole;
     return Row(
       children: [
-        Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundImage: image,
-              onBackgroundImageError: image == null
-                  ? null
-                  : (_, _) => refreshAvatarDisplayUrl(ref, avatarUrl),
-              child: image == null ? Text(_initials(detail.title)) : null,
-            ),
-            IconButton.filledTonal(
-              tooltip: tr('Change group avatar'),
-              onPressed: onPickAvatar,
-              icon: const Icon(Icons.photo_camera_outlined, size: 18),
-            ),
-          ],
+        SizedBox.square(
+          dimension: 68,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _GroupAvatar(title: detail.title, avatarUrl: avatarUrl, size: 64),
+              Positioned(
+                right: -6,
+                bottom: -6,
+                child: WeCordPressable(
+                  onPressed: onPickAvatar,
+                  tooltip: tr('Change group avatar'),
+                  semanticLabel: tr('Change group avatar'),
+                  shape: const CircleBorder(),
+                  pressedScale: 0.92,
+                  builder: (context, states) => AnimatedOpacity(
+                    duration: WeCordMotion.quick,
+                    opacity: onPickAvatar == null ? 0.5 : 1,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: c.ink,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: c.panel, width: 2.5),
+                      ),
+                      child: Icon(
+                        Icons.photo_camera_outlined,
+                        size: 15,
+                        color: c.onInk,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                tr('Group details'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge,
+              Semantics(
+                header: true,
+                child: Text(
+                  tr('Group details'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: c.ink,
+                  ),
+                ),
               ),
-              Text(tr('{count} members', {'count': detail.memberCount})),
-              if (detail.currentUserRole != null)
-                Text(_roleLabel(detail.currentUserRole!)),
+              const SizedBox(height: 2),
+              Text(
+                tr('{count} members', {'count': detail.memberCount}),
+                style: TextStyle(fontSize: 14, color: c.muted),
+              ),
+              if (role != null) ...[
+                const SizedBox(height: 6),
+                _RoleTag(role: role),
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The group's picture in a squircle, or its initial.
+class _GroupAvatar extends ConsumerStatefulWidget {
+  const _GroupAvatar({
+    required this.title,
+    required this.avatarUrl,
+    required this.size,
+  });
+
+  final String title;
+  final String? avatarUrl;
+  final double size;
+
+  @override
+  ConsumerState<_GroupAvatar> createState() => _GroupAvatarState();
+}
+
+class _GroupAvatarState extends ConsumerState<_GroupAvatar> {
+  /// The URL that failed to load, so the initial shows instead.
+  String? _failedUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayUrl = ref
+        .watch(avatarDisplayUrlProvider(widget.avatarUrl))
+        .valueOrNull;
+    if (displayUrl == null || displayUrl == _failedUrl) {
+      return ThingAvatar(label: widget.title, size: widget.size);
+    }
+    return SizedBox.square(
+      dimension: widget.size,
+      child: Stack(
+        children: [
+          ThingAvatar(label: widget.title, size: widget.size),
+          Positioned.fill(
+            child: ClipRSuperellipse(
+              borderRadius: BorderRadius.circular(widget.size / 3),
+              child: Image.network(
+                displayUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _failedUrl != displayUrl) {
+                      setState(() => _failedUrl = displayUrl);
+                      refreshAvatarDisplayUrl(ref, widget.avatarUrl);
+                    }
+                  });
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "owner", "admin" or "member" as a small tag.
+class _RoleTag extends StatelessWidget {
+  const _RoleTag({required this.role});
+
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final (fill, foreground) = switch (role) {
+      'owner' => (c.warningSoft, c.warningText),
+      'admin' => (c.accentSoft, c.accentText),
+      _ => (c.raised, c.muted),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(WeCordRadii.xs),
+      ),
+      child: Text(
+        _roleLabel(role),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: foreground,
+        ),
+      ),
     );
   }
 }
@@ -559,44 +721,71 @@ class _MemberTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        child: Text(_initials(member.profile.displayLabel)),
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      onPressed: onOpenProfile,
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.md),
       ),
-      title: Text(member.profile.displayLabel),
-      subtitle: Text('@${member.profile.username}'),
-      onTap: onOpenProfile,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(_roleLabel(member.role)),
-          if (canRemove) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: tr('Remove member'),
-              icon: const Icon(Icons.person_remove_outlined),
-              onPressed: onRemove,
-            ),
-          ],
-        ],
-      ),
+      builder: (context, states) {
+        final highlighted =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          color: c.ink.withValues(alpha: highlighted ? 0.04 : 0),
+          padding: const EdgeInsets.fromLTRB(14, 9, 8, 9),
+          child: Row(
+            children: [
+              ProfileAvatar(
+                name: member.profile.displayLabel,
+                avatarUrl: member.profile.avatarUrl,
+                size: 40,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      member.profile.displayLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
+                      ),
+                    ),
+                    Text(
+                      '@${member.profile.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: c.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _RoleTag(role: member.role),
+              if (canRemove) ...[
+                const SizedBox(width: 2),
+                WeCordIconButton(
+                  icon: Icons.person_remove_outlined,
+                  tooltip: tr('Remove member'),
+                  size: 36,
+                  variant: WeCordButtonVariant.ghost,
+                  onPressed: onRemove,
+                ),
+              ] else
+                const SizedBox(width: 6),
+            ],
+          ),
+        );
+      },
     );
   }
-}
-
-String _initials(String value) {
-  final parts = value
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  final first = parts.first.characters.first;
-  final second = parts.length > 1 ? parts.last.characters.first : '';
-  return '$first$second'.toUpperCase();
 }
 
 String _formatAnnouncementTime(DateTime value) {

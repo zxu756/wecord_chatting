@@ -5,6 +5,7 @@ import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/features/push/push_gateway.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/push/push_settings_tile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 const _subscription = PushSubscriptionInfo(
   endpoint: 'https://push.example.com/abc',
@@ -114,8 +115,12 @@ void main() {
     return capturedRef;
   }
 
-  SwitchListTile tile(WidgetTester tester) =>
-      tester.widget(find.byKey(const ValueKey('push-notifications')));
+  WeCordSwitch tile(WidgetTester tester) => tester.widget(
+    find.descendant(
+      of: find.byKey(const ValueKey('push-notifications')),
+      matching: find.byType(WeCordSwitch),
+    ),
+  );
 
   testWidgets('hidden where web push is unsupported', (tester) async {
     gateway.supported = false;

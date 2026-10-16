@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
@@ -20,6 +21,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../presence/presence_repository_test.dart' as presence_fakes;
 import '../profile/profile_extras_repository_test.dart';
@@ -30,19 +32,14 @@ void main() {
 
     await tester.pumpWidget(_app(settingsRepository: settingsRepository));
     await tester.pump();
+    await openProfileEditor(tester);
 
     expect(find.text('@ada'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Display name'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'Bio'), findsOneWidget);
+    expect(displayNameField, findsOneWidget);
+    expect(bioField, findsOneWidget);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Display name'),
-      'Ada Byron',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Bio'),
-      'First programmer',
-    );
+    await tester.enterText(displayNameField, 'Ada Byron');
+    await tester.enterText(bioField, 'First programmer');
     await tapSave(tester);
     await tester.pump();
 
@@ -90,12 +87,12 @@ void main() {
     );
     await tester.ensureVisible(showOnline);
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(showOnline).value, isTrue);
+    expect(switchValue(tester, showOnline), isTrue);
     await tester.tap(showOnline);
     await tester.pump();
 
     expect(presence.savedShowOnline, [false]);
-    expect(tester.widget<SwitchListTile>(showOnline).value, isFalse);
+    expect(switchValue(tester, showOnline), isFalse);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
     expect(
@@ -116,16 +113,25 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    SegmentedButton<ThemeMode> picker() =>
-        tester.widget(find.byKey(const ValueKey('theme-mode')));
-    expect(picker().selected, {ThemeMode.system});
+    bool selected(ThemeMode mode) => tester
+        .widget<WeCordPressable>(
+          find
+              .descendant(
+                of: find.byKey(ValueKey('theme-mode-${mode.name}')),
+                matching: find.byType(WeCordPressable),
+              )
+              .first,
+        )
+        .selected;
+    expect(selected(ThemeMode.system), isTrue);
 
     await tester.ensureVisible(find.text('Dark'));
     await tester.pump();
     await tester.tap(find.text('Dark'));
     await tester.pump();
 
-    expect(picker().selected, {ThemeMode.dark});
+    expect(selected(ThemeMode.dark), isTrue);
+    expect(selected(ThemeMode.system), isFalse);
     expect(await store.load(), ThemeMode.dark);
   });
 
@@ -144,12 +150,12 @@ void main() {
     );
     await tester.ensureVisible(toggle);
     await tester.pump();
-    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    expect(switchValue(tester, toggle), isTrue);
 
     await tester.tap(toggle);
     await tester.pump();
 
-    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(switchValue(tester, toggle), isFalse);
     expect(await store.load(), isFalse);
   });
 
@@ -181,7 +187,7 @@ void main() {
       await tester.pump();
       await openDialog(tester);
 
-      FilledButton confirm() =>
+      WeCordButton confirm() =>
           tester.widget(find.byKey(const ValueKey('delete-account-confirm')));
       expect(confirm().onPressed, isNull);
       await tester.enterText(
@@ -245,9 +251,9 @@ void main() {
     // Nothing to save yet.
     final saveStatus = find.descendant(
       of: find.byType(CustomStatusSheet),
-      matching: find.widgetWithText(FilledButton, 'Save'),
+      matching: find.widgetWithText(WeCordButton, 'Save'),
     );
-    expect(tester.widget<FilledButton>(saveStatus).onPressed, isNull);
+    expect(tester.widget<WeCordButton>(saveStatus).onPressed, isNull);
 
     await tester.tap(find.byTooltip('Choose emoji'));
     await tester.pumpAndSettle();
@@ -334,16 +340,16 @@ void main() {
     await tester.pump();
 
     await tester.scrollUntilVisible(
-      find.widgetWithText(OutlinedButton, 'Sign out'),
+      find.byKey(const ValueKey('sign-out')),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     // Tiles above load as they scroll into view; settle, then bring the
     // target back on screen.
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Sign out'));
+    await tester.ensureVisible(find.byKey(const ValueKey('sign-out')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Sign out'));
+    await tester.tap(find.byKey(const ValueKey('sign-out')));
     await tester.pump();
 
     expect(authRepository.signOutCalls, 1);
@@ -365,8 +371,9 @@ void main() {
       ),
     );
     await tester.pump();
+    await openProfileEditor(tester);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
+    await tester.tap(find.byKey(const ValueKey('change-avatar')));
     await tester.pump();
     await tapSave(tester);
     await tester.pump();
@@ -399,6 +406,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await openProfileEditor(tester);
 
     await tapSave(tester);
     await tester.pump();
@@ -440,17 +448,23 @@ void main() {
       ),
     );
     await tester.pump();
+    await openProfileEditor(tester);
     settingsRepository.createdAvatarUrls.clear();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
+    await tester.tap(find.byKey(const ValueKey('change-avatar')));
     await tester.pump();
     await tester.pump();
 
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-    final image = avatar.backgroundImage;
+    // (The picture itself can't load in tests, so check what it asks for.)
+    final avatar = find.byKey(const ValueKey('profile-editor-avatar'));
+    expect(tester.widget<ProfileAvatar>(avatar).avatarUrl, 'avatars/ada.png');
     expect(settingsRepository.createdAvatarUrls, ['avatars/ada.png']);
-    expect(image, isA<NetworkImage>());
-    expect((image! as NetworkImage).url, 'https://signed.example.com/ada.png');
+    expect(
+      ProviderScope.containerOf(
+        tester.element(avatar),
+      ).read(avatarDisplayUrlProvider('avatars/ada.png')).valueOrNull,
+      'https://signed.example.com/ada.png',
+    );
   });
 
   testWidgets('renders public avatar URLs without signing', (tester) async {
@@ -469,11 +483,17 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-    final image = avatar.backgroundImage;
+    // (The picture itself can't load in tests, so check what it asks for.)
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const ValueKey('settings-account-avatar'))),
+    );
     expect(settingsRepository.createdAvatarUrls, isEmpty);
-    expect(image, isA<NetworkImage>());
-    expect((image! as NetworkImage).url, 'https://example.com/ada.png');
+    expect(
+      container
+          .read(avatarDisplayUrlProvider('https://example.com/ada.png'))
+          .valueOrNull,
+      'https://example.com/ada.png',
+    );
   });
 
   testWidgets('keeps text edits when avatar upload fails', (tester) async {
@@ -493,20 +513,13 @@ void main() {
       ),
     );
     await tester.pump();
+    await openProfileEditor(tester);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Display name'),
-      'Ada Byron',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Bio'),
-      'First programmer',
-    );
-    await tester.ensureVisible(
-      find.widgetWithText(OutlinedButton, 'Change avatar'),
-    );
+    await tester.enterText(displayNameField, 'Ada Byron');
+    await tester.enterText(bioField, 'First programmer');
+    await tester.ensureVisible(find.byKey(const ValueKey('change-avatar')));
     await tester.pump();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Change avatar'));
+    await tester.tap(find.byKey(const ValueKey('change-avatar')));
     await tester.pump();
     await tester.scrollUntilVisible(
       find.text('Could not upload avatar. Try again.'),
@@ -515,8 +528,14 @@ void main() {
     );
 
     expect(find.text('Could not upload avatar. Try again.'), findsOneWidget);
-    expect(find.text('Ada Byron'), findsOneWidget);
-    expect(find.text('First programmer'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(displayNameField).controller!.text,
+      'Ada Byron',
+    );
+    expect(
+      tester.widget<TextField>(bioField).controller!.text,
+      'First programmer',
+    );
     expect(settingsRepository.updateCalls, isEmpty);
   });
 
@@ -532,7 +551,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.byKey(const ValueKey('notifications-enabled')), findsOneWidget);
     expect(find.text('Message previews'), findsOneWidget);
     expect(find.text('Request permission'), findsOneWidget);
     expect(find.text('Send test notification'), findsOneWidget);
@@ -609,8 +628,11 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pump();
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Notifications'));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('notifications-enabled')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('notifications-enabled')));
     await tester.pump();
 
     expect((await store.load())?.enabled, isFalse);
@@ -628,18 +650,16 @@ void main() {
     );
     await tester.pump();
     await tester.scrollUntilVisible(
-      find.widgetWithText(OutlinedButton, 'Send test notification'),
+      find.byKey(const ValueKey('notifications-test')),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.ensureVisible(
-      find.widgetWithText(OutlinedButton, 'Send test notification'),
+      find.byKey(const ValueKey('notifications-test')),
     );
     await tester.pump();
 
-    await tester.tap(
-      find.widgetWithText(OutlinedButton, 'Send test notification'),
-    );
+    await tester.tap(find.byKey(const ValueKey('notifications-test')));
     await tester.pump();
 
     expect(
@@ -658,9 +678,25 @@ void main() {
   });
 }
 
+/// Opens the profile editor from the account card.
+Future<void> openProfileEditor(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('settings-account-card')));
+  await tester.pumpAndSettle();
+}
+
+final displayNameField = find.byKey(const ValueKey('display-name'));
+final bioField = find.byKey(const ValueKey('bio'));
+
+/// The on/off state of the settings row [row].
+bool switchValue(WidgetTester tester, Finder row) => tester
+    .widget<WeCordSwitch>(
+      find.descendant(of: row, matching: find.byType(WeCordSwitch)),
+    )
+    .value;
+
 /// Taps the profile's Save button, scrolled into view first.
 Future<void> tapSave(WidgetTester tester) async {
-  final save = find.widgetWithText(FilledButton, 'Save');
+  final save = find.byKey(const ValueKey('profile-save'));
   await tester.scrollUntilVisible(
     save,
     200,

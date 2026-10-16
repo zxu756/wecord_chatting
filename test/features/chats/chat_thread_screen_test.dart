@@ -1280,7 +1280,7 @@ void main() {
       expect(calls.map((call) => call['body']), ['Trip', '']);
       expect(calls.map((call) => call['group']).toSet(), hasLength(1));
       expect(calls.first['group'], isNotNull);
-      expect(calls.map((call) => call['notify']), [true, false]);
+      expect(calls.map((call) => call['notify']), [false, true]);
       final attachment = calls.first['attachment']! as Map<String, dynamic>;
       expect(attachment['width'], 40);
       expect(attachment['height'], 30);
@@ -1433,7 +1433,44 @@ void main() {
       expect(find.byType(MediaTile), findsNothing);
     });
 
-    testWidgets('a failed upload says so and sends again when tapped', (
+    testWidgets('slowmode on an album says how long and sends again on Retry', (
+      tester,
+    ) async {
+      final repository = OutboxChatsRepository();
+      repository.mediaSender.failures.add(const SlowmodeException(8));
+      final uploader = FakeChatMediaUploader();
+      final picker = FakeChatMediaPicker()..photos = [testPhoto('a.jpg')];
+      await tester.pumpWidget(
+        _app(repository, mediaPicker: picker, uploader: uploader),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+      await tester.tap(find.byKey(const ValueKey('media-tray-send')));
+      await _settleMedia(tester);
+
+      // The reason, in the words text sends use, not a bare "failed".
+      expect(
+        find.text('Slowmode is enabled. Try again in 8 seconds.'),
+        findsOneWidget,
+      );
+      expect(find.text('Failed — tap to retry'), findsNothing);
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Edit and resend'), findsNothing);
+      expect(find.text('Discard'), findsOneWidget);
+      expect(find.byTooltip('Retry upload'), findsOneWidget);
+      expect(repository.mediaSender.calls, isEmpty);
+
+      await tester.tap(find.text('Retry'));
+      await _settleMedia(tester);
+
+      // The file was already up; only the message is sent again.
+      expect(uploader.uploads, hasLength(1));
+      expect(repository.mediaSender.calls, hasLength(1));
+      expect(find.text('Retry'), findsNothing);
+    });
+
+    testWidgets('a file over the limit says so and offers to edit it', (
       tester,
     ) async {
       final repository = OutboxChatsRepository();
@@ -1449,16 +1486,97 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('media-tray-send')));
       await _settleMedia(tester);
 
-      expect(find.text('Failed — tap to retry'), findsOneWidget);
-      expect(find.byTooltip('Retry upload'), findsOneWidget);
-      expect(repository.mediaSender.calls, isEmpty);
+      expect(find.text('Files can be up to 50 MB.'), findsOneWidget);
+      expect(find.text('Edit and resend'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+      expect(find.byTooltip('Retry upload'), findsNothing);
+      expect(find.byTooltip('Edit and resend'), findsOneWidget);
+    });
 
-      await tester.tap(find.text('Failed — tap to retry'));
+    testWidgets(
+      'an album refused by AutoMod says why; Edit and resend puts it back in the tray',
+      (tester) async {
+        final repository = OutboxChatsRepository();
+        repository.mediaSender.failures.add(
+          const AutoModBlockedException('No links here'),
+        );
+        final uploader = FakeChatMediaUploader();
+        final picker = FakeChatMediaPicker()
+          ..photos = [testPhoto('a.jpg'), testPhoto('b.jpg')];
+        await tester.pumpWidget(
+          _app(repository, mediaPicker: picker, uploader: uploader),
+        );
+        await tester.pump();
+        await _openAttach(tester, 'Photos and videos');
+        await _settleMedia(tester);
+        await tester.enterText(
+          find.byKey(const ValueKey('media-tray-caption')),
+          'Trip',
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('media-tray-send')));
+        await _settleMedia(tester);
+
+        // The first item was refused, the second went through.
+        expect(
+          find.text('AutoMod blocked your message: No links here'),
+          findsOneWidget,
+        );
+        expect(repository.mediaSender.calls, hasLength(1));
+        expect(find.text('Edit and resend'), findsOneWidget);
+        expect(find.text('Discard'), findsOneWidget);
+        expect(find.text('Retry'), findsNothing);
+        expect(find.byKey(const ValueKey('media-tray')), findsNothing);
+
+        await tester.tap(find.text('Edit and resend'));
+        await _settleMedia(tester);
+
+        // The refused photo is back in the tray with its caption, and is
+        // gone from the chat.
+        expect(find.byKey(const ValueKey('media-tray')), findsOneWidget);
+        expect(find.text('1 photo'), findsOneWidget);
+        final caption = tester.widget<TextField>(
+          find.byKey(const ValueKey('media-tray-caption')),
+        );
+        expect(caption.controller!.text, 'Trip');
+        expect(find.text('Edit and resend'), findsNothing);
+        expect(
+          find.text('AutoMod blocked your message: No links here'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('Discard drops a refused album after asking', (tester) async {
+      final repository = OutboxChatsRepository();
+      repository.mediaSender.failures.add(
+        const CircleRulesNotAcceptedException(),
+      );
+      final picker = FakeChatMediaPicker()..photos = [testPhoto('a.jpg')];
+      await tester.pumpWidget(
+        _app(
+          repository,
+          mediaPicker: picker,
+          uploader: FakeChatMediaUploader(),
+        ),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+      await tester.tap(find.byKey(const ValueKey('media-tray-send')));
       await _settleMedia(tester);
 
-      expect(uploader.uploads, hasLength(2));
-      expect(repository.mediaSender.calls, hasLength(1));
-      expect(find.text('Failed — tap to retry'), findsNothing);
+      expect(
+        find.text('Accept the circle rules to start chatting.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pending-discard-confirm')));
+      await _settleMedia(tester);
+
+      expect(find.byType(MediaTile), findsNothing);
+      expect(find.text('Discard'), findsNothing);
     });
 
     testWidgets('pictures sent together show as one grid and open the viewer', (
@@ -3906,6 +4024,10 @@ ChatMessage _message({
 class OutboxChatsRepository extends FakeChatsRepository
     implements OutboxMessageSender, MediaMessageSender {
   final mediaSender = FakeMediaMessageSender();
+
+  @override
+  Future<void> notifyMessageSent(String messageId) =>
+      mediaSender.notifyMessageSent(messageId);
 
   @override
   Future<String?> sendQueuedTextMessage({

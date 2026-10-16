@@ -540,6 +540,11 @@ class SupabaseChatsRepository
   }
 
   @override
+  Future<void> notifyMessageSent(String messageId) async {
+    await _onMessageSent?.call(messageId);
+  }
+
+  @override
   Future<ConversationSummary?> getConversationSummary(
     String conversationId,
   ) async {

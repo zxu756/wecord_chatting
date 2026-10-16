@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/media_outbox.dart';
+import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/media_send/outbox_media.dart';
 import 'package:wecord/features/chats/media_send/pending_media_store.dart';
@@ -98,17 +100,18 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     final sender = repository as OutboxMessageSender;
     final store = ref.watch(pendingMediaStoreProvider);
     _store = store;
+    late final OutboxEngine engine;
     final media = repository is MediaMessageSender
         ? MediaSendPipeline(
             store: store,
             uploader: ref.watch(chatMediaUploaderProvider),
             sender: repository as MediaMessageSender,
             progress: ref.watch(uploadProgressTrackerProvider),
+            albumHasWaiting: (entry) => _albumHasWaiting(engine, entry),
           )
         : null;
     _media = media;
     var knownMedia = <String>{};
-    late final OutboxEngine engine;
     engine = OutboxEngine(
       send: (entry) {
         if (entry.media != null) {
@@ -173,6 +176,20 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     );
     unawaited(_restore(engine, cache, userId));
     return const [];
+  }
+
+  /// Whether other attachments of [entry]'s album are still due to be sent.
+  static bool _albumHasWaiting(OutboxEngine engine, OutboxEntry entry) {
+    final groupId = entry.media?.groupId;
+    if (groupId == null) {
+      return false;
+    }
+    return engine.entries.any(
+      (other) =>
+          other.clientId != entry.clientId &&
+          other.media?.groupId == groupId &&
+          other.state == OutboxState.sending,
+    );
   }
 
   Future<void> _restore(
@@ -363,6 +380,55 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
               other.state == OutboxState.failed)) {
         cancelMedia(other.clientId);
       }
+    }
+  }
+
+  /// "Edit and resend": puts the failed attachments of [entry]'s album (or
+  /// just [entry]) back in the tray of its conversation, with the caption,
+  /// and drops them from the outbox. What was already stored stays sent.
+  Future<void> editAndResendMedia(OutboxEntry entry) async {
+    final engine = _engine;
+    final store = _store;
+    if (engine == null || store == null || entry.media == null) {
+      return;
+    }
+    final groupId = entry.media?.groupId;
+    final failed = [
+      for (final other in engine.entries)
+        if (other.media != null &&
+            other.state == OutboxState.failed &&
+            (other.clientId == entry.clientId ||
+                (groupId != null && other.media?.groupId == groupId)))
+          other,
+    ]..sort((a, b) => a.media!.groupIndex.compareTo(b.media!.groupIndex));
+    final files = <XFile>[];
+    var caption = '';
+    for (final item in failed) {
+      final media = item.media!;
+      try {
+        final builder = BytesBuilder(copy: false);
+        await for (final chunk in store.openRead(item.clientId)) {
+          builder.add(chunk);
+        }
+        files.add(
+          XFile.fromData(
+            builder.takeBytes(),
+            name: media.fileName,
+            mimeType: media.mimeType,
+          ),
+        );
+        if (caption.isEmpty) {
+          caption = item.body;
+        }
+      } catch (_) {
+        // The file is gone; the rest still go back.
+      }
+    }
+    discardMedia(entry);
+    if (files.isNotEmpty) {
+      await ref
+          .read(mediaTrayProvider(entry.conversationId).notifier)
+          .restore(files, caption: caption);
     }
   }
 

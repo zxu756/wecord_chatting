@@ -59,7 +59,25 @@ void main() {
   late UploadProgressTracker progress;
   late MediaSendPipeline pipeline;
 
+  /// The queue the pipeline looks at to see whether more of an album waits.
+  OutboxEngine? activeQueue;
+
+  bool albumHasWaiting(OutboxEntry entry) {
+    final queue = activeQueue;
+    final groupId = entry.media?.groupId;
+    if (queue == null || groupId == null) {
+      return false;
+    }
+    return queue.entries.any(
+      (other) =>
+          other.clientId != entry.clientId &&
+          other.media?.groupId == groupId &&
+          other.state == OutboxState.sending,
+    );
+  }
+
   setUp(() {
+    activeQueue = null;
     store = MemoryPendingMediaStore();
     uploader = FakeChatMediaUploader();
     sender = FakeMediaMessageSender();
@@ -69,6 +87,7 @@ void main() {
       uploader: uploader,
       sender: sender,
       progress: progress,
+      albumHasWaiting: albumHasWaiting,
     );
   });
 
@@ -131,7 +150,7 @@ void main() {
     });
 
     test(
-      'videos and files go to chat-files, later album items stay quiet',
+      'videos and files go to chat-files, an album item with more to come stays quiet',
       () async {
         final video = await _queued(
           store,
@@ -142,11 +161,20 @@ void main() {
           groupId: 'group-1',
           groupIndex: 1,
         );
+        final queue = OutboxEngine(send: pipeline.send);
+        activeQueue = queue;
+        queue.enqueue(video);
+        queue.enqueue(await _queued(store, 'client-3', groupId: 'group-1'));
         await pipeline.send(video);
+        queue.dispose();
         expect(uploader.uploads.single.bucket, 'chat-files');
         final call = sender.calls.single;
         expect(call['type'], MessageType.file);
-        expect(call['notify'], isFalse, reason: 'only the first item notifies');
+        expect(
+          call['notify'],
+          isFalse,
+          reason: 'the last item of an album notifies',
+        );
         final attachment = call['attachment']! as Map<String, dynamic>;
         expect(attachment['kind'], 'video');
         expect(attachment['name'], 'Clip.MOV');
@@ -201,7 +229,7 @@ void main() {
       DateTime Function()? clock,
       void Function(List<OutboxEntry>)? onChanged,
     }) {
-      return OutboxEngine(
+      return activeQueue = OutboxEngine(
         send: pipeline.send,
         maxAttempts: maxAttempts,
         baseDelay: const Duration(seconds: 1),
@@ -306,9 +334,69 @@ void main() {
         'conversation-1/b-b.jpg',
         'conversation-1/c-c.jpg',
       ]);
-      expect(sender.calls.map((c) => c['notify']), [true, false, false]);
+      // One push for the album, once all of it is stored.
+      expect(sender.calls.map((c) => c['notify']), [false, false, true]);
+      expect(sender.notified, isEmpty);
       expect(sender.calls.map((c) => c['group']).toSet(), {'group-1'});
       expect(queue.entries, isEmpty);
+      queue.dispose();
+    });
+
+    test('a refused last item still sends the push for the rest', () async {
+      final queue = engine();
+      for (final (index, id) in ['a', 'b', 'c'].indexed) {
+        queue.enqueue(
+          await _queued(
+            store,
+            id,
+            fileName: '$id.jpg',
+            groupId: 'group-1',
+            groupIndex: index,
+          ),
+        );
+      }
+      // Two uploads go through, the third is refused.
+      var uploads = 0;
+      uploader.beforeUpload = () {
+        uploads += 1;
+        if (uploads == 3) {
+          throw const UploadException(403, 'not allowed');
+        }
+      };
+
+      await queue.drain();
+
+      expect(sender.calls.map((c) => c['notify']), [false, false]);
+      expect(sender.notified, ['message-2']);
+      expect(queue.entries.single.state, OutboxState.failed);
+      queue.dispose();
+    });
+
+    test('a refused middle item leaves the push to the last one', () async {
+      final queue = engine();
+      for (final (index, id) in ['a', 'b', 'c'].indexed) {
+        queue.enqueue(
+          await _queued(
+            store,
+            id,
+            fileName: '$id.jpg',
+            groupId: 'group-1',
+            groupIndex: index,
+          ),
+        );
+      }
+      var uploads = 0;
+      uploader.beforeUpload = () {
+        uploads += 1;
+        if (uploads == 2) {
+          throw const UploadException(403, 'not allowed');
+        }
+      };
+
+      await queue.drain();
+
+      expect(sender.calls.map((c) => c['notify']), [false, true]);
+      expect(sender.notified, isEmpty);
       queue.dispose();
     });
 
@@ -563,6 +651,10 @@ class _Repository
   _Repository(this._media);
 
   final MediaMessageSender _media;
+
+  @override
+  Future<void> notifyMessageSent(String messageId) =>
+      _media.notifyMessageSent(messageId);
 
   @override
   Future<String?> sendQueuedMediaMessage({

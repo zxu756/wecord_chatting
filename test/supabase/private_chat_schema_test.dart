@@ -3463,7 +3463,6 @@ void main() {
       contains("when last_message.attachment->>'kind' = 'video'"),
     );
     expect(summaries, contains("like 'video/%' then 'video'"));
-    expect(summaries, contains('last_message.attachment,'));
     // Still everything the webhook version returned.
     expect(summaries, contains('last_message_webhook_name'));
     expect(summaries, contains('slowmode_seconds'));

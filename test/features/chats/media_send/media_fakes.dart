@@ -49,6 +49,9 @@ class FakeChatMediaUploader implements ChatMediaUploader {
   /// Thrown by the next uploads, in order, before any byte is read.
   final failures = <Object>[];
 
+  /// Called at the start of every upload; may throw.
+  void Function()? beforeUpload;
+
   /// While set, uploads wait for it (and abort when cancelled).
   Completer<void>? hold;
 
@@ -63,6 +66,7 @@ class FakeChatMediaUploader implements ChatMediaUploader {
     UploadCancelToken? cancel,
   }) async {
     uploads.add((bucket: bucket, path: path, length: length));
+    beforeUpload?.call();
     if (failures.isNotEmpty) {
       throw failures.removeAt(0);
     }
@@ -86,6 +90,14 @@ class FakeChatMediaUploader implements ChatMediaUploader {
 class FakeMediaMessageSender implements MediaMessageSender {
   final calls = <Map<String, Object?>>[];
   final failures = <Object>[];
+
+  /// The messages a push was asked for after the fact.
+  final notified = <String>[];
+
+  @override
+  Future<void> notifyMessageSent(String messageId) async {
+    notified.add(messageId);
+  }
 
   @override
   Future<String?> sendQueuedMediaMessage({

@@ -92,6 +92,24 @@ void main() {
     await settle(tester);
   }
 
+  /// The open sheet is a WeCord sheet (grabber, 28 corners on the panel)
+  /// without Material list tiles, chips or ripples.
+  void expectWeCordSheet(WidgetTester tester) {
+    final sheet = find.byType(WeCordSheet);
+    expect(sheet, findsOneWidget);
+    for (final type in [ListTile, ChoiceChip, InkWell]) {
+      expect(
+        find.descendant(of: sheet, matching: find.byType(type)),
+        findsNothing,
+        reason: '$type in a WeCord sheet',
+      );
+    }
+    final bottomSheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+    expect(bottomSheet.showDragHandle, isNot(isTrue));
+    // showWeCordSheet draws the panel itself over a clear Material sheet.
+    expect(bottomSheet.backgroundColor, Colors.transparent);
+  }
+
   Future<void> longPressMessage(WidgetTester tester, String text) async {
     final message = find.textContaining(text, findRichText: true);
     await reveal(tester, message);
@@ -235,6 +253,7 @@ void main() {
       await tester.tap(find.byTooltip('Group details'));
       await settle(tester);
       expect(find.text('Leave group'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('long-press menu, emoji picker and reactors', (
@@ -252,6 +271,7 @@ void main() {
       await tester.tap(find.byTooltip('More reactions'));
       await settle(tester);
       expect(find.text('Add reaction'), findsOneWidget);
+      expectWeCordSheet(tester);
       await tester.tap(find.text('😀'));
       await settle(tester);
 
@@ -260,6 +280,7 @@ void main() {
       await tester.longPress(chip);
       await settle(tester);
       expect(find.text('Reacted with 😂'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('reaction chips are touch sized', (
@@ -287,6 +308,7 @@ void main() {
       await settle(tester);
       expect(find.text('Pinned messages'), findsWidgets);
       expect(find.text('Pinned by ${me.displayName}'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('reply, edit and voice composer states', (
@@ -321,12 +343,18 @@ void main() {
       viewport,
     ) async {
       await openChat(tester);
-      await tester.tap(find.widgetWithText(TextField, 'Message'));
+      await tester.tap(find.byKey(const ValueKey('chat-composer-field')));
       await showKeyboard(tester, viewport);
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('chat-composer-field')),
+      );
       // Phones show the microphone until there is something to send.
       expectFullyVisible(tester, find.byTooltip('Record voice message'));
-      await tester.enterText(find.widgetWithText(TextField, 'Message'), 'Hi');
+      await tester.enterText(
+        find.byKey(const ValueKey('chat-composer-field')),
+        'Hi',
+      );
       await settle(tester);
       expectFullyVisible(tester, find.byTooltip('Send'));
     });
@@ -347,6 +375,7 @@ void main() {
       await tester.tap(find.text('Forward'));
       await settle(tester);
       expect(find.text('Forward to'), findsWidgets);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('create thread dialog with keyboard', (
@@ -383,7 +412,7 @@ void main() {
         title: groupDetail.title,
         type: ConversationType.group,
       );
-      final composer = find.widgetWithText(TextField, 'Message');
+      final composer = find.byKey(const ValueKey('chat-composer-field'));
       await tester.tap(composer);
       await tester.enterText(composer, 'Hey @');
       await showKeyboard(tester, viewport);
@@ -461,6 +490,7 @@ void main() {
       await tester.tap(viewVotes);
       await settle(tester);
       expect(find.text('Votes'), findsOneWidget);
+      expectWeCordSheet(tester);
       expectFullyVisible(tester, find.text(grace.displayName));
       await tester.tap(find.byKey(const ValueKey('poll-voters-option-o2')));
       await settle(tester);
@@ -521,7 +551,7 @@ void main() {
       viewport,
     ) async {
       await openCircleChannel(tester);
-      final composer = find.widgetWithText(TextField, 'Message');
+      final composer = find.byKey(const ValueKey('chat-composer-field'));
       await tester.tap(composer);
       await tester.enterText(composer, '/');
       await showKeyboard(tester, viewport);
@@ -775,6 +805,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('phone-new-group')));
       await settle(tester);
       expect(find.byType(GroupCreationSheet), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('the old Messages link opens home', (
@@ -1615,7 +1646,10 @@ void main() {
       );
       expect(find.byKey(const ValueKey('forum-opening-post')), findsOneWidget);
       expectFullyVisible(tester, find.byTooltip('Back'));
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('chat-composer-field')),
+      );
 
       final opening = find.byKey(const ValueKey('forum-opening-post'));
       await tester.drag(
@@ -1774,7 +1808,7 @@ void main() {
         tester,
         find.text("You don't have permission to send messages in this channel"),
       );
-      expect(find.widgetWithText(TextField, 'Message'), findsNothing);
+      expect(find.byKey(const ValueKey('chat-composer-field')), findsNothing);
     });
 
     phoneTestWidgets('slowmode countdown above the keyboard', (
@@ -1808,14 +1842,17 @@ void main() {
           circleId: 'circle-1',
         ),
       );
-      await tester.tap(find.widgetWithText(TextField, 'Message'));
+      await tester.tap(find.byKey(const ValueKey('chat-composer-field')));
       await showKeyboard(tester, viewport);
       expectFullyVisible(tester, find.text('Slowmode is enabled'));
       expectFullyVisible(
         tester,
         find.byKey(const ValueKey('composer-slowmode-countdown')),
       );
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('chat-composer-field')),
+      );
     });
 
     phoneTestWidgets('private channels show a lock', (tester, viewport) async {
@@ -1849,9 +1886,12 @@ void main() {
       viewport,
     ) async {
       await openCircleChannel(tester);
-      await tester.tap(find.widgetWithText(TextField, 'Message'));
+      await tester.tap(find.byKey(const ValueKey('chat-composer-field')));
       await showKeyboard(tester, viewport);
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Message'));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('chat-composer-field')),
+      );
     });
 
     phoneTestWidgets('circle thread conversation', (tester, viewport) async {

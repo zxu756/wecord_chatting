@@ -1,11 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/sheet_rows.dart';
+import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
+/// Picks a chat to forward [message] to, inside a WeCord sheet titled
+/// "Forward to": a search field and the user's direct and group chats.
 class MessageForwardSheet extends ConsumerStatefulWidget {
   const MessageForwardSheet({required this.message, super.key});
 
@@ -23,66 +30,57 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final conversations = ref.watch(conversationsProvider);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
 
     return SafeArea(
+      top: false,
       child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
+        padding: EdgeInsets.only(bottom: keyboard),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 520),
+          constraints: BoxConstraints(
+            maxHeight: math.min(
+              560,
+              (MediaQuery.sizeOf(context).height - keyboard) * 0.8,
+            ),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  tr('Forward to'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: TextField(
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: tr('Search chats'),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Semantics(
+                  label: tr('Search chats'),
+                  textField: true,
+                  child: WeCordTextField(
+                    fieldKey: const ValueKey('forward-search'),
+                    autofocus: true,
+                    hint: tr('Search chats'),
+                    prefixIcon: Icons.search_rounded,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (value) {
+                      setState(() {
+                        _query = value;
+                      });
+                    },
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      _query = value;
-                    });
-                  },
                 ),
               ),
               if (_errorText != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                   child: Text(
                     _errorText!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(fontSize: 13.5, color: c.dangerText),
                   ),
                 ),
               Flexible(
                 child: conversations.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        error.toString(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ),
+                  loading: () => const SheetSpinner(),
+                  error: (error, stackTrace) =>
+                      SheetNote(text: error.toString(), error: true),
                   data: _buildConversationList,
                 ),
               ),
@@ -110,39 +108,40 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
         .toList(growable: false);
 
     if (visibleConversations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(tr('No matching conversations')),
-        ),
-      );
+      return SheetNote(text: tr('No matching conversations'));
     }
 
-    return ListView.separated(
+    return ListView.builder(
       shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
       itemCount: visibleConversations.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final conversation = visibleConversations[index];
         final title = conversation.title?.trim().isNotEmpty == true
             ? conversation.title!.trim()
             : tr('Conversation');
-        return ListTile(
+        final group = conversation.type != ConversationType.direct;
+        return SheetListRow(
+          key: ValueKey('forward-target-${conversation.id}'),
           enabled: !_isForwarding,
-          leading: Icon(
-            conversation.type == ConversationType.group
-                ? Icons.group_outlined
-                : Icons.person_outline,
+          leading: ResolvedAvatar(
+            name: title,
+            avatarUrl: conversation.avatarUrl,
+            size: 40,
+            squircle: group,
           ),
-          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            conversation.type == ConversationType.group
-                ? tr('Group')
-                : tr('Direct'),
+          title: title,
+          subtitle: switch (conversation.type) {
+            ConversationType.group => tr('Group'),
+            ConversationType.channel => tr('Channel'),
+            _ => tr('Direct'),
+          },
+          trailing: Icon(
+            Icons.send_rounded,
+            size: 18,
+            color: context.tokens.colors.faint,
           ),
-          onTap: _isForwarding
-              ? null
-              : () => _forwardToConversation(conversation.id),
+          onTap: () => _forwardToConversation(conversation.id),
         );
       },
     );

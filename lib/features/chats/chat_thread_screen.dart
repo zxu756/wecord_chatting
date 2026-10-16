@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/swipe_to_reply.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
@@ -625,14 +626,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showGroupDetails(String title) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
+    showWeCordSheet<void>(
+      context,
+      detents: GroupDetailSheet.detents,
+      initialDetent: GroupDetailSheet.initialDetent,
+      builder: (context, scrollController) {
         return GroupDetailSheet(
           conversationId: widget.conversationId,
           title: title,
+          scrollController: scrollController,
         );
       },
     );
@@ -1176,6 +1178,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 member.profile.id: member,
             };
             final sidePadding = cards ? 0.0 : (desktop ? 40.0 : 14.0);
+            // Touch screens swipe a message sideways to reply.
+            final touch = usesTouchInput(context);
             _galleryFiles = () => [
               for (final message in fullOldestToNewest)
                 if (PreviewFile.fromMessage(
@@ -1281,8 +1285,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       : null,
                 );
               }
+              final swipeable =
+                  touch &&
+                      canSend &&
+                      pendingEntry == null &&
+                      message.type != MessageType.system &&
+                      message.id != openingPostId &&
+                      message.recalledAt == null
+                  ? SwipeToReply(
+                      key: ValueKey('swipe-reply-${message.id}'),
+                      // Bubbles swipe away from their side; channel cards
+                      // all sit on the left and swipe right.
+                      towardsEnd: cards || !message.isSentBy(currentUserId),
+                      onReply: () => _startReply(message),
+                      child: bubble,
+                    )
+                  : bubble;
               final framed = pendingEntry == null
-                  ? bubble
+                  ? swipeable
                   : PendingMessageFrame(
                       entry: pendingEntry,
                       alignEnd: !cards,
@@ -1356,7 +1376,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 latestOutgoingReadState.latestOutgoingMessageId == message.id &&
                     latestOutgoingReadState.isRead,
                 (sender?.name, sender?.avatarUrl, sender?.roleColor),
-                (desktop, cards, showSenders, canSend, canStartThreads),
+                (desktop, cards, showSenders, canSend, canStartThreads, touch),
                 (
                   canPinMessages,
                   canModeratePolls,
@@ -1488,7 +1508,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 builder: (context, slowmodeRemaining) => _Composer(
                   desktop: desktop,
                   bottomGap: composerBottomGap,
-                  hint: tr('Message'),
+                  hint: composerHint(conversationType, title),
                   slowmodeSeconds: slowmodeSeconds,
                   slowmodeRemainingSeconds: slowmodeRemaining,
                   controller: _composerController,
@@ -2567,11 +2587,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showPollVoters(ChatMessage message) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => PollVotersSheet(message: message),
+    showWeCordSheet<void>(
+      context,
+      title: tr('Votes'),
+      builder: (context, _) => PollVotersSheet(message: message),
     );
   }
 
@@ -3334,11 +3353,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   Future<void> _showPinnedMessages(bool canManagePins) async {
     ref.invalidate(pinnedMessagesProvider(widget.conversationId));
-    final messageId = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
+    final messageId = await showWeCordSheet<String>(
+      context,
+      title: tr('Pinned messages'),
+      builder: (context, _) {
         return PinnedMessagesSheet(
           conversationId: widget.conversationId,
           canManagePins: canManagePins,
@@ -3440,13 +3458,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showReactors(ChatMessage message, MessageReaction reaction) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
+    showWeCordSheet<void>(
+      context,
+      title: tr('Reacted with {emoji}', {
+        'emoji': reactionLabel(reaction, ref.read(usableEmojisByIdProvider)),
+      }),
+      builder: (context, _) {
         return MessageReactorsSheet(
           messageId: message.id,
           emoji: reaction.emoji,
-          label: reactionLabel(reaction, ref.read(usableEmojisByIdProvider)),
         );
       },
     );
@@ -3486,11 +3506,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (message.recalledAt != null) {
       return;
     }
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => MessageForwardSheet(message: message),
+    showWeCordSheet<void>(
+      context,
+      title: tr('Forward to'),
+      builder: (context, _) => MessageForwardSheet(message: message),
     );
   }
 
@@ -3530,6 +3549,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 }
 
+/// The composer's placeholder: "Message #general" in a channel, "Message
+/// @Ada" in a direct chat and "Message Weekend crew" in a group or thread;
+/// plain "Message" while the name is unknown.
+String composerHint(ConversationType? type, String title) {
+  var name = title.trim();
+  if (type == ConversationType.channel) {
+    // Channel routes pass "# general".
+    name = name.replaceFirst(RegExp(r'^#\s*'), '');
+  }
+  if (name.isEmpty || name == tr('Conversation')) {
+    return tr('Message');
+  }
+  return switch (type) {
+    ConversationType.channel => tr('Message #{name}', {'name': name}),
+    ConversationType.direct => tr('Message @{name}', {'name': name}),
+    _ => tr('Message {name}', {'name': name}),
+  };
+}
+
 /// "in #channel" (or "in Group") under a thread's title.
 String _threadSubtitle(ConversationSummary? summary) {
   final parentTitle = summary?.parentTitle?.trim();
@@ -3553,7 +3591,8 @@ String _suggestedTitleFor(ChatMessage message) {
     ),
     MessageType.image => tr('Image'),
     MessageType.voice => tr('Voice message'),
-    MessageType.file => tr('File'),
+    MessageType.file =>
+      message.fileAttachment?.isVideo == true ? tr('Video') : tr('File'),
     MessageType.system => tr('Thread'),
     MessageType.poll => suggestedThreadTitle(message.body),
     MessageType.sticker => tr('Sticker'),
@@ -5617,6 +5656,7 @@ class _Composer extends StatelessWidget {
               ),
               decoration: InputDecoration(
                 hintText: hint,
+                hintMaxLines: 1,
                 hintStyle: TextStyle(
                   fontSize: desktop ? 15 : 16,
                   color: c.subtle,

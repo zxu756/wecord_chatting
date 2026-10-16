@@ -12,6 +12,7 @@ import 'package:wecord/features/file_preview/file_preview_service.dart';
 import 'package:wecord/features/file_preview/native_file_bridge.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/thumbnails.dart';
+import 'package:wecord/features/file_preview/web_share.dart';
 import 'package:wecord/features/file_preview/viewers/document_preview.dart';
 import 'package:wecord/features/file_preview/viewers/pdf_preview.dart';
 
@@ -131,17 +132,21 @@ class FakeThumbnailService implements ThumbnailService {
 }
 
 class FakeFileActions implements FileActions {
-  FakeFileActions({this.web = false});
+  FakeFileActions({this.web = false, this.webShare = false});
 
-  /// Acts like the browser: Download only.
+  /// Acts like the browser: Download only, plus Share with [webShare].
   final bool web;
+
+  /// The browser has the Web Share API.
+  final bool webShare;
   final saved = <String>[];
+  final shared = <String>[];
 
   @override
   bool get canOpenIn => !web;
 
   @override
-  bool get canShare => !web;
+  bool get canShare => !web || webShare;
 
   @override
   Future<bool> openIn(
@@ -164,7 +169,29 @@ class FakeFileActions implements FileActions {
     PreviewFile file, {
     Rect? origin,
     DownloadProgress? onProgress,
-  }) async {}
+  }) async {
+    shared.add(file.path);
+  }
+}
+
+/// Records what the page would hand `navigator.share`.
+class FakeWebShare implements WebShare {
+  FakeWebShare({this.isAvailable = true});
+
+  @override
+  final bool isAvailable;
+  final shares =
+      <({String name, String mimeType, Uri url, Uint8List? bytes})>[];
+
+  @override
+  Future<void> share({
+    required String name,
+    required String mimeType,
+    required Uri url,
+    Uint8List? bytes,
+  }) async {
+    shares.add((name: name, mimeType: mimeType, url: url, bytes: bytes));
+  }
 }
 
 /// Stands in for PDFium: shows where the PDF would come from.

@@ -13,7 +13,7 @@ final _callStarted = RegExp(r'^(.+) started a call\.$');
 final _callEnded = RegExp(r' started a call that lasted .+\.$');
 
 /// One line about a conversation's latest message: its [text], and an
-/// [icon] for photos, GIFs, voice messages, files and calls.
+/// [icon] for photos, GIFs, voice messages, videos, files and calls.
 typedef ConversationPreview = ({IconData? icon, String text});
 
 /// One line about [conversation]'s latest message for conversation lists:
@@ -42,6 +42,10 @@ ConversationPreview? conversationPreview(
     MessageType.text => (null, plainTextFromMarkdown(body)),
     MessageType.image => (Icons.image_outlined, tr('Image')),
     MessageType.voice => (Icons.mic_none_rounded, tr('Voice message')),
+    MessageType.file when conversation.lastMessageIsVideo => (
+      Icons.videocam_outlined,
+      tr('Video'),
+    ),
     MessageType.file => (Icons.attach_file_rounded, tr('File')),
     MessageType.poll => (null, pollPreviewText(body)),
     MessageType.sticker => (null, stickerPreviewText(body)),

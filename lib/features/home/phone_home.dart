@@ -71,8 +71,30 @@ class PhoneHomeFrame extends ConsumerStatefulWidget {
   ConsumerState<PhoneHomeFrame> createState() => _PhoneHomeFrameState();
 }
 
-class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame> {
+class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame>
+    with WidgetsBindingObserver {
   static const _gap = 10.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// The keyboard coming and going; a scaffold above may already have
+  /// taken it out of this frame's MediaQuery.
+  @override
+  void didChangeMetrics() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   /// Height of the floating panels, measured after layout.
   var _floatingHeight = FloatingUserPanel.phoneHeight;
@@ -87,85 +109,100 @@ class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame> {
     final panelTop = math.max(padding.top, 12.0);
     // On phones with a home indicator the user panel sits just above it.
     final floatingBottom = math.max(padding.bottom, 12.0);
-    final bottomInset = floatingBottom + _floatingHeight + _gap;
+    // While the keyboard is up the floating panels hide, so they don't
+    // sit over the list's rows. The frame stops above the keyboard itself
+    // unless a scaffold above already made room for it.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final keyboardUp = keyboard > 0 || View.of(context).viewInsets.bottom > 0;
+    final bottomInset = keyboardUp
+        ? _gap
+        : floatingBottom + _floatingHeight + _gap;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: WeCordTheme.overlayStyleFor(tokens.brightness),
       child: Material(
         key: const ValueKey('phone-home'),
         color: c.rail,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(left: padding.left),
-                    child: CircleRail(
-                      phone: true,
-                      homeSelected: widget.homeSelected,
-                      selectedCircleId: widget.selectedCircleId,
-                      padding: EdgeInsets.only(
-                        top: panelTop + 7,
-                        bottom: bottomInset + _gap,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: keyboard),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.only(left: padding.left),
+                      child: CircleRail(
+                        phone: true,
+                        homeSelected: widget.homeSelected,
+                        selectedCircleId: widget.selectedCircleId,
+                        padding: EdgeInsets.only(
+                          top: panelTop + 7,
+                          bottom: bottomInset + _gap,
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: panelTop),
-                      child: PanelSurface(
-                        key: const ValueKey('phone-home-panel'),
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: MediaQuery.removePadding(
-                            context: context,
-                            removeTop: true,
-                            removeBottom: true,
-                            removeLeft: true,
-                            child: Builder(
-                              builder: (context) =>
-                                  widget.panelBuilder(context, bottomInset),
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: panelTop),
+                        child: PanelSurface(
+                          key: const ValueKey('phone-home-panel'),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: MediaQuery.removePadding(
+                              context: context,
+                              removeTop: true,
+                              removeBottom: true,
+                              removeLeft: true,
+                              child: MediaQuery.removeViewInsets(
+                                context: context,
+                                removeBottom: true,
+                                child: Builder(
+                                  builder: (context) =>
+                                      widget.panelBuilder(context, bottomInset),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: _gap + padding.left,
-              right: _gap + padding.right,
-              bottom: floatingBottom,
-              child: _SizeReporter(
-                onSize: (size) {
-                  if (mounted && size.height != _floatingHeight) {
-                    setState(() => _floatingHeight = size.height);
-                  }
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (ref.watch(voiceSessionProvider) != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(WeCordRadii.xl),
-                        child: VoiceConnectedPanel(
-                          onOpen: (session) =>
-                              context.push(voiceSessionPath(session)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    const PhoneUserPanel(),
                   ],
                 ),
               ),
-            ),
-          ],
+              if (!keyboardUp)
+                Positioned(
+                  left: _gap + padding.left,
+                  right: _gap + padding.right,
+                  bottom: floatingBottom,
+                  child: _SizeReporter(
+                    onSize: (size) {
+                      if (mounted && size.height != _floatingHeight) {
+                        setState(() => _floatingHeight = size.height);
+                      }
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (ref.watch(voiceSessionProvider) != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(WeCordRadii.xl),
+                            child: VoiceConnectedPanel(
+                              onOpen: (session) =>
+                                  context.push(voiceSessionPath(session)),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        const PhoneUserPanel(),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -426,6 +426,7 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
     final canDragDismiss = !widget.desktop && !_zoomed && !_fullscreen;
     if (canDragDismiss &&
         (media ||
+            _current.kind == PreviewKind.svg ||
             _current.kind == PreviewKind.office ||
             _current.kind == PreviewKind.other ||
             _current.kind == PreviewKind.audio)) {
@@ -587,7 +588,7 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
     final onDownload = _save;
     final key = ValueKey('file-preview-page-${file.key}');
     switch (file.kind) {
-      case PreviewKind.image:
+      case PreviewKind.image || PreviewKind.svg:
         return ImagePreview(
           key: key,
           file: file,

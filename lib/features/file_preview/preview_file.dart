@@ -7,6 +7,9 @@ import 'package:wecord/shared/ui/ui.dart';
 /// How a file is shown in the viewer.
 enum PreviewKind {
   image,
+
+  /// A vector image (SVG), drawn as a zoomable image.
+  svg,
   video,
   audio,
   pdf,
@@ -47,6 +50,9 @@ enum PreviewKind {
 
 /// Text-like files show at most this much; the rest is a download away.
 const maxTextPreviewBytes = 5 * 1024 * 1024;
+
+/// SVGs bigger than this are offered as a download instead of drawn.
+const maxSvgPreviewBytes = 10 * 1024 * 1024;
 
 const _officeExtensions = {
   'doc', 'docx', 'docm', 'dot', 'dotx', 'odt', 'ott', 'rtf', //
@@ -181,6 +187,9 @@ PreviewKind previewKindFor({required String name, required String mimeType}) {
   }
   if (_officeExtensions.contains(ext)) {
     return PreviewKind.office;
+  }
+  if (ext == 'svg' || mime == 'image/svg+xml') {
+    return PreviewKind.svg;
   }
   if (_imageExtensions.contains(ext) ||
       (mime.startsWith('image/') && mime != 'image/svg+xml')) {
@@ -416,7 +425,7 @@ class PreviewFile {
 IconData previewIconFor(PreviewFile file) {
   final ext = file.extension;
   return switch (file.kind) {
-    PreviewKind.image => Icons.image_outlined,
+    PreviewKind.image || PreviewKind.svg => Icons.image_outlined,
     PreviewKind.video => Icons.movie_outlined,
     PreviewKind.audio => Icons.music_note_rounded,
     PreviewKind.pdf => Icons.picture_as_pdf_outlined,

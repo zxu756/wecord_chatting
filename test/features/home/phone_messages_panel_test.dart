@@ -237,7 +237,9 @@ void main() {
     expect(find.text('Ship it today [spoiler]'), findsOneWidget);
   });
 
-  testWidgets('labels voice messages, images, files and calls', (tester) async {
+  testWidgets('labels voice messages, images, videos, files and calls', (
+    tester,
+  ) async {
     ConversationSummary chat(String id, MessageType type, String body) {
       return ConversationSummary(
         id: id,
@@ -255,6 +257,16 @@ void main() {
         chat('voice', MessageType.voice, ''),
         chat('image', MessageType.image, '[Image]'),
         chat('file', MessageType.file, ''),
+        ConversationSummary.fromJson({
+          'id': 'video',
+          'type': 'direct',
+          'title': 'Chat video',
+          'last_message_body': '',
+          'last_message_type': 'file',
+          'last_message_attachment_kind': 'video',
+          'last_message_at': '2026-05-18T04:30:00Z',
+          'unread_count': 0,
+        }),
         chat(
           'call',
           MessageType.system,
@@ -269,6 +281,15 @@ void main() {
     expect(find.text('Voice message'), findsOneWidget);
     expect(find.text('Image'), findsOneWidget);
     expect(find.text('File'), findsOneWidget);
+    // Videos say so, with a video icon.
+    expect(find.text('Video'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-dm-video')),
+        matching: find.byIcon(Icons.videocam_outlined),
+      ),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.call_outlined), findsNWidgets(2));
     expect(find.text('Call ended'), findsOneWidget);
     expect(find.text('Ada started a call'), findsOneWidget);

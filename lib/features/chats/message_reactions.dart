@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
+import 'package:wecord/features/chats/sheet_rows.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
-import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -67,34 +70,29 @@ Future<String?> showEmojiReactionPicker(
   bool includeCustom = false,
   String? circleId,
 }) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (sheetContext) => EmojiReactionPicker(
-      title: title,
-      includeCustom: includeCustom,
-      circleId: circleId,
-    ),
+  return showWeCordSheet<String>(
+    context,
+    title: title ?? tr('Add reaction'),
+    builder: (sheetContext, _) =>
+        EmojiReactionPicker(includeCustom: includeCustom, circleId: circleId),
   );
 }
 
+/// The emoji grid of the reaction picker sheet: the user's custom emoji
+/// (with [includeCustom]) and then the unicode groups. Tapping one pops
+/// the sheet with it.
 class EmojiReactionPicker extends ConsumerWidget {
   const EmojiReactionPicker({
-    this.title,
     this.includeCustom = false,
     this.circleId,
     super.key,
   });
 
-  /// Defaults to "Add reaction".
-  final String? title;
   final bool includeCustom;
   final String? circleId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final custom = includeCustom
         ? [
             for (final emoji
@@ -120,71 +118,64 @@ class EmojiReactionPicker extends ConsumerWidget {
       ),
     ];
     return SafeArea(
+      top: false,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 480),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        constraints: BoxConstraints(
+          maxHeight: math.min(480, MediaQuery.sizeOf(context).height * 0.62),
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                title ?? tr('Add reaction'),
-                style: theme.textTheme.titleLarge,
-              ),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                children: [
-                  for (final group in customGroups)
-                    if (group.emojis.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-                        child: Text(
-                          group.label,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
+            for (final group in customGroups)
+              if (group.emojis.isNotEmpty) ...[
+                _PickerSectionHeader(group.label),
+                Wrap(
+                  children: [
+                    for (final emoji in group.emojis)
+                      _CustomEmojiButton(
+                        emoji: emoji,
+                        onTap: () =>
+                            Navigator.of(context).pop(emoji.reactionValue),
                       ),
-                      Wrap(
-                        children: [
-                          for (final emoji in group.emojis)
-                            _CustomEmojiButton(
-                              emoji: emoji,
-                              onTap: () => Navigator.of(
-                                context,
-                              ).pop(emoji.reactionValue),
-                            ),
-                        ],
-                      ),
-                    ],
-                  for (final (label, emojis) in _pickerEmojiGroups) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-                      child: Text(
-                        label,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    Wrap(
-                      children: [
-                        for (final emoji in emojis.split(' '))
-                          _EmojiButton(
-                            emoji: emoji,
-                            onTap: () => Navigator.of(context).pop(emoji),
-                          ),
-                      ],
-                    ),
                   ],
+                ),
+              ],
+            for (final (label, emojis) in _pickerEmojiGroups) ...[
+              _PickerSectionHeader(label),
+              Wrap(
+                children: [
+                  for (final emoji in emojis.split(' '))
+                    _EmojiButton(
+                      emoji: emoji,
+                      onTap: () => Navigator.of(context).pop(emoji),
+                    ),
                 ],
               ),
-            ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A group's name above its emoji: 12/700 in the subtle color.
+class _PickerSectionHeader extends StatelessWidget {
+  const _PickerSectionHeader(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: context.tokens.colors.subtle,
         ),
       ),
     );
@@ -337,30 +328,33 @@ class _CustomEmojiButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: ':${emoji.name}:',
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          key: ValueKey('custom-emoji-option-${emoji.id}'),
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox.square(
-            dimension: 44,
-            child: Center(
-              child: CustomEmojiImage(
-                storagePath: emoji.storagePath,
-                size: 28,
-                semanticLabel: ':${emoji.name}:',
-                fallback: Text(
-                  ':${emoji.name}:',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10),
-                ),
-              ),
-            ),
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      key: ValueKey('custom-emoji-option-${emoji.id}'),
+      onPressed: onTap,
+      tooltip: ':${emoji.name}:',
+      pressedScale: 0.85,
+      shape: const CircleBorder(),
+      builder: (context, states) => AnimatedContainer(
+        duration: WeCordMotion.quick,
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: c.ink.withValues(
+            alpha: states.contains(WidgetState.hovered) ? 0.06 : 0,
+          ),
+        ),
+        child: CustomEmojiImage(
+          storagePath: emoji.storagePath,
+          size: 28,
+          semanticLabel: ':${emoji.name}:',
+          fallback: Text(
+            ':${emoji.name}:',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10),
           ),
         ),
       ),
@@ -508,16 +502,11 @@ class MessageReactorsSheet extends ConsumerStatefulWidget {
   const MessageReactorsSheet({
     required this.messageId,
     required this.emoji,
-    this.label,
     super.key,
   });
 
   final String messageId;
   final String emoji;
-
-  /// How the reaction reads (`:name:` for custom emoji); defaults to
-  /// [emoji].
-  final String? label;
 
   @override
   ConsumerState<MessageReactorsSheet> createState() =>
@@ -532,91 +521,47 @@ class _MessageReactorsSheetState extends ConsumerState<MessageReactorsSheet> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
+      top: false,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                tr('Reacted with {emoji}', {
-                  'emoji': widget.label ?? widget.emoji,
-                }),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            Flexible(
-              child: FutureBuilder<List<Profile>>(
-                future: _reactors,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        tr('Could not load reactions.'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    );
-                  }
-                  final reactors = snapshot.data;
-                  if (reactors == null) {
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (reactors.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(tr('No one has reacted with this yet.')),
-                    );
-                  }
-                  return ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.only(bottom: 12),
-                    children: [
-                      for (final profile in reactors)
-                        ListTile(
-                          leading: _ReactorAvatar(profile: profile),
-                          title: Text(profile.displayLabel),
-                          subtitle: Text('@${profile.username}'),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
+        constraints: BoxConstraints(
+          maxHeight: math.min(460, MediaQuery.sizeOf(context).height * 0.6),
+        ),
+        child: FutureBuilder<List<Profile>>(
+          future: _reactors,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return SheetNote(
+                text: tr('Could not load reactions.'),
+                error: true,
+              );
+            }
+            final reactors = snapshot.data;
+            if (reactors == null) {
+              return const SheetSpinner();
+            }
+            if (reactors.isEmpty) {
+              return SheetNote(text: tr('No one has reacted with this yet.'));
+            }
+            return ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+              children: [
+                for (final profile in reactors)
+                  SheetListRow(
+                    key: ValueKey('reactor-${profile.id}'),
+                    leading: ProfileAvatar(
+                      name: profile.displayLabel,
+                      avatarUrl: profile.avatarUrl,
+                      size: 40,
+                    ),
+                    title: profile.displayLabel,
+                    subtitle: '@${profile.username}',
+                  ),
+              ],
+            );
+          },
         ),
       ),
-    );
-  }
-}
-
-class _ReactorAvatar extends ConsumerWidget {
-  const _ReactorAvatar({required this.profile});
-
-  final Profile profile;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final displayUrl = ref
-        .watch(avatarDisplayUrlProvider(profile.avatarUrl))
-        .valueOrNull;
-    final image = displayUrl == null ? null : NetworkImage(displayUrl);
-    final label = profile.displayLabel.trim();
-    return CircleAvatar(
-      backgroundImage: image,
-      onBackgroundImageError: image == null
-          ? null
-          : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
-      child: image == null
-          ? Text(label.isEmpty ? '?' : label.characters.first.toUpperCase())
-          : null,
     );
   }
 }

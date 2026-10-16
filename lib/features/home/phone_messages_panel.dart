@@ -88,7 +88,7 @@ class PhoneMessagesPanel extends ConsumerWidget {
                   tooltip: tr('New message'),
                   variant: WeCordButtonVariant.accent,
                   iconSize: 22,
-                  onPressed: () => _showNewMenu(context, ref),
+                  onPressed: () => showNewConversationMenu(context, ref),
                 ),
               ],
             ),
@@ -150,61 +150,65 @@ class PhoneMessagesPanel extends ConsumerWidget {
       ],
     );
   }
+}
 
-  Future<void> _showNewMenu(BuildContext context, WidgetRef ref) async {
-    final choice = await showWeCordSheet<_NewChoice>(
-      context,
-      builder: (sheetContext, _) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-        child: SettingsGroup(
-          color: sheetContext.tokens.colors.well,
-          children: [
-            SettingsRow(
-              key: const ValueKey('phone-new-message'),
-              icon: Icons.chat_bubble_outline_rounded,
-              tone: SettingsTone.accent,
-              title: tr('New message'),
-              showChevron: false,
-              onTap: () => Navigator.of(sheetContext).pop(_NewChoice.message),
-            ),
-            SettingsRow(
-              key: const ValueKey('phone-new-group'),
-              icon: Icons.group_add_outlined,
-              tone: SettingsTone.success,
-              title: tr('New group'),
-              showChevron: false,
-              onTap: () => Navigator.of(sheetContext).pop(_NewChoice.group),
-            ),
-          ],
-        ),
+/// Asks whether to start a direct message or a group, then starts it.
+Future<void> showNewConversationMenu(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final choice = await showWeCordSheet<_NewChoice>(
+    context,
+    builder: (sheetContext, _) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: SettingsGroup(
+        color: sheetContext.tokens.colors.well,
+        children: [
+          SettingsRow(
+            key: const ValueKey('phone-new-message'),
+            icon: Icons.chat_bubble_outline_rounded,
+            tone: SettingsTone.accent,
+            title: tr('New message'),
+            showChevron: false,
+            onTap: () => Navigator.of(sheetContext).pop(_NewChoice.message),
+          ),
+          SettingsRow(
+            key: const ValueKey('phone-new-group'),
+            icon: Icons.group_add_outlined,
+            tone: SettingsTone.success,
+            title: tr('New group'),
+            showChevron: false,
+            onTap: () => Navigator.of(sheetContext).pop(_NewChoice.group),
+          ),
+        ],
       ),
-    );
-    if (!context.mounted) {
-      return;
-    }
-    switch (choice) {
-      case _NewChoice.message:
-        await _pickFriendToMessage(context, ref);
-      case _NewChoice.group:
-        await createGroupChat(context, ref);
-      case null:
-        break;
-    }
+    ),
+  );
+  if (!context.mounted) {
+    return;
   }
+  switch (choice) {
+    case _NewChoice.message:
+      await _pickFriendToMessage(context, ref);
+    case _NewChoice.group:
+      await createGroupChat(context, ref);
+    case null:
+      break;
+  }
+}
 
-  Future<void> _pickFriendToMessage(BuildContext context, WidgetRef ref) async {
-    final friends = await ref.read(friendsProvider.future);
-    if (!context.mounted) {
-      return;
-    }
-    final friend = await showWeCordSheet<Profile>(
-      context,
-      title: tr('New message'),
-      builder: (sheetContext, _) => _FriendPickerSheet(friends: friends),
-    );
-    if (friend != null && context.mounted) {
-      await openDirectMessage(context, ref, friend);
-    }
+Future<void> _pickFriendToMessage(BuildContext context, WidgetRef ref) async {
+  final friends = await ref.read(friendsProvider.future);
+  if (!context.mounted) {
+    return;
+  }
+  final friend = await showWeCordSheet<Profile>(
+    context,
+    title: tr('New message'),
+    builder: (sheetContext, _) => _FriendPickerSheet(friends: friends),
+  );
+  if (friend != null && context.mounted) {
+    await openDirectMessage(context, ref, friend);
   }
 }
 
@@ -382,11 +386,7 @@ class _FriendTile extends ConsumerWidget {
 
 /// "Draft  half written" in conversation lists, the label in red-orange.
 class ConversationDraftPreview extends StatelessWidget {
-  const ConversationDraftPreview({
-    required this.draft,
-    this.style,
-    super.key,
-  });
+  const ConversationDraftPreview({required this.draft, this.style, super.key});
 
   final ComposerDraft draft;
   final TextStyle? style;

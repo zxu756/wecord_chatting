@@ -12,7 +12,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/set_new_password_screen.dart';
@@ -26,10 +25,10 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/voice.dart';
-import 'package:wecord/shared/theme/wecord_theme.dart';
 
 import '../../test/features/voice/voice_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
+import 'screenshot_fonts.dart';
 
 const _outputDir = String.fromEnvironment(
   'PHONE_SCREENS_DIR',
@@ -37,7 +36,7 @@ const _outputDir = String.fromEnvironment(
 );
 
 void main() {
-  setUpAll(_loadFonts);
+  setUpAll(loadScreenshotFonts);
 
   Future<void> shoot(WidgetTester tester, String name) async {
     await settle(tester);
@@ -872,88 +871,6 @@ void main() {
     await tester.enterText(composer, '/');
     await showKeyboard(tester, notchedPhone);
   });
-}
-
-/// Loads Roboto and the Material icons from the Flutter SDK, so text is not
-/// drawn as boxes, plus the system emoji font where there is one.
-Future<void> _loadFonts() async {
-  final fonts = _materialFontsDir();
-  final roboto = FontLoader('Roboto');
-  // The test engine doesn't fall back to other fonts, so Chinese shots
-  // draw everything with a font that has both Latin and Chinese.
-  const unicodeFont = '/System/Library/Fonts/Supplemental/Arial Unicode.ttf';
-  if (const bool.fromEnvironment('PHONE_SCREENS_ZH') &&
-      File(unicodeFont).existsSync()) {
-    roboto.addFont(_fontData(unicodeFont));
-  } else {
-    for (final weight in ['Light', 'Regular', 'Medium', 'Bold', 'Black']) {
-      roboto.addFont(_fontData('${fonts.path}/Roboto-$weight.ttf'));
-    }
-    roboto.addFont(_fontData('${fonts.path}/Roboto-Italic.ttf'));
-  }
-  await roboto.load();
-
-  // The app's own font, and a Chinese font under the names the theme falls
-  // back to for characters it lacks.
-  final jakarta = FontLoader(WeCordTheme.fontFamily)
-    ..addFont(
-      _fontData('assets/fonts/plus_jakarta_sans/PlusJakartaSans-Variable.ttf'),
-    );
-  await jakarta.load();
-  final cjkFont = [
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
-    unicodeFont,
-  ].where((path) => File(path).existsSync()).firstOrNull;
-  const emojiFont = '/System/Library/Fonts/Apple Color Emoji.ttc';
-  for (final family in WeCordTheme.fontFamilyFallback) {
-    final file = family.contains('Emoji') ? emojiFont : cjkFont;
-    if (file != null && File(file).existsSync()) {
-      final fallback = FontLoader(family)..addFont(_fontData(file));
-      await fallback.load();
-    }
-  }
-
-  final icons = FontLoader('MaterialIcons')
-    ..addFont(_fontData('${fonts.path}/MaterialIcons-Regular.otf'));
-  await icons.load();
-
-  // Code blocks ask for "monospace"; borrow a system mono font.
-  const monoFont = '/System/Library/Fonts/Supplemental/Courier New.ttf';
-  if (File(monoFont).existsSync()) {
-    final mono = FontLoader('monospace')..addFont(_fontData(monoFont));
-    await mono.load();
-  }
-
-  if (File(emojiFont).existsSync()) {
-    final emoji = FontLoader('Apple Color Emoji')
-      ..addFont(_fontData(emojiFont));
-    await emoji.load();
-  }
-}
-
-Future<ByteData> _fontData(String path) async {
-  final bytes = File(path).readAsBytesSync();
-  return ByteData.sublistView(bytes);
-}
-
-Directory _materialFontsDir() {
-  final flutterRoot = Platform.environment['FLUTTER_ROOT'];
-  if (flutterRoot != null) {
-    final dir = Directory('$flutterRoot/bin/cache/artifacts/material_fonts');
-    if (dir.existsSync()) {
-      return dir;
-    }
-  }
-  // flutter_tester lives under bin/cache/artifacts/engine/<platform>/.
-  var dir = File(Platform.resolvedExecutable).parent;
-  while (dir.path != dir.parent.path) {
-    final candidate = Directory('${dir.path}/material_fonts');
-    if (candidate.existsSync()) {
-      return candidate;
-    }
-    dir = dir.parent;
-  }
-  throw StateError('Could not find the Flutter SDK material fonts.');
 }
 
 // With PHONE_SCREENS_ZH the app shows Chinese, so look the English labels

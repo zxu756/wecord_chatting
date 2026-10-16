@@ -19,6 +19,7 @@ class ShellPlacement {
     this.homeSection,
     this.selectedConversationId,
     this.pageHasSidebar = false,
+    this.exploreSelected = false,
   });
 
   /// Whether the rail highlights Home.
@@ -36,6 +37,9 @@ class ShellPlacement {
   /// Whether the page brings its own sidebar (a circle's channels), which
   /// then shows the voice panel instead of the rail.
   final bool pageHasSidebar;
+
+  /// Whether the rail highlights Explore (public circles).
+  final bool exploreSelected;
 }
 
 /// The signed-in app frame. Wide layouts keep the circle rail on the left
@@ -121,6 +125,7 @@ class WeCordShell extends StatelessWidget {
               children: [
                 CircleRail(
                   homeSelected: placement.homeSelected,
+                  exploreSelected: placement.exploreSelected,
                   selectedCircleId: placement.selectedCircleId,
                   showVoiceIndicator: !spansSidebar,
                   onOpenVoice: onOpenVoice,

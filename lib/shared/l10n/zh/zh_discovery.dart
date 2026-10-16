@@ -1,0 +1,101 @@
+// Chinese for public circles: Explore, the circle preview, joining,
+// reporting a circle and Circle settings → Discovery.
+const zhDiscovery = <String, String>{
+  // Categories.
+  'Gaming': '游戏',
+  'Music': '音乐',
+  'Education': '教育',
+  'Science & Tech': '科学与技术',
+  'Entertainment': '娱乐',
+  'Art': '艺术',
+  'Sports': '运动',
+  'Travel & Outdoors': '旅行与户外',
+  'Food': '美食',
+  'Local': '本地',
+  'Other': '其他',
+
+  // Explore.
+  'Explore circles': '探索圈子',
+  'Search messages': '搜索消息',
+  'Find public circles to join, or make yours public in its settings.':
+      '找到可以加入的公开圈子，或在圈子设置中把你的圈子设为公开。',
+  'Search circles, topics and tags': '搜索圈子、话题和标签',
+  'All': '全部',
+  'New': '最新',
+  'Recently made public': '最近公开的圈子',
+  'Popular': '热门',
+  'Popular in {category}': '{category}热门',
+  'Most members and most active lately': '成员最多、最近最活跃',
+  'Results': '搜索结果',
+  'Could not load circles.': '无法加载圈子。',
+  'Check your connection and try again.': '请检查网络连接后重试。',
+  'No circles match “{query}”': '没有与“{query}”匹配的圈子',
+  'Try another word, or another category.': '换个关键词或分类试试。',
+  'No public circles yet': '还没有公开的圈子',
+  'No public circles in {category} yet': '{category}分类下还没有公开的圈子',
+  'Circles show up here once a manager turns on Public in Circle settings → Discovery.':
+      '圈子管理者在“圈子设置 → 发现”中开启“公开”后，圈子就会显示在这里。',
+  'Could not load more circles.': '无法加载更多圈子。',
+  "That's everything for now.": '暂时就这么多了。',
+  'Try again': '重试',
+
+  // Cards and the preview.
+  '1 member': '1 位成员',
+  '{count} members': '{count} 位成员',
+  '{count} online': '{count} 人在线',
+  'Joined': '已加入',
+  'No description yet.': '还没有简介。',
+  'Rules': '规则',
+  'Channels': '频道',
+  'You accept these rules after joining, before you can chat.':
+      '加入后需要先接受这些规则，才能开始聊天。',
+  'Could not load this circle.': '无法加载这个圈子。',
+  'Open': '打开',
+  'Join circle': '加入圈子',
+  'Joining…': '正在加入…',
+  "You're banned from this circle.": '你已被此圈子封禁。',
+  "You've joined a lot of circles. Try again in a while.": '你加入的圈子太多了，请稍后再试。',
+  'This circle is no longer public.': '这个圈子已不再公开。',
+  'Could not join. Try again.': '无法加入，请重试。',
+  'More': '更多',
+  'Report circle': '举报圈子',
+  'Report {name}': '举报 {name}',
+  'Thanks. We will review this circle.': '谢谢，我们会审核这个圈子。',
+
+  // Adding a circle.
+  'Explore public circles': '探索公开圈子',
+  'Find communities anyone can join.': '找到任何人都能加入的社区。',
+
+  // Circle settings → Discovery.
+  'Discovery': '发现',
+  'Public listing in Explore': '在“探索”中公开展示',
+  'Could not load discovery settings.': '无法加载发现设置。',
+  'Public circle': '公开圈子',
+  'Listed in Explore, and anyone signed in can join. Bans, rules and AutoMod still apply. Off: invite only.':
+      '显示在“探索”中，任何已登录的人都可以加入。封禁、规则和自动审核依然生效。关闭时仅限邀请加入。',
+  'Description': '简介',
+  'What is this circle about? Who is it for?': '这个圈子是关于什么的？适合哪些人？',
+  'Category': '分类',
+  'Language': '语言',
+  'Not set': '未设置',
+  'Tags': '标签',
+  'Add a tag, e.g. pixel art': '添加标签，例如：像素画',
+  'Add': '添加',
+  'Up to 5 tags.': '最多 5 个标签。',
+  'A tag is up to 24 characters.': '每个标签最多 24 个字符。',
+  'Tags cannot have commas or #.': '标签中不能包含逗号或 #。',
+  'Preview': '预览',
+  'Explore also shows how many members are online, and your channel names and rules to people deciding whether to join.':
+      '“探索”还会向考虑加入的人展示在线成员数、频道名称和规则。',
+  'Pick a category to make the circle public.': '请先选择一个分类，才能公开圈子。',
+  'Could not save discovery settings. Try again.': '无法保存发现设置，请重试。',
+  'Your circle is now listed in Explore.': '你的圈子已显示在“探索”中。',
+  'Discovery settings saved.': '发现设置已保存。',
+  'Save': '保存',
+
+  // Audit log.
+  '{actor} made the circle public': '{actor} 将圈子设为公开',
+  '{actor} made the circle private': '{actor} 将圈子设为私密',
+  '{actor} updated the discovery settings': '{actor} 更新了发现设置',
+  'Public': '公开',
+};

@@ -13,6 +13,7 @@ import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
 import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
@@ -845,7 +846,7 @@ void main() {
       await tester.tap(find.text('Join with invite'));
       await settle(tester);
       await showKeyboard(tester, viewport);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Join'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Join'));
     });
 
     phoneTestWidgets('circle mobile home with rail and sidebar', (
@@ -863,7 +864,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('TEXT CHANNELS'), findsOneWidget);
+      expect(find.text('Text Channels'), findsOneWidget);
       expect(find.byKey(const ValueKey('circle-mention-badge')), findsWidgets);
       // The collapsed Archive category hides its quiet channel.
       expect(find.text('old-stuff'), findsNothing);
@@ -873,7 +874,7 @@ void main() {
         tester,
         find.descendant(
           of: find.byType(CircleCategoryHeader),
-          matching: find.byType(IconButton),
+          matching: find.byType(WeCordIconButton),
         ),
       );
       expectTouchTargets(tester, find.byType(CircleRailItem));
@@ -944,9 +945,9 @@ void main() {
       await showKeyboard(tester, viewport);
       expectFullyVisible(
         tester,
-        find.widgetWithText(TextField, 'Category name'),
+        find.widgetWithText(WeCordTextField, 'Category name'),
       );
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Create'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Create'));
       await tester.tap(find.text('Cancel'));
       await settle(tester);
 
@@ -957,8 +958,11 @@ void main() {
       await settle(tester);
       await tester.tap(find.text('Change my nickname'));
       await settle(tester);
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Nickname'));
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Save'));
+      expectFullyVisible(
+        tester,
+        find.widgetWithText(WeCordTextField, 'Nickname'),
+      );
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Save'));
       await tester.tap(find.text('Cancel'));
       await settle(tester);
       await hideKeyboard(tester, viewport);
@@ -993,7 +997,7 @@ void main() {
       await tester.ensureVisible(confirm);
       await settle(tester);
       expectFullyVisible(tester, confirm);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Transfer'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Transfer'));
     });
 
     phoneTestWidgets('leave circle confirmation', (tester, viewport) async {
@@ -1012,7 +1016,7 @@ void main() {
       await settle(tester);
       await tester.tap(find.text('Leave circle'));
       await settle(tester);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Leave'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Leave'));
     });
 
     phoneTestWidgets('circle the user is no longer in', (
@@ -1032,7 +1036,7 @@ void main() {
       );
       expectFullyVisible(
         tester,
-        find.widgetWithText(FilledButton, 'Back to home'),
+        find.widgetWithText(WeCordButton, 'Back to home'),
       );
     });
 
@@ -1073,7 +1077,13 @@ void main() {
       await settle(tester);
 
       expect(find.text('Audit log'), findsOneWidget);
-      expectTouchTargets(tester, iconButtonWithTooltip('Filter by action'));
+      expectTouchTargets(
+        tester,
+        find.ancestor(
+          of: find.byTooltip('Filter by action'),
+          matching: find.byType(WeCordIconButton),
+        ),
+      );
       await tester.tap(find.byKey(const ValueKey('circle-audit-audit-long')));
       await settle(tester);
       expect(
@@ -1085,7 +1095,10 @@ void main() {
       await settle(tester);
       await tester.tap(find.text('Roles').last);
       await settle(tester);
-      expectFullyVisible(tester, find.byType(InputChip));
+      expectFullyVisible(
+        tester,
+        find.byKey(const ValueKey('circle-audit-filter-chip')),
+      );
       expect(
         find.byKey(const ValueKey('circle-audit-audit-1')),
         findsOneWidget,
@@ -1104,17 +1117,26 @@ void main() {
       await settle(tester);
       expect(find.text('Moderators of the Valley'), findsOneWidget);
       expect(find.text('@everyone'), findsOneWidget);
-      expectTouchTargets(tester, iconButtonWithTooltip('Create role'));
+      expectTouchTargets(
+        tester,
+        find.ancestor(
+          of: find.byTooltip('Create role'),
+          matching: find.byType(WeCordIconButton),
+        ),
+      );
 
       await tester.tap(find.byTooltip('Create role'));
       await settle(tester);
       await showKeyboard(tester, viewport);
-      expectFullyVisible(tester, find.widgetWithText(TextField, 'Role name'));
+      expectFullyVisible(
+        tester,
+        find.widgetWithText(WeCordTextField, 'Role name'),
+      );
       await popTopRoute(tester);
 
       await tester.tap(find.text('Trip Leaders'));
       await settle(tester);
-      final save = find.widgetWithText(FilledButton, 'Save');
+      final save = find.widgetWithText(WeCordButton, 'Save');
       await tester.ensureVisible(save);
       await settle(tester);
       expectFullyVisible(tester, save);
@@ -1167,7 +1189,7 @@ void main() {
       await tester.tap(find.byTooltip('Show member list'));
       await settle(tester);
       expect(find.text('Bart the Bold'), findsOneWidget);
-      expect(find.textContaining('ONLINE'), findsOneWidget);
+      expect(find.textContaining('Online — '), findsOneWidget);
       expect(find.text('🎯 $longStatusText'), findsOneWidget);
 
       // Long press is the touch stand-in for the desktop context menu.
@@ -1179,7 +1201,7 @@ void main() {
       await tester.tap(find.text('Manage roles'));
       await settle(tester);
       expect(find.text('Moderators of the Valley'), findsOneWidget);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Save'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Save'));
       await popTopRoute(tester);
 
       await tester.longPress(find.text('Bart the Bold'));
@@ -1187,7 +1209,7 @@ void main() {
       await tester.tap(find.text('Kick'));
       await settle(tester);
       expect(find.text('Kick Bart the Bold'), findsOneWidget);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Kick'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Kick'));
     });
 
     phoneTestWidgets('channel settings and permission overwrites', (
@@ -1220,7 +1242,8 @@ void main() {
       await tester.ensureVisible(connect);
       await settle(tester);
       expectFullyVisible(tester, connect);
-      final save = find.widgetWithText(FilledButton, 'Save');
+      // The editor's Save comes after the overview form's.
+      final save = find.widgetWithText(WeCordButton, 'Save').last;
       await tester.ensureVisible(save);
       await settle(tester);
       expectFullyVisible(tester, save);
@@ -1479,7 +1502,7 @@ void main() {
       await tester.enterText(confirm, 'general');
       await settle(tester);
       expectCaretVisible(tester, confirm);
-      expectFullyVisible(tester, find.widgetWithText(FilledButton, 'Delete'));
+      expectFullyVisible(tester, find.widgetWithText(WeCordButton, 'Delete'));
     });
 
     phoneTestWidgets('forum post list', (tester, viewport) async {
@@ -1612,7 +1635,7 @@ void main() {
         find.byKey(const ValueKey('circle-events-live')),
       );
       expect(
-        find.descendant(of: entry, matching: find.text('Events (3)')),
+        find.descendant(of: entry, matching: find.textContaining('Events (3)')),
         findsOneWidget,
       );
     });
@@ -1627,8 +1650,8 @@ void main() {
       );
       expectFullyVisible(tester, interest);
       expectTouchTargets(tester, interest);
-      expectFullyVisible(tester, iconButtonWithTooltip('Create event'));
-      expectTouchTargets(tester, iconButtonWithTooltip('Create event'));
+      expectFullyVisible(tester, find.byTooltip('Create event'));
+      expectTouchTargets(tester, find.byTooltip('Create event'));
       await scrollIntoView(
         tester,
         find.byKey(const ValueKey('circle-events-show-past')),
@@ -1656,7 +1679,7 @@ void main() {
         expectFullyVisible(tester, button);
         expectTouchTargets(tester, button);
       }
-      expectTouchTargets(tester, iconButtonWithTooltip('Event options'));
+      expectTouchTargets(tester, find.byTooltip('Event options'));
       await scrollIntoView(
         tester,
         find.byKey(const ValueKey('circle-event-interested-list')),
@@ -1879,7 +1902,9 @@ void main() {
         find.byKey(const ValueKey('voice-channel-members-ch-lounge')),
         findsOneWidget,
       );
-      expect(find.text('Bart the Bold'), findsOneWidget);
+      // Phones show a live card: who is in the channel, and a way to join.
+      expect(find.textContaining('Bart the Bold'), findsOneWidget);
+      expect(find.text('2 · Join'), findsOneWidget);
 
       await tester.tap(lounge);
       await settle(tester);

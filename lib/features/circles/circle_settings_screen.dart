@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/circle_audit_log_screen.dart';
+import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_bot_widgets.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_emojis_screen.dart';
+import 'package:wecord/features/circles/circle_moderation.dart';
+import 'package:wecord/features/circles/circle_onboarding.dart';
+import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the circle's settings: its template, tag and bots.
 void openCircleSettingsScreen(BuildContext context, String circleId) {
@@ -19,6 +27,8 @@ void openCircleSettingsScreen(BuildContext context, String circleId) {
 /// Whether the current user may open circle settings.
 bool canOpenCircleSettings(CircleDetail detail) => detail.canManageCircle;
 
+/// Circle settings on paper: the circle's card, the pages that manage it,
+/// then its template, tag and bots.
 class CircleSettingsScreen extends ConsumerWidget {
   const CircleSettingsScreen({required this.circleId, super.key});
 
@@ -27,31 +37,28 @@ class CircleSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(circleDetailProvider(circleId));
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Circle settings'))),
+    return CirclePageScaffold(
+      title: tr('Circle settings'),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(tr('Could not load the circle.')),
-          ),
+        error: (error, _) => CircleEmptyState(
+          icon: Icons.error_outline,
+          title: tr('Could not load the circle.'),
         ),
         data: (detail) => ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: circlePagePadding(context),
           children: [
-            if (detail.canManageCircle)
+            _CircleHeaderCard(detail: detail),
+            _ManageGroup(detail: detail),
+            if (detail.canManageCircle) ...[
               CircleTemplateSection(
                 key: ValueKey('circle-template-$circleId'),
                 circleId: circleId,
               ),
-            if (detail.canManageCircle) ...[
-              const Divider(height: 32),
               CircleTagSection(
                 key: ValueKey('circle-tag-$circleId'),
                 circleId: circleId,
               ),
-              const Divider(height: 32),
               CircleBotsSection(
                 key: ValueKey('circle-bots-$circleId'),
                 detail: detail,
@@ -64,7 +71,122 @@ class CircleSettingsScreen extends ConsumerWidget {
   }
 }
 
-/// A section title in circle settings.
+class _CircleHeaderCard extends StatelessWidget {
+  const _CircleHeaderCard({required this.detail});
+
+  final CircleDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final circle = detail.circle;
+    return CircleCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          CircleNetworkAvatar(
+            name: circle.name,
+            url: circle.avatarUrl,
+            size: 58,
+            thing: true,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  circle.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tr('{count} members', {'count': detail.members.length}),
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rows to the pages that manage the circle, as far as the current user
+/// may open them.
+class _ManageGroup extends StatelessWidget {
+  const _ManageGroup({required this.detail});
+
+  final CircleDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final circleId = detail.circle.id;
+    final rows = [
+      if (detail.canManageRoles)
+        SettingsRow(
+          key: const ValueKey('circle-settings-roles'),
+          icon: Icons.shield_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Roles'),
+          value: '${detail.roles.length}',
+          onTap: () => openCircleRolesScreen(context, circleId),
+        ),
+      if (detail.canBanMembers)
+        SettingsRow(
+          key: const ValueKey('circle-settings-bans'),
+          icon: Icons.block,
+          tone: SettingsTone.danger,
+          title: tr('Bans'),
+          onTap: () => openCircleBansScreen(context, circleId),
+        ),
+      if (detail.canManageCircle) ...[
+        SettingsRow(
+          key: const ValueKey('circle-settings-automod'),
+          icon: Icons.gpp_maybe_outlined,
+          tone: SettingsTone.warning,
+          title: tr('AutoMod'),
+          onTap: () => openCircleAutoModScreen(context, detail),
+        ),
+        SettingsRow(
+          key: const ValueKey('circle-settings-onboarding'),
+          icon: Icons.rule,
+          tone: SettingsTone.success,
+          title: tr('Onboarding'),
+          onTap: () => openCircleOnboardingSettings(context, detail),
+        ),
+      ],
+      if (detail.canViewAuditLog)
+        SettingsRow(
+          key: const ValueKey('circle-settings-audit-log'),
+          icon: Icons.history,
+          title: tr('Audit log'),
+          onTap: () => openCircleAuditLogScreen(context, circleId),
+        ),
+      if (detail.currentMember != null)
+        SettingsRow(
+          key: const ValueKey('circle-settings-emojis'),
+          icon: Icons.emoji_emotions_outlined,
+          title: tr('Emoji & stickers'),
+          onTap: () => openCircleEmojisScreen(context, circleId),
+        ),
+    ];
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SettingsGroup(header: tr('Manage'), children: rows);
+  }
+}
+
+/// A section title in circle settings, with an optional note under it.
 class CircleSettingsHeader extends StatelessWidget {
   const CircleSettingsHeader(this.title, {this.subtitle, super.key});
 
@@ -73,26 +195,28 @@ class CircleSettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      padding: const EdgeInsets.fromLTRB(6, 18, 6, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
+          Semantics(
+            header: true,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: c.subtle,
+              ),
             ),
           ),
           if (subtitle case final subtitle?) ...[
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
             ),
           ],
         ],

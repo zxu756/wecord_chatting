@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class CircleInviteSheet extends ConsumerStatefulWidget {
   const CircleInviteSheet({required this.detail, super.key});
@@ -25,13 +27,15 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final existingMemberIds = {
       for (final member in widget.detail.members) member.profile.id,
     };
     final friendsFuture = ref.watch(contactsRepositoryProvider).listFriends();
     return SafeArea(
+      top: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
         child: FutureBuilder(
           future: friendsFuture,
           builder: (context, snapshot) {
@@ -40,64 +44,91 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
                 .toList(growable: false);
             return Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  tr('Invite friends'),
-                  style: Theme.of(context).textTheme.titleLarge,
+                Semantics(
+                  header: true,
+                  child: Text(
+                    tr('Invite friends'),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      color: c.ink,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 2),
+                Text(
+                  widget.detail.circle.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, color: c.muted),
+                ),
+                const SizedBox(height: 14),
                 if (friends.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text(tr('No friends to invite')),
+                  CircleCard(
+                    color: c.well,
+                    child: Text(
+                      tr('No friends to invite'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: c.muted),
+                    ),
                   )
                 else
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 320),
-                    child: ListView(
-                      shrinkWrap: true,
+                    child: SettingsGroup(
+                      color: c.well,
                       children: [
-                        for (final friend in friends)
-                          CheckboxListTile(
-                            value: _selectedFriendIds.contains(friend.id),
-                            title: Text(friend.displayLabel),
-                            subtitle: Text('@${friend.username}'),
-                            onChanged: _isSaving
-                                ? null
-                                : (selected) {
-                                    setState(() {
-                                      if (selected == true) {
-                                        _selectedFriendIds.add(friend.id);
-                                      } else {
-                                        _selectedFriendIds.remove(friend.id);
-                                      }
-                                    });
-                                  },
+                        Flexible(
+                          child: ListView(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            children: [
+                              for (final friend in friends)
+                                CircleFriendPickRow(
+                                  friend: friend,
+                                  selected: _selectedFriendIds.contains(
+                                    friend.id,
+                                  ),
+                                  onChanged: _isSaving
+                                      ? null
+                                      : (selected) => setState(() {
+                                          if (selected) {
+                                            _selectedFriendIds.add(friend.id);
+                                          } else {
+                                            _selectedFriendIds.remove(
+                                              friend.id,
+                                            );
+                                          }
+                                        }),
+                                ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
                   ),
                 if (_errorText != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     _errorText!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                    style: TextStyle(fontSize: 13, color: c.dangerText),
                   ),
                 ],
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton(
+                if (friends.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  WeCordButton(
+                    label: tr('Invite'),
+                    expand: true,
+                    loading: _isSaving,
                     onPressed: _isSaving || _selectedFriendIds.isEmpty
                         ? null
                         : _invite,
-                    child: Text(tr('Invite')),
                   ),
-                ),
-                const Divider(height: 32),
+                ],
+                const SizedBox(height: 8),
                 CircleInviteLinksSection(circleId: widget.detail.circle.id),
               ],
             );
@@ -146,14 +177,6 @@ enum _InviteExpiry {
 
 const _maxUsesOptions = <int?>[null, 1, 10, 100];
 
-String _maxUsesLabel(int? maxUses) {
-  return switch (maxUses) {
-    null => tr('No limit'),
-    1 => tr('1 use'),
-    _ => tr('{count} uses', {'count': maxUses}),
-  };
-}
-
 /// Create, copy, list and revoke shareable invite links for a circle.
 class CircleInviteLinksSection extends ConsumerStatefulWidget {
   const CircleInviteLinksSection({required this.circleId, super.key});
@@ -186,58 +209,70 @@ class _CircleInviteLinksSectionState
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final c = context.tokens.colors;
+    TextStyle label() =>
+        TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted);
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(tr('Invite links'), style: textTheme.titleMedium),
-        const SizedBox(height: 12),
-        Text(tr('Expire after'), style: textTheme.labelLarge),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final expiry in _InviteExpiry.values)
-              ChoiceChip(
-                label: Text(tr(expiry.label)),
-                selected: _expiry == expiry,
-                onSelected: _isBusy
+        SettingsSectionHeader(tr('Invite links')),
+        CircleCard(
+          color: c.well,
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(tr('Expire after'), style: label()),
+              const SizedBox(height: 6),
+              WeCordSegmented<_InviteExpiry>(
+                expand: true,
+                height: 36,
+                selected: _expiry,
+                onChanged: _isBusy
                     ? null
-                    : (_) => setState(() => _expiry = expiry),
+                    : (expiry) => setState(() => _expiry = expiry),
+                segments: [
+                  for (final expiry in _InviteExpiry.values)
+                    WeCordSegment(value: expiry, label: tr(expiry.label)),
+                ],
               ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(tr('Max uses'), style: textTheme.labelLarge),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (final maxUses in _maxUsesOptions)
-              ChoiceChip(
-                label: Text(_maxUsesLabel(maxUses)),
-                selected: _maxUses == maxUses,
-                onSelected: _isBusy
+              const SizedBox(height: 12),
+              Text(tr('Max uses'), style: label()),
+              const SizedBox(height: 6),
+              WeCordSegmented<int?>(
+                expand: true,
+                height: 36,
+                selected: _maxUses,
+                onChanged: _isBusy
                     ? null
-                    : (_) => setState(() => _maxUses = maxUses),
+                    : (maxUses) => setState(() => _maxUses = maxUses),
+                segments: [
+                  for (final maxUses in _maxUsesOptions)
+                    WeCordSegment(
+                      value: maxUses,
+                      label: maxUses == null ? tr('No limit') : '$maxUses',
+                    ),
+                ],
               ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: _isBusy ? null : _createInvite,
-          icon: const Icon(Icons.add_link),
-          label: Text(tr('Create link')),
+              const SizedBox(height: 14),
+              WeCordButton(
+                variant: WeCordButtonVariant.secondary,
+                icon: Icons.add_link_rounded,
+                label: tr('Create link'),
+                onPressed: _isBusy ? null : _createInvite,
+              ),
+            ],
+          ),
         ),
         if (_errorText != null) ...[
           const SizedBox(height: 8),
           Text(
             _errorText!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: TextStyle(fontSize: 13, color: c.dangerText),
           ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         FutureBuilder<List<CircleInvite>>(
           future: _invites,
           builder: (context, snapshot) {
@@ -252,46 +287,48 @@ class _CircleInviteLinksSectionState
                 tr('Could not load invite links. {error}', {
                   'error': snapshot.error,
                 }),
+                style: TextStyle(fontSize: 13, color: c.dangerText),
               );
             }
             final invites = snapshot.data ?? const <CircleInvite>[];
             if (invites.isEmpty) {
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(tr('No active invite links')),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Text(
+                  tr('No active invite links'),
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                ),
               );
             }
-            return Column(
-              mainAxisSize: MainAxisSize.min,
+            return SettingsGroup(
+              color: c.well,
               children: [
                 for (final invite in invites)
-                  ListTile(
+                  SettingsRow(
                     key: ValueKey('circle-invite-${invite.code}'),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.link),
-                    title: Text(
-                      circleInviteLink(invite.code),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(_inviteDetails(invite)),
+                    icon: Icons.link_rounded,
+                    tone: SettingsTone.accent,
+                    title: circleInviteLink(invite.code),
+                    subtitle: _inviteDetails(invite),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        WeCordIconButton(
                           tooltip: _copiedCode == invite.code
                               ? tr('Copied')
                               : tr('Copy link'),
-                          icon: Icon(
-                            _copiedCode == invite.code
-                                ? Icons.check
-                                : Icons.copy,
-                          ),
+                          icon: _copiedCode == invite.code
+                              ? Icons.check_rounded
+                              : Icons.copy_rounded,
+                          size: 34,
+                          variant: WeCordButtonVariant.ghost,
                           onPressed: () => _copy(invite),
                         ),
-                        IconButton(
+                        WeCordIconButton(
                           tooltip: tr('Revoke'),
-                          icon: const Icon(Icons.link_off),
+                          icon: Icons.link_off_rounded,
+                          size: 34,
+                          variant: WeCordButtonVariant.ghost,
                           onPressed: _isBusy ? null : () => _revoke(invite),
                         ),
                       ],

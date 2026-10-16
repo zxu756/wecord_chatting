@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final circleNotificationSettingsProvider = FutureProvider.autoDispose
     .family<CircleNotificationSettings, String>((ref, circleId) {
@@ -18,10 +21,9 @@ void showCircleNotificationSettingsSheet(
   required String circleId,
   required String circleName,
 }) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  showCircleChannelPanel<void>(
+    context,
+    title: tr('Notification settings'),
     builder: (context) => CircleNotificationSettingsSheet(
       circleId: circleId,
       circleName: circleName,
@@ -110,69 +112,87 @@ class _CircleNotificationSettingsSheetState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
+    final wide = circleWideLayout(context);
     final loaded = ref.watch(
       circleNotificationSettingsProvider(widget.circleId),
     );
     final settings = _saved ?? loaded.valueOrNull;
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              tr('Notification settings'),
-              style: theme.textTheme.titleLarge,
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        wide ? 20 : 12,
+        0,
+        wide ? 20 : 12,
+        circleChannelPanelBottom(context),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              widget.circleName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: c.muted),
             ),
-            const SizedBox(height: 4),
-            Text(widget.circleName, style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 12),
-            if (settings == null)
-              loaded.hasError
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Text(tr('Could not load notification settings.')),
-                    )
-                  : const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-            else ...[
-              _SectionLabel(tr('Mute circle')),
-              ..._muteTiles(settings),
-              const SizedBox(height: 8),
-              _SectionLabel(tr('Notify me about')),
-              RadioGroup<CircleNotificationLevel>(
-                groupValue: settings.level,
-                onChanged: (level) {
-                  if (level == null || level == settings.level) {
-                    return;
-                  }
-                  _save(settings, level: level);
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final (level, label) in const [
-                      (CircleNotificationLevel.all, 'All messages'),
-                      (CircleNotificationLevel.mentions, 'Only @mentions'),
-                      (CircleNotificationLevel.none, 'Nothing'),
-                    ])
-                      RadioListTile<CircleNotificationLevel>(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(tr(label)),
-                        value: level,
-                        enabled: !_isSaving,
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          ),
+          if (settings == null)
+            loaded.hasError
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 24,
+                    ),
+                    child: Text(tr('Could not load notification settings.')),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+          else ...[
+            SettingsSectionHeader(tr('Mute circle')),
+            SettingsGroup(color: c.well, children: _muteTiles(settings)),
+            SettingsSectionHeader(tr('Notify me about')),
+            SettingsGroup(
+              color: c.well,
+              children: [
+                for (final (level, label, icon) in const [
+                  (
+                    CircleNotificationLevel.all,
+                    'All messages',
+                    Icons.notifications_active_outlined,
+                  ),
+                  (
+                    CircleNotificationLevel.mentions,
+                    'Only @mentions',
+                    Icons.alternate_email_rounded,
+                  ),
+                  (
+                    CircleNotificationLevel.none,
+                    'Nothing',
+                    Icons.notifications_none_rounded,
+                  ),
+                ])
+                  SettingsRow(
+                    key: ValueKey('circle-notify-${level.name}'),
+                    icon: icon,
+                    tone: settings.level == level
+                        ? SettingsTone.accent
+                        : SettingsTone.neutral,
+                    title: tr(label),
+                    showChevron: false,
+                    trailing: _Check(selected: settings.level == level),
+                    onTap: _isSaving || level == settings.level
+                        ? null
+                        : () => _save(settings, level: level),
+                  ),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -181,55 +201,56 @@ class _CircleNotificationSettingsSheetState
     final now = _now();
     if (settings.isMutedAt(now)) {
       return [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.notifications_off_outlined),
-          title: Text(
-            settings.isMutedIndefinitelyAt(now)
-                ? tr('Muted until you turn it back on')
-                : tr('Muted until {time}', {
-                    'time': _formatMuteEnd(settings.mutedUntil!, now),
-                  }),
-          ),
-          trailing: TextButton(
+        SettingsRow(
+          icon: Icons.notifications_off_outlined,
+          tone: SettingsTone.warning,
+          title: settings.isMutedIndefinitelyAt(now)
+              ? tr('Muted until you turn it back on')
+              : tr('Muted until {time}', {
+                  'time': _formatMuteEnd(settings.mutedUntil!, now),
+                }),
+          trailing: WeCordButton(
+            label: tr('Unmute'),
+            size: WeCordButtonSize.small,
+            variant: WeCordButtonVariant.secondary,
             onPressed: _isSaving ? null : () => _save(settings, unmute: true),
-            child: Text(tr('Unmute')),
           ),
         ),
       ];
     }
     return [
       for (final (label, duration) in _muteOptions)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          leading: const Icon(Icons.notifications_paused_outlined),
-          title: Text(tr(label)),
-          enabled: !_isSaving,
-          onTap: () => _save(settings, muteFor: duration),
+        SettingsRow(
+          icon: Icons.notifications_paused_outlined,
+          title: tr(label),
+          showChevron: false,
+          onTap: _isSaving ? null : () => _save(settings, muteFor: duration),
         ),
     ];
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.label);
+/// A round accent check for the chosen level, an empty ring otherwise.
+class _Check extends StatelessWidget {
+  const _Check({required this.selected});
 
-  final String label;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Text(
-        label.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
+    final c = context.tokens.colors;
+    return AnimatedContainer(
+      duration: WeCordMotion.quick,
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? c.accent : c.accent.withValues(alpha: 0),
+        border: selected ? null : Border.all(color: c.track, width: 2),
       ),
+      child: selected
+          ? Icon(Icons.check_rounded, size: 15, color: c.onAccent)
+          : null,
     );
   }
 }

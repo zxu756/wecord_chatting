@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the form that schedules an event in [detail]'s circle, or edits
 /// [event]. Returns the saved event, or null when cancelled.
@@ -13,13 +15,40 @@ Future<CircleEvent?> showCircleEventEditor(
   CircleEvent? event,
   DateTime? now,
 }) {
-  return showModalBottomSheet<CircleEvent>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  return showCircleFormSheet<CircleEvent>(
+    context,
     builder: (context) =>
         CircleEventEditorSheet(detail: detail, event: event, now: now),
   );
+}
+
+/// Shows a long form as a sheet on phones (lifted above the keyboard by
+/// the form itself) and as a centred rounded panel on wide screens.
+Future<T?> showCircleFormSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+}) {
+  if (circleWideLayout(context)) {
+    final tokens = context.tokens;
+    return showDialog<T>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: tokens.colors.panel,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(WeCordRadii.xxl),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: builder(context),
+        ),
+      ),
+    );
+  }
+  return showWeCordSheet<T>(context, builder: (context, _) => builder(context));
 }
 
 /// Title, description, start and optional end, and where: a voice or text
@@ -243,9 +272,26 @@ class _CircleEventEditorSheetState
     }
   }
 
+  Future<void> _pickChannel(List<CircleChannel> channels) async {
+    final picked = await showCircleActionMenu<String>(
+      context,
+      title: tr('Channel'),
+      items: [
+        for (final channel in channels)
+          CircleMenuItem(
+            value: channel.id,
+            icon: channel.isVoice ? Icons.volume_up_outlined : Icons.tag,
+            label: channel.name,
+          ),
+      ],
+    );
+    if (picked != null && mounted) {
+      setState(() => _channelId = picked);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final localizations = MaterialLocalizations.of(context);
     final use24Hour = MediaQuery.alwaysUse24HourFormatOf(context);
     String dateTime(DateTime value) =>
@@ -254,182 +300,305 @@ class _CircleEventEditorSheetState
     final channels = _channelsFor(_locationType);
     final endsAt = _endsAt;
     final editing = widget.event != null;
+    final selectedChannel = channels
+        .where((channel) => channel.id == _channelId)
+        .firstOrNull;
 
+    return CircleFormBody(
+      title: editing ? tr('Edit event') : tr('New event'),
+      errorText: _errorText,
+      actions: [
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.secondary,
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+        ),
+        WeCordButton(
+          key: const ValueKey('event-save'),
+          label: editing ? tr('Save') : tr('Create'),
+          loading: _saving,
+          onPressed: _saving ? null : _save,
+        ),
+      ],
+      children: [
+        WeCordTextField(
+          fieldKey: const ValueKey('event-title-field'),
+          controller: _titleController,
+          autofocus: !editing,
+          enabled: !_saving,
+          maxLength: CircleEvent.maxTitleLength,
+          textInputAction: TextInputAction.next,
+          label: tr('Title'),
+        ),
+        const SizedBox(height: 4),
+        CircleFormLabel(tr('Starts')),
+        CirclePickerField(
+          key: const ValueKey('event-start-button'),
+          icon: Icons.event_outlined,
+          label: dateTime(_startsAt),
+          onPressed: _saving ? null : _pickStart,
+        ),
+        const SizedBox(height: 10),
+        SettingsGroup(
+          color: context.tokens.colors.well,
+          children: [
+            SettingsRow.toggle(
+              key: const ValueKey('event-end-switch'),
+              icon: Icons.timelapse_rounded,
+              title: tr('End time'),
+              subtitle: endsAt == null
+                  ? tr('Without one, the event lasts 2 hours.')
+                  : null,
+              value: endsAt != null,
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() {
+                      _endsAt = value
+                          ? _startsAt.add(const Duration(hours: 1))
+                          : null;
+                    }),
+            ),
+          ],
+        ),
+        if (endsAt != null) ...[
+          const SizedBox(height: 10),
+          CirclePickerField(
+            key: const ValueKey('event-end-button'),
+            icon: Icons.event_available_outlined,
+            label: dateTime(endsAt),
+            onPressed: _saving ? null : _pickEnd,
+          ),
+        ],
+        const SizedBox(height: 6),
+        CircleFormLabel(tr('Where')),
+        WeCordSegmented<CircleEventLocationType>(
+          key: const ValueKey('event-location-type'),
+          expand: true,
+          height: 40,
+          semanticLabel: tr('Where'),
+          segments: [
+            for (final type in _locationTypes)
+              WeCordSegment(
+                value: type,
+                icon: switch (type) {
+                  CircleEventLocationType.voice => Icons.volume_up_outlined,
+                  CircleEventLocationType.text => Icons.tag,
+                  CircleEventLocationType.external => Icons.place_outlined,
+                },
+                label: switch (type) {
+                  CircleEventLocationType.voice => tr('Voice'),
+                  CircleEventLocationType.text => tr('Text'),
+                  CircleEventLocationType.external => tr('Elsewhere'),
+                },
+              ),
+          ],
+          selected: _locationType,
+          onChanged: _saving ? null : _setLocationType,
+        ),
+        const SizedBox(height: 12),
+        if (_locationType == CircleEventLocationType.external)
+          WeCordTextField(
+            fieldKey: const ValueKey('event-location-field'),
+            controller: _locationController,
+            enabled: !_saving,
+            maxLength: CircleEvent.maxLocationLength,
+            label: tr('Location'),
+            hint: tr('An address, a park, a link…'),
+          )
+        else ...[
+          CircleFormLabel(tr('Channel')),
+          CirclePickerField(
+            // Keyed by kind, so switching kinds starts from that kind's
+            // choice.
+            key: ValueKey('event-channel-field-${_locationType.value}'),
+            icon: _locationType == CircleEventLocationType.voice
+                ? Icons.volume_up_outlined
+                : Icons.tag,
+            label: selectedChannel?.name ?? tr('Choose a channel.'),
+            trailingIcon: Icons.unfold_more_rounded,
+            onPressed: _saving || channels.isEmpty
+                ? null
+                : () => _pickChannel(channels),
+          ),
+          const SizedBox(height: 12),
+        ],
+        WeCordTextField(
+          fieldKey: const ValueKey('event-description-field'),
+          controller: _descriptionController,
+          enabled: !_saving,
+          minLines: 2,
+          maxLines: 6,
+          maxLength: CircleEvent.maxDescriptionLength,
+          keyboardType: TextInputType.multiline,
+          label: tr('Description (optional)'),
+        ),
+      ],
+    );
+  }
+}
+
+/// A form in a sheet or dialog: title, [children], an error line and
+/// [actions] (main action last). Scrolls above the keyboard.
+class CircleFormBody extends StatelessWidget {
+  const CircleFormBody({
+    required this.title,
+    required this.children,
+    required this.actions,
+    this.errorText,
+    super.key,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final List<Widget> actions;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final wide = circleWideLayout(context);
+    final errorText = this.errorText;
     return SafeArea(
+      top: false,
       child: Padding(
-        // Lifts the sheet above the keyboard, so the form scrolls within
-        // the space left instead of hiding behind it.
+        // Lifts the form above the keyboard, so it scrolls within the
+        // space left instead of hiding behind it.
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(20, wide ? 22 : 6, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                editing ? tr('Edit event') : tr('New event'),
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('event-title-field'),
-                controller: _titleController,
-                autofocus: !editing,
-                enabled: !_saving,
-                maxLength: CircleEvent.maxTitleLength,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Title'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(tr('Starts'), style: theme.textTheme.titleSmall),
-              const SizedBox(height: 6),
-              OutlinedButton.icon(
-                key: const ValueKey('event-start-button'),
-                onPressed: _saving ? null : _pickStart,
-                icon: const Icon(Icons.event_outlined),
-                label: Text(dateTime(_startsAt)),
-              ),
-              const SizedBox(height: 4),
-              SwitchListTile(
-                key: const ValueKey('event-end-switch'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(tr('End time')),
-                subtitle: endsAt == null
-                    ? Text(tr('Without one, the event lasts 2 hours.'))
-                    : null,
-                value: endsAt != null,
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(() {
-                        _endsAt = value
-                            ? _startsAt.add(const Duration(hours: 1))
-                            : null;
-                      }),
-              ),
-              if (endsAt != null)
-                OutlinedButton.icon(
-                  key: const ValueKey('event-end-button'),
-                  onPressed: _saving ? null : _pickEnd,
-                  icon: const Icon(Icons.event_available_outlined),
-                  label: Text(dateTime(endsAt)),
-                ),
-              const SizedBox(height: 12),
-              Text(tr('Where'), style: theme.textTheme.titleSmall),
-              const SizedBox(height: 6),
-              SegmentedButton<CircleEventLocationType>(
-                key: const ValueKey('event-location-type'),
-                showSelectedIcon: false,
-                segments: [
-                  for (final type in _locationTypes)
-                    ButtonSegment(
-                      value: type,
-                      icon: Icon(switch (type) {
-                        CircleEventLocationType.voice =>
-                          Icons.volume_up_outlined,
-                        CircleEventLocationType.text => Icons.tag,
-                        CircleEventLocationType.external =>
-                          Icons.place_outlined,
-                      }),
-                      label: Text(switch (type) {
-                        CircleEventLocationType.voice => tr('Voice'),
-                        CircleEventLocationType.text => tr('Text'),
-                        CircleEventLocationType.external => tr('Elsewhere'),
-                      }),
-                    ),
-                ],
-                selected: {_locationType},
-                onSelectionChanged: _saving
-                    ? null
-                    : (selection) => _setLocationType(selection.single),
-              ),
-              const SizedBox(height: 10),
-              if (_locationType == CircleEventLocationType.external)
-                TextField(
-                  key: const ValueKey('event-location-field'),
-                  controller: _locationController,
-                  enabled: !_saving,
-                  maxLength: CircleEvent.maxLocationLength,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: tr('Location'),
-                    hintText: tr('An address, a park, a link…'),
+              Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: c.ink,
                   ),
-                )
-              else
-                DropdownButtonFormField<String>(
-                  // Keyed by kind, so switching kinds starts from that kind's choice.
-                  key: ValueKey('event-channel-field-${_locationType.value}'),
-                  initialValue: channels.any((c) => c.id == _channelId)
-                      ? _channelId
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: tr('Channel'),
-                  ),
-                  items: [
-                    for (final channel in channels)
-                      DropdownMenuItem(
-                        value: channel.id,
-                        child: Text(
-                          '# ${channel.name}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (value) => setState(() => _channelId = value),
-                ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('event-description-field'),
-                controller: _descriptionController,
-                enabled: !_saving,
-                minLines: 2,
-                maxLines: 6,
-                maxLength: CircleEvent.maxDescriptionLength,
-                keyboardType: TextInputType.multiline,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Description (optional)'),
-                  alignLabelWithHint: true,
                 ),
               ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 4),
+              const SizedBox(height: 16),
+              ...children,
+              if (errorText != null) ...[
+                const SizedBox(height: 8),
                 Text(
-                  _errorText!,
-                  style: TextStyle(color: theme.colorScheme.error),
+                  errorText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: c.dangerText,
+                  ),
                 ),
               ],
-              const SizedBox(height: 12),
-              OverflowBar(
-                alignment: MainAxisAlignment.end,
-                spacing: 8,
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  TextButton(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: Text(tr('Cancel')),
-                  ),
-                  FilledButton(
-                    key: const ValueKey('event-save'),
-                    onPressed: _saving ? null : _save,
-                    child: Text(editing ? tr('Save') : tr('Create')),
-                  ),
+                  for (final (index, action) in actions.indexed) ...[
+                    if (index > 0) const SizedBox(width: 10),
+                    if (wide) action else Expanded(child: action),
+                  ],
                 ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A small muted label above a form control.
+class CircleFormLabel extends StatelessWidget {
+  const CircleFormLabel(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 6, top: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: context.tokens.colors.muted,
+        ),
+      ),
+    );
+  }
+}
+
+/// A field-like button that opens a picker (date, channel).
+class CirclePickerField extends StatelessWidget {
+  const CirclePickerField({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.trailingIcon = Icons.chevron_right_rounded,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData trailingIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    const radius = BorderRadius.all(Radius.circular(WeCordRadii.lg));
+    return WeCordPressable(
+      onPressed: onPressed,
+      pressedScale: 0.99,
+      semanticLabel: label,
+      shape: const RoundedRectangleBorder(borderRadius: radius),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedOpacity(
+          duration: WeCordMotion.quick,
+          opacity: onPressed == null ? 0.5 : 1,
+          child: AnimatedContainer(
+            duration: WeCordMotion.quick,
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: hovered
+                  ? Color.alphaBlend(c.ink.withValues(alpha: 0.04), c.raised)
+                  : c.raised,
+              borderRadius: radius,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: c.muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.ink,
+                    ),
+                  ),
+                ),
+                Icon(trailingIcon, size: 20, color: c.faint),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

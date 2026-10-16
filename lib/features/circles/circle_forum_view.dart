@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/forum_post_composer_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -14,6 +15,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// A forum channel: its posts as cards, newest activity (or newest post)
 /// first with pinned posts on top, filtered by tag, loading more while
@@ -305,25 +307,58 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
   }
 
   void _showTopic(String topic) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(_channel.name),
-        content: SelectableText(topic),
+    showCircleDialog<void>(
+      context,
+      builder: (context) => CircleDialog(
+        title: _channel.name,
+        content: SelectableText(
+          topic,
+          style: TextStyle(
+            fontSize: 14.5,
+            height: 1.45,
+            color: context.tokens.colors.ink,
+          ),
+        ),
         actions: [
-          TextButton(
+          CircleDialogAction(
+            label: tr('Close'),
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(tr('Close')),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _pickSort(BuildContext buttonContext) async {
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    final sort = await showCircleActionMenu<ForumPostSort>(
+      context,
+      title: tr('Sort posts'),
+      position: box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+      items: [
+        for (final sort in ForumPostSort.values)
+          CircleMenuItem(
+            value: sort,
+            icon: sort == _sort
+                ? Icons.check_rounded
+                : switch (sort) {
+                    ForumPostSort.activity => Icons.bolt_rounded,
+                    ForumPostSort.created => Icons.schedule_rounded,
+                  },
+            tone: sort == _sort ? SettingsTone.accent : SettingsTone.neutral,
+            label: tr(sort.label),
+          ),
+      ],
+    );
+    if (sort != null && mounted) {
+      _setSort(sort);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
+    final touch = usesTouchInput(context);
     final detail = widget.detail;
     final canPost = detail.canInChannel(
       _channel,
@@ -334,13 +369,28 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
       CirclePermission.manageMessages,
     );
     final topic = _channel.topic?.trim();
+    final subtitleStyle = TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w500,
+      color: c.muted,
+    );
 
     return Scaffold(
+      backgroundColor: c.panel,
       appBar: AppBar(
-        leading: const Padding(
-          padding: EdgeInsets.all(8),
-          child: CircleAvatar(child: Icon(Icons.forum_outlined)),
+        backgroundColor: c.panel,
+        toolbarHeight: 58,
+        leadingWidth: 60,
+        shape: Border(bottom: BorderSide(color: c.lineSoft)),
+        leading: Center(
+          child: ThingAvatar(
+            icon: Icons.forum_outlined,
+            size: 36,
+            color: c.raised,
+            foregroundColor: c.ink,
+          ),
         ),
+        titleSpacing: 4,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -349,32 +399,41 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
               _channel.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+              style: TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+                color: c.ink,
               ),
             ),
             if (topic != null && topic.isNotEmpty)
-              InkWell(
+              GestureDetector(
                 key: const ValueKey('forum-topic'),
+                behavior: HitTestBehavior.opaque,
                 onTap: () => _showTopic(topic),
-                child: Text(
-                  topic,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Text(
+                    topic,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: subtitleStyle,
+                  ),
                 ),
               )
             else
-              Text(tr('Forum'), style: theme.textTheme.labelSmall),
+              Text(tr('Forum'), style: subtitleStyle),
           ],
         ),
-        actions: [for (final action in widget.actions) action.toIconButton()],
+        actions: [
+          for (final action in widget.actions) action.toIconButton(),
+          const SizedBox(width: 6),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 4),
             // Phones show the sort as an icon; its menu names the choices.
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -383,15 +442,15 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                   children: [
                     if (canPost)
                       Flexible(
-                        child: FilledButton.icon(
+                        child: WeCordButton(
                           key: const ValueKey('forum-new-post'),
+                          variant: WeCordButtonVariant.accent,
+                          size: touch
+                              ? WeCordButtonSize.medium
+                              : WeCordButtonSize.small,
                           onPressed: _newPost,
-                          icon: const Icon(Icons.add),
-                          label: Text(
-                            tr('New post'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          icon: Icons.add_rounded,
+                          label: tr('New post'),
                         ),
                       )
                     else
@@ -399,50 +458,73 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                         child: Text(
                           tr('You cannot post in this forum.'),
                           key: const ValueKey('forum-read-only'),
-                          style: theme.textTheme.bodySmall,
+                          style: TextStyle(fontSize: 13, color: c.muted),
                         ),
                       ),
                     if (canPost) const Spacer(),
                     const SizedBox(width: 8),
-                    PopupMenuButton<ForumPostSort>(
-                      key: const ValueKey('forum-sort-button'),
-                      tooltip: tr('Sort posts: {sort}', {
-                        'sort': tr(_sort.label),
-                      }),
-                      initialValue: _sort,
-                      onSelected: _setSort,
-                      itemBuilder: (context) => [
-                        for (final sort in ForumPostSort.values)
-                          CheckedPopupMenuItem(
-                            value: sort,
-                            checked: sort == _sort,
-                            child: Text(tr(sort.label)),
-                          ),
-                      ],
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: usesTouchInput(context)
-                              ? minTouchTargetSize
-                              : 36,
-                          minWidth: usesTouchInput(context)
-                              ? minTouchTargetSize
-                              : 36,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.sort, size: 20),
-                            if (!compact) ...[
-                              const SizedBox(width: 4),
-                              Text(
-                                tr(_sort.label),
-                                style: theme.textTheme.labelLarge,
+                    Builder(
+                      builder: (buttonContext) => WeCordPressable(
+                        key: const ValueKey('forum-sort-button'),
+                        tooltip: tr('Sort posts: {sort}', {
+                          'sort': tr(_sort.label),
+                        }),
+                        onPressed: () => _pickSort(buttonContext),
+                        builder: (context, states) {
+                          final hovered = states.contains(WidgetState.hovered);
+                          return ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: touch ? minTouchTargetSize : 32,
+                              minWidth: touch ? minTouchTargetSize : 32,
+                            ),
+                            child: Center(
+                              widthFactor: 1,
+                              child: AnimatedContainer(
+                                duration: WeCordMotion.quick,
+                                height: 32,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                decoration: ShapeDecoration(
+                                  color: hovered
+                                      ? Color.alphaBlend(
+                                          c.ink.withValues(alpha: 0.05),
+                                          c.raised,
+                                        )
+                                      : c.raised,
+                                  shape: const StadiumBorder(),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.sort_rounded,
+                                      size: 17,
+                                      color: c.ink,
+                                    ),
+                                    if (!compact) ...[
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        tr(_sort.label),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: c.ink,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(width: 2),
+                                    Icon(
+                                      Icons.expand_more_rounded,
+                                      size: 17,
+                                      color: c.muted,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                            const Icon(Icons.arrow_drop_down),
-                          ],
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -452,27 +534,32 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
           ),
           if (_channel.tags.isNotEmpty)
             SizedBox(
-              height: 48,
+              height: touch ? 52 : 44,
               child: ListView(
                 key: const ValueKey('forum-tag-filters'),
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 children: [
                   for (final tag in _channel.tags)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        key: ValueKey('forum-tag-filter-${tag.id}'),
-                        label: Text(tag.label),
-                        selected: tag.id == _tagId,
-                        onSelected: (selected) =>
-                            _setTag(selected ? tag.id : null),
+                      child: Center(
+                        child: WeCordChip(
+                          key: ValueKey('forum-tag-filter-${tag.id}'),
+                          label: tag.label,
+                          height: 32,
+                          selected: tag.id == _tagId,
+                          onPressed: () =>
+                              _setTag(tag.id == _tagId ? null : tag.id),
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
-          const Divider(height: 1),
           Expanded(
             child: _buildList(canPin: canPin, canPost: canPost),
           ),
@@ -482,63 +569,44 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
   }
 
   Widget _buildList({required bool canPin, required bool canPost}) {
-    final theme = Theme.of(context);
     if (_posts.isEmpty) {
       if (_error != null) {
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr('Could not load posts.')),
-              TextButton(onPressed: _loadMore, child: Text(tr('Retry'))),
-            ],
+        return CircleEmptyState(
+          icon: Icons.forum_outlined,
+          title: tr('Could not load posts.'),
+          action: WeCordButton(
+            label: tr('Retry'),
+            variant: WeCordButtonVariant.secondary,
+            onPressed: _loadMore,
           ),
         );
       }
       if (_loading || _hasMore) {
         return const Center(child: CircularProgressIndicator());
       }
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.forum_outlined,
-                size: 40,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _tagId == null
-                    ? tr('No posts yet')
-                    : tr('No posts with this tag'),
-                style: theme.textTheme.titleMedium,
-              ),
-              if (canPost && _tagId == null)
-                Text(
-                  tr('Start the first conversation with New post.'),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
-            ],
-          ),
-        ),
+      return CircleEmptyState(
+        icon: Icons.forum_outlined,
+        title: _tagId == null
+            ? tr('No posts yet')
+            : tr('No posts with this tag'),
+        message: canPost && _tagId == null
+            ? tr('Start the first conversation with New post.')
+            : null,
       );
     }
     return ListView.builder(
       key: const ValueKey('forum-post-list'),
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
       itemCount: _posts.length + 1,
       itemBuilder: (context, index) {
         if (index == _posts.length) {
           if (_error != null) {
             return Center(
-              child: TextButton(
+              child: WeCordButton(
+                label: tr('Could not load more. Retry'),
+                variant: WeCordButtonVariant.ghost,
                 onPressed: _loadMore,
-                child: Text(tr('Could not load more. Retry')),
               ),
             );
           }
@@ -609,10 +677,29 @@ class ForumPostCard extends StatelessWidget {
   /// The current time, for tests.
   final DateTime? now;
 
+  Future<void> _showActions(BuildContext context, Offset? position) async {
+    final action = await showCircleActionMenu<ForumPostAction>(
+      context,
+      title: post.title,
+      position: position,
+      items: [
+        for (final action in actions)
+          CircleMenuItem(
+            value: action,
+            icon: action.icon,
+            label: tr(action.label),
+          ),
+      ],
+    );
+    if (action != null) {
+      onAction?.call(action);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final tokens = context.tokens;
+    final c = tokens.colors;
     final unread = post.unreadCount > 0;
     final snippet = plainTextFromMarkdown(
       post.body,
@@ -624,19 +711,28 @@ class ForumPostCard extends StatelessWidget {
       final count => tr('{count} replies', {'count': count}),
     };
     final thumbnail = post.thumbnail;
+    final radius = BorderRadius.circular(18);
+    final hasMenu = actions.isNotEmpty && onAction != null;
 
-    return Material(
+    return WeCordPressable(
       key: ValueKey('forum-post-${post.id}'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+      onPressed: onTap,
+      pressedScale: 0.99,
+      shape: RoundedRectangleBorder(borderRadius: radius),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          padding: EdgeInsets.fromLTRB(14, 12, hasMenu ? 4 : 14, 12),
+          decoration: BoxDecoration(
+            color: hovered
+                ? Color.alphaBlend(c.ink.withValues(alpha: 0.03), c.well)
+                : c.well,
+            borderRadius: radius,
+            border: Border.all(
+              color: unread ? c.accent.withValues(alpha: 0.35) : c.well,
+            ),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -646,22 +742,22 @@ class ForumPostCard extends StatelessWidget {
                   children: [
                     if (post.isPinned || post.isArchived)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: 6),
                         child: Wrap(
                           spacing: 8,
                           children: [
                             if (post.isPinned)
                               _Badge(
                                 key: const ValueKey('forum-post-pinned'),
-                                icon: Icons.push_pin,
+                                icon: Icons.push_pin_rounded,
                                 label: tr('Pinned'),
-                                color: colorScheme.primary,
+                                color: c.accentText,
                               ),
                             if (post.isArchived)
                               _Badge(
                                 icon: Icons.archive_outlined,
                                 label: tr('Archived'),
-                                color: colorScheme.onSurfaceVariant,
+                                color: c.muted,
                               ),
                           ],
                         ),
@@ -674,10 +770,13 @@ class ForumPostCard extends StatelessWidget {
                             post.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
+                            style: TextStyle(
+                              fontSize: 15.5,
+                              letterSpacing: -0.2,
                               fontWeight: unread
                                   ? FontWeight.w800
-                                  : FontWeight.w600,
+                                  : FontWeight.w700,
+                              color: c.ink,
                             ),
                           ),
                         ),
@@ -689,7 +788,7 @@ class ForumPostCard extends StatelessWidget {
                               width: 8,
                               height: 8,
                               decoration: BoxDecoration(
-                                color: colorScheme.primary,
+                                color: c.accent,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -701,16 +800,17 @@ class ForumPostCard extends StatelessWidget {
                       author?.name ?? tr('Deleted user'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                         color: switch (author?.roleColor) {
                           final color? => circleRoleColor(color),
-                          null => colorScheme.onSurfaceVariant,
+                          null => c.muted,
                         },
                       ),
                     ),
                     if (post.tags.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
@@ -725,8 +825,10 @@ class ForumPostCard extends StatelessWidget {
                         snippet,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.4,
+                          color: c.muted,
                         ),
                       ),
                     ],
@@ -734,22 +836,23 @@ class ForumPostCard extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          Icons.chat_bubble_outline,
+                          Icons.chat_bubble_outline_rounded,
                           size: 14,
-                          color: colorScheme.onSurfaceVariant,
+                          color: unread ? c.accentText : c.subtle,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 5),
                         Flexible(
                           child: Text(
                             '$replies · '
                             '${formatThreadActivity(post.lastActivityAt, now: now)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: unread
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
-                              fontWeight: unread ? FontWeight.w700 : null,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: unread ? c.accentText : c.muted,
+                              fontWeight: unread
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                         ),
@@ -759,32 +862,31 @@ class ForumPostCard extends StatelessWidget {
                 ),
               ),
               if (thumbnail != null) ...[
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 ForumThumbnail(attachment: thumbnail),
               ],
-              if (actions.isNotEmpty && onAction != null)
-                PopupMenuButton<ForumPostAction>(
-                  tooltip: tr('Post options'),
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: onAction,
-                  itemBuilder: (context) => [
-                    for (final action in actions)
-                      PopupMenuItem(
-                        value: action,
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(action.icon),
-                          title: Text(tr(action.label)),
-                        ),
-                      ),
-                  ],
-                )
-              else
-                const SizedBox(width: 10),
+              if (hasMenu)
+                Builder(
+                  builder: (buttonContext) => WeCordIconButton(
+                    tooltip: tr('Post options'),
+                    icon: Icons.more_horiz_rounded,
+                    variant: WeCordButtonVariant.ghost,
+                    size: 32,
+                    iconSize: 18,
+                    onPressed: () {
+                      final box =
+                          buttonContext.findRenderObject() as RenderBox?;
+                      _showActions(
+                        context,
+                        box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+                      );
+                    },
+                  ),
+                ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -806,11 +908,12 @@ class _Badge extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: color),
+        Icon(icon, size: 13, color: color),
         const SizedBox(width: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          style: TextStyle(
+            fontSize: 11.5,
             color: color,
             fontWeight: FontWeight.w700,
           ),
@@ -828,19 +931,21 @@ class ForumTagLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+      decoration: ShapeDecoration(
+        color: c.raised,
+        shape: const StadiumBorder(),
       ),
       child: Text(
         tag.label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onSecondaryContainer,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: c.ink,
         ),
       ),
     );
@@ -899,15 +1004,16 @@ class _ForumThumbnailState extends ConsumerState<ForumThumbnail> {
   @override
   Widget build(BuildContext context) {
     final size = widget.size;
+    final c = context.tokens.colors;
     final placeholder = Container(
       width: size,
       height: size,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: const Icon(Icons.image_outlined),
+      color: c.raised,
+      child: Icon(Icons.image_outlined, color: c.faint),
     );
     return ClipRRect(
       key: const ValueKey('forum-post-thumbnail'),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(WeCordRadii.sm),
       child: FutureBuilder<String>(
         future: _url,
         builder: (context, snapshot) {
@@ -938,8 +1044,8 @@ Future<List<String>?> showForumTagPicker(
   required List<ForumTag> tags,
   required Set<String> selected,
 }) {
-  return showDialog<List<String>>(
-    context: context,
+  return showCircleDialog<List<String>>(
+    context,
     builder: (context) => _ForumTagPickerDialog(tags: tags, selected: selected),
   );
 }
@@ -959,9 +1065,8 @@ class _ForumTagPickerDialogState extends State<_ForumTagPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Edit tags')),
+    return CircleDialog(
+      title: tr('Edit tags'),
       content: ForumTagSelector(
         tags: widget.tags,
         selected: _selected,
@@ -972,23 +1077,23 @@ class _ForumTagPickerDialogState extends State<_ForumTagPickerDialog> {
         }),
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
+          label: tr('Save'),
           onPressed: () => Navigator.of(context).pop([
             for (final tag in widget.tags)
               if (_selected.contains(tag.id)) tag.id,
           ]),
-          child: Text(tr('Save')),
         ),
       ],
     );
   }
 }
 
-/// Filter chips for choosing up to [ForumTag.maxPerPost] tags.
+/// Chips for choosing up to [ForumTag.maxPerPost] tags.
 class ForumTagSelector extends StatelessWidget {
   const ForumTagSelector({
     required this.tags,
@@ -1005,37 +1110,46 @@ class ForumTagSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final full = selected.length >= ForumTag.maxPerPost;
+    final height = usesTouchInput(context) ? minTouchTargetSize : 34.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Wrap(
           spacing: 8,
-          runSpacing: 4,
+          runSpacing: 8,
           children: [
             for (final tag in tags)
-              FilterChip(
-                key: ValueKey('forum-tag-choice-${tag.id}'),
-                label: Text(tag.label),
-                selected: selected.contains(tag.id),
-                onSelected: !enabled || (full && !selected.contains(tag.id))
-                    ? null
-                    : (value) => onChanged(
-                        value
-                            ? {...selected, tag.id}
-                            : ({...selected}..remove(tag.id)),
-                      ),
+              Opacity(
+                opacity: !enabled || (full && !selected.contains(tag.id))
+                    ? 0.45
+                    : 1,
+                child: WeCordChip(
+                  key: ValueKey('forum-tag-choice-${tag.id}'),
+                  label: tag.label,
+                  height: height,
+                  icon: selected.contains(tag.id) ? Icons.check_rounded : null,
+                  selected: selected.contains(tag.id),
+                  onPressed: !enabled || (full && !selected.contains(tag.id))
+                      ? null
+                      : () => onChanged(
+                          selected.contains(tag.id)
+                              ? ({...selected}..remove(tag.id))
+                              : {...selected, tag.id},
+                        ),
+                ),
               ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Text(
           tr('Up to {max} tags · {count} chosen', {
             'max': ForumTag.maxPerPost,
             'count': selected.length,
           }),
-          style: Theme.of(context).textTheme.bodySmall,
+          style: TextStyle(fontSize: 12.5, color: c.muted),
         ),
       ],
     );

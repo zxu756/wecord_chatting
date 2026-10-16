@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_ban.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// How long a timeout can last, as offered in the timeout dialog.
 const circleTimeoutDurations = <(String, Duration)>[
@@ -47,27 +48,31 @@ Future<void> timeOutCircleMember(
   required CircleMember member,
 }) async {
   final name = member.displayName;
-  final duration = await showDialog<Duration>(
-    context: context,
-    builder: (context) => SimpleDialog(
-      title: Text(tr('Time out {name}', {'name': name})),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-          child: Text(
-            tr(
-              "They can still read, but can't send messages, react, start "
-              'threads or join voice until it ends.',
+  final duration = await showCircleDialog<Duration>(
+    context,
+    builder: (context) => CircleDialog(
+      title: tr('Time out {name}', {'name': name}),
+      message: tr(
+        "They can still read, but can't send messages, react, start "
+        'threads or join voice until it ends.',
+      ),
+      content: SettingsGroup(
+        color: context.tokens.colors.well,
+        separatorIndent: 14,
+        children: [
+          for (final (label, duration) in circleTimeoutDurations)
+            SettingsRow(
+              key: ValueKey('timeout-option-${duration.inSeconds}'),
+              title: tr(label),
+              onTap: () => Navigator.of(context).pop(duration),
             ),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+        ],
+      ),
+      actions: [
+        CircleDialogAction(
+          label: tr('Cancel'),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        for (final (label, duration) in circleTimeoutDurations)
-          SimpleDialogOption(
-            key: ValueKey('timeout-option-${duration.inSeconds}'),
-            onPressed: () => Navigator.of(context).pop(duration),
-            child: Text(tr(label)),
-          ),
       ],
     ),
   );
@@ -147,8 +152,8 @@ Future<void> banCircleMember(
   required CircleMember member,
 }) async {
   final name = member.displayName;
-  final choice = await showDialog<({String reason, int deleteHours})>(
-    context: context,
+  final choice = await showCircleDialog<({String reason, int deleteHours})>(
+    context,
     builder: (context) => _BanDialog(name: name),
   );
   if (choice == null || !context.mounted) {
@@ -200,60 +205,59 @@ class _BanDialogState extends State<_BanDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Ban {name}', {'name': widget.name})),
+    final c = context.tokens.colors;
+    return CircleDialog(
+      title: tr('Ban {name}', {'name': widget.name}),
+      message: tr(
+        'Remove {name} from this circle and keep them from '
+        'rejoining, even with an invite.',
+        {'name': widget.name},
+      ),
       content: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            tr(
-              'Remove {name} from this circle and keep them from '
-              'rejoining, even with an invite.',
-              {'name': widget.name},
-            ),
+          SettingsGroup(
+            key: const ValueKey('ban-delete-messages'),
+            header: tr('Delete their messages'),
+            color: c.well,
+            separatorIndent: 14,
+            children: [
+              for (final (label, hours) in circleBanMessageWindows)
+                SettingsRow(
+                  key: ValueKey('ban-delete-$hours'),
+                  title: tr(label),
+                  showChevron: false,
+                  trailing: _deleteHours == hours
+                      ? Icon(Icons.check_rounded, size: 20, color: c.accentText)
+                      : null,
+                  onTap: () => setState(() => _deleteHours = hours),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<int>(
-            key: const ValueKey('ban-delete-messages'),
-            initialValue: _deleteHours,
-            decoration: InputDecoration(labelText: tr('Delete their messages')),
-            items: [
-              for (final (label, hours) in circleBanMessageWindows)
-                DropdownMenuItem(value: hours, child: Text(tr(label))),
-            ],
-            onChanged: (value) => setState(() => _deleteHours = value ?? 0),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('ban-reason'),
+          WeCordTextField(
+            fieldKey: const ValueKey('ban-reason'),
             controller: _reason,
             maxLength: 512,
             maxLines: 3,
             minLines: 1,
-            decoration: InputDecoration(
-              labelText: tr('Reason (optional)'),
-              helperText: tr('Only moderators see it.'),
-            ),
+            label: tr('Reason (optional)'),
+            helperText: tr('Only moderators see it.'),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.danger(
           key: const ValueKey('ban-confirm'),
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-            foregroundColor: Theme.of(context).colorScheme.onError,
-          ),
+          label: tr('Ban'),
           onPressed: () => Navigator.of(
             context,
           ).pop((reason: _reason.text.trim(), deleteHours: _deleteHours)),
-          child: Text(tr('Ban')),
         ),
       ],
     );
@@ -282,73 +286,44 @@ class CircleBansScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bans = ref.watch(circleBansProvider(circleId));
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Bans'))),
+    final c = context.tokens.colors;
+    return CirclePageScaffold(
+      title: tr('Bans'),
       body: bans.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(tr('Could not load bans.')),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => ref.invalidate(circleBansProvider(circleId)),
-                  child: Text(tr('Try again')),
-                ),
-              ],
-            ),
+        error: (error, stackTrace) => CircleEmptyState(
+          icon: Icons.error_outline,
+          title: tr('Could not load bans.'),
+          action: WeCordButton(
+            label: tr('Try again'),
+            variant: WeCordButtonVariant.onPaper,
+            onPressed: () => ref.invalidate(circleBansProvider(circleId)),
           ),
         ),
         data: (bans) {
           if (bans.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  tr('Nobody is banned.'),
-                  key: const ValueKey('circle-bans-empty'),
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
+            return CircleEmptyState(
+              key: const ValueKey('circle-bans-empty'),
+              icon: Icons.verified_user_outlined,
+              title: tr('Nobody is banned.'),
             );
           }
-          return ListView.builder(
-            itemCount: bans.length,
-            itemBuilder: (context, index) {
-              final ban = bans[index];
-              final details = [
-                if (ban.reason case final reason? when reason.isNotEmpty)
-                  reason,
-                if (ban.bannedByName case final by?)
-                  tr('Banned by {name}', {'name': by}),
-              ].join(' · ');
-              return ListTile(
-                key: ValueKey('circle-ban-${ban.userId}'),
-                leading: FallbackAvatar(
-                  title: ban.name,
-                  avatarUrl: ban.avatarUrl,
-                ),
-                title: Text(ban.name),
-                subtitle: details.isEmpty
-                    ? Text('@${ban.username}')
-                    : Text(
-                        '@${ban.username} · $details',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                trailing: TextButton(
-                  key: ValueKey('circle-unban-${ban.userId}'),
-                  onPressed: () => _unban(context, ref, ban),
-                  child: Text(tr('Unban')),
-                ),
-              );
-            },
+          return ListView(
+            padding: circlePagePadding(context),
+            children: [
+              SettingsGroup(
+                separatorIndent: 66,
+                children: [
+                  for (final ban in bans)
+                    _BanRow(
+                      key: ValueKey('circle-ban-${ban.userId}'),
+                      ban: ban,
+                      colors: c,
+                      onUnban: () => _unban(context, ref, ban),
+                    ),
+                ],
+              ),
+            ],
           );
         },
       ),
@@ -360,28 +335,16 @@ class CircleBansScreen extends ConsumerWidget {
     WidgetRef ref,
     CircleBan ban,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Unban {name}', {'name': ban.name})),
-        content: Text(
-          tr('{name} will be able to join again with an invite.', {
-            'name': ban.name,
-          }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Unban')),
-          ),
-        ],
-      ),
+    final confirmed = await confirmCircleAction(
+      context,
+      title: tr('Unban {name}', {'name': ban.name}),
+      message: tr('{name} will be able to join again with an invite.', {
+        'name': ban.name,
+      }),
+      confirmLabel: tr('Unban'),
+      destructive: false,
     );
-    if (confirmed != true || !context.mounted) {
+    if (!confirmed || !context.mounted) {
       return;
     }
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -402,5 +365,72 @@ class CircleBansScreen extends ConsumerWidget {
         ),
       );
     }
+  }
+}
+
+/// One banned person: avatar, name, @username with the reason and who
+/// banned them, and an Unban button.
+class _BanRow extends StatelessWidget {
+  const _BanRow({
+    required this.ban,
+    required this.colors,
+    required this.onUnban,
+    super.key,
+  });
+
+  final CircleBan ban;
+  final WeCordPalette colors;
+  final VoidCallback onUnban;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    final details = [
+      '@${ban.username}',
+      if (ban.reason case final reason? when reason.isNotEmpty) reason,
+      if (ban.bannedByName case final by?) tr('Banned by {name}', {'name': by}),
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+      child: Row(
+        children: [
+          CircleNetworkAvatar(name: ban.name, url: ban.avatarUrl, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ban.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  details,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          WeCordButton(
+            key: ValueKey('circle-unban-${ban.userId}'),
+            label: tr('Unban'),
+            size: WeCordButtonSize.small,
+            variant: WeCordButtonVariant.secondary,
+            onPressed: onUnban,
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
+import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
@@ -11,6 +12,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the new post form of a forum. Returns the created post, or null
 /// when cancelled.
@@ -18,10 +20,8 @@ Future<ForumPost?> showForumPostComposer(
   BuildContext context, {
   required CircleChannel channel,
 }) {
-  return showModalBottomSheet<ForumPost>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  return showCircleFormSheet<ForumPost>(
+    context,
     builder: (context) => ForumPostComposerSheet(channel: channel),
   );
 }
@@ -146,7 +146,6 @@ class _ForumPostComposerSheetState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final image = _image;
     final query = _mentionQuery;
     // The forum's member list leaves out members who cannot see it.
@@ -160,133 +159,117 @@ class _ForumPostComposerSheetState
                 const [],
             query,
           );
-    return SafeArea(
-      child: Padding(
-        // Lifts the sheet above the keyboard, so the form scrolls within
-        // the space left instead of hiding behind it.
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
+    final c = context.tokens.colors;
+    return CircleFormBody(
+      title: tr('New post in {channel}', {'channel': widget.channel.name}),
+      errorText: _errorText,
+      actions: [
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.secondary,
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                tr('New post in {channel}', {'channel': widget.channel.name}),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('forum-post-title-field'),
-                controller: _titleController,
-                autofocus: true,
-                enabled: !_saving,
-                maxLength: ForumPost.maxTitleLength,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Title'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('forum-post-body-field'),
-                controller: _bodyController,
-                enabled: !_saving,
-                minLines: 3,
-                maxLines: 8,
-                maxLength: ForumPost.maxBodyLength,
-                keyboardType: TextInputType.multiline,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Message'),
-                  alignLabelWithHint: true,
-                ),
-              ),
-              if (candidates.isNotEmpty) ...[
-                MentionCandidateList(
-                  key: const ValueKey('forum-post-mention-candidates'),
-                  candidates: candidates,
-                  onSelect: _insertMention,
-                  maxHeight: 180,
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (widget.channel.tags.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(tr('Tags'), style: theme.textTheme.titleSmall),
-                const SizedBox(height: 6),
-                ForumTagSelector(
-                  tags: widget.channel.tags,
-                  selected: _tagIds,
-                  enabled: !_saving,
-                  onChanged: (selected) => setState(() {
-                    _tagIds
-                      ..clear()
-                      ..addAll(selected);
-                  }),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (image == null)
-                    TextButton.icon(
-                      key: const ValueKey('forum-post-add-image'),
-                      onPressed: _saving || _picking ? null : _pickImage,
-                      icon: const Icon(Icons.image_outlined),
-                      label: Text(tr('Add image')),
-                    )
-                  else
-                    Expanded(
-                      child: InputChip(
-                        key: const ValueKey('forum-post-image'),
-                        avatar: const Icon(Icons.image_outlined),
-                        label: Text(
-                          image.fileName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onDeleted: _saving
-                            ? null
-                            : () => setState(() => _image = null),
-                        deleteButtonTooltipMessage: tr('Remove image'),
-                      ),
-                    ),
-                ],
-              ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _errorText!,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ],
-              const SizedBox(height: 12),
-              OverflowBar(
-                alignment: MainAxisAlignment.end,
-                spacing: 8,
-                children: [
-                  TextButton(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: Text(tr('Cancel')),
-                  ),
-                  FilledButton(
-                    key: const ValueKey('forum-post-submit'),
-                    onPressed: _saving ? null : _post,
-                    child: Text(tr('Post')),
-                  ),
-                ],
-              ),
-            ],
+        WeCordButton(
+          key: const ValueKey('forum-post-submit'),
+          label: tr('Post'),
+          variant: WeCordButtonVariant.accent,
+          loading: _saving,
+          onPressed: _saving ? null : _post,
+        ),
+      ],
+      children: [
+        WeCordTextField(
+          fieldKey: const ValueKey('forum-post-title-field'),
+          controller: _titleController,
+          autofocus: true,
+          enabled: !_saving,
+          maxLength: ForumPost.maxTitleLength,
+          textInputAction: TextInputAction.next,
+          label: tr('Title'),
+        ),
+        const SizedBox(height: 4),
+        WeCordTextField(
+          fieldKey: const ValueKey('forum-post-body-field'),
+          controller: _bodyController,
+          enabled: !_saving,
+          minLines: 3,
+          maxLines: 8,
+          maxLength: ForumPost.maxBodyLength,
+          keyboardType: TextInputType.multiline,
+          label: tr('Message'),
+        ),
+        if (candidates.isNotEmpty) ...[
+          MentionCandidateList(
+            key: const ValueKey('forum-post-mention-candidates'),
+            candidates: candidates,
+            onSelect: _insertMention,
+            maxHeight: 180,
           ),
-        ),
-      ),
+          const SizedBox(height: 8),
+        ],
+        if (widget.channel.tags.isNotEmpty) ...[
+          CircleFormLabel(tr('Tags')),
+          ForumTagSelector(
+            tags: widget.channel.tags,
+            selected: _tagIds,
+            enabled: !_saving,
+            onChanged: (selected) => setState(() {
+              _tagIds
+                ..clear()
+                ..addAll(selected);
+            }),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 4),
+        if (image == null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: WeCordButton(
+              key: const ValueKey('forum-post-add-image'),
+              variant: WeCordButtonVariant.secondary,
+              onPressed: _saving || _picking ? null : _pickImage,
+              icon: Icons.image_outlined,
+              label: tr('Add image'),
+            ),
+          )
+        else
+          Container(
+            key: const ValueKey('forum-post-image'),
+            padding: const EdgeInsets.only(left: 14),
+            decoration: BoxDecoration(
+              color: c.raised,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.image_outlined, size: 20, color: c.muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    image.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: c.ink,
+                    ),
+                  ),
+                ),
+                WeCordIconButton(
+                  tooltip: tr('Remove image'),
+                  icon: Icons.close_rounded,
+                  variant: WeCordButtonVariant.ghost,
+                  size: 32,
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() => _image = null),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

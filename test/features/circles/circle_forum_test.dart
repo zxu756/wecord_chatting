@@ -9,6 +9,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/forum.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../../mobile/phone_test_support.dart';
 
@@ -39,7 +40,7 @@ void main() {
       (widget) =>
           widget.key is ValueKey<String> &&
           (widget.key! as ValueKey<String>).value.startsWith('forum-post-') &&
-          widget is Material,
+          widget is WeCordPressable,
     );
     final card = cards.at(index);
     return tester
@@ -437,12 +438,8 @@ void main() {
       find.byKey(const ValueKey('forum-tag-name-field')),
       'Equipment',
     );
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(FilledButton, 'Save'),
-      ),
-    );
+    // The dialog's Save comes after the overview form's.
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save').last);
     await settle(tester);
     expect(world.circles.forumCalls.last, 'update tag tag-gear Equipment -');
 
@@ -450,7 +447,7 @@ void main() {
       find.descendant(of: gear, matching: find.byTooltip('Delete tag')),
     );
     await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Delete'));
     await settle(tester);
     expect(world.circles.forumCalls.last, 'delete tag tag-gear');
 
@@ -465,7 +462,7 @@ void main() {
       find.byKey(const ValueKey('forum-tag-emoji-field')),
       '🧪',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Add'));
     await settle(tester);
     expect(world.circles.forumCalls.last, 'create tag ch-help Beta 🧪');
 
@@ -485,10 +482,10 @@ void main() {
     await tester.tap(find.text('Forum'));
     await settle(tester);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Channel name'),
+      find.widgetWithText(WeCordTextField, 'Channel name'),
       'qa',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
     await settle(tester);
 
     expect(world.circles.createdChannelName, 'qa');

@@ -14,9 +14,11 @@ import 'package:wecord/features/circles/circle_notification_settings_sheet.dart'
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -25,8 +27,10 @@ import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 const maxCircleCategoryNameLength = 32;
 
@@ -320,31 +324,17 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
   }
 
   Future<void> _deleteCategory(CircleChannelCategory category) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(tr('Delete category')),
-        content: Text(
-          tr(
-            'Delete "{name}"? Its channels move to the top of the channel '
-            'list.',
-            {'name': category.name},
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Delete')),
-          ),
-        ],
+    final confirmed = await confirmCircleAction(
+      context,
+      title: tr('Delete category'),
+      message: tr(
+        'Delete "{name}"? Its channels move to the top of the channel '
+        'list.',
+        {'name': category.name},
       ),
+      confirmLabel: tr('Delete'),
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     final deleted = await _runCategoryAction(
@@ -378,21 +368,15 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     CircleChannel channel,
     Offset globalPosition,
   ) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final action = await showMenu<_ChannelMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
+    final action = await showCircleActionMenu<_ChannelMenuAction>(
+      context,
+      title: channel.name,
+      position: globalPosition,
       items: [
-        PopupMenuItem(
+        CircleMenuItem(
           value: _ChannelMenuAction.settings,
-          child: ListTile(
-            leading: const Icon(Icons.settings_outlined),
-            title: Text(tr('Channel settings')),
-          ),
+          icon: Icons.settings_outlined,
+          label: tr('Channel settings'),
         ),
       ],
     );
@@ -470,46 +454,92 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           : ReorderableDragStartListener(index: index, child: child);
     }
 
+    final tokens = context.tokens;
+    final c = tokens.colors;
+    final mutedConversations = <String>{
+      for (final conversation in conversations)
+        if (conversation.isMuted) conversation.id,
+    };
+    final onlineUserIds =
+        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+    final onlineCount = detail.members
+        .where((member) => onlineUserIds.contains(member.profile.id))
+        .length;
+    final session = ref.watch(voiceSessionProvider);
+
     final list = ReorderableListView.builder(
-      padding: EdgeInsets.fromLTRB(8, 8, 8, 8 + widget.listBottomPadding),
+      padding: EdgeInsets.fromLTRB(
+        wide ? 6 : 4,
+        0,
+        wide ? 6 : 4,
+        12 + widget.listBottomPadding,
+      ),
       buildDefaultDragHandles: false,
+      proxyDecorator: (child, index, animation) => Material(
+        color: Colors.transparent,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: c.panel,
+            borderRadius: BorderRadius.circular(WeCordRadii.md),
+            boxShadow: tokens.shadows.menu,
+          ),
+          child: child,
+        ),
+      ),
       header: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.only(bottom: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            CircleBannerCard(
+              detail: detail,
+              onlineCount: onlineCount,
+              compact: wide,
+              onMenu: (position) => _openCircleMenu(position),
+            ),
+            CircleEventsEntry(
+              circleId: _circleId,
+              builder: (context, label, live, next) => wide
+                  ? CircleChannelRow(
+                      key: const ValueKey('circle-events-entry'),
+                      icon: Icons.event_outlined,
+                      label: label,
+                      selected: false,
+                      emphasized: true,
+                      trailing: live
+                          ? const _LiveNowPill()
+                          : next != null && _isToday(next.startsAt)
+                          ? CircleTag(
+                              label: tr('Today'),
+                              background: c.warningSoft,
+                              foreground: c.warningText,
+                            )
+                          : null,
+                      onTap: () => _openEvents(context),
+                    )
+                  : CircleEventCard(
+                      key: const ValueKey('circle-events-entry'),
+                      label: label,
+                      live: live,
+                      next: next,
+                      onTap: () => _openEvents(context),
+                    ),
+            ),
             CircleChannelRow(
               icon: Icons.dynamic_feed_outlined,
               label: tr('Feed'),
               selected: widget.feedSelected,
               onTap: widget.onSelectFeed,
             ),
-            CircleEventsEntry(
-              circleId: _circleId,
-              builder: (context, label, live) => CircleChannelRow(
-                key: const ValueKey('circle-events-entry'),
-                icon: Icons.event_outlined,
-                label: label,
-                selected: false,
-                unread: live,
-                trailing: live ? const _LiveNowPill() : null,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) =>
-                        CircleEventsScreen(circleId: _circleId),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
       footer: detail.channels.isEmpty
           ? Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Text(
                 tr('No channels yet'),
-                style: theme.textTheme.bodySmall,
+                style: TextStyle(fontSize: 13, color: c.muted),
               ),
             )
           : null,
@@ -525,7 +555,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               child: draggable(
                 index,
                 Padding(
-                  padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+                  padding: EdgeInsets.only(top: index == 0 ? 4 : 10),
                   child: CircleCategoryHeader(
                     label: category.name,
                     collapsed: collapsed,
@@ -547,40 +577,58 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
             final voiceMembers = channel.isVoice
                 ? voiceMembersIn(voiceStates, channel.id)
                 : const <VoiceMemberState>[];
-            final channelRow = CircleChannelRow(
-              key: ValueKey('circle-channel-row-${channel.id}'),
-              icon: switch (channel.kind) {
-                CircleChannelKind.forum => Icons.forum_outlined,
-                CircleChannelKind.voice => Icons.volume_up_outlined,
-                CircleChannelKind.stage => Icons.podcasts,
-                CircleChannelKind.text => Icons.tag,
-                CircleChannelKind.announcement => Icons.campaign_outlined,
-              },
-              label: channel.name,
-              locked: channel.isPrivate,
-              trailing: switch (userLimits[channel.id]) {
-                final limit? when channel.isVoice => VoiceUserLimitBadge(
-                  count: voiceMembers.length,
-                  limit: limit,
-                ),
-                _ => null,
-              },
-              selected:
-                  channel.id == widget.selectedChannelId &&
-                  widget.selectedThreadConversationId == null,
-              unread: unread,
-              onTap: () => widget.onSelectChannel(channel),
-              // Long presses drag channels for members who can sort them.
-              onContextMenu: detail.canOpenChannelSettings
-                  ? (position) => _showChannelMenu(channel, position)
-                  : null,
-              longPressOpensMenu: !(canManage && dragOnLongPress),
-            );
+            final limitBadge = switch (userLimits[channel.id]) {
+              final limit? when channel.isVoice => VoiceUserLimitBadge(
+                count: voiceMembers.length,
+                limit: limit,
+              ),
+              _ => null,
+            };
+            final selected =
+                channel.id == widget.selectedChannelId &&
+                widget.selectedThreadConversationId == null;
+            void onContextMenu(Offset position) =>
+                _showChannelMenu(channel, position);
+            final contextMenu = detail.canOpenChannelSettings
+                ? onContextMenu
+                : null;
+            final Widget channelRow;
+            if (!wide && channel.isVoice && voiceMembers.isNotEmpty) {
+              // Phones show a live card for a voice channel people are in.
+              channelRow = CircleVoiceLiveCard(
+                key: ValueKey('circle-channel-row-${channel.id}'),
+                channel: channel,
+                members: voiceMembers,
+                speaking: voiceSpeakingUserIds(session, channel.id),
+                joined: session?.channelId == channel.id,
+                trailing: limitBadge,
+                onTap: () => widget.onSelectChannel(channel),
+                onContextMenu: contextMenu,
+                longPressOpensMenu: !(canManage && dragOnLongPress),
+              );
+            } else {
+              channelRow = CircleChannelRow(
+                key: ValueKey('circle-channel-row-${channel.id}'),
+                icon: circleChannelIcon(channel.kind),
+                label: channel.name,
+                locked: channel.isPrivate,
+                trailing: limitBadge,
+                selected: selected,
+                unread: unread,
+                muted: mutedConversations.contains(channel.conversationId),
+                onTap: () => widget.onSelectChannel(channel),
+                // Long presses drag channels for members who can sort them.
+                onContextMenu: contextMenu,
+                longPressOpensMenu: !(canManage && dragOnLongPress),
+              );
+            }
+            final showMembers =
+                voiceMembers.isNotEmpty && channelRow is CircleChannelRow;
             return KeyedSubtree(
               key: ValueKey('circle-channel-${channel.id}'),
               child: draggable(
                 index,
-                voiceMembers.isNotEmpty
+                showMembers
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -603,9 +651,9 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                           for (final thread in threads)
                             CircleChannelRow(
                               key: ValueKey('circle-thread-${thread.id}'),
-                              icon: Icons.forum_outlined,
+                              icon: Icons.subdirectory_arrow_right_rounded,
                               label: thread.title ?? tr('Thread'),
-                              indent: 20,
+                              indent: 18,
                               selected:
                                   thread.id ==
                                   widget.selectedThreadConversationId,
@@ -621,34 +669,202 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     );
 
     return Material(
-      color: widget.color ?? theme.colorScheme.surfaceContainerLow,
+      color: widget.color ?? c.sidebar,
       child: SizedBox(
         width: widget.width,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SidebarHeader(
-              detail: detail,
-              onChangeNickname: widget.onChangeNickname,
-              onCreateChannel: _createChannel,
-              onCreateCategory: _createCategory,
-              onLeave: () => leaveCircle(context, detail: detail),
-              onTransferOwnership: () =>
-                  transferCircleOwnership(context, detail: detail),
-            ),
-            const Divider(height: 1),
             Expanded(child: list),
-            if (showVoicePanel) ...[
-              const Divider(height: 1),
-              VoiceConnectedPanel(onOpen: widget.onOpenVoice),
-            ],
-            if (wide) ...[const Divider(height: 1), const UserPanel()],
+            if (showVoicePanel)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                child: VoiceConnectedPanel(onOpen: widget.onOpenVoice),
+              ),
+            if (wide) const UserPanel(),
           ],
         ),
       ),
     );
   }
+
+  void _openEvents(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => CircleEventsScreen(circleId: _circleId),
+      ),
+    );
+  }
+
+  Future<void> _openCircleMenu(Offset? position) async {
+    final detail = widget.detail;
+    final currentMember = detail.currentMember;
+    final canManageChannels = detail.canManageChannels;
+    final items = <CircleMenuItem<_CircleMenuAction>>[
+      if (detail.canCreateInvites)
+        CircleMenuItem(
+          value: _CircleMenuAction.invite,
+          icon: Icons.person_add_alt_1_outlined,
+          label: tr('Invite friends'),
+          tone: SettingsTone.accent,
+        ),
+      if (canManageChannels) ...[
+        CircleMenuItem(
+          value: _CircleMenuAction.createChannel,
+          icon: Icons.add_comment_outlined,
+          label: tr('Create channel'),
+        ),
+        CircleMenuItem(
+          value: _CircleMenuAction.createCategory,
+          icon: Icons.create_new_folder_outlined,
+          label: tr('Create category'),
+        ),
+      ],
+      if (canOpenCircleSettings(detail))
+        CircleMenuItem(
+          value: _CircleMenuAction.circleSettings,
+          icon: Icons.tune,
+          label: tr('Circle settings'),
+        ),
+      if (detail.canManageRoles)
+        CircleMenuItem(
+          value: _CircleMenuAction.roles,
+          icon: Icons.shield_outlined,
+          label: tr('Roles'),
+        ),
+      if (detail.canBanMembers)
+        CircleMenuItem(
+          value: _CircleMenuAction.bans,
+          icon: Icons.block,
+          label: tr('Bans'),
+        ),
+      if (detail.canManageCircle)
+        CircleMenuItem(
+          value: _CircleMenuAction.autoMod,
+          icon: Icons.gpp_maybe_outlined,
+          label: tr('AutoMod'),
+        ),
+      if (detail.canManageCircle)
+        CircleMenuItem(
+          value: _CircleMenuAction.onboarding,
+          icon: Icons.rule,
+          label: tr('Onboarding'),
+        ),
+      if (detail.canViewAuditLog)
+        CircleMenuItem(
+          value: _CircleMenuAction.auditLog,
+          icon: Icons.history,
+          label: tr('Audit log'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.emojis,
+          icon: Icons.emoji_emotions_outlined,
+          label: tr('Emoji & stickers'),
+        ),
+      CircleMenuItem(
+        value: _CircleMenuAction.notificationSettings,
+        icon: Icons.notifications_outlined,
+        label: tr('Notification settings'),
+      ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.changeNickname,
+          icon: Icons.badge_outlined,
+          label: tr('Change my nickname'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.changeCircleAvatar,
+          icon: Icons.face_retouching_natural_outlined,
+          label: tr('Change circle avatar'),
+        ),
+      if (detail.isOwner)
+        CircleMenuItem(
+          value: _CircleMenuAction.transferOwnership,
+          icon: Icons.swap_horiz,
+          label: tr('Transfer ownership'),
+        )
+      else if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.leave,
+          icon: Icons.logout,
+          label: tr('Leave circle'),
+          destructive: true,
+        ),
+    ];
+    final manageCount = items
+        .where((item) => _manageActions.contains(item.value))
+        .length;
+    final inviteCount = items
+        .where((item) => item.value == _CircleMenuAction.invite)
+        .length;
+    final action = await showCircleActionMenu<_CircleMenuAction>(
+      context,
+      items: items,
+      position: position,
+      header: _CircleMenuHeader(detail: detail),
+      groups: [inviteCount + manageCount, items.length],
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    switch (action) {
+      case _CircleMenuAction.invite:
+        showCircleInviteSheet(context, detail);
+      case _CircleMenuAction.createChannel:
+        _createChannel();
+      case _CircleMenuAction.createCategory:
+        _createCategory();
+      case _CircleMenuAction.roles:
+        openCircleRolesScreen(context, detail.circle.id);
+      case _CircleMenuAction.circleSettings:
+        openCircleSettingsScreen(context, detail.circle.id);
+      case _CircleMenuAction.auditLog:
+        openCircleAuditLogScreen(context, detail.circle.id);
+      case _CircleMenuAction.bans:
+        openCircleBansScreen(context, detail.circle.id);
+      case _CircleMenuAction.autoMod:
+        openCircleAutoModScreen(context, detail);
+      case _CircleMenuAction.onboarding:
+        openCircleOnboardingSettings(context, detail);
+      case _CircleMenuAction.emojis:
+        openCircleEmojisScreen(context, detail.circle.id);
+      case _CircleMenuAction.changeNickname:
+        widget.onChangeNickname(currentMember!);
+      case _CircleMenuAction.changeCircleAvatar:
+        showCircleAvatarSheet(
+          context,
+          circleId: detail.circle.id,
+          member: currentMember!,
+        );
+      case _CircleMenuAction.notificationSettings:
+        showCircleNotificationSettingsSheet(
+          context,
+          circleId: detail.circle.id,
+          circleName: detail.circle.name,
+        );
+      case _CircleMenuAction.transferOwnership:
+        transferCircleOwnership(context, detail: detail);
+      case _CircleMenuAction.leave:
+        leaveCircle(context, detail: detail);
+    }
+  }
 }
+
+bool _isToday(DateTime time) {
+  final local = time.toLocal();
+  return DateUtils.isSameDay(local, DateTime.now());
+}
+
+/// The icon of a channel of [kind] in lists.
+IconData circleChannelIcon(CircleChannelKind kind) => switch (kind) {
+  CircleChannelKind.forum => Icons.forum_outlined,
+  CircleChannelKind.voice => Icons.volume_up_outlined,
+  CircleChannelKind.stage => Icons.podcasts,
+  CircleChannelKind.text => Icons.tag,
+  CircleChannelKind.announcement => Icons.campaign_outlined,
+};
 
 bool _sameLayout(CircleChannelLayout left, CircleChannelLayout right) {
   final a = left.toJson();
@@ -726,12 +942,15 @@ Map<String, List<ConversationSummary>> activeThreadsByParent(
 
 /// Asks for a category name. Returns the trimmed name, or null when
 /// cancelled.
+
+/// Asks for a category name. Returns the trimmed name, or null when
+/// cancelled.
 Future<String?> showCircleCategoryNameDialog(
   BuildContext context, {
   String? initialName,
 }) {
-  return showDialog<String>(
-    context: context,
+  return showCircleDialog<String>(
+    context,
     builder: (context) => _CategoryNameDialog(initialName: initialName),
   );
 }
@@ -767,247 +986,74 @@ class _CategoryNameDialogState extends State<_CategoryNameDialog> {
   @override
   Widget build(BuildContext context) {
     final renaming = widget.initialName != null;
-    return AlertDialog(
-      scrollable: true,
-      title: Text(renaming ? tr('Rename category') : tr('Create category')),
-      content: TextField(
+    return CircleDialog(
+      title: renaming ? tr('Rename category') : tr('Create category'),
+      content: WeCordTextField(
         controller: _controller,
         autofocus: true,
         maxLength: maxCircleCategoryNameLength,
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          labelText: tr('Category name'),
-          errorText: _errorText,
-        ),
+        label: tr('Category name'),
+        errorText: _errorText,
         onSubmitted: (_) => _save(),
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
+          label: renaming ? tr('Save') : tr('Create'),
           onPressed: _save,
-          child: Text(renaming ? tr('Save') : tr('Create')),
         ),
       ],
     );
   }
 }
 
-class _SidebarHeader extends StatelessWidget {
-  const _SidebarHeader({
-    required this.detail,
-    required this.onChangeNickname,
-    required this.onCreateChannel,
-    required this.onCreateCategory,
-    required this.onLeave,
-    required this.onTransferOwnership,
-  });
+/// The circle's name and avatar above its menu.
+class _CircleMenuHeader extends StatelessWidget {
+  const _CircleMenuHeader({required this.detail});
 
   final CircleDetail detail;
-  final ValueChanged<CircleMember> onChangeNickname;
-  final VoidCallback onCreateChannel;
-  final VoidCallback onCreateCategory;
-  final VoidCallback onLeave;
-  final VoidCallback onTransferOwnership;
 
   @override
   Widget build(BuildContext context) {
-    final title = Text(
-      detail.circle.name,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Theme.of(
-        context,
-      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-    );
-    final currentMember = detail.currentMember;
-    final canManageChannels = detail.canManageChannels;
-
-    return SizedBox(
-      height: kToolbarHeight,
-      child: PopupMenuButton<_CircleMenuAction>(
-        tooltip: tr('Circle menu'),
-        position: PopupMenuPosition.under,
-        onSelected: (action) {
-          switch (action) {
-            case _CircleMenuAction.invite:
-              showCircleInviteSheet(context, detail);
-            case _CircleMenuAction.createChannel:
-              onCreateChannel();
-            case _CircleMenuAction.createCategory:
-              onCreateCategory();
-            case _CircleMenuAction.roles:
-              openCircleRolesScreen(context, detail.circle.id);
-            case _CircleMenuAction.circleSettings:
-              openCircleSettingsScreen(context, detail.circle.id);
-            case _CircleMenuAction.auditLog:
-              openCircleAuditLogScreen(context, detail.circle.id);
-            case _CircleMenuAction.bans:
-              openCircleBansScreen(context, detail.circle.id);
-            case _CircleMenuAction.autoMod:
-              openCircleAutoModScreen(context, detail);
-            case _CircleMenuAction.onboarding:
-              openCircleOnboardingSettings(context, detail);
-            case _CircleMenuAction.emojis:
-              openCircleEmojisScreen(context, detail.circle.id);
-            case _CircleMenuAction.changeNickname:
-              onChangeNickname(currentMember!);
-            case _CircleMenuAction.changeCircleAvatar:
-              showCircleAvatarSheet(
-                context,
-                circleId: detail.circle.id,
-                member: currentMember!,
-              );
-            case _CircleMenuAction.notificationSettings:
-              showCircleNotificationSettingsSheet(
-                context,
-                circleId: detail.circle.id,
-                circleName: detail.circle.name,
-              );
-            case _CircleMenuAction.transferOwnership:
-              onTransferOwnership();
-            case _CircleMenuAction.leave:
-              onLeave();
-          }
-        },
-        itemBuilder: (context) => [
-          if (detail.canCreateInvites)
-            PopupMenuItem(
-              value: _CircleMenuAction.invite,
-              child: ListTile(
-                leading: const Icon(Icons.person_add_alt_1_outlined),
-                title: Text(tr('Invite friends')),
-              ),
-            ),
-          if (canManageChannels) ...[
-            PopupMenuItem(
-              value: _CircleMenuAction.createChannel,
-              child: ListTile(
-                leading: const Icon(Icons.add_comment_outlined),
-                title: Text(tr('Create channel')),
-              ),
-            ),
-            PopupMenuItem(
-              value: _CircleMenuAction.createCategory,
-              child: ListTile(
-                leading: const Icon(Icons.create_new_folder_outlined),
-                title: Text(tr('Create category')),
-              ),
-            ),
-          ],
-          if (canOpenCircleSettings(detail))
-            PopupMenuItem(
-              value: _CircleMenuAction.circleSettings,
-              child: ListTile(
-                leading: const Icon(Icons.tune),
-                title: Text(tr('Circle settings')),
-              ),
-            ),
-          if (detail.canManageRoles)
-            PopupMenuItem(
-              value: _CircleMenuAction.roles,
-              child: ListTile(
-                leading: const Icon(Icons.shield_outlined),
-                title: Text(tr('Roles')),
-              ),
-            ),
-          if (detail.canBanMembers)
-            PopupMenuItem(
-              value: _CircleMenuAction.bans,
-              child: ListTile(
-                leading: const Icon(Icons.block),
-                title: Text(tr('Bans')),
-              ),
-            ),
-          if (detail.canManageCircle)
-            PopupMenuItem(
-              value: _CircleMenuAction.autoMod,
-              child: ListTile(
-                leading: const Icon(Icons.gpp_maybe_outlined),
-                title: Text(tr('AutoMod')),
-              ),
-            ),
-          if (detail.canManageCircle)
-            PopupMenuItem(
-              value: _CircleMenuAction.onboarding,
-              child: ListTile(
-                leading: const Icon(Icons.rule),
-                title: Text(tr('Onboarding')),
-              ),
-            ),
-          if (detail.canViewAuditLog)
-            PopupMenuItem(
-              value: _CircleMenuAction.auditLog,
-              child: ListTile(
-                leading: const Icon(Icons.history),
-                title: Text(tr('Audit log')),
-              ),
-            ),
-          if (currentMember != null)
-            PopupMenuItem(
-              value: _CircleMenuAction.emojis,
-              child: ListTile(
-                leading: const Icon(Icons.emoji_emotions_outlined),
-                title: Text(tr('Emoji & stickers')),
-              ),
-            ),
-          PopupMenuItem(
-            value: _CircleMenuAction.notificationSettings,
-            child: ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: Text(tr('Notification settings')),
+    final c = context.tokens.colors;
+    final circle = detail.circle;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+      child: Row(
+        children: [
+          CircleNetworkAvatar(
+            name: circle.name,
+            size: 44,
+            url: circle.avatarUrl,
+            thing: true,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  circle.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: c.ink,
+                  ),
+                ),
+                Text(
+                  tr('{count} members', {'count': detail.members.length}),
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                ),
+              ],
             ),
           ),
-          if (currentMember != null)
-            PopupMenuItem(
-              value: _CircleMenuAction.changeNickname,
-              child: ListTile(
-                leading: const Icon(Icons.badge_outlined),
-                title: Text(tr('Change my nickname')),
-              ),
-            ),
-          if (currentMember != null)
-            PopupMenuItem(
-              value: _CircleMenuAction.changeCircleAvatar,
-              child: ListTile(
-                leading: const Icon(Icons.face_retouching_natural_outlined),
-                title: Text(tr('Change circle avatar')),
-              ),
-            ),
-          if (detail.isOwner)
-            PopupMenuItem(
-              value: _CircleMenuAction.transferOwnership,
-              child: ListTile(
-                leading: const Icon(Icons.swap_horiz),
-                title: Text(tr('Transfer ownership')),
-              ),
-            )
-          else if (currentMember != null)
-            PopupMenuItem(
-              value: _CircleMenuAction.leave,
-              child: ListTile(
-                leading: Icon(
-                  Icons.logout,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  tr('Leave circle'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            ),
         ],
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(child: title),
-              const Icon(Icons.expand_more, size: 20),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1031,9 +1077,537 @@ enum _CircleMenuAction {
   leave,
 }
 
+/// Menu entries that manage the circle, grouped together.
+const _manageActions = {
+  _CircleMenuAction.createChannel,
+  _CircleMenuAction.createCategory,
+  _CircleMenuAction.circleSettings,
+  _CircleMenuAction.roles,
+  _CircleMenuAction.bans,
+  _CircleMenuAction.autoMod,
+  _CircleMenuAction.onboarding,
+  _CircleMenuAction.auditLog,
+};
+
 enum _CategoryMenuAction { rename, delete }
 
 enum _ChannelMenuAction { settings }
+
+/// The circle's cover at the top of its channel list: a colored card with
+/// the name, member and online counts, and the circle menu.
+class CircleBannerCard extends StatelessWidget {
+  const CircleBannerCard({
+    required this.detail,
+    required this.onlineCount,
+    required this.onMenu,
+    this.compact = false,
+    super.key,
+  });
+
+  final CircleDetail detail;
+  final int onlineCount;
+
+  /// Opens the circle menu; with the button's position on wide screens.
+  final ValueChanged<Offset?> onMenu;
+
+  /// The smaller desktop banner.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final circle = detail.circle;
+    final fill = WeCordAvatarColors.forSeed(circle.name);
+    final memberCount = detail.members.length;
+    final subtitle = [
+      tr('{count} members', {'count': memberCount}),
+      if (onlineCount > 0) tr('{count} online', {'count': onlineCount}),
+    ].join(' · ');
+    final buttonSize = compact ? 30.0 : 34.0;
+
+    return Container(
+      key: const ValueKey('circle-banner'),
+      margin: EdgeInsets.fromLTRB(
+        compact ? 4 : 6,
+        compact ? 4 : 10,
+        compact ? 4 : 6,
+        compact ? 6 : 10,
+      ),
+      height: compact ? 96 : 118,
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(compact ? 18 : 20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: CustomPaint(painter: _BannerStripesPainter()),
+          ),
+          if (circle.avatarUrl != null)
+            Positioned(
+              left: compact ? 12 : 14,
+              top: compact ? 12 : 14,
+              child: CircleNetworkAvatar(
+                name: circle.name,
+                size: compact ? 30 : 36,
+                url: circle.avatarUrl,
+                thing: true,
+              ),
+            ),
+          Positioned(
+            left: compact ? 12 : 14,
+            right: compact ? 10 : 12,
+            bottom: compact ? 10 : 12,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          circle.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: compact ? 17 : 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          fontSize: compact ? 11.5 : 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Builder(
+                  builder: (buttonContext) => WeCordPressable(
+                    tooltip: tr('Circle menu'),
+                    semanticLabel: tr('Circle menu'),
+                    shape: const CircleBorder(),
+                    pressedScale: 0.92,
+                    onPressed: () {
+                      final box =
+                          buttonContext.findRenderObject() as RenderBox?;
+                      onMenu(
+                        box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+                      );
+                    },
+                    builder: (context, states) {
+                      final hovered =
+                          states.contains(WidgetState.hovered) ||
+                          states.contains(WidgetState.pressed);
+                      return SizedBox.square(
+                        dimension: usesTouchInput(context)
+                            ? minTouchTargetSize
+                            : buttonSize,
+                        child: Center(
+                          child: AnimatedContainer(
+                            duration: WeCordMotion.quick,
+                            width: buttonSize,
+                            height: buttonSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(
+                                alpha: hovered ? 0.36 : 0.25,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.more_horiz_rounded,
+                              size: compact ? 18 : 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Thin diagonal lines over a banner's color.
+class _BannerStripesPainter extends CustomPainter {
+  const _BannerStripesPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.08)
+      ..strokeWidth = 2;
+    const gap = 18.0;
+    // Lines at about 60 degrees, filling the card.
+    const slope = 0.58;
+    for (var x = -size.height / slope; x < size.width; x += gap) {
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height / slope, 0),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BannerStripesPainter oldDelegate) => false;
+}
+
+/// The phone's events card under the banner: the next event with its time,
+/// or a plain Events entry when nothing is planned.
+class CircleEventCard extends StatelessWidget {
+  const CircleEventCard({
+    required this.label,
+    required this.live,
+    required this.onTap,
+    this.next,
+    super.key,
+  });
+
+  final String label;
+  final bool live;
+  final CircleEvent? next;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final next = this.next;
+    if (next == null) {
+      return CircleChannelRow(
+        icon: Icons.event_outlined,
+        label: label,
+        selected: false,
+        onTap: onTap,
+      );
+    }
+    final localizations = MaterialLocalizations.of(context);
+    final start = next.startsAt.toLocal();
+    final today = DateUtils.dateOnly(DateTime.now());
+    final days = DateUtils.dateOnly(start).difference(today).inDays;
+    final day = switch (days) {
+      0 => tr('Today'),
+      1 => tr('Tomorrow'),
+      _ when days < 0 => tr('Now'),
+      _ => localizations.narrowWeekdays[start.weekday % 7],
+    };
+    final time = days > 6
+        ? '${start.month}/${start.day}'
+        : localizations.formatTimeOfDay(
+            TimeOfDay.fromDateTime(start),
+            alwaysUse24HourFormat: true,
+          );
+    final details = [
+      label,
+      if (next.interestedCount > 0)
+        tr('{count} interested', {'count': next.interestedCount}),
+      next.locationLabel,
+    ].join(' · ');
+    final fill = live ? c.dangerSoft : c.warningSoft;
+    final tileFill = live
+        ? c.danger.withValues(alpha: 0.18)
+        : c.warning.withValues(alpha: 0.28);
+    final tileText = live ? c.dangerText : c.warningText;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+      child: WeCordPressable(
+        onPressed: onTap,
+        semanticLabel: '$label: ${next.title}',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(WeCordRadii.lg),
+        ),
+        builder: (context, states) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: ShapeDecoration(
+                  color: tileFill,
+                  shape: RoundedSuperellipseBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                padding: const EdgeInsets.all(3),
+                // Scales down rather than overflowing with large text.
+                child: FittedBox(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        day,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: tileText,
+                          height: 1.1,
+                        ),
+                      ),
+                      Text(
+                        time,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: tileText,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      next.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: c.ink,
+                      ),
+                    ),
+                    Text(
+                      details,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: c.muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (live) const _LiveNowPill(),
+              Icon(Icons.chevron_right_rounded, size: 20, color: c.subtle),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A voice channel people are in, on phones: who is there (speakers
+/// ringed) and a way to join.
+class CircleVoiceLiveCard extends StatelessWidget {
+  const CircleVoiceLiveCard({
+    required this.channel,
+    required this.members,
+    required this.speaking,
+    required this.joined,
+    required this.onTap,
+    this.trailing,
+    this.onContextMenu,
+    this.longPressOpensMenu = true,
+    super.key,
+  });
+
+  final CircleChannel channel;
+  final List<VoiceMemberState> members;
+  final Set<String> speaking;
+
+  /// Whether the current user is in this channel.
+  final bool joined;
+  final VoidCallback onTap;
+  final Widget? trailing;
+  final ValueChanged<Offset>? onContextMenu;
+  final bool longPressOpensMenu;
+
+  static const _shown = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final speakers = [
+      for (final member in members)
+        if (speaking.contains(member.userId)) member,
+    ];
+    final status = speakers.isNotEmpty
+        ? tr('{name} is speaking', {'name': speakers.first.name})
+        : members.map((member) => member.name).join(', ');
+    final action = joined
+        ? tr('Joined')
+        : tr('{count} · Join', {'count': members.length});
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
+      child: GestureDetector(
+        onSecondaryTapUp: onContextMenu == null
+            ? null
+            : (details) => onContextMenu!(details.globalPosition),
+        child: WeCordPressable(
+          onPressed: onTap,
+          onLongPress: onContextMenu == null || !longPressOpensMenu
+              ? null
+              : () {
+                  final box = context.findRenderObject()! as RenderBox;
+                  onContextMenu!(
+                    box.localToGlobal(box.size.centerLeft(Offset.zero)),
+                  );
+                },
+          semanticLabel: '${channel.name}, $action',
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          builder: (context, states) => Container(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+            decoration: BoxDecoration(
+              color: c.successSoft,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      circleChannelIcon(channel.kind),
+                      size: 19,
+                      color: c.successText,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        channel.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: c.ink,
+                        ),
+                      ),
+                    ),
+                    if (trailing != null) ...[
+                      trailing!,
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      action,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: c.successText,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  key: ValueKey('voice-channel-members-${channel.id}'),
+                  children: [
+                    for (final (index, member) in members.take(_shown).indexed)
+                      Transform.translate(
+                        offset: Offset(-4.0 * index, 0),
+                        child: _LiveAvatar(
+                          member: member,
+                          speaking: speaking.contains(member.userId),
+                          ringColor: c.successSoft,
+                        ),
+                      ),
+                    if (members.length > _shown)
+                      Transform.translate(
+                        offset: const Offset(-4.0 * _shown, 0),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: c.panel,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '+${members.length - _shown}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: c.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        status,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: c.muted),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveAvatar extends StatelessWidget {
+  const _LiveAvatar({
+    required this.member,
+    required this.speaking,
+    required this.ringColor,
+  });
+
+  final VoiceMemberState member;
+  final bool speaking;
+  final Color ringColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Container(
+      key: ValueKey('voice-live-avatar-${member.userId}'),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: ringColor,
+        shape: BoxShape.circle,
+        boxShadow: speaking
+            ? [BoxShadow(color: c.success, spreadRadius: 2)]
+            : null,
+      ),
+      child: CircleNetworkAvatar(
+        name: member.name,
+        size: 28,
+        url: member.avatarUrl,
+      ),
+    );
+  }
+}
 
 /// Collapsible category title. Managers get a create-channel button and a
 /// menu (also on right click) to rename or delete the category.
@@ -1055,97 +1629,85 @@ class CircleCategoryHeader extends StatelessWidget {
   final VoidCallback? onRename;
   final VoidCallback? onDelete;
 
-  void _onMenu(_CategoryMenuAction action) {
+  Future<void> _showMenu(BuildContext context, Offset? position) async {
+    final action = await showCircleActionMenu<_CategoryMenuAction>(
+      context,
+      title: label,
+      position: position,
+      items: [
+        CircleMenuItem(
+          value: _CategoryMenuAction.rename,
+          icon: Icons.edit_outlined,
+          label: tr('Rename category'),
+        ),
+        CircleMenuItem(
+          value: _CategoryMenuAction.delete,
+          icon: Icons.delete_outline,
+          label: tr('Delete category'),
+          destructive: true,
+        ),
+      ],
+    );
     switch (action) {
       case _CategoryMenuAction.rename:
         onRename?.call();
       case _CategoryMenuAction.delete:
         onDelete?.call();
-    }
-  }
-
-  List<PopupMenuEntry<_CategoryMenuAction>> _menuItems() {
-    return [
-      PopupMenuItem(
-        value: _CategoryMenuAction.rename,
-        child: ListTile(
-          leading: const Icon(Icons.edit_outlined),
-          title: Text(tr('Rename category')),
-        ),
-      ),
-      PopupMenuItem(
-        value: _CategoryMenuAction.delete,
-        child: ListTile(
-          leading: const Icon(Icons.delete_outline),
-          title: Text(tr('Delete category')),
-        ),
-      ),
-    ];
-  }
-
-  Future<void> _showContextMenu(
-    BuildContext context,
-    Offset globalPosition,
-  ) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final action = await showMenu<_CategoryMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: _menuItems(),
-    );
-    if (action != null) {
-      _onMenu(action);
+      case null:
+        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.labelSmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.4,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
+    final c = context.tokens.colors;
+    final wide = circleWideLayout(context);
     final hasMenu = onRename != null || onDelete != null;
     final touch = usesTouchInput(context);
 
     return GestureDetector(
       onSecondaryTapUp: hasMenu
-          ? (details) => _showContextMenu(context, details.globalPosition)
+          ? (details) => _showMenu(context, details.globalPosition)
           : null,
       child: Row(
         children: [
           Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(4),
-              onTap: onToggle,
-              child: Container(
+            child: WeCordPressable(
+              onPressed: onToggle,
+              pressedScale: 1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(WeCordRadii.sm),
+              ),
+              builder: (context, states) => Container(
                 constraints: BoxConstraints(
-                  minHeight: touch ? minTouchTargetSize : 0,
+                  minHeight: touch ? minTouchTargetSize : 28,
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
                 child: Row(
                   children: [
-                    AnimatedRotation(
-                      turns: collapsed ? -0.25 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: Icon(
-                        Icons.expand_more,
-                        size: 14,
-                        color: style?.color,
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: wide ? 11.5 : 12,
+                          fontWeight: FontWeight.w700,
+                          color: c.subtle,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 2),
-                    Expanded(
-                      child: Text(
-                        label.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: style,
+                    AnimatedRotation(
+                      turns: collapsed ? -0.25 : 0,
+                      duration: WeCordMotion.durationOf(
+                        context,
+                        WeCordMotion.quick,
+                      ),
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        size: 14,
+                        color: c.subtle,
                       ),
                     ),
                   ],
@@ -1153,24 +1715,29 @@ class CircleCategoryHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (onCreate != null)
-            IconButton(
-              tooltip: tr('Create channel'),
-              visualDensity: touch ? null : VisualDensity.compact,
-              iconSize: 16,
-              icon: const Icon(Icons.add),
-              onPressed: onCreate,
-            ),
           if (hasMenu)
-            PopupMenuButton<_CategoryMenuAction>(
+            WeCordIconButton(
               tooltip: tr('Category options'),
+              icon: Icons.more_horiz_rounded,
+              variant: WeCordButtonVariant.ghost,
+              size: 26,
               iconSize: 16,
-              style: ButtonStyle(
-                visualDensity: touch ? null : VisualDensity.compact,
-              ),
-              icon: const Icon(Icons.more_horiz),
-              onSelected: _onMenu,
-              itemBuilder: (context) => _menuItems(),
+              onPressed: () {
+                final box = context.findRenderObject() as RenderBox?;
+                _showMenu(
+                  context,
+                  box?.localToGlobal(box.size.centerRight(Offset.zero)),
+                );
+              },
+            ),
+          if (onCreate != null)
+            WeCordIconButton(
+              tooltip: tr('Create channel'),
+              icon: Icons.add_rounded,
+              variant: WeCordButtonVariant.ghost,
+              size: 26,
+              iconSize: 16,
+              onPressed: onCreate,
             ),
         ],
       ),
@@ -1184,26 +1751,22 @@ class _LiveNowPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
+    final c = context.tokens.colors;
+    return Padding(
       key: const ValueKey('circle-events-live'),
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        tr('Live now'),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onPrimary,
-          fontWeight: FontWeight.w700,
-        ),
+      padding: const EdgeInsets.only(right: 6),
+      child: CircleTag(
+        label: tr('Live now'),
+        background: c.danger,
+        foreground: c.onDanger,
       ),
     );
   }
 }
 
+/// A row of the channel list: icon, name, and an unread dot, lock or
+/// [trailing] badge. Selected rows are raised (white on desktop); unread
+/// rows are bold ink; muted rows are dimmed.
 class CircleChannelRow extends StatelessWidget {
   const CircleChannelRow({
     required this.icon,
@@ -1212,6 +1775,8 @@ class CircleChannelRow extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.unread = false,
+    this.muted = false,
+    this.emphasized = false,
     this.indent = 0,
     this.locked = false,
     this.onContextMenu,
@@ -1223,6 +1788,12 @@ class CircleChannelRow extends StatelessWidget {
   final String label;
   final bool selected;
   final bool unread;
+
+  /// Notifications are muted: the row is dimmed.
+  final bool muted;
+
+  /// Ink text without the unread dot (the Events entry).
+  final bool emphasized;
   final VoidCallback onTap;
 
   /// Shown at the end of the row, such as a badge.
@@ -1241,91 +1812,118 @@ class CircleChannelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final emphasized = selected || unread;
-    final foreground = emphasized
-        ? colorScheme.onSurface
-        : colorScheme.onSurfaceVariant;
+    final tokens = context.tokens;
+    final c = tokens.colors;
+    final wide = circleWideLayout(context);
+    final touch = usesTouchInput(context);
+    final showUnread = unread && !selected;
+    final Color foreground;
+    if (muted && !selected) {
+      foreground = c.faint;
+    } else if (selected || unread || emphasized) {
+      foreground = c.ink;
+    } else {
+      foreground = c.muted;
+    }
+    final weight = unread && !muted
+        ? FontWeight.w700
+        : selected
+        ? FontWeight.w600
+        : FontWeight.w500;
+    final radius = BorderRadius.circular(wide ? WeCordRadii.sm : 12);
+    final height = touch ? minTouchTargetSize : (wide ? 34.0 : 40.0);
 
-    return Stack(
-      alignment: Alignment.centerLeft,
-      clipBehavior: Clip.none,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(left: indent, top: 1, bottom: 1),
-          child: Material(
-            color: selected
-                ? colorScheme.secondaryContainer
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(6),
-              onTap: onTap,
-              onSecondaryTapUp: onContextMenu == null
-                  ? null
-                  : (details) => onContextMenu!(details.globalPosition),
-              onLongPress: onContextMenu == null || !longPressOpensMenu
-                  ? null
-                  : () {
-                      final box = context.findRenderObject()! as RenderBox;
-                      onContextMenu!(
-                        box.localToGlobal(box.size.centerLeft(Offset.zero)),
-                      );
-                    },
-              child: SizedBox(
-                // Discord-dense with a mouse, finger-sized on touch screens.
-                height: usesTouchInput(context) ? minTouchTargetSize : 34,
-                child: Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    Icon(icon, size: indent > 0 ? 16 : 18, color: foreground),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: foreground,
-                          fontWeight: emphasized
-                              ? FontWeight.w600
-                              : FontWeight.w400,
+    return Padding(
+      padding: EdgeInsets.only(left: indent + 2, right: 2, top: 1, bottom: 1),
+      child: GestureDetector(
+        onSecondaryTapUp: onContextMenu == null
+            ? null
+            : (details) => onContextMenu!(details.globalPosition),
+        child: WeCordPressable(
+          onPressed: onTap,
+          onLongPress: onContextMenu == null || !longPressOpensMenu
+              ? null
+              : () {
+                  final box = context.findRenderObject()! as RenderBox;
+                  onContextMenu!(
+                    box.localToGlobal(box.size.centerLeft(Offset.zero)),
+                  );
+                },
+          selected: selected,
+          pressedScale: 0.98,
+          shape: RoundedRectangleBorder(borderRadius: radius),
+          builder: (context, states) {
+            final hovered =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.pressed);
+            final Color fill;
+            if (selected) {
+              fill = wide ? c.panel : c.raised;
+            } else if (hovered) {
+              fill = c.ink.withValues(alpha: 0.05);
+            } else {
+              fill = c.ink.withValues(alpha: 0);
+            }
+            return AnimatedContainer(
+              duration: WeCordMotion.quick,
+              curve: WeCordMotion.standard,
+              height: height,
+              padding: EdgeInsets.only(left: wide ? 10 : 12, right: 8),
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: radius,
+                boxShadow: selected && wide ? tokens.shadows.hairline : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: indent > 0 ? 16 : (wide ? 18 : 19),
+                    color: foreground,
+                  ),
+                  SizedBox(width: wide ? 9 : 10),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: indent > 0 ? 13.5 : (wide ? 14 : 15),
+                        fontWeight: weight,
+                      ),
+                    ),
+                  ),
+                  ?trailing,
+                  if (locked)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        key: const ValueKey('channel-lock-icon'),
+                        size: 14,
+                        color: c.subtle,
+                      ),
+                    ),
+                  if (showUnread)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 2),
+                      child: Container(
+                        key: const ValueKey('channel-unread-pill'),
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: muted ? c.faint : c.ink,
+                          shape: BoxShape.circle,
                         ),
                       ),
                     ),
-                    ?trailing,
-                    if (locked)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Icon(
-                          Icons.lock_outline,
-                          key: const ValueKey('channel-lock-icon'),
-                          size: 14,
-                          color: foreground,
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
-            ),
-          ),
+            );
+          },
         ),
-        if (unread && !selected)
-          Positioned(
-            left: -8,
-            child: Container(
-              key: const ValueKey('channel-unread-pill'),
-              width: 4,
-              height: 8,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface,
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(4),
-                ),
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }

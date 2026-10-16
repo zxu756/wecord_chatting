@@ -10,13 +10,16 @@ import 'package:wecord/features/circles/calendar_file_download.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Which events of a circle to list.
 typedef CircleEventsQuery = ({String circleId, bool includePast});
@@ -161,31 +164,28 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
     final canCreate =
         detail != null && detail.can(CirclePermission.manageEvents);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Events')),
-        actions: [
-          if (canCreate)
-            IconButton(
-              key: const ValueKey('circle-events-create'),
-              tooltip: tr('Create event'),
-              onPressed: () => _create(detail),
-              icon: const Icon(Icons.add),
-            ),
-        ],
-      ),
+    return CirclePageScaffold(
+      title: tr('Events'),
+      subtitle: detail?.circle.name,
+      actions: [
+        if (canCreate)
+          WeCordIconButton(
+            key: const ValueKey('circle-events-create'),
+            tooltip: tr('Create event'),
+            icon: Icons.add_rounded,
+            variant: WeCordButtonVariant.accent,
+            onPressed: () => _create(detail),
+          ),
+      ],
       body: events.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr('Could not load events.')),
-              TextButton(
-                onPressed: () => ref.invalidate(circleEventsProvider(_query)),
-                child: Text(tr('Retry')),
-              ),
-            ],
+        error: (error, stackTrace) => CircleEmptyState(
+          icon: Icons.event_busy_outlined,
+          title: tr('Could not load events.'),
+          action: WeCordButton(
+            label: tr('Retry'),
+            variant: WeCordButtonVariant.onPaper,
+            onPressed: () => ref.invalidate(circleEventsProvider(_query)),
           ),
         ),
         data: (events) {
@@ -194,7 +194,7 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
             onRefresh: () => ref.refresh(circleEventsProvider(_query).future),
             child: ListView(
               key: const ValueKey('circle-events-list'),
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: circlePagePadding(context),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 if (events.isEmpty)
@@ -204,7 +204,7 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
                   ),
                 for (final event in events)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: CircleEventCard(
                       event: event,
                       busy: _busyEventIds.contains(event.id),
@@ -212,19 +212,19 @@ class _CircleEventsScreenState extends ConsumerState<CircleEventsScreen> {
                       onToggleInterest: () => _toggleInterest(event),
                     ),
                   ),
+                const SizedBox(height: 4),
                 Center(
-                  child: TextButton.icon(
+                  child: WeCordButton(
                     key: const ValueKey('circle-events-show-past'),
+                    variant: WeCordButtonVariant.ghost,
                     onPressed: () =>
                         setState(() => _includePast = !_includePast),
-                    icon: Icon(
-                      _includePast ? Icons.visibility_off : Icons.history,
-                    ),
-                    label: Text(
-                      _includePast
-                          ? tr('Hide past and cancelled events')
-                          : tr('Show past and cancelled events'),
-                    ),
+                    icon: _includePast
+                        ? Icons.visibility_off_outlined
+                        : Icons.history_rounded,
+                    label: _includePast
+                        ? tr('Hide past and cancelled events')
+                        : tr('Show past and cancelled events'),
                   ),
                 ),
               ],
@@ -244,35 +244,42 @@ class _EmptyEvents extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
       child: Column(
         children: [
-          Icon(
-            Icons.event_outlined,
-            size: 40,
-            color: theme.colorScheme.onSurfaceVariant,
+          ThingAvatar(
+            icon: Icons.event_outlined,
+            size: 64,
+            color: c.warningSoft,
+            foregroundColor: c.warningText,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Text(
             includePast ? tr('No events yet') : tr('No upcoming events'),
-            style: theme.textTheme.titleMedium,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: c.ink,
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             onCreate == null
                 ? tr('Events scheduled in this circle show up here.')
                 : tr('Schedule a meetup, a voice hangout or a game night.'),
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall,
+            style: TextStyle(fontSize: 14, color: c.muted, height: 1.4),
           ),
           if (onCreate != null) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
+            const SizedBox(height: 20),
+            WeCordButton(
               onPressed: onCreate,
-              icon: const Icon(Icons.add),
-              label: Text(tr('Create event')),
+              icon: Icons.add_rounded,
+              label: tr('Create event'),
             ),
           ],
         ],
@@ -299,6 +306,85 @@ Future<void> toggleCircleEventInterest(
   }
 }
 
+/// Buttons inside event cards: finger-sized on touch screens.
+WeCordButtonSize _cardButtonSize(BuildContext context) =>
+    usesTouchInput(context) ? WeCordButtonSize.medium : WeCordButtonSize.small;
+
+/// The day of an event in a small tinted tile: weekday (or Today) over the
+/// day of the month. Live events are red, upcoming ones warm, finished and
+/// cancelled ones quiet.
+class CircleEventDateTile extends StatelessWidget {
+  const CircleEventDateTile({
+    required this.event,
+    required this.status,
+    this.now,
+    this.size = 48,
+    super.key,
+  });
+
+  final CircleEvent event;
+  final CircleEventStatus status;
+  final DateTime? now;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final localizations = MaterialLocalizations.of(context);
+    final start = event.startsAt.toLocal();
+    final today = DateUtils.dateOnly((now ?? DateTime.now()).toLocal());
+    final days = DateUtils.dateOnly(start).difference(today).inDays;
+    final (fill, foreground) = switch (status) {
+      CircleEventStatus.ongoing => (c.dangerSoft, c.dangerText),
+      CircleEventStatus.scheduled => (c.warningSoft, c.warningText),
+      _ => (c.raised, c.muted),
+    };
+    final top = switch (days) {
+      _ when status == CircleEventStatus.ongoing => tr('Now'),
+      0 => tr('Today'),
+      _ => localizations.narrowWeekdays[start.weekday % 7],
+    };
+    return Container(
+      width: size,
+      constraints: BoxConstraints(minHeight: size + 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      alignment: Alignment.center,
+      decoration: ShapeDecoration(
+        color: fill,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(WeCordRadii.md),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            top,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: foreground,
+              height: 1.1,
+            ),
+          ),
+          Text(
+            '${start.day}',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: foreground,
+              height: 1.15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// An event in the list: when, what, where, who is interested, and the
 /// Interested toggle.
 class CircleEventCard extends StatelessWidget {
@@ -321,68 +407,90 @@ class CircleEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final tokens = context.tokens;
+    final c = tokens.colors;
     final now = this.now ?? DateTime.now();
     final status = event.statusAt(now);
+    final live = status == CircleEventStatus.ongoing;
     final creator = event.creator;
     final interested = switch (event.interestedCount) {
       0 => tr('No one interested yet'),
       final count => tr('{count} interested', {'count': count}),
     };
+    final radius = BorderRadius.circular(WeCordRadii.xl);
 
-    return Material(
+    return WeCordPressable(
       key: ValueKey('circle-event-${event.id}'),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: status == CircleEventStatus.ongoing
-              ? colorScheme.primary
-              : colorScheme.outlineVariant,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      onPressed: onTap,
+      pressedScale: 0.98,
+      shape: RoundedRectangleBorder(borderRadius: radius),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          decoration: BoxDecoration(
+            color: c.panel,
+            borderRadius: radius,
+            border: Border.all(
+              color: live ? c.danger.withValues(alpha: 0.5) : c.panel,
+              width: 1.5,
+            ),
+            boxShadow: hovered ? tokens.shadows.hairline : null,
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (circleEventStatusBadge(context, status) case final badge?)
-                    badge,
-                  Text(
-                    formatCircleEventTime(context, event, now: now),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: status == CircleEventStatus.ongoing
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                  CircleEventDateTile(event: event, status: status, now: now),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (circleEventStatusBadge(context, status)
+                                case final badge?)
+                              badge,
+                            Text(
+                              formatCircleEventTime(context, event, now: now),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: live ? c.dangerText : c.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            color: event.isCancelled ? c.muted : c.ink,
+                            decoration: event.isCancelled
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        CircleEventLocationChip(event: event),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                event.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  decoration: event.isCancelled
-                      ? TextDecoration.lineThrough
-                      : null,
-                ),
-              ),
-              const SizedBox(height: 6),
-              CircleEventLocationChip(event: event),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -394,9 +502,7 @@ class CircleEventCard extends StatelessWidget {
                       ].join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                      style: TextStyle(fontSize: 12.5, color: c.muted),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -412,8 +518,8 @@ class CircleEventCard extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -477,11 +583,13 @@ class CircleEventJoinVoiceButton extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: FilledButton.icon(
+      child: WeCordButton(
         key: ValueKey('circle-event-join-voice-${event.id}'),
+        variant: WeCordButtonVariant.accent,
+        size: _cardButtonSize(context),
         onPressed: connected || canConnect ? join : null,
-        icon: const Icon(Icons.volume_up, size: 18),
-        label: Text(connected ? tr('Open') : tr('Join')),
+        icon: Icons.volume_up_rounded,
+        label: connected ? tr('Open') : tr('Join'),
       ),
     );
   }
@@ -508,64 +616,42 @@ class CircleEventInterestButton extends StatelessWidget {
     // Interest can always be taken back, but only given while the event is
     // still on.
     final enabled = !busy && (active || event.interestedByMe);
-    final icon = Icon(
-      event.interestedByMe
-          ? Icons.notifications_active
-          : Icons.notifications_none,
-      size: 18,
+    return WeCordButton(
+      variant: event.interestedByMe
+          ? WeCordButtonVariant.primary
+          : WeCordButtonVariant.secondary,
+      size: _cardButtonSize(context),
+      onPressed: enabled ? onPressed : null,
+      icon: event.interestedByMe
+          ? Icons.notifications_active_rounded
+          : Icons.notifications_none_rounded,
+      label: tr('Interested'),
     );
-    final label = Text(tr('Interested'));
-    return event.interestedByMe
-        ? FilledButton.tonalIcon(
-            onPressed: enabled ? onPressed : null,
-            icon: icon,
-            label: label,
-          )
-        : OutlinedButton.icon(
-            onPressed: enabled ? onPressed : null,
-            icon: icon,
-            label: label,
-          );
   }
 }
 
 /// Live now / Cancelled / Ended, or null for scheduled events.
 Widget? circleEventStatusBadge(BuildContext context, CircleEventStatus status) {
-  final colorScheme = Theme.of(context).colorScheme;
+  final c = context.tokens.colors;
   final (label, background, foreground) = switch (status) {
-    CircleEventStatus.ongoing => (
-      tr('Live now'),
-      colorScheme.primary,
-      colorScheme.onPrimary,
-    ),
+    CircleEventStatus.ongoing => (tr('Live now'), c.danger, c.onDanger),
     CircleEventStatus.cancelled => (
       tr('Cancelled'),
-      colorScheme.errorContainer,
-      colorScheme.onErrorContainer,
+      c.dangerSoft,
+      c.dangerText,
     ),
-    CircleEventStatus.over => (
-      tr('Ended'),
-      colorScheme.surfaceContainerHighest,
-      colorScheme.onSurfaceVariant,
-    ),
+    CircleEventStatus.over => (tr('Ended'), c.raised, c.muted),
     CircleEventStatus.scheduled => (null, null, null),
   };
   if (label == null) {
     return null;
   }
-  return Container(
+  return KeyedSubtree(
     key: ValueKey('circle-event-status-${status.name}'),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: background,
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: foreground,
-        fontWeight: FontWeight.w700,
-      ),
+    child: CircleTag(
+      label: label,
+      background: background!,
+      foreground: foreground!,
     ),
   );
 }
@@ -578,8 +664,7 @@ class CircleEventLocationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final icon = switch (event.locationType) {
       CircleEventLocationType.voice => Icons.volume_up_outlined,
       CircleEventLocationType.text => Icons.tag,
@@ -590,23 +675,25 @@ class CircleEventLocationChip extends StatelessWidget {
       _ => event.channelName ?? tr('Deleted channel'),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: ShapeDecoration(
+        color: c.raised,
+        shape: const StadiumBorder(),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: colorScheme.onSecondaryContainer),
+          Icon(icon, size: 14, color: c.muted),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSecondaryContainer,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: c.ink,
               ),
             ),
           ),
@@ -665,6 +752,35 @@ class _CircleEventDetailScreenState
     }
   }
 
+  Future<void> _showMenu(
+    CircleDetail? detail,
+    bool canEdit,
+    Offset? position,
+  ) async {
+    final action = await showCircleActionMenu<_EventMenuAction>(
+      context,
+      title: _event.title,
+      position: position,
+      items: [
+        if (canEdit)
+          CircleMenuItem(
+            value: _EventMenuAction.edit,
+            icon: Icons.edit_outlined,
+            label: tr('Edit event'),
+          ),
+        CircleMenuItem(
+          value: _EventMenuAction.cancel,
+          icon: Icons.event_busy_outlined,
+          label: tr('Cancel event'),
+          destructive: true,
+        ),
+      ],
+    );
+    if (action != null && mounted) {
+      await _onMenu(action, detail);
+    }
+  }
+
   Future<void> _onMenu(_EventMenuAction action, CircleDetail? detail) async {
     switch (action) {
       case _EventMenuAction.edit:
@@ -681,27 +797,24 @@ class _CircleEventDetailScreenState
           refreshCircleEvents(ref);
         }
       case _EventMenuAction.cancel:
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            scrollable: true,
-            title: Text(tr('Cancel event?')),
-            content: Text(
-              tr(
-                '"{title}" will be marked as cancelled and no one will be '
-                'reminded of it.',
-                {'title': _event.title},
-              ),
+        final confirmed = await showCircleDialog<bool>(
+          context,
+          builder: (context) => CircleDialog(
+            title: tr('Cancel event?'),
+            message: tr(
+              '"{title}" will be marked as cancelled and no one will be '
+              'reminded of it.',
+              {'title': _event.title},
             ),
             actions: [
-              TextButton(
+              CircleDialogAction(
+                label: tr('Keep event'),
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(tr('Keep event')),
               ),
-              FilledButton(
+              CircleDialogAction.danger(
                 key: const ValueKey('circle-event-confirm-cancel'),
+                label: tr('Cancel event'),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(tr('Cancel event')),
               ),
             ],
           ),
@@ -750,8 +863,7 @@ class _CircleEventDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final detail = ref.watch(circleDetailProvider(widget.circleId)).valueOrNull;
     final latest = ref
         .watch(
@@ -769,146 +881,212 @@ class _CircleEventDetailScreenState
     final creator = event.creator;
     final description = event.description;
     final canManage = event.canManage && !event.isCancelled;
+    final buttonSize = _cardButtonSize(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Event')),
-        actions: [
-          if (canManage)
-            PopupMenuButton<_EventMenuAction>(
+    return CirclePageScaffold(
+      title: tr('Event'),
+      subtitle: detail?.circle.name,
+      actions: [
+        if (canManage)
+          Builder(
+            builder: (buttonContext) => WeCordIconButton(
               tooltip: tr('Event options'),
-              icon: const Icon(Icons.more_vert),
-              onSelected: (action) => _onMenu(action, detail),
-              itemBuilder: (context) => [
-                if (status != CircleEventStatus.over)
-                  PopupMenuItem(
-                    value: _EventMenuAction.edit,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.edit_outlined),
-                      title: Text(tr('Edit event')),
+              icon: Icons.more_horiz_rounded,
+              variant: WeCordButtonVariant.onPaper,
+              onPressed: () {
+                final box = buttonContext.findRenderObject() as RenderBox?;
+                _showMenu(
+                  detail,
+                  status != CircleEventStatus.over,
+                  box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+                );
+              },
+            ),
+          ),
+      ],
+      body: ListView(
+        key: const ValueKey('circle-event-detail'),
+        padding: circlePagePadding(context),
+        children: [
+          CircleCard(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleEventDateTile(
+                      event: event,
+                      status: status,
+                      now: now,
+                      size: 56,
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (circleEventStatusBadge(context, status)
+                              case final badge?) ...[
+                            badge,
+                            const SizedBox(height: 6),
+                          ],
+                          Text(
+                            event.title,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                              height: 1.2,
+                              color: event.isCancelled ? c.muted : c.ink,
+                              decoration: event.isCancelled
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _DetailLine(
+                  icon: Icons.schedule_rounded,
+                  text: formatCircleEventTime(context, event, now: now),
+                ),
+                _DetailLine(
+                  icon: switch (event.locationType) {
+                    CircleEventLocationType.voice => Icons.volume_up_outlined,
+                    CircleEventLocationType.text => Icons.tag,
+                    CircleEventLocationType.external => Icons.place_outlined,
+                  },
+                  text: _locationText(event),
+                ),
+                if (creator != null)
+                  _DetailLine(
+                    icon: Icons.person_outline_rounded,
+                    text: tr('Created by {name}', {'name': creator.name}),
                   ),
-                PopupMenuItem(
-                  value: _EventMenuAction.cancel,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.event_busy_outlined),
-                    title: Text(tr('Cancel event')),
-                  ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    CircleEventJoinVoiceButton(event: event, now: now),
+                    CircleEventInterestButton(
+                      key: const ValueKey('circle-event-detail-interest'),
+                      event: event,
+                      busy: _busy,
+                      now: now,
+                      onPressed: _toggleInterest,
+                    ),
+                    WeCordButton(
+                      key: const ValueKey('circle-event-add-to-calendar'),
+                      variant: WeCordButtonVariant.secondary,
+                      size: buttonSize,
+                      onPressed: event.isCancelled ? null : _addToCalendar,
+                      icon: Icons.event_available_outlined,
+                      label: tr('Add to calendar'),
+                    ),
+                  ],
                 ),
               ],
             ),
-        ],
-      ),
-      body: ListView(
-        key: const ValueKey('circle-event-detail'),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          if (circleEventStatusBadge(context, status) case final badge?)
-            Align(alignment: Alignment.centerLeft, child: badge),
-          const SizedBox(height: 8),
-          Text(
-            event.title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              decoration: event.isCancelled ? TextDecoration.lineThrough : null,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _DetailLine(
-            icon: Icons.schedule,
-            text: formatCircleEventTime(context, event, now: now),
-          ),
-          _DetailLine(
-            icon: switch (event.locationType) {
-              CircleEventLocationType.voice => Icons.volume_up_outlined,
-              CircleEventLocationType.text => Icons.tag,
-              CircleEventLocationType.external => Icons.place_outlined,
-            },
-            text: _locationText(event),
-          ),
-          if (creator != null)
-            _DetailLine(
-              icon: Icons.person_outline,
-              text: tr('Created by {name}', {'name': creator.name}),
-            ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              CircleEventJoinVoiceButton(event: event, now: now),
-              CircleEventInterestButton(
-                key: const ValueKey('circle-event-detail-interest'),
-                event: event,
-                busy: _busy,
-                now: now,
-                onPressed: _toggleInterest,
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('circle-event-add-to-calendar'),
-                onPressed: event.isCancelled ? null : _addToCalendar,
-                icon: const Icon(Icons.event_available_outlined, size: 18),
-                label: Text(tr('Add to calendar')),
-              ),
-            ],
           ),
           if (description != null) ...[
-            const SizedBox(height: 20),
-            Text(tr('About'), style: theme.textTheme.titleSmall),
-            const SizedBox(height: 6),
-            MessageMarkdownText(
-              key: const ValueKey('circle-event-description'),
-              body: description,
-              color: colorScheme.onSurface,
+            SettingsSectionHeader(tr('About')),
+            CircleCard(
+              child: MessageMarkdownText(
+                key: const ValueKey('circle-event-description'),
+                body: description,
+                color: c.ink,
+              ),
             ),
           ],
-          const SizedBox(height: 20),
-          Text(
+          SettingsSectionHeader(
             tr('Interested · {count}', {'count': event.interestedCount}),
-            style: theme.textTheme.titleSmall,
           ),
-          const SizedBox(height: 4),
           FutureBuilder<List<CircleEventPerson>>(
             future: _interested,
             builder: (context, snapshot) {
               final people = snapshot.data;
               if (people == null) {
                 return snapshot.hasError
-                    ? Text(tr('Could not load who is interested.'))
+                    ? CircleCard(
+                        child: Text(
+                          tr('Could not load who is interested.'),
+                          style: TextStyle(color: c.muted),
+                        ),
+                      )
                     : const Padding(
                         padding: EdgeInsets.all(12),
                         child: Center(child: CircularProgressIndicator()),
                       );
               }
               if (people.isEmpty) {
-                return Text(
-                  tr('No one yet.'),
-                  style: theme.textTheme.bodySmall,
+                return CircleCard(
+                  child: Text(
+                    tr('No one yet.'),
+                    style: TextStyle(fontSize: 14, color: c.muted),
+                  ),
                 );
               }
-              return Column(
+              return SettingsGroup(
                 key: const ValueKey('circle-event-interested-list'),
+                separatorIndent: 66,
                 children: [
-                  for (final person in people)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(child: Text(_initial(person.name))),
-                      title: Text(
-                        person.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '@${person.profile.username}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                  for (final person in people) _InterestedRow(person: person),
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InterestedRow extends StatelessWidget {
+  const _InterestedRow({required this.person});
+
+  final CircleEventPerson person;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      child: Row(
+        children: [
+          CircleNetworkAvatar(
+            name: person.name,
+            url: person.profile.avatarUrl,
+            size: 40,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  person.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink,
+                  ),
+                ),
+                Text(
+                  '@${person.profile.username}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -924,15 +1102,20 @@ class _DetailLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          Icon(icon, size: 19, color: c.muted),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14.5, color: c.ink, height: 1.35),
+            ),
+          ),
         ],
       ),
     );
@@ -950,8 +1133,15 @@ class CircleEventsEntry extends ConsumerWidget {
 
   final String circleId;
 
-  /// Builds the row from its label and whether an event is live.
-  final Widget Function(BuildContext context, String label, bool live) builder;
+  /// Builds the entry from its label, whether an event is live, and the
+  /// live or next event (null when none is planned).
+  final Widget Function(
+    BuildContext context,
+    String label,
+    bool live,
+    CircleEvent? next,
+  )
+  builder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -970,7 +1160,21 @@ class CircleEventsEntry extends ConsumerWidget {
     final label = active.isEmpty
         ? tr('Events')
         : tr('Events ({count})', {'count': active.length});
-    return builder(context, label, live);
+    final upcoming = [...active]
+      ..sort((left, right) {
+        final leftLive = left.statusAt(now) == CircleEventStatus.ongoing;
+        final rightLive = right.statusAt(now) == CircleEventStatus.ongoing;
+        if (leftLive != rightLive) {
+          return leftLive ? -1 : 1;
+        }
+        return left.startsAt.compareTo(right.startsAt);
+      });
+    return builder(
+      context,
+      label,
+      live,
+      upcoming.isEmpty ? null : upcoming.first,
+    );
   }
 }
 
@@ -1080,9 +1284,4 @@ String _safeFileName(String title) {
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
   return safe.isEmpty ? 'event' : safe;
-}
-
-String _initial(String name) {
-  final trimmed = name.trim();
-  return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
 }

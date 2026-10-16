@@ -6,6 +6,7 @@ import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../../mobile/phone_test_support.dart';
 
@@ -54,7 +55,7 @@ void main() {
     expect(find.byKey(const ValueKey('circle-events-list')), findsOneWidget);
     final cards = find.byWidgetPredicate(
       (widget) =>
-          widget is Material &&
+          widget is WeCordPressable &&
           widget.key is ValueKey<String> &&
           (widget.key! as ValueKey<String>).value.startsWith('circle-event-'),
     );

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_category_collapse_store.dart';
@@ -16,7 +17,6 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
-import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -70,15 +70,13 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final indicator = tester.widget<PresenceIndicator>(
+    final indicator = tester.widget<PresenceDot>(
       find.byKey(const ValueKey('member-online-user-1')),
     );
-    expect(indicator.status, PresenceStatus.doNotDisturb);
+    expect(indicator.color, WeCordTokens.light.colors.danger);
     final images = [
-      for (final avatar in tester.widgetList<CircleAvatar>(
-        find.byType(CircleAvatar),
-      ))
-        if (avatar.backgroundImage case final NetworkImage image) image.url,
+      for (final avatar in tester.widgetList<Image>(find.byType(Image)))
+        if (avatar.image case final NetworkImage image) image.url,
     ];
     expect(images, contains('https://example.com/circle.png'));
   });
@@ -306,13 +304,13 @@ void main() {
     await tester.tap(find.text('general'));
     await tester.pumpAndSettle();
 
-    expect(find.text('ONLINE — 1'), findsNothing);
+    expect(find.text('Online — 1'), findsNothing);
     await tester.tap(find.byTooltip('Show member list'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Drawer), findsOneWidget);
-    expect(find.text('ONLINE — 1'), findsOneWidget);
-    expect(find.text('OFFLINE — 1'), findsOneWidget);
+    expect(find.byType(CircleMemberList), findsOneWidget);
+    expect(find.text('Online — 1'), findsOneWidget);
+    expect(find.text('Offline — 1'), findsOneWidget);
     expect(find.byKey(const ValueKey('member-online-user-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('member-offline-user-3')), findsOneWidget);
 
@@ -321,7 +319,7 @@ void main() {
     await tester.tap(find.text('Change nickname'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Amelia');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(repository.nicknameUpdates, [
@@ -442,12 +440,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('MEDIA'), findsOneWidget);
+    expect(find.text('Media'), findsOneWidget);
     expect(find.text('clips'), findsNothing);
     // Unread channels stay visible in a collapsed category.
     expect(find.text('reels'), findsOneWidget);
 
-    await tester.tap(find.text('MEDIA'));
+    await tester.tap(find.text('Media'));
     await tester.pumpAndSettle();
     expect(find.text('clips'), findsOneWidget);
     expect(store.collapsed['circle-1'], isEmpty);
@@ -478,8 +476,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Create channel'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Channel name'), 'photos');
-    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.enterText(
+      find.widgetWithText(WeCordTextField, 'Channel name'),
+      'photos',
+    );
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
     await tester.pumpAndSettle();
     expect(repository.createdChannelName, 'photos');
 
@@ -487,9 +488,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Invite friends'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Grace'));
+    await tester.tap(find.text('Grace'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Invite'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Invite'));
     await tester.pumpAndSettle();
     expect(repository.invitedMemberIds, ['friend-2']);
   });
@@ -559,13 +560,13 @@ void main() {
     // The rail belongs to the shell, beside the workspace.
     expect(find.byType(CircleRail), findsNothing);
     expect(find.text('Channel general'), findsOneWidget);
-    expect(find.text('ONLINE — 1'), findsOneWidget);
+    expect(find.text('Online — 1'), findsOneWidget);
 
     await tester.tap(find.text('photos'));
     await tester.pumpAndSettle();
     expect(find.text('Channel photos'), findsOneWidget);
 
-    await tester.tap(find.text('MEDIA'));
+    await tester.tap(find.text('Media'));
     await tester.pumpAndSettle();
     // Uncategorized channels never collapse; the open channel stays listed.
     expect(find.text('general'), findsOneWidget);
@@ -574,7 +575,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Hide member list'));
     await tester.pumpAndSettle();
-    expect(find.text('ONLINE — 1'), findsNothing);
+    expect(find.text('Online — 1'), findsNothing);
 
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
@@ -650,18 +651,18 @@ void main() {
     await tester.pumpWidget(_app(repository, FakeContactsRepository(), router));
     await tester.pumpAndSettle();
 
-    expect(find.text('ONLINE — 4'), findsOneWidget);
-    expect(find.text('OFFLINE — 2'), findsOneWidget);
+    expect(find.text('Online — 4'), findsOneWidget);
+    expect(find.text('Offline — 2'), findsOneWidget);
 
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     // Online: owner, then admins, then members, each by name.
-    expect(top('ONLINE — 4'), lessThan(top('Xu')));
+    expect(top('Online — 4'), lessThan(top('Xu')));
     expect(top('Xu'), lessThan(top('Yan')));
     expect(top('Yan'), lessThan(top('Amy')));
     expect(top('Amy'), lessThan(top('Zed')));
     // Offline: by name, after every online member.
-    expect(top('Zed'), lessThan(top('OFFLINE — 2')));
-    expect(top('OFFLINE — 2'), lessThan(top('Abe')));
+    expect(top('Zed'), lessThan(top('Offline — 2')));
+    expect(top('Offline — 2'), lessThan(top('Abe')));
     expect(top('Abe'), lessThan(top('Bea')));
 
     expect(find.byKey(const ValueKey('member-online-user-2')), findsOneWidget);
@@ -794,19 +795,19 @@ void main() {
       await pumpRoles(tester, currentUserId: 'user-1', permissions: 32767);
 
       double y(String text) => tester.getTopLeft(find.text(text).last).dy;
-      expect(find.text('MODS — 1'), findsOneWidget);
-      expect(find.text('CREW — 1'), findsOneWidget);
-      expect(find.text('ONLINE — 2'), findsOneWidget);
-      expect(find.text('OFFLINE — 1'), findsOneWidget);
+      expect(find.text('Mods — 1'), findsOneWidget);
+      expect(find.text('Crew — 1'), findsOneWidget);
+      expect(find.text('Online — 2'), findsOneWidget);
+      expect(find.text('Offline — 1'), findsOneWidget);
       // Helpers is not hoisted, so Bo stays under Online.
       expect(find.textContaining('HELPERS'), findsNothing);
-      expect(y('MODS — 1'), lessThan(y('Yan')));
-      expect(y('Yan'), lessThan(y('CREW — 1')));
-      expect(y('CREW — 1'), lessThan(y('Amy')));
-      expect(y('Amy'), lessThan(y('ONLINE — 2')));
-      expect(y('ONLINE — 2'), lessThan(y('Xu')));
+      expect(y('Mods — 1'), lessThan(y('Yan')));
+      expect(y('Yan'), lessThan(y('Crew — 1')));
+      expect(y('Crew — 1'), lessThan(y('Amy')));
+      expect(y('Amy'), lessThan(y('Online — 2')));
+      expect(y('Online — 2'), lessThan(y('Xu')));
       expect(y('Xu'), lessThan(y('Bo')));
-      expect(y('Bo'), lessThan(y('OFFLINE — 1')));
+      expect(y('Bo'), lessThan(y('Offline — 1')));
 
       // Names take the highest coloured role's colour.
       Color? colorOf(String name) =>
@@ -814,7 +815,7 @@ void main() {
       expect(colorOf('Yan'), const Color(0xFF3498DB));
       expect(colorOf('Amy'), const Color(0xFFE91E63));
       expect(colorOf('Bo'), const Color(0xFF2ECC71));
-      expect(colorOf('Cy'), isNull);
+      expect(colorOf('Cy'), WeCordTokens.light.colors.ink);
     });
 
     testWidgets('the owner creates, edits and deletes roles', (tester) async {
@@ -838,7 +839,7 @@ void main() {
       await tester.tap(find.byTooltip('Create role'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Role name'),
+        find.widgetWithText(WeCordTextField, 'Role name'),
         'Artists',
       );
       await tester.tap(find.byTooltip('#E67E22'));
@@ -853,7 +854,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(manageMessages);
       await tester.pumpAndSettle();
-      final create = find.widgetWithText(FilledButton, 'Create');
+      final create = find.widgetWithText(WeCordButton, 'Create');
       await tester.ensureVisible(create);
       await tester.pumpAndSettle();
       await tester.tap(create);
@@ -864,12 +865,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Edit role'), findsOneWidget);
       await tester.enterText(
-        find.widgetWithText(TextField, 'Role name'),
+        find.widgetWithText(WeCordTextField, 'Role name'),
         'Helpers 2',
       );
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      final save = find.widgetWithText(FilledButton, 'Save');
+      final save = find.widgetWithText(WeCordButton, 'Save');
       await tester.ensureVisible(save);
       await tester.pumpAndSettle();
       await tester.tap(save);
@@ -885,7 +886,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete role'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Delete'));
       await tester.pumpAndSettle();
       expect(repository.roleCalls.last, 'delete role-crew');
 
@@ -893,7 +894,7 @@ void main() {
       await tester.tap(find.text('@everyone'));
       await tester.pumpAndSettle();
       expect(find.text('Every member has these permissions.'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'Role name'), findsNothing);
+      expect(find.widgetWithText(WeCordTextField, 'Role name'), findsNothing);
       expect(find.text('Show separately'), findsNothing);
     });
 
@@ -916,15 +917,19 @@ void main() {
         find.text('This role ranks at or above your highest role.'),
         findsOneWidget,
       );
-      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+      expect(find.widgetWithText(WeCordButton, 'Save'), findsNothing);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Helpers'));
       await tester.pumpAndSettle();
       // Permissions the user lacks cannot be granted.
-      SwitchListTile permissionSwitch(String key) =>
-          tester.widget(find.byKey(ValueKey('role-permission-$key')));
+      WeCordSwitch permissionSwitch(String key) => tester.widget(
+        find.descendant(
+          of: find.byKey(ValueKey('role-permission-$key')),
+          matching: find.byType(WeCordSwitch),
+        ),
+      );
       expect(permissionSwitch('manage_roles').onChanged, isNotNull);
       expect(permissionSwitch('kick_members').onChanged, isNull);
       expect(repository.roleCalls, isEmpty);
@@ -972,14 +977,18 @@ void main() {
       await tester.tap(find.text('Manage roles'));
       await tester.pumpAndSettle();
 
-      CheckboxListTile box(String id) =>
-          tester.widget(find.byKey(ValueKey('member-role-$id')));
+      WeCordSwitch box(String id) => tester.widget(
+        find.descendant(
+          of: find.byKey(ValueKey('member-role-$id')),
+          matching: find.byType(WeCordSwitch),
+        ),
+      );
       expect(box('role-mods').onChanged, isNull);
       expect(box('role-crew').onChanged, isNull);
       expect(box('role-helpers').value, isTrue);
       await tester.tap(find.byKey(const ValueKey('member-role-role-helpers')));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
       await tester.pumpAndSettle();
       expect(repository.roleCalls, ['assign user-4 ']);
 
@@ -1011,7 +1020,7 @@ void main() {
       await tester.tap(find.text('Kick'));
       await tester.pumpAndSettle();
       expect(find.text('Kick Bo'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(repository.kickedUserIds, isEmpty);
 
@@ -1019,7 +1028,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Kick'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Kick'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Kick'));
       await tester.pumpAndSettle();
       expect(repository.kickedUserIds, ['user-4']);
       expect(find.text('Kicked Bo.'), findsOneWidget);
@@ -1123,7 +1132,8 @@ void main() {
       expect(find.textContaining('Links everywhere'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('circle-unban-user-9')));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Unban'));
+      // The dialog's Unban, above the list's.
+      await tester.tap(find.widgetWithText(WeCordButton, 'Unban').last);
       await tester.pumpAndSettle();
       expect(repository.unbannedUserIds, ['user-9']);
       expect(find.text('Unbanned Spam Bot.'), findsOneWidget);
@@ -1346,8 +1356,11 @@ void main() {
 
       expect(find.text('# staff'), findsOneWidget);
       expect(find.text('Private channel'), findsOneWidget);
-      final privateSwitch = tester.widget<SwitchListTile>(
-        find.byKey(const ValueKey('channel-private-switch')),
+      final privateSwitch = tester.widget<WeCordSwitch>(
+        find.descendant(
+          of: find.byKey(const ValueKey('channel-private-switch')),
+          matching: find.byType(WeCordSwitch),
+        ),
       );
       expect(privateSwitch.value, isTrue);
     });
@@ -1388,10 +1401,13 @@ void main() {
       expect(find.text('Allowed: Send messages'), findsOneWidget);
       expect(find.text('Allowed: View channels'), findsOneWidget);
       // Mods is the caller's own rank: shown but not editable.
-      final modsTile = tester.widget<ListTile>(
-        find.byKey(const ValueKey('channel-overwrite-ow-mods')),
+      final modsTile = tester.widget<WeCordPressable>(
+        find.descendant(
+          of: find.byKey(const ValueKey('channel-overwrite-ow-mods')),
+          matching: find.byType(WeCordPressable),
+        ),
       );
-      expect(modsTile.onTap, isNull);
+      expect(modsTile.onPressed, isNull);
 
       await tester.tap(find.text('Amy'));
       await tester.pumpAndSettle();
@@ -1404,13 +1420,13 @@ void main() {
       final manageRow = find.byKey(
         const ValueKey('overwrite-row-manage_messages'),
       );
-      final manageButton = tester.widget<SegmentedButton<OverwriteState>>(
+      final manageButton = tester.widget<ChannelOverwriteChoice>(
         find.descendant(
           of: manageRow,
-          matching: find.byType(SegmentedButton<OverwriteState>),
+          matching: find.byType(ChannelOverwriteChoice),
         ),
       );
-      expect(manageButton.onSelectionChanged, isNull);
+      expect(manageButton.onChanged, isNull);
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
@@ -1512,7 +1528,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Overview'), findsOneWidget);
       final save = find.byKey(const ValueKey('channel-overview-save'));
-      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      expect(tester.widget<WeCordButton>(save).onPressed, isNull);
 
       await tester.enterText(
         find.byKey(const ValueKey('channel-name-field')),
@@ -1534,7 +1550,7 @@ void main() {
       );
       await tester.pump();
       expect(find.text('Channel name is required.'), findsOneWidget);
-      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      expect(tester.widget<WeCordButton>(save).onPressed, isNull);
     });
 
     testWidgets('deleting a channel asks for its name and opens the next', (
@@ -1558,17 +1574,21 @@ void main() {
             )
             .first,
       );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('channel-delete-button')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('channel-delete-button')));
       await tester.pumpAndSettle();
 
-      final delete = find.widgetWithText(FilledButton, 'Delete');
-      expect(tester.widget<FilledButton>(delete).onPressed, isNull);
+      final delete = find.widgetWithText(WeCordButton, 'Delete');
+      expect(tester.widget<WeCordButton>(delete).onPressed, isNull);
       await tester.enterText(
         find.byKey(const ValueKey('channel-delete-confirm-field')),
         'genera',
       );
       await tester.pump();
-      expect(tester.widget<FilledButton>(delete).onPressed, isNull);
+      expect(tester.widget<WeCordButton>(delete).onPressed, isNull);
       await tester.enterText(
         find.byKey(const ValueKey('channel-delete-confirm-field')),
         'general',
@@ -1726,7 +1746,7 @@ void main() {
 
       expect(find.text('Only shown in this circle for Amy.'), findsOneWidget);
       await tester.enterText(find.byType(TextField), '  Amelia  ');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
       await tester.pumpAndSettle();
 
       expect(repository.nicknameUpdates, [
@@ -1745,7 +1765,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Change nickname'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Reset'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Reset'));
       await tester.pumpAndSettle();
 
       expect(repository.nicknameUpdates, [(userId: 'user-3', nickname: null)]);
@@ -1795,7 +1815,7 @@ void main() {
 
       expect(find.text('Only shown in this circle.'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Amy B');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
       await tester.pumpAndSettle();
 
       expect(repository.nicknameUpdates, [
@@ -1839,7 +1859,7 @@ void main() {
       expect(find.textContaining('Muted until'), findsOneWidget);
       expect(find.text('For 1 hour'), findsNothing);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Unmute'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Unmute'));
       await tester.pumpAndSettle();
       expect(repository.notificationUpdates.last.mutedUntil, isNull);
       expect(
@@ -1881,10 +1901,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Muted until you turn it back on'), findsOneWidget);
-    final levels = tester.widget<RadioGroup<CircleNotificationLevel>>(
-      find.byType(RadioGroup<CircleNotificationLevel>),
+    final nothing = tester.widget<SettingsRow>(
+      find.byKey(const ValueKey('circle-notify-none')),
     );
-    expect(levels.groupValue, CircleNotificationLevel.none);
+    expect(nothing.tone, SettingsTone.accent);
 
     await tester.tap(find.text('All messages'));
     await tester.pumpAndSettle();
@@ -2014,7 +2034,7 @@ void main() {
       await pumpCategories(tester);
 
       expect(find.text('Channel general'), findsOneWidget);
-      final order = ['general', 'TEXT', 'chat', 'memes', 'MEDIA', 'clips'];
+      final order = ['general', 'Text', 'chat', 'memes', 'Media', 'clips'];
       for (var index = 1; index < order.length; index++) {
         expect(
           top(tester, order[index - 1]),
@@ -2037,12 +2057,12 @@ void main() {
       expect(sidebarText('memes'), findsNothing);
       expect(sidebarText('clips'), findsOneWidget);
 
-      await tester.tap(sidebarText('MEDIA'));
+      await tester.tap(sidebarText('Media'));
       await tester.pumpAndSettle();
       expect(sidebarText('clips'), findsNothing);
       expect(store.collapsed['circle-1'], {'cat-a', 'cat-b'});
 
-      await tester.tap(sidebarText('TEXT'));
+      await tester.tap(sidebarText('Text'));
       await tester.pumpAndSettle();
       expect(sidebarText('chat'), findsOneWidget);
       expect(store.collapsed['circle-1'], {'cat-b'});
@@ -2066,7 +2086,7 @@ void main() {
 
       await tester.tap(sidebarText('chat'));
       await tester.pumpAndSettle();
-      await tester.tap(sidebarText('TEXT'));
+      await tester.tap(sidebarText('Text'));
       await tester.pumpAndSettle();
 
       expect(sidebarText('chat'), findsOneWidget);
@@ -2140,8 +2160,8 @@ void main() {
           {'id': 'memes', 'category_id': 'cat-a'},
         ],
       });
-      expect(top(tester, 'MEDIA'), lessThan(top(tester, 'TEXT')));
-      expect(top(tester, 'general'), lessThan(top(tester, 'TEXT')));
+      expect(top(tester, 'Media'), lessThan(top(tester, 'Text')));
+      expect(top(tester, 'general'), lessThan(top(tester, 'Text')));
 
       // Dropping an entry where it was is not a change.
       channelList(tester).onReorderItem!(1, 1);
@@ -2162,7 +2182,7 @@ void main() {
       repository.reorderCompleter!.complete();
       await tester.pumpAndSettle();
       expect(top(tester, 'general'), lessThan(top(tester, 'clips')));
-      expect(top(tester, 'MEDIA'), lessThan(top(tester, 'clips')));
+      expect(top(tester, 'Media'), lessThan(top(tester, 'clips')));
       expect(
         find.text('Could not reorder channels. Try again.'),
         findsOneWidget,
@@ -2191,7 +2211,7 @@ void main() {
       await tester.tap(find.text('Create category'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '  Voice  ');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Category options').last);
@@ -2200,14 +2220,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'Media'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Clips');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Category options').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete category'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Delete'));
       await tester.pumpAndSettle();
 
       expect(repository.categoryCalls, [
@@ -2223,11 +2243,16 @@ void main() {
       await tester.tap(find.byTooltip('Create channel').last);
       await tester.pumpAndSettle();
       expect(
-        find.widgetWithText(DropdownButtonFormField<String?>, 'Media'),
-        findsOneWidget,
+        tester
+            .widget<WeCordChip>(find.widgetWithText(WeCordChip, 'Media'))
+            .selected,
+        isTrue,
       );
-      await tester.enterText(find.bySemanticsLabel('Channel name'), 'reels');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.enterText(
+        find.widgetWithText(WeCordTextField, 'Channel name'),
+        'reels',
+      );
+      await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
       await tester.pumpAndSettle();
 
       expect(repository.createdChannelName, 'reels');
@@ -2242,8 +2267,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Text').last);
       await tester.pumpAndSettle();
-      await tester.enterText(find.bySemanticsLabel('Channel name'), 'talk');
-      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.enterText(
+        find.widgetWithText(WeCordTextField, 'Channel name'),
+        'talk',
+      );
+      await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
       await tester.pumpAndSettle();
       expect(repository.createdChannelName, 'talk');
       expect(repository.createdChannelCategoryId, 'cat-a');
@@ -2488,7 +2516,7 @@ void main() {
       await openMenu(tester);
       await tester.tap(find.text('Leave circle'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Leave'));
       await tester.pumpAndSettle();
 
       expect(repository.leftCircleIds, ['circle-1']);
@@ -2514,8 +2542,8 @@ void main() {
       await tester.tap(find.text('Transfer ownership'));
       await tester.pumpAndSettle();
 
-      FilledButton transfer() => tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Transfer'),
+      WeCordButton transfer() => tester.widget<WeCordButton>(
+        find.widgetWithText(WeCordButton, 'Transfer'),
       );
       // The owner is not a candidate.
       expect(find.byKey(const ValueKey('transfer-owner-user-1')), findsNothing);
@@ -2537,7 +2565,7 @@ void main() {
         'Close Friends',
       );
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Transfer'));
+      await tester.tap(find.widgetWithText(WeCordButton, 'Transfer'));
       await tester.pumpAndSettle();
 
       expect(repository.ownershipTransfers, [

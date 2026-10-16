@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/message_origin.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Channel settings: turns a text channel into an announcement channel
 /// and back.
@@ -33,27 +35,24 @@ class _AnnouncementChannelSwitchState
 
   Future<void> _set(bool enabled) async {
     if (!enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          scrollable: true,
-          title: Text(tr('Turn off announcements?')),
-          content: Text(
-            tr(
-              'Channels that follow #{name} stop receiving its posts, and '
-              'their follows are removed.',
-              {'name': widget.channel.name},
-            ),
+      final confirmed = await showCircleDialog<bool>(
+        context,
+        builder: (context) => CircleDialog(
+          title: tr('Turn off announcements?'),
+          message: tr(
+            'Channels that follow #{name} stop receiving its posts, and '
+            'their follows are removed.',
+            {'name': widget.channel.name},
           ),
           actions: [
-            TextButton(
+            CircleDialogAction(
+              label: tr('Cancel'),
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text(tr('Cancel')),
             ),
-            FilledButton(
+            CircleDialogAction.danger(
               key: const ValueKey('announcement-off-confirm'),
+              label: tr('Turn off'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(tr('Turn off')),
             ),
           ],
         ),
@@ -89,15 +88,15 @@ class _AnnouncementChannelSwitchState
     }
   }
 
+  /// A settings row: place it in a [SettingsGroup].
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
+    return SettingsRow.toggle(
       key: const ValueKey('announcement-channel-switch'),
-      secondary: const Icon(Icons.campaign_outlined),
-      title: Text(tr('Announcement channel')),
-      subtitle: Text(
-        tr('Posts here can be published to channels that follow it.'),
-      ),
+      icon: Icons.campaign_outlined,
+      tone: SettingsTone.accent,
+      title: tr('Announcement channel'),
+      subtitle: tr('Posts here can be published to channels that follow it.'),
       value: _value ?? widget.channel.isAnnouncement,
       onChanged: _busy ? null : (value) => unawaited(_set(value)),
     );
@@ -116,26 +115,23 @@ class FollowedChannelsSection extends ConsumerWidget {
     WidgetRef ref,
     ChannelFollow follow,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(tr('Unfollow channel')),
-        content: Text(
-          tr('Stop receiving posts from #{channel} in {circle}?', {
-            'channel': follow.sourceChannelName,
-            'circle': follow.sourceCircleName,
-          }),
-        ),
+    final confirmed = await showCircleDialog<bool>(
+      context,
+      builder: (context) => CircleDialog(
+        title: tr('Unfollow channel'),
+        message: tr('Stop receiving posts from #{channel} in {circle}?', {
+          'channel': follow.sourceChannelName,
+          'circle': follow.sourceCircleName,
+        }),
         actions: [
-          TextButton(
+          CircleDialogAction(
+            label: tr('Cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
           ),
-          FilledButton(
+          CircleDialogAction.danger(
             key: const ValueKey('unfollow-confirm'),
+            label: tr('Unfollow'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Unfollow')),
           ),
         ],
       ),
@@ -154,27 +150,46 @@ class FollowedChannelsSection extends ConsumerWidget {
     ref.invalidate(channelFollowsProvider(channel.id));
   }
 
+  /// A whole section (header, note and a group of rows) for a column of
+  /// settings groups.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final follows = ref.watch(channelFollowsProvider(channel.id));
     final list = follows.valueOrNull ?? const <ChannelFollow>[];
     return Column(
       key: const ValueKey('followed-channels'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(
-            tr('Followed channels'),
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
+        SettingsSectionHeader(tr('Followed channels')),
+        if (list.isNotEmpty) ...[
+          SettingsGroup(
+            children: [
+              for (final follow in list)
+                SettingsRow(
+                  key: ValueKey('channel-follow-${follow.id}'),
+                  icon: Icons.campaign_outlined,
+                  tone: SettingsTone.accent,
+                  title: '#${follow.sourceChannelName}',
+                  subtitle: follow.creatorName == null
+                      ? follow.sourceCircleName
+                      : tr('{circle} · followed by {name}', {
+                          'circle': follow.sourceCircleName,
+                          'name': follow.creatorName,
+                        }),
+                  trailing: WeCordButton(
+                    label: tr('Unfollow'),
+                    variant: WeCordButtonVariant.secondary,
+                    size: WeCordButtonSize.small,
+                    onPressed: () => unawaited(_unfollow(context, ref, follow)),
+                  ),
+                ),
+            ],
           ),
-        ),
+          const SizedBox(height: 8),
+        ],
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Text(
             // Loading and failures read like an empty list, so the
             // section keeps its height.
@@ -184,35 +199,9 @@ class FollowedChannelsSection extends ConsumerWidget {
                     'one from its channel header.',
                   )
                 : tr('Posts published in these channels appear here.'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
           ),
         ),
-        for (final follow in list)
-          ListTile(
-            key: ValueKey('channel-follow-${follow.id}'),
-            leading: const Icon(Icons.campaign_outlined),
-            title: Text(
-              '#${follow.sourceChannelName}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              follow.creatorName == null
-                  ? follow.sourceCircleName
-                  : tr('{circle} · followed by {name}', {
-                      'circle': follow.sourceCircleName,
-                      'name': follow.creatorName,
-                    }),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: TextButton(
-              onPressed: () => unawaited(_unfollow(context, ref, follow)),
-              child: Text(tr('Unfollow')),
-            ),
-          ),
       ],
     );
   }
@@ -224,11 +213,10 @@ Future<void> showFollowChannelSheet(
   BuildContext context, {
   required CircleChannel channel,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => _FollowChannelSheet(channel: channel),
+  return showWeCordSheet<void>(
+    context,
+    title: tr('Follow #{name}', {'name': channel.name}),
+    builder: (context, _) => _FollowChannelSheet(channel: channel),
   );
 }
 
@@ -286,111 +274,107 @@ class _FollowChannelSheetState extends ConsumerState<_FollowChannelSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SafeArea(
+    final c = context.tokens.colors;
+    final message = TextStyle(fontSize: 14, color: c.muted, height: 1.4);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        16 + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-            child: Text(
-              tr('Follow #{name}', {'name': widget.channel.name}),
-              style: theme.textTheme.titleLarge,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
             child: Text(
               tr(
                 'Choose where its published posts should appear. You need '
                 'to manage webhooks in that channel.',
               ),
-              style: theme.textTheme.bodyMedium,
+              style: message,
             ),
           ),
-          Flexible(
-            child: FutureBuilder<List<FollowTarget>>(
-              future: _targets,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(tr('Could not load your channels.')),
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _targets = ref
-                                .read(announcementRepositoryProvider)
-                                .listFollowTargets(widget.channel.id);
-                          }),
-                          child: Text(tr('Retry')),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                final targets = snapshot.data;
-                if (targets == null) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (targets.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      tr(
-                        'None of your circles has a text channel where you '
-                        'manage webhooks.',
+          FutureBuilder<List<FollowTarget>>(
+            future: _targets,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(tr('Could not load your channels.'), style: message),
+                      const SizedBox(height: 10),
+                      WeCordButton(
+                        label: tr('Retry'),
+                        variant: WeCordButtonVariant.secondary,
+                        onPressed: () => setState(() {
+                          _targets = ref
+                              .read(announcementRepositoryProvider)
+                              .listFollowTargets(widget.channel.id);
+                        }),
                       ),
-                    ),
-                  );
-                }
-                return ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final target in targets)
-                      ListTile(
-                        key: ValueKey('follow-target-${target.channelId}'),
-                        leading: const Icon(Icons.tag),
-                        title: Text(
-                          target.channelName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          target.circleName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: target.isFollowing
-                            ? Text(
-                                tr('Following'),
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              )
-                            : _busyChannelId == target.channelId
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : null,
-                        enabled: !target.isFollowing && _busyChannelId == null,
-                        onTap: () => unawaited(_follow(target)),
-                      ),
-                  ],
+                    ],
+                  ),
                 );
-              },
-            ),
+              }
+              final targets = snapshot.data;
+              if (targets == null) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (targets.isEmpty) {
+                return CircleCard(
+                  color: c.well,
+                  child: Text(
+                    tr(
+                      'None of your circles has a text channel where you '
+                      'manage webhooks.',
+                    ),
+                    style: message,
+                  ),
+                );
+              }
+              return SettingsGroup(
+                color: c.well,
+                children: [
+                  for (final target in targets)
+                    SettingsRow(
+                      key: ValueKey('follow-target-${target.channelId}'),
+                      icon: Icons.tag,
+                      title: target.channelName,
+                      subtitle: target.circleName,
+                      showChevron:
+                          !target.isFollowing &&
+                          _busyChannelId != target.channelId,
+                      trailing: target.isFollowing
+                          ? Text(
+                              tr('Following'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: c.muted,
+                              ),
+                            )
+                          : _busyChannelId == target.channelId
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : null,
+                      onTap: target.isFollowing || _busyChannelId != null
+                          ? null
+                          : () => unawaited(_follow(target)),
+                    ),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 8),
         ],
       ),
     );
@@ -422,13 +406,15 @@ class CrosspostOrigin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final muted = foregroundColor.withValues(alpha: 0.75);
-    return InkWell(
+    return WeCordPressable(
       key: ValueKey('crosspost-origin-${crosspost.sourceMessageId}'),
-      onTap: () => _open(context),
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
+      onPressed: () => _open(context),
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.xs),
+      ),
+      builder: (context, states) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -444,9 +430,14 @@ class CrosspostOrigin extends StatelessWidget {
                 }),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
+                style: TextStyle(
+                  fontSize: 11.5,
                   color: muted,
                   fontWeight: FontWeight.w600,
+                  decoration: states.contains(WidgetState.hovered)
+                      ? TextDecoration.underline
+                      : null,
+                  decorationColor: muted,
                 ),
               ),
             ),
@@ -476,9 +467,11 @@ class PublishedMarker extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             tr('Published'),
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: muted),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: muted,
+            ),
           ),
         ],
       ),

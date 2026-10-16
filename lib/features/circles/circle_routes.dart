@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Circle locations; a circle lives at `/circles/<id>`.
 abstract final class CircleRoutes {
@@ -13,54 +15,77 @@ enum _AddCircleChoice { create, join }
 
 /// Asks whether to create a circle or join one with an invite, then does it.
 Future<void> showAddCircleSheet(BuildContext context) async {
-  final choice = await showModalBottomSheet<_AddCircleChoice>(
-    context: context,
-    useSafeArea: true,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-            child: Text(
-              tr('Add a circle'),
-              style: Theme.of(sheetContext).textTheme.titleLarge,
+  final choice = await showWeCordSheet<_AddCircleChoice>(
+    context,
+    builder: (sheetContext, _) {
+      final c = sheetContext.tokens.colors;
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          4,
+          16,
+          16 + MediaQuery.paddingOf(sheetContext).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  tr('Add a circle'),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: c.ink,
+                  ),
+                ),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-            child: Text(
-              tr('Start your own, or join one you were invited to.'),
-              style: Theme.of(sheetContext).textTheme.bodyMedium,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+              child: Text(
+                tr('Start your own, or join one you were invited to.'),
+                style: TextStyle(fontSize: 14, color: c.muted),
+              ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.add_circle_outline),
-            title: Text(tr('Create a circle')),
-            onTap: () =>
-                Navigator.of(sheetContext).pop(_AddCircleChoice.create),
-          ),
-          ListTile(
-            leading: const Icon(Icons.add_link),
-            title: Text(tr('Join with invite')),
-            onTap: () => Navigator.of(sheetContext).pop(_AddCircleChoice.join),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+            SettingsGroup(
+              color: c.well,
+              children: [
+                SettingsRow(
+                  icon: Icons.add_rounded,
+                  tone: SettingsTone.accent,
+                  title: tr('Create a circle'),
+                  subtitle: tr('Channels, voice and events for your people.'),
+                  onTap: () =>
+                      Navigator.of(sheetContext).pop(_AddCircleChoice.create),
+                ),
+                SettingsRow(
+                  icon: Icons.add_link_rounded,
+                  tone: SettingsTone.success,
+                  title: tr('Join with invite'),
+                  subtitle: tr('Paste an invite code or link.'),
+                  onTap: () =>
+                      Navigator.of(sheetContext).pop(_AddCircleChoice.join),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
   );
   if (choice == null || !context.mounted) {
     return;
   }
   switch (choice) {
     case _AddCircleChoice.create:
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: (context) => const CircleCreationSheet(),
+      await showWeCordSheet<void>(
+        context,
+        builder: (context, _) => const CircleCreationSheet(),
       );
     case _AddCircleChoice.join:
       await joinCircleWithInvite(context);
@@ -69,8 +94,8 @@ Future<void> showAddCircleSheet(BuildContext context) async {
 
 /// Asks for an invite code or link and opens its invite page.
 Future<void> joinCircleWithInvite(BuildContext context) async {
-  final code = await showDialog<String>(
-    context: context,
+  final code = await showCircleDialog<String>(
+    context,
     builder: (context) => const _JoinWithInviteDialog(),
   );
   if (code != null && context.mounted) {
@@ -106,24 +131,22 @@ class _JoinWithInviteDialogState extends State<_JoinWithInviteDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Join with invite')),
-      content: TextField(
+    return CircleDialog(
+      title: tr('Join with invite'),
+      content: WeCordTextField(
         controller: _controller,
         autofocus: true,
-        decoration: InputDecoration(
-          labelText: tr('Invite code or link'),
-          errorText: _errorText,
-        ),
+        label: tr('Invite code or link'),
+        errorText: _errorText,
+        prefixIcon: Icons.link_rounded,
         onSubmitted: (_) => _submit(),
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(onPressed: _submit, child: Text(tr('Join'))),
+        CircleDialogAction.primary(label: tr('Join'), onPressed: _submit),
       ],
     );
   }

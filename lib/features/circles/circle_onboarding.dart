@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_automod_repository.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Limits the server enforces (see `202610160021_member_onboarding.sql`).
 abstract final class CircleOnboardingLimits {
@@ -142,7 +145,7 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
         }
       });
     }
-    final colors = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     // The same shape with or without the bar, so the circle below keeps
     // its state when the bar goes away.
     return Column(
@@ -151,14 +154,14 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
         if (onboarding != null && needsAcceptance)
           Material(
             key: const ValueKey('circle-rules-bar'),
-            color: colors.secondaryContainer,
+            color: c.accentSoft,
             child: SafeArea(
               bottom: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.rule, color: colors.onSecondaryContainer),
+                    Icon(Icons.rule, size: 20, color: c.accentText),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -167,13 +170,19 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
                           'chatting.',
                           {'circle': widget.circleName},
                         ),
-                        style: TextStyle(color: colors.onSecondaryContainer),
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: c.accentText,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    FilledButton(
+                    WeCordButton(
+                      label: tr('Read rules'),
+                      variant: WeCordButtonVariant.accent,
+                      size: WeCordButtonSize.small,
                       onPressed: () => _openRules(onboarding),
-                      child: Text(tr('Read rules')),
                     ),
                   ],
                 ),
@@ -192,8 +201,8 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
   }
 
   Future<void> _openRules(CircleOnboarding onboarding) async {
-    final accepted = await showDialog<bool>(
-      context: context,
+    final accepted = await showCircleDialog<bool>(
+      context,
       builder: (context) => CircleRulesDialog(
         circleName: widget.circleName,
         rules: onboarding.rules,
@@ -219,8 +228,8 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
       return;
     }
     ref.invalidate(circleOnboardingProvider(widget.circleId));
-    await showDialog<void>(
-      context: context,
+    await showCircleDialog<void>(
+      context,
       builder: (context) =>
           CircleWelcomeDialog(circleName: widget.circleName, message: welcome),
     );
@@ -247,63 +256,120 @@ class _CircleRulesDialogState extends State<CircleRulesDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Rules of {circle}', {'circle': widget.circleName})),
-      content: SizedBox(
-        width: 440,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr('Accept these rules to send messages, react and join voice.'),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+    final c = context.tokens.colors;
+    return CircleDialog(
+      title: tr('Rules of {circle}', {'circle': widget.circleName}),
+      message: tr('Accept these rules to send messages, react and join voice.'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 2),
+            decoration: BoxDecoration(
+              color: c.well,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
             ),
-            const SizedBox(height: 16),
-            for (final (index, rule) in widget.rules.indexed)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundColor: theme.colorScheme.primaryContainer,
-                      foregroundColor: theme.colorScheme.onPrimaryContainer,
-                      child: Text(
-                        '${index + 1}',
-                        style: theme.textTheme.labelSmall,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, rule) in widget.rules.indexed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: c.accentSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: c.accentText,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              rule,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                color: c.ink,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          WeCordPressable(
+            key: const ValueKey('circle-rules-agree'),
+            toggled: _agreed,
+            pressedScale: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+            ),
+            onPressed: () {
+              WeCordHaptics.selection();
+              setState(() => _agreed = !_agreed);
+            },
+            builder: (context, states) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: WeCordMotion.quick,
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: _agreed ? c.accent : c.raised,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _agreed
+                        ? Icon(Icons.check_rounded, size: 18, color: c.onAccent)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      tr('I have read and agree to the rules'),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(rule)),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            CheckboxListTile(
-              key: const ValueKey('circle-rules-agree'),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _agreed,
-              onChanged: (value) => setState(() => _agreed = value ?? false),
-              title: Text(tr('I have read and agree to the rules')),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Not now'),
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text(tr('Not now')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
           key: const ValueKey('circle-rules-accept'),
+          label: tr('Accept'),
           onPressed: _agreed ? () => Navigator.of(context).pop(true) : null,
-          child: Text(tr('Accept')),
         ),
       ],
     );
@@ -323,19 +389,15 @@ class CircleWelcomeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      icon: Icon(Icons.celebration_outlined, color: theme.colorScheme.primary),
-      title: Text(tr('Welcome to {circle}!', {'circle': circleName})),
-      content: Text(
-        message ?? tr('You can now send messages, react and join voice.'),
-        textAlign: TextAlign.center,
-      ),
+    return CircleDialog(
+      title: tr('Welcome to {circle}!', {'circle': circleName}),
+      message:
+          message ?? tr('You can now send messages, react and join voice.'),
       actions: [
-        FilledButton(
+        CircleDialogAction.primary(
           key: const ValueKey('circle-welcome-done'),
+          label: tr("Let's go"),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr("Let's go")),
         ),
       ],
     );
@@ -361,24 +423,19 @@ class CircleOnboardingSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final onboarding = ref.watch(circleOnboardingProvider(detail.circle.id));
     return onboarding.when(
-      loading: () => Scaffold(
-        appBar: AppBar(title: Text(tr('Onboarding'))),
+      loading: () => CirclePageScaffold(
+        title: tr('Onboarding'),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (error, stackTrace) => Scaffold(
-        appBar: AppBar(title: Text(tr('Onboarding'))),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(tr('Could not load onboarding.')),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () =>
-                    ref.invalidate(circleOnboardingProvider(detail.circle.id)),
-                child: Text(tr('Try again')),
-              ),
-            ],
+      error: (error, stackTrace) => CirclePageScaffold(
+        title: tr('Onboarding'),
+        body: CircleEmptyState(
+          icon: Icons.rule,
+          title: tr('Could not load onboarding.'),
+          action: WeCordButton(
+            label: tr('Try again'),
+            onPressed: () =>
+                ref.invalidate(circleOnboardingProvider(detail.circle.id)),
           ),
         ),
       ),
@@ -462,101 +519,134 @@ class _OnboardingEditorState extends ConsumerState<_OnboardingEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Onboarding')),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(
-              key: const ValueKey('onboarding-save'),
-              onPressed: _saving ? null : _save,
-              child: Text(tr('Save')),
-            ),
-          ),
-        ],
-      ),
+    final c = context.tokens.colors;
+    return CirclePageScaffold(
+      title: tr('Onboarding'),
+      actions: [
+        WeCordButton(
+          key: const ValueKey('onboarding-save'),
+          label: tr('Save'),
+          size: WeCordButtonSize.medium,
+          loading: _saving,
+          onPressed: _saving ? null : _save,
+        ),
+      ],
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: circlePagePadding(context),
         children: [
-          if (_error case final error?) ...[
-            Text(
-              error,
-              key: const ValueKey('onboarding-error'),
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
-            const SizedBox(height: 12),
-          ],
-          SwitchListTile(
-            key: const ValueKey('onboarding-enabled'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr('Members must accept the rules')),
-            subtitle: Text(
-              tr(
-                'New members can read channels, but cannot send messages, '
-                'react or join voice until they accept. Everyone already '
-                'here counts as having accepted.',
+          if (_error case final error?)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: c.dangerSoft,
+                borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              ),
+              child: Text(
+                error,
+                key: const ValueKey('onboarding-error'),
+                style: TextStyle(
+                  color: c.dangerText,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            value: _enabled,
-            onChanged: (value) => setState(() => _enabled = value),
+          SettingsGroup(
+            children: [
+              SettingsRow.toggle(
+                key: const ValueKey('onboarding-enabled'),
+                icon: Icons.rule,
+                tone: SettingsTone.success,
+                title: tr('Members must accept the rules'),
+                subtitle: tr(
+                  'New members can read channels, but cannot send '
+                  'messages, react or join voice until they accept. '
+                  'Everyone already here counts as having accepted.',
+                ),
+                value: _enabled,
+                onChanged: (value) => setState(() => _enabled = value),
+              ),
+            ],
           ),
-          const Divider(height: 32),
-          Text(tr('Rules'), style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          for (final (index, controller) in _rules.indexed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: ValueKey('onboarding-rule-$index'),
-                      controller: controller,
-                      maxLength: CircleOnboardingLimits.ruleLength,
-                      minLines: 1,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        labelText: tr('Rule {number}', {'number': index + 1}),
-                        counterText: '',
-                      ),
+          SettingsSectionHeader(tr('Rules')),
+          CircleCard(
+            padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, controller) in _rules.indexed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: c.accentSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: c.accentText,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: WeCordTextField(
+                            fieldKey: ValueKey('onboarding-rule-$index'),
+                            controller: controller,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(
+                                CircleOnboardingLimits.ruleLength,
+                              ),
+                            ],
+                            minLines: 1,
+                            maxLines: 3,
+                            hint: tr('Rule {number}', {'number': index + 1}),
+                          ),
+                        ),
+                        WeCordIconButton(
+                          tooltip: tr('Remove rule'),
+                          icon: Icons.remove_circle_outline,
+                          variant: WeCordButtonVariant.ghost,
+                          onPressed: () => setState(() {
+                            _rules.removeAt(index).dispose();
+                          }),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: tr('Remove rule'),
-                    onPressed: () => setState(() {
-                      _rules.removeAt(index).dispose();
-                    }),
-                    icon: const Icon(Icons.remove_circle_outline),
+                if (_rules.length < CircleOnboardingLimits.rules)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: WeCordButton(
+                      key: const ValueKey('onboarding-add-rule'),
+                      label: tr('Add rule'),
+                      icon: Icons.add_rounded,
+                      variant: WeCordButtonVariant.secondary,
+                      size: WeCordButtonSize.small,
+                      onPressed: () =>
+                          setState(() => _rules.add(TextEditingController())),
+                    ),
                   ),
-                ],
-              ),
+              ],
             ),
-          if (_rules.length < CircleOnboardingLimits.rules)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                key: const ValueKey('onboarding-add-rule'),
-                onPressed: () =>
-                    setState(() => _rules.add(TextEditingController())),
-                icon: const Icon(Icons.add),
-                label: Text(tr('Add rule')),
-              ),
-            ),
-          const Divider(height: 32),
-          Text(tr('Welcome message'), style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('onboarding-welcome'),
-            controller: _welcome,
-            maxLength: CircleOnboardingLimits.welcomeLength,
-            minLines: 2,
-            maxLines: 6,
-            decoration: InputDecoration(
-              hintText: tr(
-                'Shown once to members after they accept the rules.',
-              ),
+          ),
+          SettingsSectionHeader(tr('Welcome message')),
+          CircleCard(
+            child: WeCordTextField(
+              fieldKey: const ValueKey('onboarding-welcome'),
+              controller: _welcome,
+              maxLength: CircleOnboardingLimits.welcomeLength,
+              minLines: 2,
+              maxLines: 6,
+              hint: tr('Shown once to members after they accept the rules.'),
             ),
           ),
         ],

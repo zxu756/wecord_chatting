@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/features/circles/circle_automod_repository.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -97,7 +98,7 @@ void main() {
     expect(find.text('Rules of Book Club'), findsOneWidget);
     expect(find.text('Be kind'), findsOneWidget);
     final accept = find.byKey(const ValueKey('circle-rules-accept'));
-    expect(tester.widget<FilledButton>(accept).onPressed, isNull);
+    expect(tester.widget<WeCordButton>(accept).onPressed, isNull);
 
     await tester.tap(find.byKey(const ValueKey('circle-rules-agree')));
     await tester.pumpAndSettle();

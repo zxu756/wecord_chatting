@@ -4,7 +4,9 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class CircleFeedComposer extends ConsumerStatefulWidget {
   const CircleFeedComposer({
@@ -109,80 +111,106 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final selectedImage = _selectedImage;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.well,
+        borderRadius: BorderRadius.circular(WeCordRadii.xl),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
+          WeCordTextField(
             controller: _bodyController,
             enabled: !_isPosting,
             minLines: 1,
             maxLines: 4,
-            decoration: InputDecoration(
-              labelText: tr('Share with this Circle'),
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                tooltip: tr('Add image'),
-                icon: _isPickingImage
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.image_outlined),
-                onPressed: _isPickingImage || _isPosting ? null : _pickImage,
-              ),
+            onPaper: true,
+            hint: tr('Share with this Circle'),
+            suffix: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _isPickingImage
+                  ? const SizedBox.square(
+                      dimension: 44,
+                      child: Center(
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  : WeCordIconButton(
+                      tooltip: tr('Add image'),
+                      icon: Icons.image_outlined,
+                      variant: WeCordButtonVariant.ghost,
+                      size: 36,
+                      onPressed: _isPosting ? null : _pickImage,
+                    ),
             ),
           ),
           if (selectedImage != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.image_outlined, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    selectedImage.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
+            Container(
+              padding: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(
+                color: c.raised,
+                borderRadius: BorderRadius.circular(WeCordRadii.md),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.image_outlined, size: 18, color: c.muted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      selectedImage.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
+                      ),
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: tr('Remove image'),
-                  icon: const Icon(Icons.close),
-                  onPressed: _isPosting
-                      ? null
-                      : () => setState(() => _selectedImage = null),
-                ),
-              ],
+                  WeCordIconButton(
+                    tooltip: tr('Remove image'),
+                    icon: Icons.close_rounded,
+                    variant: WeCordButtonVariant.ghost,
+                    size: 32,
+                    onPressed: _isPosting
+                        ? null
+                        : () => setState(() => _selectedImage = null),
+                  ),
+                ],
+              ),
             ),
           ],
           if (_errorText != null) ...[
             const SizedBox(height: 8),
             Text(
               _errorText!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: c.dangerText,
               ),
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
             child: Tooltip(
               message: tr('Post'),
-              child: FilledButton.icon(
-                icon: _isPosting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_outlined),
-                label: Text(_isPosting ? tr('Posting...') : tr('Post')),
+              child: WeCordButton(
+                variant: WeCordButtonVariant.accent,
+                size: usesTouchInput(context)
+                    ? WeCordButtonSize.medium
+                    : WeCordButtonSize.small,
+                icon: Icons.send_rounded,
+                label: _isPosting ? tr('Posting...') : tr('Post'),
                 onPressed: _isPosting ? null : _post,
               ),
             ),

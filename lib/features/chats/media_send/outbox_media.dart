@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
 /// What an attachment in the outbox is.
@@ -145,4 +146,14 @@ String mediaStoragePath({
   }
   final safe = extension.isEmpty ? stem : '$stem.$extension';
   return '$conversationId/$clientId-$safe';
+}
+
+/// The file of a queued attachment is not kept any more (the app was closed
+/// where files live in memory, or storage was cleared), so it cannot be
+/// sent. A [StateError]: trying again would not bring the file back.
+class PendingMediaMissingException extends StateError {
+  PendingMediaMissingException() : super('The file to send is no longer there');
+
+  @override
+  String toString() => tr('The file to send is no longer there.');
 }

@@ -168,22 +168,28 @@ void main() {
         expect(notified, ['inserted-1']);
       });
 
-      test('only the first message of an album sends a notification', () async {
-        final dataSource = FakeChatsDataSource();
-        final notified = <String>[];
+      test(
+        'an album item sent with notify false sends no notification',
+        () async {
+          final dataSource = FakeChatsDataSource();
+          final notified = <String>[];
 
-        await repository(dataSource, notified: notified).sendQueuedMediaMessage(
-          conversationId: 'conversation-1',
-          clientId: 'client-2',
-          type: MessageType.file,
-          attachment: attachment,
-          attachmentGroupId: 'album-1',
-          notify: false,
-        );
+          await repository(
+            dataSource,
+            notified: notified,
+          ).sendQueuedMediaMessage(
+            conversationId: 'conversation-1',
+            clientId: 'client-2',
+            type: MessageType.file,
+            attachment: attachment,
+            attachmentGroupId: 'album-1',
+            notify: false,
+          );
 
-        expect(dataSource.insertedMessages, hasLength(1));
-        expect(notified, isEmpty);
-      });
+          expect(dataSource.insertedMessages, hasLength(1));
+          expect(notified, isEmpty);
+        },
+      );
 
       test('a server without albums or client ids still takes it', () async {
         final dataSource = FakeChatsDataSource()
@@ -232,6 +238,72 @@ void main() {
 
         expect(id, isNull);
         expect(dataSource.insertedMessages, isEmpty);
+      });
+
+      test('AutoMod dropping an item quietly gives its reason', () async {
+        final dataSource = FakeChatsDataSource()
+          ..insertReturnsNull = true
+          ..autoModNotice = {'rule_name': 'Links', 'reason': 'No links here'};
+
+        await expectLater(
+          repository(dataSource).sendQueuedMediaMessage(
+            conversationId: 'conversation-1',
+            clientId: 'client-1',
+            type: MessageType.image,
+            attachment: attachment,
+            attachmentGroupId: 'album-1',
+          ),
+          throwsA(
+            isA<AutoModBlockedException>().having(
+              (error) => error.reason,
+              'reason',
+              'No links here',
+            ),
+          ),
+        );
+        expect(dataSource.autoModNoticeCalls, ['conversation-1']);
+      });
+
+      test(
+        'AutoMod and the circle rules refusing an item are told apart',
+        () async {
+          final dataSource = FakeChatsDataSource()
+            ..insertErrors.addAll([
+              const PostgrestException(
+                message: 'AutoMod blocked this message',
+                code: 'P0001',
+                details: 'automod_block',
+                hint: 'No links here',
+              ),
+              const PostgrestException(
+                message: 'Accept the circle rules first',
+                code: '42501',
+                details: 'rules_not_accepted',
+              ),
+            ]);
+
+          Future<void> send() => repository(dataSource).sendQueuedMediaMessage(
+            conversationId: 'conversation-1',
+            clientId: 'client-1',
+            type: MessageType.image,
+            attachment: attachment,
+            attachmentGroupId: 'album-1',
+          );
+          await expectLater(send(), throwsA(isA<AutoModBlockedException>()));
+          await expectLater(
+            send(),
+            throwsA(isA<CircleRulesNotAcceptedException>()),
+          );
+        },
+      );
+
+      test('a push can be asked for after the fact', () async {
+        final notified = <String>[];
+        await repository(
+          FakeChatsDataSource(),
+          notified: notified,
+        ).notifyMessageSent('inserted-2');
+        expect(notified, ['inserted-2']);
       });
 
       test('slowmode and the server stopping it are told apart', () async {

@@ -126,6 +126,15 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     );
   }
 
+  /// Puts files back after a send failed ("Edit and resend"), with their
+  /// caption unless the reader has already typed one.
+  Future<void> restore(List<XFile> files, {String caption = ''}) async {
+    if (caption.isNotEmpty && state.caption.isEmpty) {
+      state = state.copyWith(caption: caption);
+    }
+    await add(files);
+  }
+
   void remove(String id) {
     state = state.copyWith(
       items: [

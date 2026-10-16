@@ -80,6 +80,9 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
     ref.listen(mediaTrayProvider(widget.conversationId), (previous, next) {
       if (next.isEmpty && _caption.text.isNotEmpty) {
         _caption.clear();
+      } else if (next.caption != _caption.text && _caption.text.isEmpty) {
+        // A caption put back by "Edit and resend".
+        _caption.text = next.caption;
       }
     });
     if (state.isEmpty) {

@@ -85,7 +85,7 @@ class MediaSendPipeline {
         if (length == null) {
           // A StateError is a refusal: trying again would not bring the
           // file back.
-          throw StateError('The file to send is no longer there');
+          throw PendingMediaMissingException();
         }
         progress.report(clientId, 0);
         await uploader.upload(

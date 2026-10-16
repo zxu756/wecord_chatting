@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/media_send/album_layout.dart';
 import 'package:wecord/features/chats/media_send/blurhash.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/media_send/pending_media_store.dart';
+import 'package:wecord/features/chats/media_send/send_failure.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/chats/offline/outbox_provider.dart';
@@ -600,16 +601,30 @@ class _PendingOverlay extends ConsumerWidget {
       ),
       child: Center(
         child: failed
-            ? button(
-                label: tr('Retry upload'),
-                fill: c.danger,
-                onPressed: () => unawaited(outbox.retryMedia(entry)),
-                child: Icon(
-                  Icons.refresh_rounded,
-                  color: dark.ink,
-                  size: size * 0.55,
-                ),
-              )
+            ? (isRetryableFailure(entry.error)
+                  ? button(
+                      label: tr('Retry upload'),
+                      fill: c.danger,
+                      onPressed: () => unawaited(outbox.retryMedia(entry)),
+                      child: Icon(
+                        Icons.refresh_rounded,
+                        color: dark.ink,
+                        size: size * 0.55,
+                      ),
+                    )
+                  // Refused for good: sending it again would be refused
+                  // again, so the way on is to change it.
+                  : button(
+                      label: tr('Edit and resend'),
+                      fill: c.danger,
+                      onPressed: () =>
+                          unawaited(outbox.editAndResendMedia(entry)),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        color: dark.ink,
+                        size: size * 0.5,
+                      ),
+                    ))
             : ValueListenableBuilder<UploadProgress>(
                 valueListenable: progress,
                 builder: (context, upload, _) => Stack(

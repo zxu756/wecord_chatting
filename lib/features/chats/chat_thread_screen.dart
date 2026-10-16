@@ -43,6 +43,7 @@ import 'package:wecord/features/chats/media_send/clipboard_files.dart';
 import 'package:wecord/features/chats/media_send/media_picker.dart';
 import 'package:wecord/features/chats/media_send/media_prepare.dart';
 import 'package:wecord/features/chats/media_send/media_tray.dart';
+import 'package:wecord/features/chats/media_send/send_failure.dart';
 import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/chats/offline/outbox_provider.dart';
@@ -1373,6 +1374,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       alignEnd: !cards,
                       onRetry: () => _retryPending(pendingEntry),
                       onDiscard: () => _discardPending(pendingEntry),
+                      reason: sendFailureReason(
+                        pendingEntry.error,
+                        timedOutUntil: widget.timedOutUntil,
+                      ),
+                      onEditResend: pendingEntry.media == null
+                          ? null
+                          : () => unawaited(
+                              ref
+                                  .read(outboxProvider.notifier)
+                                  .editAndResendMedia(pendingEntry),
+                            ),
                       child: bubble,
                     );
               final highlighted = AnimatedContainer(

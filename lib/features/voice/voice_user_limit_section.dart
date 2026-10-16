@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// The highest user limit a voice channel can have.
 const maxVoiceUserLimit = 99;
@@ -62,56 +63,78 @@ class _VoiceUserLimitSectionState extends ConsumerState<VoiceUserLimitSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final limits = ref.watch(voiceChannelUserLimitsProvider(widget.circleId));
     final saved = limits.valueOrNull?[widget.channelId] ?? 0;
     final value = _dragging ?? saved.toDouble();
-    return Column(
+    return Padding(
       key: const ValueKey('voice-user-limit-section'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(
-            tr('User limit'),
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.primary,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SettingsSectionHeader(tr('User limit')),
+          SettingsGroup(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const SettingsIconTile(
+                          icon: Icons.group_outlined,
+                          tone: SettingsTone.success,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _label(value.round()),
+                            key: const ValueKey('voice-user-limit-value'),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: c.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      key: const ValueKey('voice-user-limit-slider'),
+                      value: value,
+                      max: maxVoiceUserLimit.toDouble(),
+                      divisions: maxVoiceUserLimit,
+                      label: _label(value.round()),
+                      onChanged: !widget.enabled || _saving || limits.isLoading
+                          ? null
+                          : (next) => setState(() => _dragging = next),
+                      onChangeEnd: (next) {
+                        if (next.round() != saved) {
+                          _save(next.round());
+                        } else {
+                          setState(() => _dragging = null);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: Text(
+              tr(
+                'How many people can be in this voice channel at once. Members '
+                'who can move members can still join.',
+              ),
+              style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
             ),
           ),
-        ),
-        ListTile(
-          title: Text(
-            _label(value.round()),
-            key: const ValueKey('voice-user-limit-value'),
-          ),
-          subtitle: Text(
-            tr(
-              'How many people can be in this voice channel at once. Members '
-              'who can move members can still join.',
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Slider(
-            key: const ValueKey('voice-user-limit-slider'),
-            value: value,
-            max: maxVoiceUserLimit.toDouble(),
-            divisions: maxVoiceUserLimit,
-            label: _label(value.round()),
-            onChanged: !widget.enabled || _saving || limits.isLoading
-                ? null
-                : (next) => setState(() => _dragging = next),
-            onChangeEnd: (next) {
-              if (next.round() != saved) {
-                _save(next.round());
-              } else {
-                setState(() => _dragging = null);
-              }
-            },
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

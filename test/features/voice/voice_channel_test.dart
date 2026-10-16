@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
+import 'package:wecord/features/voice/voice_ui.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -389,7 +390,7 @@ void main() {
 
     await tester.tap(channelRow('ch-lounge'));
     await settle(tester);
-    final mic = tester.widget<IconButton>(
+    final mic = tester.widget<VoiceControlButton>(
       find.byKey(const ValueKey('voice-control-mic')),
     );
     expect(mic.onPressed, isNull);

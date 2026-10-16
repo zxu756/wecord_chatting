@@ -1,19 +1,22 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
+import 'package:wecord/features/voice/voice_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
+import 'package:wecord/features/voice/voice_ui.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/voice.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// The live stage in [channelId], if any; null while loading too.
 StageInstance? watchStage(WidgetRef ref, String circleId, String channelId) {
@@ -158,29 +161,30 @@ class _StageTopicDialogState extends State<_StageTopicDialog> {
       key: const ValueKey('stage-topic-dialog'),
       scrollable: true,
       title: Text(editing ? tr('Edit topic') : tr('Start stage')),
-      content: TextField(
-        key: const ValueKey('stage-topic-field'),
-        controller: _controller,
-        autofocus: true,
-        maxLength: StageInstance.maxTopicLength,
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          labelText: tr('Topic'),
-          hintText: tr('What is the stage about?'),
+      content: SizedBox(
+        width: 360,
+        child: WeCordTextField(
+          fieldKey: const ValueKey('stage-topic-field'),
+          controller: _controller,
+          autofocus: true,
+          maxLength: StageInstance.maxTopicLength,
+          label: tr('Topic'),
+          hint: tr('What is the stage about?'),
+          onSubmitted: (_) => _submit(),
         ),
-        onSubmitted: (_) => _submit(),
       ),
       actions: [
-        TextButton(
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.ghost,
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
         ListenableBuilder(
           listenable: _controller,
-          builder: (context, _) => FilledButton(
+          builder: (context, _) => WeCordButton(
             key: const ValueKey('stage-topic-submit'),
+            label: editing ? tr('Save') : tr('Start stage'),
             onPressed: _controller.text.trim().isEmpty ? null : _submit,
-            child: Text(editing ? tr('Save') : tr('Start stage')),
           ),
         ),
       ],
@@ -188,7 +192,8 @@ class _StageTopicDialogState extends State<_StageTopicDialog> {
   }
 }
 
-/// The topic, or that no stage is live; moderators start, edit and end it.
+/// The topic as the room's big title, or that no stage is live;
+/// moderators start, edit and end it.
 class _StageHeader extends ConsumerWidget {
   const _StageHeader({
     required this.stage,
@@ -202,109 +207,104 @@ class _StageHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final stage = this.stage;
-    return Container(
+    return Column(
       key: const ValueKey('stage-header'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.podcasts,
-                color: stage == null
-                    ? colorScheme.onSurfaceVariant
-                    : voiceConnectedColor,
-              ),
-              const SizedBox(width: 8),
-              if (stage != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: voiceConnectedColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    tr('Live'),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  stage?.topic ?? tr('No stage is live right now.'),
-                  key: const ValueKey('stage-topic'),
-                  style: stage == null
-                      ? theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        )
-                      : theme.textTheme.titleMedium,
-                ),
-              ),
-            ],
-          ),
-          if (moderator) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (stage != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: c.successSoft,
+              borderRadius: BorderRadius.circular(WeCordRadii.pill),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (stage == null)
-                  FilledButton.icon(
-                    key: const ValueKey('stage-start-button'),
-                    onPressed: () async {
-                      final topic = await showStageTopicDialog(context);
-                      if (topic != null && context.mounted) {
-                        await actions.start(context, topic);
-                      }
-                    },
-                    icon: const Icon(Icons.podcasts),
-                    label: Text(tr('Start stage')),
-                  )
-                else ...[
-                  OutlinedButton.icon(
-                    key: const ValueKey('stage-edit-topic-button'),
-                    onPressed: () async {
-                      final topic = await showStageTopicDialog(
-                        context,
-                        initialTopic: stage.topic,
-                      );
-                      if (topic != null && context.mounted) {
-                        await actions.start(context, topic);
-                      }
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: Text(tr('Edit topic')),
+                Icon(Icons.podcasts, size: 13, color: c.successText),
+                const SizedBox(width: 4),
+                Text(
+                  tr('Live'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.successText,
                   ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('stage-end-button'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colorScheme.error,
-                    ),
-                    onPressed: () => actions.end(context),
-                    icon: const Icon(Icons.stop_circle_outlined),
-                    label: Text(tr('End stage')),
-                  ),
-                ],
+                ),
               ],
             ),
-          ],
+          ),
+          const SizedBox(height: 8),
         ],
-      ),
+        Text(
+          stage?.topic ?? tr('No stage is live right now.'),
+          key: const ValueKey('stage-topic'),
+          style: stage == null
+              ? TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: c.muted,
+                )
+              : TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                  height: 1.2,
+                  color: c.ink,
+                ),
+        ),
+        if (moderator) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (stage == null)
+                WeCordButton(
+                  key: const ValueKey('stage-start-button'),
+                  label: tr('Start stage'),
+                  icon: Icons.podcasts,
+                  variant: WeCordButtonVariant.accent,
+                  size: WeCordButtonSize.small,
+                  onPressed: () async {
+                    final topic = await showStageTopicDialog(context);
+                    if (topic != null && context.mounted) {
+                      await actions.start(context, topic);
+                    }
+                  },
+                )
+              else ...[
+                WeCordButton(
+                  key: const ValueKey('stage-edit-topic-button'),
+                  label: tr('Edit topic'),
+                  icon: Icons.edit_outlined,
+                  variant: WeCordButtonVariant.secondary,
+                  size: WeCordButtonSize.small,
+                  onPressed: () async {
+                    final topic = await showStageTopicDialog(
+                      context,
+                      initialTopic: stage.topic,
+                    );
+                    if (topic != null && context.mounted) {
+                      await actions.start(context, topic);
+                    }
+                  },
+                ),
+                WeCordButton(
+                  key: const ValueKey('stage-end-button'),
+                  label: tr('End stage'),
+                  icon: Icons.stop_circle_outlined,
+                  variant: WeCordButtonVariant.secondary,
+                  size: WeCordButtonSize.small,
+                  onPressed: () => actions.end(context),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
@@ -323,8 +323,8 @@ class _StagePerson {
   final bool micOff;
 }
 
-/// Who is on the stage: the topic, the speakers, the raised hands (for
-/// moderators) and the audience, above [StageControls].
+/// Who is on the stage: the topic, the speakers as cards, the raised hands
+/// (for moderators) and the audience grid, above [StageControls].
 class StageView extends ConsumerWidget {
   const StageView({
     required this.session,
@@ -345,6 +345,7 @@ class StageView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
     final stage = watchStage(ref, circleId, channelId);
     final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
     final actions = StageActions(ref, circleId: circleId, channelId: channelId);
@@ -386,18 +387,10 @@ class StageView extends ConsumerWidget {
         if (entry.member.handRaised) entry.member,
     ]..sort((a, b) => a.handRaisedAt!.compareTo(b.handRaisedAt!));
 
-    final theme = Theme.of(context);
     Widget heading(String text, Key key) {
       return Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 8),
-        child: Text(
-          text,
-          key: key,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        padding: const EdgeInsets.only(top: 22, bottom: 10),
+        child: VoiceSectionLabel(text, key: key),
       );
     }
 
@@ -416,89 +409,105 @@ class StageView extends ConsumerWidget {
       );
     }
 
-    return ListView(
-      key: const ValueKey('stage-view'),
-      padding: const EdgeInsets.all(12),
-      children: [
-        _StageHeader(stage: stage, moderator: moderator, actions: actions),
-        if (session.stageInvited) ...[
-          const SizedBox(height: 12),
-          _InviteBanner(actions: actions),
-        ],
-        heading(
-          tr('Speakers ({count})', {'count': speakers.length}),
-          const ValueKey('stage-speakers-heading'),
-        ),
-        if (speakers.isEmpty)
-          Text(
-            tr('No one is speaking yet.'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final touch = usesTouchInput(context);
+        final side = constraints.maxWidth < 600 ? 16.0 : 24.0;
+        final width = math.min(constraints.maxWidth - side * 2, 960.0);
+        const gap = 10.0;
+        final speakerColumns = (width / 150).floor().clamp(3, 6);
+        final speakerWidth =
+            (width - gap * (speakerColumns - 1)) / speakerColumns;
+        final audienceColumns = (width / (touch ? 56 : 76)).floor().clamp(
+          4,
+          14,
+        );
+        final audienceWidth =
+            (width - 6 * (audienceColumns - 1)) / audienceColumns;
+        return ListView(
+          key: const ValueKey('stage-view'),
+          padding: EdgeInsets.fromLTRB(
+            (constraints.maxWidth - width) / 2,
+            12,
+            (constraints.maxWidth - width) / 2,
+            20 + MediaQuery.paddingOf(context).bottom,
+          ),
+          children: [
+            _StageHeader(stage: stage, moderator: moderator, actions: actions),
+            if (session.stageInvited) ...[
+              const SizedBox(height: 16),
+              _InviteBanner(actions: actions),
+            ],
+            heading(
+              tr('Speakers ({count})', {'count': speakers.length}),
+              const ValueKey('stage-speakers-heading'),
             ),
-          )
-        else
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              for (final speaker in speakers)
-                _StageTile(
-                  key: ValueKey('stage-speaker-${speaker.member.userId}'),
-                  person: speaker,
-                  radius: usesTouchInput(context) ? 30 : 34,
-                  isSelf: speaker.member.userId == currentUserId,
-                  onMenu: (position) =>
-                      openMenu(position, speaker.member, true),
+            if (speakers.isEmpty)
+              Text(
+                tr('No one is speaking yet.'),
+                style: TextStyle(fontSize: 14, color: c.muted),
+              )
+            else
+              Wrap(
+                // A few speakers sit in the middle of a wide stage.
+                alignment: speakers.length < speakerColumns
+                    ? WrapAlignment.center
+                    : WrapAlignment.start,
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final speaker in speakers)
+                    SizedBox(
+                      width: speakerWidth,
+                      child: _SpeakerCard(
+                        key: ValueKey('stage-speaker-${speaker.member.userId}'),
+                        person: speaker,
+                        isSelf: speaker.member.userId == currentUserId,
+                        onMenu: (position) =>
+                            openMenu(position, speaker.member, true),
+                      ),
+                    ),
+                ],
+              ),
+            if (moderator && hands.isNotEmpty) ...[
+              heading(
+                tr('Raised hands ({count})', {'count': hands.length}),
+                const ValueKey('stage-hands-heading'),
+              ),
+              for (final member in hands)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _RaisedHand(
+                    key: ValueKey('stage-hand-${member.userId}'),
+                    member: member,
+                    onInvite: () => actions.invite(context, member.userId),
+                  ),
                 ),
             ],
-          ),
-        if (moderator && hands.isNotEmpty) ...[
-          heading(
-            tr('Raised hands ({count})', {'count': hands.length}),
-            const ValueKey('stage-hands-heading'),
-          ),
-          for (final member in hands)
-            ListTile(
-              key: ValueKey('stage-hand-${member.userId}'),
-              contentPadding: EdgeInsets.zero,
-              leading: FallbackAvatar(
-                title: member.name,
-                avatarUrl: member.avatarUrl,
-                radius: 16,
-              ),
-              title: Text(
-                member.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: FilledButton.tonal(
-                key: ValueKey('stage-accept-hand-${member.userId}'),
-                onPressed: () => actions.invite(context, member.userId),
-                child: Text(tr('Invite to speak')),
-              ),
+            heading(
+              tr('Audience ({count})', {'count': audience.length}),
+              const ValueKey('stage-audience-heading'),
             ),
-        ],
-        heading(
-          tr('Audience ({count})', {'count': audience.length}),
-          const ValueKey('stage-audience-heading'),
-        ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
-          children: [
-            for (final listener in audience)
-              _StageTile(
-                key: ValueKey('stage-listener-${listener.member.userId}'),
-                person: listener,
-                radius: 22,
-                isSelf: listener.member.userId == currentUserId,
-                listener: true,
-                onMenu: (position) =>
-                    openMenu(position, listener.member, false),
-              ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 14,
+              children: [
+                for (final listener in audience)
+                  SizedBox(
+                    width: audienceWidth,
+                    child: _ListenerTile(
+                      key: ValueKey('stage-listener-${listener.member.userId}'),
+                      person: listener,
+                      isSelf: listener.member.userId == currentUserId,
+                      onMenu: (position) =>
+                          openMenu(position, listener.member, false),
+                    ),
+                  ),
+              ],
+            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -510,37 +519,42 @@ class _InviteBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     return Container(
       key: const ValueKey('stage-invite-banner'),
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        color: c.accent.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(WeCordRadii.bubble),
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 8,
+      child: Row(
         children: [
-          Text(
-            tr("You're invited to speak."),
-            style: TextStyle(color: colorScheme.onPrimaryContainer),
+          Icon(Icons.record_voice_over_rounded, size: 22, color: c.accentText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr("You're invited to speak."),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: c.ink,
+              ),
+            ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextButton(
-                key: const ValueKey('stage-invite-decline'),
-                onPressed: () => actions.respond(context, accept: false),
-                child: Text(tr('Decline')),
-              ),
-              FilledButton(
-                key: const ValueKey('stage-invite-accept'),
-                onPressed: () => actions.respond(context, accept: true),
-                child: Text(tr('Accept')),
-              ),
-            ],
+          WeCordButton(
+            key: const ValueKey('stage-invite-decline'),
+            label: tr('Decline'),
+            variant: WeCordButtonVariant.ghost,
+            size: WeCordButtonSize.small,
+            onPressed: () => actions.respond(context, accept: false),
+          ),
+          const SizedBox(width: 4),
+          WeCordButton(
+            key: const ValueKey('stage-invite-accept'),
+            label: tr('Accept'),
+            variant: WeCordButtonVariant.accent,
+            size: WeCordButtonSize.small,
+            onPressed: () => actions.respond(context, accept: true),
           ),
         ],
       ),
@@ -548,106 +562,249 @@ class _InviteBanner extends StatelessWidget {
   }
 }
 
-/// An avatar (ringed while speaking) and name; tapping it opens [onMenu].
-class _StageTile extends StatelessWidget {
-  const _StageTile({
-    required this.person,
-    required this.radius,
-    required this.isSelf,
-    required this.onMenu,
-    this.listener = false,
-    super.key,
-  });
+/// Someone in the audience with a raised hand, for moderators: "Invite to
+/// speak" brings them on stage.
+class _RaisedHand extends StatelessWidget {
+  const _RaisedHand({required this.member, required this.onInvite, super.key});
 
-  final _StagePerson person;
-  final double radius;
-  final bool isSelf;
-  final bool listener;
-  final ValueChanged<Offset> onMenu;
+  final VoiceMemberState member;
+  final VoidCallback onInvite;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final member = person.member;
-    final name = isSelf
-        ? tr('{name} (you)', {'name': member.name})
-        : member.name;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: (details) => onMenu(details.globalPosition),
-      onSecondaryTapUp: (details) => onMenu(details.globalPosition),
-      child: SizedBox(
-        width: radius * 2 + 28,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
+    final c = context.tokens.colors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: c.warning.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(WeCordRadii.bubble),
+      ),
+      child: Row(
+        children: [
+          VoiceAvatar(name: member.name, avatarUrl: member.avatarUrl, size: 36),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                VoiceSpeakingRing(
-                  speaking: person.speaking,
-                  child: FallbackAvatar(
-                    title: member.name,
-                    avatarUrl: member.avatarUrl,
-                    radius: radius,
+                Text(
+                  member.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: c.ink,
                   ),
                 ),
-                if (listener && member.handRaised)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: CircleAvatar(
-                      key: ValueKey('stage-hand-badge-${member.userId}'),
-                      radius: 10,
-                      backgroundColor: theme.colorScheme.tertiaryContainer,
-                      child: Icon(
-                        Icons.back_hand,
-                        size: 12,
-                        color: theme.colorScheme.onTertiaryContainer,
-                        semanticLabel: tr('Hand raised'),
+                Row(
+                  children: [
+                    Icon(Icons.back_hand_rounded, size: 12, color: c.warning),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        tr('Hand raised'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: c.warningText),
                       ),
                     ),
-                  )
-                else if (!listener && person.micOff)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: CircleAvatar(
-                      radius: 10,
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      child: Icon(
-                        Icons.mic_off,
-                        size: 12,
-                        color: member.serverMute
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
-                        semanticLabel: tr('Muted'),
-                      ),
-                    ),
-                  ),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style:
-                  (listener
-                          ? theme.textTheme.bodySmall
-                          : theme.textTheme.bodyMedium)
-                      ?.copyWith(
-                        fontWeight: person.speaking ? FontWeight.w700 : null,
-                      ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          WeCordButton(
+            key: ValueKey('stage-accept-hand-${member.userId}'),
+            label: tr('Invite to speak'),
+            size: WeCordButtonSize.small,
+            onPressed: onInvite,
+          ),
+        ],
       ),
     );
   }
 }
+
+/// Opens [onMenu] at the tap (or right click) position.
+class _MenuTarget extends StatelessWidget {
+  const _MenuTarget({required this.onMenu, required this.child});
+
+  final ValueChanged<Offset> onMenu;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (details) => onMenu(details.globalPosition),
+        onSecondaryTapUp: (details) => onMenu(details.globalPosition),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// A speaker's card: a big avatar (ringed while speaking), their name and
+/// whether they speak right now; tapping it opens [onMenu].
+class _SpeakerCard extends StatelessWidget {
+  const _SpeakerCard({
+    required this.person,
+    required this.isSelf,
+    required this.onMenu,
+    super.key,
+  });
+
+  final _StagePerson person;
+  final bool isSelf;
+  final ValueChanged<Offset> onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final member = person.member;
+    final speaking = person.speaking;
+    final name = isSelf
+        ? tr('{name} (you)', {'name': member.name})
+        : member.name;
+    return _MenuTarget(
+      onMenu: onMenu,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final avatar = (constraints.maxWidth * 0.62).clamp(48.0, 84.0);
+          return AnimatedContainer(
+            duration: WeCordMotion.durationOf(context, WeCordMotion.quick),
+            padding: const EdgeInsets.fromLTRB(6, 16, 6, 12),
+            decoration: BoxDecoration(
+              color: speaking
+                  ? c.success.withValues(alpha: 0.14)
+                  : c.ink.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(WeCordRadii.xl + 2),
+              border: Border.all(
+                color: speaking
+                    ? c.successText.withValues(alpha: 0.5)
+                    : c.ink.withValues(alpha: 0),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                VoiceAvatar(
+                  name: member.name,
+                  avatarUrl: member.avatarUrl,
+                  size: avatar,
+                  speaking: speaking,
+                  badge: person.micOff
+                      ? VoiceAvatarBadge(
+                          icon: Icons.mic_off_rounded,
+                          label: tr('Muted'),
+                          color: member.serverMute ? c.danger : c.dangerText,
+                          size: avatar * 0.34,
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  speaking ? tr('Speaking') : tr('Speaker'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: speaking ? c.successText : c.muted,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Someone in the audience: avatar and name, with a hand when raised.
+class _ListenerTile extends StatelessWidget {
+  const _ListenerTile({
+    required this.person,
+    required this.isSelf,
+    required this.onMenu,
+    super.key,
+  });
+
+  final _StagePerson person;
+  final bool isSelf;
+  final ValueChanged<Offset> onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final member = person.member;
+    return _MenuTarget(
+      onMenu: onMenu,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              VoiceAvatar(
+                name: member.name,
+                avatarUrl: member.avatarUrl,
+                size: 44,
+                speaking: person.speaking,
+              ),
+              if (member.handRaised)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: VoiceAvatarBadge(
+                    key: ValueKey('stage-hand-badge-${member.userId}'),
+                    icon: Icons.back_hand_rounded,
+                    label: tr('Hand raised'),
+                    fill: c.warning,
+                    color: c.onInk,
+                    size: 22,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            isSelf ? tr('{name} (you)', {'name': member.name}) : member.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: person.speaking ? FontWeight.w700 : FontWeight.w500,
+              color: person.speaking ? c.ink : c.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _StageMenuAction { invite, audience }
 
 Future<void> _showStagePersonMenu(
   BuildContext context, {
@@ -661,44 +818,35 @@ Future<void> _showStagePersonMenu(
   if (!canInvite && !canMoveDown) {
     return;
   }
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
-  final choice = await showMenu<String>(
-    context: context,
-    position: RelativeRect.fromRect(
-      position & Size.zero,
-      Offset.zero & overlay.size,
-    ),
+  final choice = await showVoiceMenu<_StageMenuAction>(
+    context,
+    position: position,
+    title: name,
+    leading: PersonAvatar(name: name, size: 30),
     items: [
-      PopupMenuItem<String>(
-        enabled: false,
-        height: 32,
-        child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
       if (canInvite)
-        PopupMenuItem(
+        VoiceMenuAction(
           key: const ValueKey('stage-menu-invite'),
-          value: 'invite',
-          child: ListTile(
-            leading: const Icon(Icons.record_voice_over_outlined),
-            title: Text(tr('Invite to speak')),
-          ),
+          value: _StageMenuAction.invite,
+          icon: Icons.record_voice_over_outlined,
+          label: tr('Invite to speak'),
         ),
       if (canMoveDown)
-        PopupMenuItem(
+        VoiceMenuAction(
           key: const ValueKey('stage-menu-audience'),
-          value: 'audience',
-          child: ListTile(
-            leading: const Icon(Icons.voice_over_off_outlined),
-            title: Text(tr('Move to audience')),
-          ),
+          value: _StageMenuAction.audience,
+          icon: Icons.voice_over_off_outlined,
+          label: tr('Move to audience'),
         ),
     ],
   );
   switch (choice) {
-    case 'invite':
+    case _StageMenuAction.invite:
       onInvite();
-    case 'audience':
+    case _StageMenuAction.audience:
       onMoveDown();
+    case null:
+      break;
   }
 }
 
@@ -722,7 +870,7 @@ class StageLobby extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final stage = watchStage(ref, circleId, channelId);
     final speakers = [
       for (final member in members)
@@ -732,90 +880,108 @@ class StageLobby extends ConsumerWidget {
     return Center(
       key: const ValueKey('stage-lobby'),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.podcasts,
-              size: 48,
-              color: stage == null
-                  ? theme.colorScheme.onSurfaceVariant
-                  : voiceConnectedColor,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              stage?.topic ?? tr('No stage is live right now.'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              tr('{count} listening', {'count': listening}),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          24 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ThingAvatar(
+                size: 84,
+                radius: 28,
+                icon: Icons.podcasts,
+                color: stage == null
+                    ? c.ink.withValues(alpha: 0.08)
+                    : c.success.withValues(alpha: 0.2),
+                foregroundColor: stage == null ? c.ink : c.successText,
               ),
-            ),
-            if (speakers.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  for (final speaker in speakers)
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FallbackAvatar(
-                          title: speaker.name,
-                          avatarUrl: speaker.avatarUrl,
-                          radius: 22,
-                        ),
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          width: 72,
-                          child: Text(
-                            speaker.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 20),
-            if (canConnect)
-              FilledButton.icon(
-                key: const ValueKey('stage-join-button'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: voiceConnectedColor,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: onJoin,
-                icon: const Icon(Icons.headphones),
-                label: Text(tr('Join stage')),
-              )
-            else
+              const SizedBox(height: 18),
               Text(
-                tr("You don't have permission to join this voice channel."),
+                stage?.topic ?? tr('No stage is live right now.'),
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: c.ink,
+                ),
               ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                tr('{count} listening', {'count': listening}),
+                style: TextStyle(fontSize: 14, color: c.muted),
+              ),
+              if (speakers.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 12,
+                  children: [
+                    for (final speaker in speakers)
+                      SizedBox(
+                        width: 72,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            VoiceAvatar(
+                              name: speaker.name,
+                              avatarUrl: speaker.avatarUrl,
+                              size: 56,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              speaker.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: c.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 26),
+              if (canConnect)
+                WeCordButton(
+                  key: const ValueKey('stage-join-button'),
+                  label: tr('Join stage'),
+                  icon: Icons.headphones_rounded,
+                  variant: WeCordButtonVariant.accent,
+                  size: WeCordButtonSize.large,
+                  onPressed: () {
+                    WeCordHaptics.medium();
+                    onJoin();
+                  },
+                )
+              else
+                Text(
+                  tr("You don't have permission to join this voice channel."),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: c.muted),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// A stage's controls: speakers get the microphone and can step down;
-/// the audience raises a hand (moderators can step up); everyone can
-/// deafen and leave.
+/// A stage's controls in the floating glass bar: speakers get the
+/// microphone and can step down; the audience raises a hand (moderators can
+/// step up); everyone can deafen, open the chat and leave.
 class StageControls extends ConsumerStatefulWidget {
   const StageControls({
     required this.session,
@@ -823,6 +989,7 @@ class StageControls extends ConsumerStatefulWidget {
     required this.channelId,
     required this.moderator,
     this.soundboard,
+    this.chat,
     super.key,
   });
 
@@ -833,6 +1000,9 @@ class StageControls extends ConsumerStatefulWidget {
 
   /// The circle's soundboard, which speakers can play into the stage.
   final SoundboardAccess? soundboard;
+
+  /// The chat button, when the stage has a chat to open.
+  final VoiceControl? chat;
 
   @override
   ConsumerState<StageControls> createState() => _StageControlsState();
@@ -860,9 +1030,9 @@ class _StageControlsState extends ConsumerState<StageControls> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final session = widget.session;
     final controller = ref.read(voiceSessionProvider.notifier);
-    final colorScheme = Theme.of(context).colorScheme;
     final stage = watchStage(ref, widget.circleId, widget.channelId);
     final actions = StageActions(
       ref,
@@ -879,143 +1049,107 @@ class _StageControlsState extends ConsumerState<StageControls> {
         session.stageSpeaker &&
         session.pushToTalk &&
         (usesTouchInput(context) || !hasKey);
+    final muted = session.selfMute || session.serverMute;
+    final deafened = session.selfDeaf || session.serverDeaf;
 
-    Widget toggle({
-      required Key key,
-      required String tooltip,
-      required IconData icon,
-      required bool on,
-      required VoidCallback? onPressed,
-    }) {
-      return IconButton.filledTonal(
-        key: key,
-        tooltip: tooltip,
-        isSelected: on,
-        style: IconButton.styleFrom(
-          minimumSize: const Size.square(48),
-          backgroundColor: on ? colorScheme.inverseSurface : null,
-          foregroundColor: on ? colorScheme.onInverseSurface : null,
-        ),
-        onPressed: _busy ? null : onPressed,
-        icon: Icon(icon),
-      );
-    }
+    VoidCallback? guard(VoidCallback? action) => _busy ? null : action;
 
-    return Material(
+    return KeyedSubtree(
       key: const ValueKey('stage-controls'),
-      color: colorScheme.surfaceContainerLow,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              if (session.stageSpeaker) ...[
-                if (holdToTalk)
-                  VoiceHoldToTalkButton(session: session, enabled: !_busy),
-                toggle(
-                  key: const ValueKey('voice-control-mic'),
-                  tooltip: voiceMuteTooltip(session),
-                  icon: session.selfMute || session.serverMute
-                      ? Icons.mic_off
-                      : Icons.mic_none,
-                  on: session.selfMute || session.serverMute,
-                  onPressed: session.serverMute
-                      ? null
-                      : () => _run(
-                          controller.toggleMute,
-                          tr('Could not change the microphone.'),
-                        ),
-                ),
-              ] else
-                toggle(
-                  key: const ValueKey('stage-control-hand'),
-                  tooltip: session.handRaised
-                      ? tr('Lower hand')
-                      : tr('Raise hand'),
-                  icon: session.handRaised
-                      ? Icons.back_hand
-                      : Icons.back_hand_outlined,
-                  on: session.handRaised,
-                  onPressed: stage == null
-                      ? null
-                      : () => _run(
-                          () => actions.setHandRaised(
-                            context,
-                            !session.handRaised,
-                          ),
-                          tr('Could not change the stage. Try again.'),
-                        ),
-                ),
-              toggle(
-                key: const ValueKey('voice-control-deafen'),
-                tooltip: voiceDeafenTooltip(session),
-                icon: session.selfDeaf || session.serverDeaf
-                    ? Icons.headset_off
-                    : Icons.headset_outlined,
-                on: session.selfDeaf || session.serverDeaf,
-                onPressed: session.serverDeaf
+      child: VoiceControlBar(
+        above: holdToTalk
+            ? VoiceHoldToTalkButton(session: session, enabled: !_busy)
+            : null,
+        controls: [
+          if (session.stageSpeaker)
+            VoiceControl(
+              key: const ValueKey('voice-control-mic'),
+              tooltip: voiceMuteTooltip(session),
+              icon: muted ? Icons.mic_off_rounded : Icons.mic_none_rounded,
+              on: muted,
+              onPressed: guard(
+                session.serverMute
                     ? null
                     : () => _run(
-                        controller.toggleDeafen,
-                        tr('Could not deafen.'),
+                        controller.toggleMute,
+                        tr('Could not change the microphone.'),
                       ),
               ),
-              if (currentUserId != null && session.stageSpeaker)
-                toggle(
-                  key: const ValueKey('stage-control-audience'),
-                  tooltip: tr('Move to audience'),
-                  icon: Icons.voice_over_off_outlined,
-                  on: false,
-                  onPressed: () => _run(
-                    () => actions.moveToAudience(context, currentUserId),
-                    tr('Could not change the stage. Try again.'),
-                  ),
-                )
-              else if (currentUserId != null &&
-                  widget.moderator &&
-                  stage != null)
-                toggle(
-                  key: const ValueKey('stage-control-speak'),
-                  tooltip: tr('Become a speaker'),
-                  icon: Icons.record_voice_over_outlined,
-                  on: false,
-                  onPressed: () => _run(
-                    () => actions.invite(context, currentUserId),
-                    tr('Could not change the stage. Try again.'),
-                  ),
-                ),
-              if (widget.soundboard case final soundboard?
-                  when session.stageSpeaker)
-                toggle(
-                  key: const ValueKey('voice-control-soundboard'),
-                  tooltip: tr('Soundboard'),
-                  icon: Icons.music_note_outlined,
-                  on: false,
-                  onPressed: () => showSoundboard(
-                    context,
-                    access: soundboard,
-                    channelId: widget.channelId,
-                  ),
-                ),
-              IconButton.filled(
-                key: const ValueKey('voice-control-leave'),
-                tooltip: tr('Disconnect'),
-                style: IconButton.styleFrom(
-                  minimumSize: const Size.square(48),
-                  backgroundColor: colorScheme.error,
-                  foregroundColor: colorScheme.onError,
-                ),
-                onPressed: controller.leave,
-                icon: const Icon(Icons.call_end),
+            )
+          else
+            VoiceControl(
+              key: const ValueKey('stage-control-hand'),
+              tooltip: session.handRaised ? tr('Lower hand') : tr('Raise hand'),
+              icon: session.handRaised
+                  ? Icons.back_hand_rounded
+                  : Icons.back_hand_outlined,
+              on: session.handRaised,
+              activeColor: c.warning,
+              onPressed: guard(
+                stage == null
+                    ? null
+                    : () => _run(
+                        () =>
+                            actions.setHandRaised(context, !session.handRaised),
+                        tr('Could not change the stage. Try again.'),
+                      ),
               ),
-            ],
+            ),
+          if (widget.soundboard case final soundboard?
+              when session.stageSpeaker)
+            VoiceControl(
+              key: const ValueKey('voice-control-soundboard'),
+              tooltip: tr('Soundboard'),
+              icon: Icons.music_note_rounded,
+              onPressed: guard(
+                () => showSoundboard(
+                  context,
+                  access: soundboard,
+                  channelId: widget.channelId,
+                ),
+              ),
+            ),
+          VoiceControl(
+            key: const ValueKey('voice-control-deafen'),
+            tooltip: voiceDeafenTooltip(session),
+            icon: deafened ? Icons.headset_off_rounded : Icons.headset_outlined,
+            on: deafened,
+            onPressed: guard(
+              session.serverDeaf
+                  ? null
+                  : () =>
+                        _run(controller.toggleDeafen, tr('Could not deafen.')),
+            ),
           ),
-        ),
+          if (currentUserId != null && session.stageSpeaker)
+            VoiceControl(
+              key: const ValueKey('stage-control-audience'),
+              tooltip: tr('Move to audience'),
+              icon: Icons.voice_over_off_outlined,
+              onPressed: guard(
+                () => _run(
+                  () => actions.moveToAudience(context, currentUserId),
+                  tr('Could not change the stage. Try again.'),
+                ),
+              ),
+            )
+          else if (currentUserId != null && widget.moderator && stage != null)
+            VoiceControl(
+              key: const ValueKey('stage-control-speak'),
+              tooltip: tr('Become a speaker'),
+              icon: Icons.record_voice_over_outlined,
+              onPressed: guard(
+                () => _run(
+                  () => actions.invite(context, currentUserId),
+                  tr('Could not change the stage. Try again.'),
+                ),
+              ),
+            ),
+          ?widget.chat,
+        ],
+        leaveLabel: tr('Leave'),
+        leaveTooltip: tr('Disconnect'),
+        onLeave: controller.leave,
       ),
     );
   }

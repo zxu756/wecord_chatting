@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/voice/soundboard_player.dart';
 import 'package:wecord/features/voice/soundboard_repository.dart';
+import 'package:wecord/features/voice/voice_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_sound.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Who may do what with a circle's soundboard from a voice channel.
 typedef SoundboardAccess = ({String circleId, bool canManage});
@@ -30,11 +32,9 @@ Future<void> showSoundboard(
   required SoundboardAccess access,
   required String channelId,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (context) => SoundboardPanel(
+  return showWeCordSheet<void>(
+    context,
+    builder: (context, _) => SoundboardPanel(
       circleId: access.circleId,
       channelId: channelId,
       canManage: access.canManage,
@@ -128,14 +128,16 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
           tr('Delete {name} from the soundboard?', {'name': sound.name}),
         ),
         actions: [
-          TextButton(
+          WeCordButton(
+            label: tr('Cancel'),
+            variant: WeCordButtonVariant.ghost,
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
           ),
-          FilledButton(
+          WeCordButton(
             key: const ValueKey('soundboard-delete-confirm'),
+            label: tr('Delete'),
+            variant: WeCordButtonVariant.danger,
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -198,37 +200,25 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
   }
 
   Future<void> _openMenu(CircleSound sound, Offset position) async {
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final choice = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & Size.zero,
-        Offset.zero & overlay.size,
-      ),
+    final choice = await showVoiceMenu<String>(
+      context,
+      position: position,
+      title: sound.name,
+      leading: Text(sound.emoji ?? '🔊', style: const TextStyle(fontSize: 22)),
       items: [
-        PopupMenuItem(
+        VoiceMenuAction(
           key: const ValueKey('soundboard-menu-preview'),
           value: 'preview',
-          child: ListTile(
-            leading: const Icon(Icons.headphones_outlined),
-            title: Text(tr('Preview')),
-          ),
+          icon: Icons.headphones_outlined,
+          label: tr('Preview'),
         ),
         if (widget.canManage)
-          PopupMenuItem(
+          VoiceMenuAction(
             key: const ValueKey('soundboard-menu-delete'),
             value: 'delete',
-            child: ListTile(
-              leading: Icon(
-                Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(
-                tr('Delete'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
+            icon: Icons.delete_outline_rounded,
+            destructive: true,
+            label: tr('Delete'),
           ),
       ],
     );
@@ -242,7 +232,7 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final sounds = ref.watch(circleSoundsProvider(widget.circleId));
     final session = ref.watch(voiceSessionProvider);
     final canPlay = canPlaySoundsIn(session, widget.channelId);
@@ -250,44 +240,52 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
     final full = list.length >= maxCircleSounds;
 
     return SafeArea(
+      top: false,
       child: Padding(
         key: const ValueKey('soundboard-panel'),
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    tr('Soundboard'),
-                    style: theme.textTheme.titleLarge,
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        tr('Soundboard'),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: c.ink,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                if (widget.canManage)
-                  TextButton.icon(
-                    key: const ValueKey('soundboard-add'),
-                    onPressed: _busy || full ? null : _add,
-                    icon: _busy
-                        ? const SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add),
-                    label: Text(tr('Add sound')),
-                  ),
-              ],
+                  if (widget.canManage)
+                    WeCordButton(
+                      key: const ValueKey('soundboard-add'),
+                      label: tr('Add sound'),
+                      icon: Icons.add_rounded,
+                      variant: WeCordButtonVariant.secondary,
+                      size: WeCordButtonSize.small,
+                      loading: _busy,
+                      onPressed: _busy || full ? null : _add,
+                    ),
+                ],
+              ),
             ),
             if (!canPlay)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(left: 4, top: 2),
                 child: Text(
                   tr("You can't play sounds here right now."),
                   key: const ValueKey('soundboard-cannot-play'),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 13, color: c.muted),
                 ),
               ),
             const SizedBox(height: 12),
@@ -299,50 +297,162 @@ class _SoundboardPanelState extends ConsumerState<SoundboardPanel> {
                     child: CircularProgressIndicator(),
                   ),
                 ),
-                error: (error, stackTrace) => Text(
-                  tr('Could not load the soundboard.'),
-                  style: theme.textTheme.bodyMedium,
+                error: (error, stackTrace) => Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Text(
+                    tr('Could not load the soundboard.'),
+                    style: TextStyle(fontSize: 14, color: c.muted),
+                  ),
                 ),
                 data: (sounds) => sounds.isEmpty
-                    ? Text(
-                        widget.canManage
-                            ? tr(
-                                'No sounds yet. Add short clips (MP3, Ogg or '
-                                'WAV, up to 5 seconds) for everyone to play.',
-                              )
-                            : tr('No sounds yet.'),
+                    ? Container(
                         key: const ValueKey('soundboard-empty'),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: c.well,
+                          borderRadius: BorderRadius.circular(WeCordRadii.lg),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.music_note_rounded,
+                              size: 28,
+                              color: c.subtle,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.canManage
+                                  ? tr(
+                                      'No sounds yet. Add short clips (MP3, '
+                                      'Ogg or WAV, up to 5 seconds) for '
+                                      'everyone to play.',
+                                    )
+                                  : tr('No sounds yet.'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: c.muted,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
                         ),
                       )
                     : SingleChildScrollView(
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final sound in sounds)
-                              GestureDetector(
-                                onLongPressStart: (details) =>
-                                    _openMenu(sound, details.globalPosition),
-                                onSecondaryTapUp: (details) =>
-                                    _openMenu(sound, details.globalPosition),
-                                child: ActionChip(
-                                  key: ValueKey('soundboard-sound-${sound.id}'),
-                                  avatar: Text(sound.emoji ?? '🔊'),
-                                  label: Text(sound.name),
-                                  onPressed: canPlay && !_coolingDown
-                                      ? () => _play(sound)
-                                      : null,
-                                ),
-                              ),
-                          ],
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            const gap = 8.0;
+                            final columns = (constraints.maxWidth / 96)
+                                .floor()
+                                .clamp(3, 8);
+                            final width =
+                                (constraints.maxWidth - gap * (columns - 1)) /
+                                columns;
+                            return Wrap(
+                              spacing: gap,
+                              runSpacing: gap,
+                              children: [
+                                for (final sound in sounds)
+                                  SizedBox(
+                                    width: width,
+                                    child: SoundboardTile(
+                                      key: ValueKey(
+                                        'soundboard-sound-${sound.id}',
+                                      ),
+                                      sound: sound,
+                                      onPressed: canPlay && !_coolingDown
+                                          ? () => _play(sound)
+                                          : null,
+                                      onMenu: (position) =>
+                                          _openMenu(sound, position),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
                       ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A sound on the soundboard: its emoji over its name in a rounded tile.
+/// Tapping plays it ([onPressed]; null while it can't play); long-press or
+/// right-click opens [onMenu].
+class SoundboardTile extends StatelessWidget {
+  const SoundboardTile({
+    required this.sound,
+    required this.onPressed,
+    required this.onMenu,
+    super.key,
+  });
+
+  final CircleSound sound;
+  final VoidCallback? onPressed;
+  final ValueChanged<Offset> onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return GestureDetector(
+      onLongPressStart: (details) => onMenu(details.globalPosition),
+      onSecondaryTapUp: (details) => onMenu(details.globalPosition),
+      child: WeCordPressable(
+        onPressed: onPressed,
+        semanticLabel: sound.name,
+        excludeSemantics: true,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(WeCordRadii.lg + 2),
+        ),
+        builder: (context, states) {
+          final hovered =
+              onPressed != null &&
+              (states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.pressed));
+          return AnimatedOpacity(
+            opacity: onPressed == null ? 0.45 : 1,
+            duration: WeCordMotion.quick,
+            child: AnimatedContainer(
+              duration: WeCordMotion.quick,
+              height: 84,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: ShapeDecoration(
+                color: hovered
+                    ? Color.alphaBlend(c.ink.withValues(alpha: 0.05), c.raised)
+                    : c.raised,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(WeCordRadii.lg + 2),
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    sound.emoji ?? '🔊',
+                    style: const TextStyle(fontSize: 28, height: 1.1),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    sound.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -390,56 +500,70 @@ class _AddSoundDialogState extends State<_AddSoundDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return AlertDialog(
       key: const ValueKey('soundboard-add-dialog'),
       scrollable: true,
       title: Text(tr('Add sound')),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.fileName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('soundboard-name-field'),
-            controller: _name,
-            autofocus: true,
-            maxLength: maxCircleSoundNameLength,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Name'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: c.well,
+                borderRadius: BorderRadius.circular(WeCordRadii.md),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.audio_file_outlined, size: 20, color: c.muted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: c.muted),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            onSubmitted: (_) => _submit(),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('soundboard-emoji-field'),
-            controller: _emoji,
-            maxLength: 16,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Emoji (optional)'),
+            const SizedBox(height: 14),
+            WeCordTextField(
+              fieldKey: const ValueKey('soundboard-name-field'),
+              controller: _name,
+              autofocus: true,
+              maxLength: maxCircleSoundNameLength,
+              label: tr('Name'),
+              onSubmitted: (_) => _submit(),
             ),
-            onSubmitted: (_) => _submit(),
-          ),
-        ],
+            const SizedBox(height: 10),
+            WeCordTextField(
+              fieldKey: const ValueKey('soundboard-emoji-field'),
+              controller: _emoji,
+              maxLength: 16,
+              label: tr('Emoji (optional)'),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
       ),
       actions: [
-        TextButton(
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.ghost,
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
         ListenableBuilder(
           listenable: _name,
-          builder: (context, _) => FilledButton(
+          builder: (context, _) => WeCordButton(
             key: const ValueKey('soundboard-upload'),
+            label: tr('Upload'),
             onPressed: isValidSoundName(_name.text) ? _submit : null,
-            child: Text(tr('Upload')),
           ),
         ),
       ],

@@ -326,9 +326,9 @@ void main() {
       await tester.pump();
       expect(sounds.played, ['ch-lounge:sound-1']);
       // Cooling down.
-      expect(tester.widget<ActionChip>(chip).onPressed, isNull);
+      expect(tester.widget<SoundboardTile>(chip).onPressed, isNull);
       await tester.pump(soundboardCooldown);
-      expect(tester.widget<ActionChip>(chip).onPressed, isNotNull);
+      expect(tester.widget<SoundboardTile>(chip).onPressed, isNotNull);
 
       sounds.playError = SoundboardCooldownException();
       await tester.tap(chip);
@@ -358,7 +358,7 @@ void main() {
         findsOneWidget,
       );
       final chip = find.byKey(const ValueKey('soundboard-sound-sound-1'));
-      expect(tester.widget<ActionChip>(chip).onPressed, isNull);
+      expect(tester.widget<SoundboardTile>(chip).onPressed, isNull);
       await close(tester);
     });
 

@@ -1011,6 +1011,14 @@ async function checkMentions(): Promise<string> {
     role_ids: [roleId],
   });
 
+  // @here reaches members with a recent presence heartbeat (202610160038),
+  // whatever list the sender sends: B has one, C doesn't. touch_presence
+  // (202610160041) writes it in the app; the service role stands in here.
+  await admin.from("presence_heartbeats").delete().in("user_id", [b.id, c.id]);
+  const { error: heartbeatError } = await admin.from("presence_heartbeats")
+    .upsert({ user_id: b.id, seen_at: new Date().toISOString() });
+  assert(!heartbeatError, `heartbeat: ${describe(heartbeatError)}`);
+
   const body = "@here @Pingable meeting now";
   const messageId = await rpc<string>(a.client, "send_text_message", {
     target_conversation_id: general.conversation_id,
@@ -1039,8 +1047,12 @@ async function checkMentions(): Promise<string> {
     "user_id, kind",
   ).eq("message_id", messageId);
   const got = new Set((rows ?? []).map((r) => `${r.kind}:${r.user_id}`));
-  const want = [`here:${b.id}`, `here:${c.id}`, `role:${b.id}`];
+  const want = [`here:${b.id}`, `role:${b.id}`];
   for (const key of want) assert(got.has(key), `missing ${key}: ${[...got]}`);
+  assert(
+    !got.has(`here:${c.id}`),
+    "@here reached a member the sender called online without a heartbeat",
+  );
   assert(!got.has(`role:${c.id}`), "role mention reached a member without it");
   assert(
     !got.has(`here:${a.id}`) && !got.has(`role:${a.id}`),
@@ -1069,7 +1081,8 @@ async function checkMentions(): Promise<string> {
     },
   ).eq("message_id", plainId);
   assert(plainRows === 0, `member @here created ${plainRows} rows`);
-  return "@here → B and C (kind here), @Pingable → only B (kind role); member @here ignored";
+  return "@here → B (heartbeat) not C (only in the sender's list), " +
+    "@Pingable → only B (kind role); member @here ignored";
 }
 
 let voiceChannelId = "";

@@ -108,4 +108,31 @@ void main() {
     // Publishing stays manual.
     expect(sql, isNot(contains('publish_message(')));
   });
+
+  test('@here comes from presence heartbeats, not the sender', () {
+    final sql = migration('202610160038');
+    // The same table as 202610160041_circle_discovery, so either order works.
+    expect(
+      sql,
+      contains('create table if not exists public.presence_heartbeats ('),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke all on public.presence_heartbeats from anon, authenticated;',
+      ),
+    );
+    expect(sql, isNot(contains('user_presence')));
+    final body = functionBody(sql, 'record_message_mentions');
+    expect(
+      body,
+      contains('join public.presence_heartbeats h on h.user_id = cm.user_id'),
+    );
+    expect(body, contains("h.seen_at > now() - interval '3 minutes'"));
+    expect(
+      body,
+      contains("coalesce(ups.presence_status, 'online') <> 'invisible'"),
+    );
+    expect(body, isNot(contains("mention->'user_ids'")));
+  });
 }

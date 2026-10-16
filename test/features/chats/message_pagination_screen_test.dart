@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 
 import '../file_preview/file_preview_fakes.dart';
@@ -236,6 +237,50 @@ void main() {
     await settle(tester);
     expect(find.text('Grace pinned a message.'), findsOneWidget);
     expect(find.text('Message 10', skipOffstage: false), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('a search result outside the loaded pages loads around it', (
+    tester,
+  ) async {
+    final repository = PagedChatsRepository()
+      ..rows = [for (var index = 0; index < 300; index++) messageRow(index)];
+
+    await tester.pumpWidget(app(repository));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Message 10', skipOffstage: false), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatThreadScreen)),
+    );
+    container.read(pendingMessageJumpProvider.notifier).state =
+        const MessageJump(
+          conversationId: 'conversation-1',
+          messageId: 'message-0010',
+        );
+    for (var frame = 0; frame < 20; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // The jump was taken once, the page around the result was fetched and
+    // the result is in view and highlighted.
+    expect(container.read(pendingMessageJumpProvider), isNull);
+    expect(repository.byIdRequests.last, ['message-0010']);
+    final target = find.text('Message 10');
+    expect(target, findsOneWidget);
+    final list = tester.getRect(
+      find.byKey(const ValueKey('chat-message-list')),
+    );
+    expect(
+      (tester.getCenter(target).dy - list.center.dy).abs(),
+      lessThan(list.height / 4),
+    );
+    final highlight = tester.widget<AnimatedContainer>(
+      find.ancestor(of: target, matching: find.byType(AnimatedContainer)).first,
+    );
+    expect((highlight.decoration as BoxDecoration?)?.color?.a, greaterThan(0));
+    expect(find.text('Message 299', skipOffstage: false), findsNothing);
     await tester.pump(const Duration(seconds: 3));
   });
 

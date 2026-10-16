@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/motion.dart';
+import 'package:wecord/shared/ui/tap_target.dart';
 import 'package:wecord/shared/ui/wecord_pressable.dart';
 
 /// One choice in a [WeCordSegmented].
@@ -50,42 +53,56 @@ class WeCordSegmented<T> extends StatelessWidget {
     final spring = WeCordMotion.snappy;
     const inset = 3.0;
 
-    final track = Container(
-      height: height,
-      padding: const EdgeInsets.all(inset),
-      decoration: BoxDecoration(
-        color: c.raised,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    // The track looks `height` tall; on touch screens the segments reach
+    // the platform's touch target, above and below it.
+    final reach = math.max(height, context.touchTargetSize);
+    final track = SizedBox(
+      height: reach,
       child: Stack(
         children: [
-          if (index >= 0)
-            Positioned.fill(
-              child: AnimatedAlign(
-                alignment: Alignment(
-                  count == 1 ? 0 : -1 + 2 * index / (count - 1),
-                  0,
+          Positioned.fill(
+            child: Center(
+              child: Container(
+                height: height,
+                padding: const EdgeInsets.all(inset),
+                decoration: BoxDecoration(
+                  color: c.raised,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                duration: spring.durationOf(context),
-                curve: spring.curve,
-                child: FractionallySizedBox(
-                  widthFactor: 1 / count,
-                  heightFactor: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: tokens.isDark ? c.raisedStrong : c.panel,
-                      borderRadius: BorderRadius.circular(9),
-                      boxShadow: tokens.shadows.hairline,
-                    ),
-                  ),
-                ),
+                child: index < 0
+                    ? null
+                    : AnimatedAlign(
+                        alignment: Alignment(
+                          count == 1 ? 0 : -1 + 2 * index / (count - 1),
+                          0,
+                        ),
+                        duration: spring.durationOf(context),
+                        curve: spring.curve,
+                        child: FractionallySizedBox(
+                          widthFactor: 1 / count,
+                          heightFactor: 1,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: tokens.isDark ? c.raisedStrong : c.panel,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: tokens.shadows.hairline,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ),
-          Row(
-            children: [
-              for (final segment in segments)
-                Expanded(child: _segment(context, segment)),
-            ],
+          ),
+          // The segments set the width; they are as tall as `reach`.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: inset),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final segment in segments)
+                  Expanded(child: _segment(context, segment)),
+              ],
+            ),
           ),
         ],
       ),
@@ -104,6 +121,8 @@ class WeCordSegmented<T> extends StatelessWidget {
     return WeCordPressable(
       key: segment.key,
       selected: isSelected,
+      exclusiveGroup: true,
+      minTapSize: Size.zero,
       pressedScale: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       onPressed: onChanged == null

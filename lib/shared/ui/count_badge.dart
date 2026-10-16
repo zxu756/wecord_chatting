@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/motion.dart';
 
@@ -23,6 +24,7 @@ class CountBadge extends StatelessWidget {
     this.tone = BadgeTone.alert,
     this.ringColor,
     this.size = 20,
+    this.semanticLabel,
     super.key,
   });
 
@@ -31,6 +33,7 @@ class CountBadge extends StatelessWidget {
     this.tone = BadgeTone.alert,
     this.ringColor,
     this.size = 10,
+    this.semanticLabel,
     super.key,
   }) : count = null;
 
@@ -40,6 +43,11 @@ class CountBadge extends StatelessWidget {
 
   /// Height of the pill (or the dot's diameter).
   final double size;
+
+  /// What a screen reader says; "{count} unread" (or "{count} new" for
+  /// alerts) and "Unread" for a dot by default. The real count is read,
+  /// not "99+".
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -86,8 +94,15 @@ class CountBadge extends StatelessWidget {
             ),
     );
 
+    final spoken =
+        semanticLabel ??
+        (count == null
+            ? tr('Unread')
+            : tone == BadgeTone.alert
+            ? tr('{count} new', {'count': count})
+            : tr('{count} unread', {'count': count}));
     return Semantics(
-      label: label,
+      label: spoken,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.6, end: 1),
         duration: spring.durationOf(context),

@@ -1661,6 +1661,10 @@ class PhoneWorld {
   });
   final openedLinks = <Uri>[];
 
+  /// The theme the app (or [pumpStandalone]) starts in; the screenshot
+  /// defines pick the default.
+  ThemeMode themeMode = _darkScreens ? ThemeMode.dark : ThemeMode.light;
+
   /// Statuses of people in [PhoneChatsRepository]'s world who are online
   /// (see `circles.onlineUserIds`); anyone missing shows as Online.
   var presenceStatuses = <String, PresenceStatus>{};
@@ -1713,6 +1717,9 @@ class PhoneWorld {
 
   /// The file viewer's services: fakes that stay off the network.
   List<Override> filePreview = filePreviewOverrides();
+
+  /// Overrides for one test, applied last (a fake RPC, say).
+  List<Override> extraOverrides = [];
 
   List<Override> get overrides {
     return [
@@ -1776,11 +1783,12 @@ class PhoneWorld {
         ),
       ),
       themeModeStoreProvider.overrideWithValue(
-        InMemoryThemeModeStore(_darkScreens ? ThemeMode.dark : ThemeMode.light),
+        InMemoryThemeModeStore(themeMode),
       ),
       glassEffectsStoreProvider.overrideWithValue(InMemoryGlassEffectsStore()),
       densityStoreProvider.overrideWithValue(densityStore),
       panelLayoutStoreProvider.overrideWithValue(panelLayoutStore),
+      ...extraOverrides,
     ];
   }
 
@@ -1829,7 +1837,11 @@ Future<void> pumpStandalone(
       retry: noProviderRetry,
       overrides: [...world.overrides, ...extraOverrides],
       child: MaterialApp(
-        theme: _theme(),
+        theme: _theme(world.themeMode),
+        darkTheme: WeCordTheme.dark(),
+        highContrastTheme: WeCordTheme.light(highContrast: true),
+        highContrastDarkTheme: WeCordTheme.dark(highContrast: true),
+        themeMode: world.themeMode,
         debugShowCheckedModeBanner: false,
         home: child,
       ),
@@ -1845,4 +1857,5 @@ const _darkScreens = bool.fromEnvironment('PHONE_SCREENS_DARK');
 // And Chinese with --dart-define=PHONE_SCREENS_ZH=true.
 const _chineseScreens = bool.fromEnvironment('PHONE_SCREENS_ZH');
 
-ThemeData _theme() => _darkScreens ? WeCordTheme.dark() : WeCordTheme.light();
+ThemeData _theme(ThemeMode mode) =>
+    mode == ThemeMode.dark ? WeCordTheme.dark() : WeCordTheme.light();

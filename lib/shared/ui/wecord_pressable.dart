@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/motion.dart';
+import 'package:wecord/shared/ui/tap_target.dart';
 
 /// Builds a pressable's look from its interaction [states] (hovered,
 /// focused, pressed, disabled, selected).
@@ -25,6 +26,10 @@ class WeCordPressable extends StatefulWidget {
     this.autofocus = false,
     this.toggled,
     this.excludeSemantics = false,
+    this.mergeSemantics = true,
+    this.minTapSize,
+    this.hint,
+    this.exclusiveGroup = false,
     super.key,
   });
 
@@ -54,6 +59,23 @@ class WeCordPressable extends StatefulWidget {
 
   /// Whether to hide the child's own semantics behind [semanticLabel].
   final bool excludeSemantics;
+
+  /// Reads the child's text as part of this control, as one node, when no
+  /// [semanticLabel] says otherwise (a list row reads "Name, preview, 5m").
+  /// Turn it off when the child holds controls of its own.
+  final bool mergeSemantics;
+
+  /// The smallest tappable area: grown around the child without changing
+  /// its look. By default 48 on Android, 44 on iOS and nothing on desktops
+  /// (see [touchTargetFor]); pass [Size.zero] to turn it off.
+  final Size? minTapSize;
+
+  /// What the control does, read after its label ("Opens the profile").
+  final String? hint;
+
+  /// One of a set where exactly one is [selected] (segments, tabs): read as
+  /// "selected, 2 of 3" by screen readers.
+  final bool exclusiveGroup;
 
   bool get enabled => onPressed != null || onLongPress != null;
 
@@ -121,6 +143,12 @@ class _WeCordPressableState extends State<WeCordPressable> {
       );
     }
 
+    final tapSize =
+        widget.minTapSize ?? Size.square(Theme.of(context).platformTouchTarget);
+    if (tapSize != Size.zero) {
+      result = WeCordTapTarget(minSize: tapSize, child: result);
+    }
+
     result = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: enabled ? (_) => _setPressed(true) : null,
@@ -150,17 +178,31 @@ class _WeCordPressableState extends State<WeCordPressable> {
       child: result,
     );
 
+    // A control with only a tooltip is named by it (icon buttons).
+    final label =
+        widget.semanticLabel ??
+        (widget.tooltip != null && widget.tooltip!.isNotEmpty
+            ? widget.tooltip
+            : null);
+    final named = widget.semanticLabel != null || label != null;
     result = Semantics(
       button: widget.toggled == null,
       toggled: widget.toggled,
       enabled: enabled,
       selected: widget.selected ? true : null,
-      label: widget.semanticLabel,
-      excludeSemantics: widget.excludeSemantics,
+      inMutuallyExclusiveGroup: widget.exclusiveGroup ? true : null,
+      label: label,
+      hint: widget.hint,
+      excludeSemantics:
+          widget.excludeSemantics || (widget.semanticLabel == null && named),
       onTap: widget.onPressed,
       onLongPress: widget.onLongPress,
       child: result,
     );
+
+    if (widget.mergeSemantics && !named && !widget.excludeSemantics) {
+      result = MergeSemantics(child: result);
+    }
 
     final tooltip = widget.tooltip;
     if (tooltip != null && tooltip.isNotEmpty) {

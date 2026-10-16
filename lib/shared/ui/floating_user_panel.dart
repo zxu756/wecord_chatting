@@ -51,10 +51,11 @@ class FloatingUserPanel extends StatelessWidget {
     final height = compact ? desktopHeight : phoneHeight;
     return WeCordGlass(
       borderRadius: BorderRadius.circular(height / 2),
-      child: SizedBox(
-        height: height,
+      // At least `height`; taller when the text size asks for it.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
               Expanded(

@@ -16,7 +16,8 @@ final chatProfileSummaryProvider = FutureProvider.autoDispose
 
 /// The right panel of a desktop direct chat (design C-desk-chat): a color
 /// banner, the big avatar, name and handle, then About me and the circles
-/// you share, on the sidebar color.
+/// you share, on the sidebar color. Fills the width it gets (the chat
+/// resizes it).
 class ChatProfilePanel extends ConsumerWidget {
   const ChatProfilePanel({
     required this.userId,
@@ -25,8 +26,6 @@ class ChatProfilePanel extends ConsumerWidget {
     this.presence,
     super.key,
   });
-
-  static const width = 300.0;
 
   final String userId;
   final String name;
@@ -74,7 +73,6 @@ class ChatProfilePanel extends ConsumerWidget {
 
     return Container(
       key: const ValueKey('chat-profile-panel'),
-      width: width,
       decoration: BoxDecoration(
         color: c.sidebar,
         border: Border(left: BorderSide(color: c.lineSoft)),

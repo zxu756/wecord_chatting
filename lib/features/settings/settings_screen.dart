@@ -129,7 +129,7 @@ class SettingsPhonePage extends ConsumerWidget {
             children: [ThemeModePicker()],
           ),
           const SizedBox(height: 12),
-          const SettingsGroup(children: [GlassEffectsRow()]),
+          const SettingsGroup(children: [GlassEffectsRow(), DensityRow()]),
           SettingsGroup(
             header: tr('Preferences'),
             children: [

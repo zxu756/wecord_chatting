@@ -501,14 +501,131 @@ abstract final class WeCordSizes {
   static const railPhone = 68.0;
   static const railDesktop = 72.0;
 
-  /// Desktop sidebar (channels, direct messages).
-  static const sidebarMin = 272.0;
-  static const sidebarMax = 292.0;
+  /// Desktop sidebar (direct messages and a circle's channels share one
+  /// width): 292 until the user drags it, between 220 and 420.
+  static const sidebarDefault = 292.0;
+  static const sidebarMin = 220.0;
+  static const sidebarMax = 420.0;
 
-  /// Desktop right panel (profile, members).
-  static const rightPanelMin = 248.0;
-  static const rightPanelMax = 300.0;
+  /// A circle's member list on the right: 248, resizable 200–360.
+  static const memberListDefault = 248.0;
+  static const memberListMin = 200.0;
+  static const memberListMax = 360.0;
+
+  /// The profile panel beside a direct chat: 300, resizable 240–420.
+  static const profilePanelDefault = 300.0;
+  static const profilePanelMin = 240.0;
+  static const profilePanelMax = 420.0;
+
+  /// The narrowest the centre content (the chat) gets before right panels
+  /// close and then the sidebar shrinks.
+  static const contentMin = 420.0;
 
   /// Room for the traffic lights above the rail on macOS.
   static const macosTitleBar = 28.0;
+}
+
+/// How tightly lists and messages sit (Settings → Appearance → Density).
+/// It scales row heights and padding (direct messages, channels, members),
+/// the gaps between messages and the avatars on message cards. Read it,
+/// resolved for the input, with `context.density`.
+enum WeCordDensity {
+  comfortable(spacing: 1.3, avatar: 1.1, rowDelta: 4),
+  standard(spacing: 1, avatar: 1, rowDelta: 0),
+  compact(spacing: 0.6, avatar: 0.8, rowDelta: -6);
+
+  const WeCordDensity({
+    required this.spacing,
+    required this.avatar,
+    required this.rowDelta,
+  });
+
+  /// Multiplies vertical padding and gaps.
+  final double spacing;
+
+  /// Multiplies avatar sizes in rows and message cards.
+  final double avatar;
+
+  /// Added to fixed row heights.
+  final double rowDelta;
+
+  /// The density chosen above [context]; [standard] without a
+  /// [WeCordDensityScope].
+  static WeCordDensity of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<WeCordDensityScope>()
+          ?.density ??
+      standard;
+}
+
+/// Puts the Density setting above the app (the app builder adds one).
+class WeCordDensityScope extends InheritedWidget {
+  const WeCordDensityScope({
+    required this.density,
+    required super.child,
+    super.key,
+  });
+
+  final WeCordDensity density;
+
+  @override
+  bool updateShouldNotify(WeCordDensityScope oldWidget) =>
+      density != oldWidget.density;
+}
+
+/// [WeCordDensity] applied to sizes. On touch screens Compact only tightens
+/// a little and rows never drop below [WeCordSizes.touchTarget], so taps
+/// stay easy; with a mouse it goes all the way.
+@immutable
+class WeCordDensityScale {
+  const WeCordDensityScale(this.density, {this.touch = false});
+
+  final WeCordDensity density;
+
+  /// Whether fingers are the main input.
+  final bool touch;
+
+  bool get _softened => touch && density == WeCordDensity.compact;
+
+  /// A vertical padding or gap.
+  double space(double value) => value * (_softened ? 0.85 : density.spacing);
+
+  /// An avatar size, kept to whole pixels.
+  double avatar(double size) =>
+      _softened ? size : (size * density.avatar).roundToDouble();
+
+  /// A fixed row height; at least a touch target on touch screens.
+  double rowHeight(double base) {
+    final height = base + (_softened ? 0 : density.rowDelta);
+    return touch && height < WeCordSizes.touchTarget
+        ? WeCordSizes.touchTarget
+        : height;
+  }
+
+  /// The smallest height of a row whose height comes from its content.
+  double get minRowHeight => touch ? WeCordSizes.touchTarget : 0;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WeCordDensityScale &&
+      other.density == density &&
+      other.touch == touch;
+
+  @override
+  int get hashCode => Object.hash(density, touch);
+}
+
+extension WeCordDensityContext on BuildContext {
+  /// The Density setting here, resolved for the platform's input.
+  WeCordDensityScale get density => WeCordDensityScale(
+    WeCordDensity.of(this),
+    touch: switch (Theme.of(this).platform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia => true,
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => false,
+    },
+  );
 }

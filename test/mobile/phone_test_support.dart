@@ -50,6 +50,8 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/panel_layout.dart';
+import 'package:wecord/shared/theme/density_controller.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
@@ -1690,6 +1692,11 @@ class PhoneWorld {
 
   late GoRouter router;
 
+  /// The Density setting and the wide layout's panel widths on this
+  /// "device".
+  final densityStore = InMemoryDensityStore();
+  final panelLayoutStore = InMemoryPanelLayoutStore();
+
   /// The file viewer's services: fakes that stay off the network.
   List<Override> filePreview = filePreviewOverrides();
 
@@ -1758,6 +1765,8 @@ class PhoneWorld {
         InMemoryThemeModeStore(_darkScreens ? ThemeMode.dark : ThemeMode.light),
       ),
       glassEffectsStoreProvider.overrideWithValue(InMemoryGlassEffectsStore()),
+      densityStoreProvider.overrideWithValue(densityStore),
+      panelLayoutStoreProvider.overrideWithValue(panelLayoutStore),
     ];
   }
 

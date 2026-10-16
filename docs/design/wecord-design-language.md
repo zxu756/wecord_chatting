@@ -65,18 +65,18 @@ use raw hex in widgets.
 | `well` | `#F7F6F3` | `#222226` | Quiet blocks inside a panel (profile sections, quotes, cards) |
 | `ink` | `#17171A` | `#F3F2EF` | Text; primary button and outgoing bubble fill |
 | `onInk` | `#FFFFFF` | `#111113` | Text on ink |
-| `muted` | `#6B6A72` | `#A3A1AA` | Secondary text (`#5F5E66` in some mockups → use `muted`) |
-| `subtle` | `#8A8891` | `#85838C` | Section headers, placeholders |
-| `faint` | `#B3B1B8` | `#5C5B63` | Chevrons, disabled, offline |
+| `muted` | `#5F5E66` | `#A3A1AA` | Secondary text |
+| `subtle` | `#6F6D76` | `#94929A` | Section headers, placeholders (still 4.5:1 on panel and raised) |
+| `faint` | `#8D8994` | `#706F78` | Chevrons, disabled, offline (3:1, for icons and dots) |
 | `line` | `#E4E2DD` | `#2C2C31` | Borders (fields on paper, theme cards) |
 | `lineSoft` | `#EFEDE8` | `#242428` | Separators inside groups and lists |
 | `track` | `#D6D3CC` | `#3A3A40` | Off switches, slider tracks, the rail divider |
 | `accent` / `onAccent` | `#2F6BF6` / white | `#6E95FF` / `#111113` | Links, compose/send, switches on, unread |
 | `accentSoft` | `#E9F0FF` | `#23283A` | Unread row, mentions, selected reaction |
 | `accentText` | `#1F5FE0` | `#9DB8FF` | Accent text on panels |
-| `success` (+Soft/Text) | `#30A46C` | `#30A46C` | Online, connected, on |
-| `warning` (+Soft/Text) | `#E7A53B` | `#E7A53B` | Idle, raised hand, events today |
-| `danger` (+Soft/Text) | `#E5484D` | `#E5484D` | Destructive, mention badges, do not disturb |
+| `success` (+Soft/Text) | `#2E9D67` | `#30A46C` | Online, connected, on |
+| `warning` (+Soft/Text) | `#CA8619` | `#E7A53B` | Idle, raised hand, events today |
+| `danger` (+Soft/Text) | `#E12F35` | `#E12F35` | Destructive, mention badges, do not disturb (white text on it clears 4.5:1) |
 | `scrim` | ink 32% | black 50% | Behind sheets and dialogs |
 
 Presence: online `success`, idle `warning`, do not disturb `danger`,
@@ -154,8 +154,9 @@ Elevation is only shadow, never tint (`WeCordShadows`):
 - `menu` — 0 18 44 ink 18%: long-press menus, popovers.
 - `dialog` — 0 30 80 ink 30%: dialogs, the desktop settings window.
 
-**Glass recipe** (`WeCordGlass`, `WeCordGlassStyle`): fill white 76% (dark:
-graphite `#2C2C32` 72%), backdrop blur 24 with saturation ×1.8 (dark ×1.6),
+**Glass recipe** (`WeCordGlass`, `WeCordGlassStyle`): fill white 88% (dark:
+graphite `#2C2C32` 90%, strong enough that `muted` text keeps 4.5:1 over dark
+content), backdrop blur 24 with saturation ×1.8 (dark ×1.6),
 1px border white 90% (dark: white 8%), shadow `float` or `menu`.
 Solid fallback: `glass.solidFill` with a `line` border. Glass turns solid
 when **Settings → Appearance → Glass effects** is off, or when the platform
@@ -204,6 +205,9 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WeCordMotion` / `WeCordSpring` / `SpringCurve` / `WeCordHaptics` | Motion and haptics above. |
 | `MacosTitleBarFrame` / `MacosWindowDragArea` / `macosTitleBarInset` | The macOS window under a transparent title bar (below). |
 | `MediaTray` / `MessageMediaGroup` / `MediaTile` (`lib/features/chats/media_send/`) | Sending pictures, videos and files: the glass tray above the composer (72–84 thumbnails, remove badges, caption, "Original quality" switch, accent send pill), and the album grid in a bubble (justified rows, 2 px gaps, 16 outer / 4 inner corners, BlurHash under every tile, progress ring with a cancel button while uploading, a red retry button once failed). `ChatDropOverlay` is the dashed accent frame and glass card shown while files are dragged over the chat. |
+| `WeCordTapTarget` / `touchTargetFor` | Grows a control's tappable and accessibility area to the platform's touch target (48 Android, 44 iOS, none on desktop) without changing how it looks; `WeCordPressable` applies it by default (`minTapSize`). |
+| `MotionSafeImage` | Pictures that can animate: still under reduced motion with a play button. |
+| `MessageFrame` (`lib/features/chats/message_semantics.dart`) | A chat message as one stop for screen readers ("{sender}, {time}: {text}, {n} reactions", actions as custom actions) and the keyboard (focus ring, context menu key / Shift+F10 / Enter open its menu). |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,
@@ -277,9 +281,13 @@ the WeCord components in new and restyled screens.
   hover tint, and draws a 2px accent focus ring when reached by keyboard
   (`WeCordPressable`); Enter/Space activate. Tooltips on icon-only buttons.
   `⌘K`/`Ctrl K` hint in the sidebar search.
-- **Reduced motion**: springs collapse to zero duration; glass goes solid.
-- **High contrast**: glass goes solid; keep text on `ink`/`muted`, never
-  `subtle`, for body copy.
+- **Reduced motion**: springs collapse to zero duration; glass goes solid;
+  animated pictures (GIFs) hold their first frame under a play button
+  (`MotionSafeImage`); videos do not start by themselves.
+- **High contrast**: the platform's "Increase contrast" selects
+  `WeCordTheme.light/dark(highContrast: true)` (`MaterialApp.highContrastTheme`):
+  `WeCordPalette.lightHighContrast` / `darkHighContrast` (ink black/white,
+  `muted` ≥ 7:1, lines, switch tracks and the glass edge ≥ 3:1) and solid glass.
 - **Glass effects off switch**: Settings → Appearance (persisted like the
   theme mode, `glassEffectsProvider`).
 - **Density**: Settings → Appearance → Density (Comfortable / Default /
@@ -300,3 +308,34 @@ the WeCord components in new and restyled screens.
 - Do use glass only on floating elements; don't blur whole panels.
 - Don't add InkWell ripples, elevation tints or outlined text fields.
 - Don't brand anything after another product; all artwork is original.
+
+## Accessibility
+
+- **Contrast** (WCAG AA): text 4.5:1, icons and dots 3:1, checked for every
+  token pair in `test/accessibility/token_contrast_test.dart` (light, dark and
+  both high contrast sets). Glass keeps `ink` and `muted` readable over
+  worst-case content. Avatar fills are deep enough for their white initial.
+- **Guard**: `test/accessibility/guidelines_test.dart` runs Flutter's
+  `androidTapTargetGuideline`, `iOSTapTargetGuideline`,
+  `labeledTapTargetGuideline` and `textContrastGuideline` over the main screens
+  (`test/accessibility/a11y_screens.dart`) in light, dark and with high
+  contrast; add a screen there when you add one. `semantics_test.dart` covers
+  message reading, keyboard and reduced motion.
+- **Touch targets**: ≥ 48 on Android, ≥ 44 on iOS, through `WeCordPressable`;
+  a visible 32–40 control is padded invisibly. Rows and bars that hold fixed
+  heights must use `minHeight` so large text grows them.
+- **Screen readers**: icon-only buttons get their tooltip as label; rows
+  read as one sentence (`conversationRowLabel`, `messageSpokenSummary`);
+  badges read counts (`CountBadge`: "3 unread"), presence dots read their
+  status; decorative icons and pictures are skipped; the typing indicator,
+  composer errors and incoming messages in the open chat are live regions /
+  announcements; menus are named routes. New strings go through `tr()` with
+  Chinese in `lib/shared/l10n/zh/zh_a11y.dart`.
+- **Keyboard** (desktop and web): every pressable has the focus ring; Tab
+  reaches messages; the context menu key or Shift+F10 opens the focused
+  message's menu, Esc closes it and focus returns; Ctrl/Cmd+J jumps to the
+  message box.
+- **Text size**: layouts are checked at 1.6× and 2.0× with
+  `tool/screenshots/a11y_screenshots_test.dart` (also dark and high
+  contrast, into `build/a11y/`). Large page titles shrink to fit their row;
+  buttons, chips and cards grow.

@@ -286,108 +286,117 @@ class VoiceConnectedPanel extends ConsumerWidget {
         );
       }
 
-      return WeCordGlass(
-        key: const ValueKey('voice-connected-panel'),
-        borderRadius: BorderRadius.circular(height / 2),
-        child: SizedBox(
-          height: height,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 9, right: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: WeCordPressable(
-                    onPressed: onOpen == null ? null : () => onOpen!(session),
-                    pressedScale: 0.98,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(height / 2),
-                    ),
-                    builder: (context, states) => Row(
-                      children: [
-                        Tooltip(
-                          message: connected
-                              ? voiceQualityLabel(session.quality)
-                              : tr('Connecting'),
-                          child: Container(
-                            width: tileSize,
-                            height: tileSize,
-                            decoration: ShapeDecoration(
-                              color: narrow
-                                  ? c.raised.withValues(alpha: 0)
-                                  : connected
-                                  ? c.successSoft
-                                  : c.raised,
-                              shape: RoundedSuperellipseBorder(
-                                borderRadius: BorderRadius.circular(13),
-                              ),
-                            ),
-                            child: Icon(
-                              voiceQualityIcon(session.quality),
-                              key: const ValueKey('voice-quality-icon'),
-                              size: 18,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: narrow ? 4 : 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                connected
-                                    ? tr('Voice connected')
-                                    : tr('Connecting…'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: narrow ? 12 : 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: statusColor,
+      return // A fixed-height bar: its text stops growing at 1.3x.
+      MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: WeCordGlass(
+          key: const ValueKey('voice-connected-panel'),
+          borderRadius: BorderRadius.circular(height / 2),
+          child: SizedBox(
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 9, right: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: WeCordPressable(
+                      onPressed: onOpen == null ? null : () => onOpen!(session),
+                      pressedScale: 0.98,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(height / 2),
+                      ),
+                      builder: (context, states) => Row(
+                        children: [
+                          Tooltip(
+                            message: connected
+                                ? voiceQualityLabel(session.quality)
+                                : tr('Connecting'),
+                            child: Container(
+                              width: tileSize,
+                              height: tileSize,
+                              decoration: ShapeDecoration(
+                                color: narrow
+                                    ? c.raised.withValues(alpha: 0)
+                                    : connected
+                                    ? c.successSoft
+                                    : c.raised,
+                                shape: RoundedSuperellipseBorder(
+                                  borderRadius: BorderRadius.circular(13),
                                 ),
                               ),
-                              Text(
-                                session.channelName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: c.muted),
+                              child: Icon(
+                                voiceQualityIcon(session.quality),
+                                key: const ValueKey('voice-quality-icon'),
+                                size: 18,
+                                color: statusColor,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(width: narrow ? 4 : 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  connected
+                                      ? tr('Voice connected')
+                                      : tr('Connecting…'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: narrow ? 12 : 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: statusColor,
+                                  ),
+                                ),
+                                Text(
+                                  session.channelName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: c.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                button(
-                  tooltip: voiceMuteTooltip(session),
-                  icon: muted ? Icons.mic_off_rounded : Icons.mic_none_rounded,
-                  fill: muted ? c.dangerSoft : c.raised,
-                  foreground: muted ? c.dangerText : c.ink,
-                  onPressed: connected && !session.serverMute
-                      ? () => runVoiceAction(context, controller.toggleMute)
-                      : null,
-                ),
-                button(
-                  tooltip: voiceDeafenTooltip(session),
-                  icon: deafened
-                      ? Icons.headset_off_rounded
-                      : Icons.headset_outlined,
-                  fill: deafened ? c.dangerSoft : c.raised,
-                  foreground: deafened ? c.dangerText : c.ink,
-                  onPressed: connected && !session.serverDeaf
-                      ? () => runVoiceAction(context, controller.toggleDeafen)
-                      : null,
-                ),
-                button(
-                  tooltip: tr('Disconnect'),
-                  icon: Icons.call_end_rounded,
-                  fill: c.danger,
-                  foreground: c.onDanger,
-                  onPressed: controller.leave,
-                ),
-              ],
+                  button(
+                    tooltip: voiceMuteTooltip(session),
+                    icon: muted
+                        ? Icons.mic_off_rounded
+                        : Icons.mic_none_rounded,
+                    fill: muted ? c.dangerSoft : c.raised,
+                    foreground: muted ? c.dangerText : c.ink,
+                    onPressed: connected && !session.serverMute
+                        ? () => runVoiceAction(context, controller.toggleMute)
+                        : null,
+                  ),
+                  button(
+                    tooltip: voiceDeafenTooltip(session),
+                    icon: deafened
+                        ? Icons.headset_off_rounded
+                        : Icons.headset_outlined,
+                    fill: deafened ? c.dangerSoft : c.raised,
+                    foreground: deafened ? c.dangerText : c.ink,
+                    onPressed: connected && !session.serverDeaf
+                        ? () => runVoiceAction(context, controller.toggleDeafen)
+                        : null,
+                  ),
+                  button(
+                    tooltip: tr('Disconnect'),
+                    icon: Icons.call_end_rounded,
+                    fill: c.danger,
+                    foreground: c.onDanger,
+                    onPressed: controller.leave,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

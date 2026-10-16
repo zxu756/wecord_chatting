@@ -218,8 +218,13 @@ class VoiceControlButton extends StatelessWidget {
     this.badgeCount,
     this.badgeKey,
     this.size = 54,
+    this.packed = false,
     super.key,
   });
+
+  /// One of several buttons sharing a narrow bar: the touch target stays 44
+  /// there instead of growing to the platform's (48 on Android).
+  final bool packed;
 
   final IconData icon;
 
@@ -243,6 +248,7 @@ class VoiceControlButton extends StatelessWidget {
     final c = context.tokens.colors;
     final activeFill = activeColor ?? c.ink;
     return WeCordPressable(
+      minTapSize: packed ? const Size.square(WeCordSizes.touchTarget) : null,
       onPressed: onPressed,
       tooltip: tooltip,
       semanticLabel: tooltip,
@@ -331,6 +337,7 @@ class VoiceRoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WeCordPressable(
+      minTapSize: const Size.square(WeCordSizes.touchTarget),
       onPressed: onPressed,
       tooltip: tooltip,
       semanticLabel: tooltip,
@@ -401,6 +408,7 @@ class VoicePillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WeCordPressable(
+      minTapSize: const Size.square(WeCordSizes.touchTarget),
       onPressed: onPressed,
       tooltip: tooltip,
       semanticLabel: tooltip,
@@ -550,6 +558,7 @@ class VoiceControlBar extends StatelessWidget {
               badgeCount: control.badgeCount,
               badgeKey: control.badgeKey,
               size: wide ? 50 : size,
+              packed: true,
             ),
           leave,
         ];

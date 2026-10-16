@@ -128,8 +128,8 @@ class _PhoneHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    return SizedBox(
-      height: 48,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
       child: Row(
         children: [
           if (onBack != null) ...[
@@ -147,15 +147,19 @@ class _PhoneHeader extends StatelessWidget {
           Expanded(
             child: Semantics(
               header: true,
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  color: c.ink,
+              // Shrinks to the row at large text sizes instead of clipping.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: c.ink,
+                  ),
                 ),
               ),
             ),

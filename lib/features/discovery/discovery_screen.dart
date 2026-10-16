@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
@@ -385,7 +387,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         sliver: SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            mainAxisExtent: DiscoveryCircleCard.height,
+            mainAxisExtent: DiscoveryCircleCard.heightOf(context),
             crossAxisSpacing: gap,
             mainAxisSpacing: gap,
           ),
@@ -484,8 +486,11 @@ class _CategoryChips extends StatelessWidget {
         child: Wrap(spacing: 8, runSpacing: 8, children: chips),
       );
     }
+    // Tall enough for the touch target and for the chips' text at large
+    // sizes.
+    final textHeight = MediaQuery.textScalerOf(context).scale(13 * 1.4) + 12;
     return SizedBox(
-      height: 34,
+      height: math.max(34.0, math.max(context.touchTargetSize, textHeight)),
       child: ListView.separated(
         key: const ValueKey('discovery-categories'),
         scrollDirection: Axis.horizontal,
@@ -576,7 +581,7 @@ class _NewSection extends ConsumerWidget {
                 if (index > 0) const SizedBox(width: gap),
                 SizedBox(
                   width: cardWidth,
-                  height: DiscoveryCircleCard.height,
+                  height: DiscoveryCircleCard.heightOf(context),
                   child: DiscoveryCircleCard(
                     circle: circle,
                     onOpen: () => onOpen(circle),
@@ -589,7 +594,7 @@ class _NewSection extends ConsumerWidget {
       );
     } else {
       row = SizedBox(
-        height: DiscoveryCircleCard.height + 8,
+        height: DiscoveryCircleCard.heightOf(context) + 8,
         child: OverflowBox(
           // Bleeds to the screen edges so cards scroll under the gutter.
           maxWidth: MediaQuery.sizeOf(context).width,

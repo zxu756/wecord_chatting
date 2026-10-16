@@ -355,6 +355,25 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
     }
   }
 
+  /// The title block as a button that shows the whole [topic], when the
+  /// forum has one.
+  Widget _topicButton(String? topic, Widget title) {
+    if (topic == null || topic.isEmpty) {
+      return title;
+    }
+    return WeCordPressable(
+      key: const ValueKey('forum-topic'),
+      onPressed: () => _showTopic(topic),
+      hint: tr('Shows the topic'),
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.sm),
+      ),
+      builder: (context, states) =>
+          Align(alignment: Alignment.centerLeft, widthFactor: 1, child: title),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
@@ -391,38 +410,33 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
           ),
         ),
         titleSpacing: 4,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _channel.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 15.5,
-                fontWeight: FontWeight.w700,
-                color: c.ink,
-              ),
-            ),
-            if (topic != null && topic.isNotEmpty)
-              GestureDetector(
-                key: const ValueKey('forum-topic'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _showTopic(topic),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    topic,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: subtitleStyle,
-                  ),
+        title: _topicButton(
+          topic,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _channel.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w700,
+                  color: c.ink,
                 ),
-              )
-            else
-              Text(tr('Forum'), style: subtitleStyle),
-          ],
+              ),
+              if (topic != null && topic.isNotEmpty)
+                Text(
+                  topic,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: subtitleStyle,
+                )
+              else
+                Text(tr('Forum'), style: subtitleStyle),
+            ],
+          ),
         ),
         actions: [
           for (final action in widget.actions) action.toIconButton(),
@@ -534,7 +548,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
           ),
           if (_channel.tags.isNotEmpty)
             SizedBox(
-              height: touch ? 52 : 44,
+              height: touch ? 62 : 44,
               child: ListView(
                 key: const ValueKey('forum-tag-filters'),
                 scrollDirection: Axis.horizontal,

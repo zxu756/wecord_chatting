@@ -43,7 +43,9 @@ void main() {
 
     expect(presses, 2);
     expect(find.text('4'), findsOneWidget);
-    expect(tester.getSize(find.byType(WeCordIconButton)).height, 44);
+    // The 40 round button is padded to the platform's touch target (48 on
+    // Android, which is what widget tests run as).
+    expect(tester.getSize(find.byType(WeCordIconButton)).height, 48);
   });
 
   testWidgets('a button activates from the keyboard', (tester) async {

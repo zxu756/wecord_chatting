@@ -4,15 +4,17 @@ import 'package:wecord/shared/theme/wecord_tokens.dart';
 /// Fills for avatars without a picture, picked from the name so a person
 /// or circle keeps its color everywhere.
 abstract final class WeCordAvatarColors {
+  /// Mid tones, each dark enough for the white initial on top to clear
+  /// 4.5:1 (the mockups' colors, deepened until they did).
   static const all = <Color>[
-    Color(0xFFE0795A),
-    Color(0xFF8B6BE0),
-    Color(0xFF4D8FD6),
-    Color(0xFFC98A2B),
-    Color(0xFF2E8F69),
+    Color(0xFFCC4D26),
+    Color(0xFF825FDE),
+    Color(0xFF2E78C8),
+    Color(0xFF9E6D22),
+    Color(0xFF2B8562),
     Color(0xFF3E5FC8),
-    Color(0xFFB85A8A),
-    Color(0xFF2F8C99),
+    Color(0xFFB65586),
+    Color(0xFF2B818D),
   ];
 
   static Color forSeed(String seed) {
@@ -41,10 +43,15 @@ class PresenceDot extends StatelessWidget {
     this.size = 12,
     this.ringColor,
     this.ringWidth,
+    this.semanticLabel,
     super.key,
   });
 
   final Color color;
+
+  /// What the dot says to a screen reader ("Online"); without one the dot
+  /// is skipped.
+  final String? semanticLabel;
 
   /// Outer size, ring included.
   final double size;
@@ -56,7 +63,7 @@ class PresenceDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ring = ringWidth ?? (size * 0.22).clamp(2.0, 4.0);
-    return Container(
+    final dot = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -69,6 +76,9 @@ class PresenceDot extends StatelessWidget {
         ),
       ),
     );
+    return semanticLabel == null
+        ? ExcludeSemantics(child: dot)
+        : Semantics(label: semanticLabel, excludeSemantics: true, child: dot);
   }
 }
 
@@ -85,6 +95,7 @@ class PersonAvatar extends StatelessWidget {
     this.ringColor,
     this.badge,
     this.semanticLabel,
+    this.presenceLabel,
     this.onImageError,
     super.key,
   });
@@ -106,6 +117,10 @@ class PersonAvatar extends StatelessWidget {
   final Widget? badge;
 
   final String? semanticLabel;
+
+  /// The presence dot in words ("Online", "Idle"), read after
+  /// [semanticLabel]; a dot without one is only a color.
+  final String? presenceLabel;
 
   /// Called when [image] fails to load (e.g. to fall back to the initial).
   final ImageErrorListener? onImageError;
@@ -149,21 +164,27 @@ class PersonAvatar extends StatelessWidget {
                 color: presence!,
                 size: (size * 0.27).clamp(10.0, 22.0),
                 ringColor: ringColor,
+                semanticLabel: presenceLabel,
               ));
-    if (corner != null) {
-      circle = Stack(
-        clipBehavior: Clip.none,
-        children: [
-          circle,
-          Positioned(right: -1, bottom: -1, child: corner),
-        ],
-      );
-    }
-    return Semantics(
+    // The picture is skipped (or named by [semanticLabel]); the corner keeps
+    // its own words, e.g. "Online".
+    final picture = Semantics(
       label: semanticLabel,
       image: semanticLabel != null,
       excludeSemantics: true,
-      child: SizedBox.square(dimension: size, child: circle),
+      child: circle,
+    );
+    return SizedBox.square(
+      dimension: size,
+      child: corner == null
+          ? picture
+          : Stack(
+              clipBehavior: Clip.none,
+              children: [
+                picture,
+                Positioned(right: -1, bottom: -1, child: corner),
+              ],
+            ),
     );
   }
 }
@@ -242,20 +263,25 @@ class ThingAvatar extends StatelessWidget {
               ),
             ),
     );
-    if (badge != null) {
-      tile = Stack(
-        clipBehavior: Clip.none,
-        children: [
-          tile,
-          Positioned(right: -4, top: -4, child: badge!),
-        ],
-      );
-    }
-    return Semantics(
+    // The squircle is skipped (or named by [semanticLabel]); a badge on its
+    // corner keeps its own words ("3 unread").
+    final picture = Semantics(
       label: semanticLabel,
       image: semanticLabel != null,
       excludeSemantics: true,
-      child: SizedBox.square(dimension: size, child: tile),
+      child: tile,
+    );
+    return SizedBox.square(
+      dimension: size,
+      child: badge == null
+          ? picture
+          : Stack(
+              clipBehavior: Clip.none,
+              children: [
+                picture,
+                Positioned(right: -4, top: -4, child: badge!),
+              ],
+            ),
     );
   }
 }

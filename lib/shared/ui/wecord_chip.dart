@@ -45,8 +45,8 @@ class WeCordChip extends StatelessWidget {
         return AnimatedContainer(
           duration: WeCordMotion.quick,
           curve: WeCordMotion.standard,
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          constraints: BoxConstraints(minHeight: height),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: ShapeDecoration(
             color: hovered
                 ? Color.alphaBlend(c.ink.withValues(alpha: 0.05), fill)
@@ -55,6 +55,7 @@ class WeCordChip extends StatelessWidget {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: 16, color: foreground),

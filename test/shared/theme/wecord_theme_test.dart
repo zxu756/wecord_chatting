@@ -17,7 +17,7 @@ void main() {
       expect(light.primary, const Color(0xFF2F6BF6));
       expect(light.onSurface, const Color(0xFF17171A));
       expect(light.surface, Colors.white);
-      expect(light.error, const Color(0xFFE5484D));
+      expect(light.error, const Color(0xFFE12F35));
 
       final dark = WeCordTheme.dark().colorScheme;
       expect(dark.primary, const Color(0xFF6E95FF));

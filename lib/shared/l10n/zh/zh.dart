@@ -2,6 +2,7 @@
 // Each area keeps its own map; test/shared/l10n/translations_test.dart
 // checks that every tr('…') in lib/ has an entry, and that text shared by
 // several areas reads the same everywhere.
+import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_app.dart';
@@ -67,6 +68,7 @@ const zhAreas = <Map<String, String>>[
   zhSearch,
   zhMediaSend,
   zhAlbums,
+  zhA11y,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

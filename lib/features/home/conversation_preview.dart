@@ -7,6 +7,8 @@ import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
+import 'package:wecord/shared/models/presence_status.dart';
+import 'package:wecord/shared/ui/spoken.dart';
 
 // The server's call notices: "Ada started a call." while it runs, then
 // "Ada started a call that lasted 5 minutes." once it ends.
@@ -110,4 +112,39 @@ String compactAge(DateTime time, {DateTime? now}) {
     return tr('{count}mo', {'count': elapsed.inDays ~/ 30});
   }
   return tr('{count}y', {'count': elapsed.inDays ~/ 365});
+}
+
+/// What a screen reader says about a conversation row, in one go: the
+/// name, who is online (direct messages), unread count, pinned and muted
+/// markers, when the last message came and what it says (or the unsent
+/// draft).
+String conversationRowLabel(
+  ConversationSummary conversation, {
+  required String title,
+  required String? preview,
+  PresenceStatus? presence,
+  String? draft,
+  DateTime? now,
+}) {
+  final unreadCount = conversation.unreadCount;
+  final lastMessageAt = conversation.lastMessageAt;
+  final isDirect = conversation.type == ConversationType.direct;
+  return spokenList([
+    title,
+    if (isDirect)
+      presence == null || presence == PresenceStatus.invisible
+          ? tr('Offline')
+          : presence.label,
+    if (unreadCount > 0)
+      tr('{count} unread', {'count': unreadCount})
+    else if (conversation.isMarkedUnread)
+      tr('Unread'),
+    if (conversation.pinnedAt != null) tr('Pinned'),
+    if (conversation.isMuted) tr('Muted'),
+    if (lastMessageAt != null) spokenAge(lastMessageAt, now: now),
+    if (draft != null && draft.trim().isNotEmpty)
+      '${tr('Draft')}: ${draft.trim()}'
+    else if (preview != null && preview.trim().isNotEmpty)
+      preview.trim(),
+  ]);
 }

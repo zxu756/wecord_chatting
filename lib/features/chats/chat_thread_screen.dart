@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -35,6 +36,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/chats/message_semantics.dart';
 import 'package:wecord/features/chats/offline/connectivity_banner.dart';
 import 'package:wecord/features/chats/media_send/album_fold.dart';
 import 'package:wecord/features/chats/media_send/album_grid.dart';
@@ -405,6 +407,9 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _composerController = TextEditingController();
   final _searchController = TextEditingController();
+
+  /// Focus of the message box; the jump-to-message-box shortcut uses it.
+  final _composerFocus = FocusNode(debugLabel: 'message box');
   final _scrollController = ScrollController();
   Timer? _typingTimer;
   ChatsRepository? _typingRepository;
@@ -500,6 +505,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   @override
   void initState() {
     super.initState();
+    ComposerFocusRegistry.attach(_composerFocus);
     _scrollController.addListener(_handleScroll);
     _activeConversationController = ref.read(
       activeConversationIdProvider.notifier,
@@ -602,6 +608,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   @override
   void dispose() {
+    ComposerFocusRegistry.detach(_composerFocus);
+    _composerFocus.dispose();
     unawaited(_pasteSubscription?.cancel());
     _typingTimer?.cancel();
     _highlightTimer?.cancel();
@@ -1067,19 +1075,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 ringColor: desktop ? c.panel : tokens.glass.solidFill,
               );
         final subtitle = topic != null
-            ? GestureDetector(
-                key: const ValueKey('chat-thread-topic'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _showTopic(title, topic),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Text(
-                    topic,
-                    key: const ValueKey('chat-thread-subtitle'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+            ? Text(
+                topic,
+                key: const ValueKey('chat-thread-subtitle'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               )
             : Text(
                 isThread
@@ -1120,6 +1120,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           channelIcon: desktop && isChannel ? Icons.tag_rounded : null,
           title: title,
           subtitle: subtitle,
+          onSubtitleTap: topic == null ? null : () => _showTopic(title, topic),
           actions: headerActions,
           primaryAction: identical(primaryAction, searchAction)
               ? pinnedAction
@@ -1243,6 +1244,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   in groupDetail?.members ?? const <GroupMember>[])
                 member.profile.id: member,
             };
+            _announceIncoming(
+              fullOldestToNewest,
+              currentUserId,
+              detached: data.hasNewer,
+              nameOf: (message) => _senderFor(
+                message,
+                membersById,
+                fallbackProfile: message.isSentBy(currentUserId)
+                    ? ownProfile
+                    : null,
+              ).name,
+            );
             final sidePadding = cards ? 0.0 : (desktop ? 40.0 : 14.0);
             // Touch screens swipe a message sideways to reply.
             final touch = usesTouchInput(context);
@@ -1591,6 +1604,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       PasteTextIntent: _pasteFilesAction,
                   },
                   child: _Composer(
+                    focusNode: _composerFocus,
                     desktop: desktop,
                     bottomGap: composerBottomGap,
                     hint: composerHint(conversationType, title),
@@ -2012,6 +2026,62 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         outbox.discard(entry.clientId);
       }
     }
+  }
+
+  /// The newest message already spoken (or present when the chat opened).
+  String? _announcedThroughId;
+
+  /// Reads out messages from other people that arrive while the chat is
+  /// open, for screen readers (a polite announcement: it waits for what is
+  /// being read). Not the messages that were there when it opened, nor
+  /// pages of history.
+  void _announceIncoming(
+    List<ChatMessage> oldestToNewest,
+    String? currentUserId, {
+    required bool detached,
+    required String Function(ChatMessage message) nameOf,
+  }) {
+    if (detached || oldestToNewest.isEmpty) {
+      return;
+    }
+    final latest = oldestToNewest.last;
+    final through = _announcedThroughId;
+    if (through == latest.id) {
+      return;
+    }
+    _announcedThroughId = latest.id;
+    final index = through == null
+        ? -1
+        : oldestToNewest.indexWhere((message) => message.id == through);
+    if (index == -1) {
+      return;
+    }
+    final fresh = [
+      for (final message in oldestToNewest.skip(index + 1))
+        if (!message.isSentBy(currentUserId) &&
+            message.recalledAt == null &&
+            !isPendingMessageId(message.id))
+          message,
+    ];
+    if (fresh.isEmpty) {
+      return;
+    }
+    final last = fresh.last;
+    final summary = messageSpokenSummary(last, senderName: nameOf(last));
+    final text = fresh.length == 1
+        ? summary
+        : '${tr('{count} new messages', {'count': fresh.length})}. $summary';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(
+          SemanticsService.sendAnnouncement(
+            View.of(context),
+            text,
+            Directionality.of(context),
+          ),
+        );
+      }
+    });
   }
 
   /// Counts messages that arrived while the reader was scrolled up. Not
@@ -4437,17 +4507,87 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Whether a screen reader can take the message in one stop: text,
+  /// pictures and stickers. Voice messages, files, polls, albums, bot
+  /// buttons and links keep their own controls reachable instead.
+  bool get _readAsOneNode {
+    if (_isRecalled) {
+      return true;
+    }
+    return switch (message.type) {
+      MessageType.voice || MessageType.file || MessageType.poll => false,
+      MessageType.text =>
+        message.album == null &&
+            message.interaction == null &&
+            firstLinkInMarkdown(message.body, mentions: message.mentions) ==
+                null,
+      MessageType.image => message.album == null,
+      MessageType.system || MessageType.sticker => true,
+    };
+  }
+
+  /// What a screen reader can do with the message, besides reading it.
+  List<MessageSemanticAction> _semanticActions(BuildContext context) {
+    return [
+      for (final action in _actions(context))
+        MessageSemanticAction(action.label, action.onSelected),
+      MessageSemanticAction(
+        tr('Add reaction'),
+        () => unawaited(_pickReaction(context)),
+      ),
+      for (final reaction in message.reactions)
+        MessageSemanticAction(
+          reaction.reactedByMe
+              ? tr('Remove {emoji} reaction', {
+                  'emoji': reaction.customName ?? reaction.emoji,
+                })
+              : tr('React with {emoji}', {
+                  'emoji': reaction.customName ?? reaction.emoji,
+                }),
+          () => unawaited(onToggleReaction(message, reaction.emoji)),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final senderName = isCurrentUser
+        ? tr('You')
+        : (sender?.name ?? message.webhookName ?? tr('Someone'));
+    final canShowActions = !_isRecalled && !_isPending;
+    final oneNode = _readAsOneNode;
+    final Widget content;
     if (isOpeningPost) {
-      return _buildOpeningPost(context);
+      content = _buildOpeningPost(context);
+    } else {
+      final hoverable = desktop && !_isRecalled && !usesTouchInput(context);
+      content = _MessageHover(
+        enabled: hoverable,
+        builder: (context, hovered) => cards
+            ? _buildCard(context, hovered)
+            : _buildBubbleRow(context, hovered),
+      );
     }
-    final hoverable = desktop && !_isRecalled && !usesTouchInput(context);
-    return _MessageHover(
-      enabled: hoverable,
-      builder: (context, hovered) => cards
-          ? _buildCard(context, hovered)
-          : _buildBubbleRow(context, hovered),
+    return MessageFrame(
+      label: messageSpokenSummary(
+        message,
+        senderName: senderName,
+        includeContent: oneNode,
+        pending: _isPending,
+      ),
+      readAsOneNode: oneNode,
+      enabled: canShowActions,
+      actions: canShowActions ? _semanticActions(context) : const [],
+      onOpenMenu: (rect) => _showContextMenu(
+        context,
+        Rect.fromLTWH(
+          rect.left + 24,
+          math.min(rect.bottom, rect.top + 48),
+          0,
+          0,
+        ),
+      ),
+      child: content,
     );
   }
 
@@ -5644,11 +5784,16 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
               ),
               child: ClipRRect(
                 borderRadius: radius,
-                child: Image.network(
+                child: MotionSafeImage.network(
                   url,
+                  animated: isAnimatedImage(
+                    mimeType: widget.attachment.mimeType,
+                  ),
                   width: width,
                   height: height,
                   fit: BoxFit.cover,
+                  // Read out as "Image from Ada" by the message around it.
+                  excludeFromSemantics: true,
                   errorBuilder: (context, error, stackTrace) {
                     _resignAfterError();
                     return placeholder(
@@ -5671,6 +5816,7 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    required this.focusNode,
     required this.desktop,
     required this.bottomGap,
     required this.hint,
@@ -5716,6 +5862,9 @@ class _Composer extends StatelessWidget {
 
   /// The tray of files waiting to be sent, above the composer pill.
   final Widget? attachmentTray;
+
+  /// Focus of the text field.
+  final FocusNode focusNode;
 
   /// Desktop sizes: a 22 radius pill, a send button that is always there.
   final bool desktop;
@@ -5845,21 +5994,25 @@ class _Composer extends StatelessWidget {
     );
 
     final field = isRecordingVoice
-        ? Row(
-            children: [
-              const _RecordingDot(),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  tr('Recording...'),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: c.ink,
+        ? Semantics(
+            liveRegion: true,
+            container: true,
+            child: Row(
+              children: [
+                const ExcludeSemantics(child: _RecordingDot()),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    tr('Recording...'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: c.ink,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           )
         : Focus(
             canRequestFocus: false,
@@ -5867,6 +6020,7 @@ class _Composer extends StatelessWidget {
             onKeyEvent: onComposerKey,
             child: TextField(
               key: const ValueKey('chat-composer-field'),
+              focusNode: focusNode,
               controller: controller,
               minLines: 1,
               maxLines: 5,
@@ -5879,9 +6033,11 @@ class _Composer extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: hint,
                 hintMaxLines: 1,
+                // The composer is glass over scrolling messages: muted keeps
+                // 4.5:1 there where subtle would not.
                 hintStyle: TextStyle(
                   fontSize: desktop ? 15 : 16,
-                  color: c.subtle,
+                  color: c.muted,
                 ),
                 isDense: true,
                 filled: false,
@@ -6074,12 +6230,16 @@ class _Composer extends StatelessWidget {
                       color: c.dangerSoft,
                       borderRadius: BorderRadius.circular(WeCordRadii.md),
                     ),
-                    child: Text(
-                      errorText!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: c.dangerText,
+                    // A live region: the error is read out as it appears.
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        errorText!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: c.dangerText,
+                        ),
                       ),
                     ),
                   ),

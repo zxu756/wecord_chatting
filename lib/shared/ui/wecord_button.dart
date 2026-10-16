@@ -165,15 +165,20 @@ class WeCordButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: WeCordMotion.quick,
             curve: WeCordMotion.standard,
-            height: size.height,
+            // At least `size.height`; taller when large text needs room.
+            constraints: BoxConstraints(minHeight: size.height),
             width: expand ? double.infinity : null,
-            padding: EdgeInsets.symmetric(horizontal: size.padding),
-            alignment: expand ? Alignment.center : null,
+            padding: EdgeInsets.symmetric(
+              horizontal: size.padding,
+              vertical: size == WeCordButtonSize.small ? 6 : 8,
+            ),
             decoration: ShapeDecoration(
               color: hovered && enabled ? colors.hover : colors.fill,
               shape: const StadiumBorder(),
             ),
-            child: expand ? content : Center(widthFactor: 1, child: content),
+            child: expand
+                ? Center(child: content)
+                : Center(widthFactor: 1, heightFactor: 1, child: content),
           ),
         );
       },

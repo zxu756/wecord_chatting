@@ -36,12 +36,14 @@ class CustomEmojiImage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final image = ref.watch(circleEmojiImageProvider(storagePath));
     return switch (image) {
-      AsyncData(value: final provider?) => Image(
+      AsyncData(value: final provider?) => MotionSafeImage(
         image: provider,
         width: size,
         height: size,
         fit: BoxFit.contain,
         semanticLabel: semanticLabel,
+        // Small enough to just hold still: no play button.
+        playButton: false,
         gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) {
           // The cached signed URL may have expired: sign it again.

@@ -74,6 +74,9 @@ class WeCordApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: WeCordTheme.light(),
       darkTheme: WeCordTheme.dark(),
+      // "Increase contrast" in the platform's accessibility settings.
+      highContrastTheme: WeCordTheme.light(highContrast: true),
+      highContrastDarkTheme: WeCordTheme.dark(highContrast: true),
       themeMode: themeMode,
       locale: chinese ? const Locale('zh') : const Locale('en'),
       supportedLocales: const [Locale('en'), Locale('zh')],

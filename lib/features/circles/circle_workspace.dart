@@ -988,9 +988,15 @@ class _MemberRow extends ConsumerWidget {
       size: avatarSize,
       url: storedAvatarUrl,
       badge: presenceColor == null
-          ? SizedBox.shrink(key: ValueKey('member-offline-${profile.id}'))
+          ? Semantics(
+              label: tr('Offline'),
+              child: SizedBox.shrink(
+                key: ValueKey('member-offline-${profile.id}'),
+              ),
+            )
           : PresenceDot(
               key: ValueKey('member-online-${profile.id}'),
+              semanticLabel: (presence ?? PresenceStatus.online).label,
               color: presenceColor,
               size: avatarSize < 30
                   ? 10
@@ -1023,6 +1029,7 @@ class _MemberRow extends ConsumerWidget {
     };
 
     return GestureDetector(
+      excludeFromSemantics: true,
       onSecondaryTapUp: (details) =>
           _showActions(context, details.globalPosition),
       child: Opacity(

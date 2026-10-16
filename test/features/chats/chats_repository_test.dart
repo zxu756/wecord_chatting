@@ -632,6 +632,47 @@ void main() {
     );
   });
 
+  test('stickers, polls and forwards read the AutoMod notice', () async {
+    final dataSource = FakeChatsDataSource()
+      ..autoModNotice = {'rule_name': 'Bad words', 'reason': 'Keep it clean'}
+      ..rpcResults['send_sticker'] = null
+      ..rpcResults['create_poll'] = null
+      ..rpcResults['forward_message'] = null;
+    final repository = SupabaseChatsRepository.withDataSource(
+      dataSource,
+      currentUserId: () => 'user-1',
+    );
+    final blocked = throwsA(
+      isA<AutoModBlockedException>().having(
+        (error) => error.reason,
+        'reason',
+        'Keep it clean',
+      ),
+    );
+
+    await expectLater(
+      repository.sendSticker(conversationId: 'c-1', stickerId: 'sticker-1'),
+      blocked,
+    );
+    await expectLater(
+      repository.createPoll(
+        conversationId: 'c-2',
+        question: 'Bad?',
+        options: const ['Yes', 'No'],
+        multi: false,
+      ),
+      blocked,
+    );
+    await expectLater(
+      repository.forwardMessage(
+        sourceMessageId: 'message-1',
+        targetConversationId: 'c-3',
+      ),
+      blocked,
+    );
+    expect(dataSource.autoModNoticeCalls, ['c-1', 'c-2', 'c-3']);
+  });
+
   test('sends map slowmode refusals to SlowmodeException', () async {
     final dataSource = FakeChatsDataSource()
       ..insertError = const PostgrestException(

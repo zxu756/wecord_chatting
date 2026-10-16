@@ -1089,7 +1089,25 @@ class SupabaseCirclesRepository implements CirclesRepository {
       'post_attachment': image?.toJson(),
       'post_mentions': [for (final mention in mentions) mention.toJson()],
     });
-    return ForumPost.fromJson(payload as Map<String, dynamic>);
+    final post = payload as Map<String, dynamic>;
+    // AutoMod refuses a post quietly, so that its alerts and timeouts stay,
+    // and leaves a note of why under the forum's conversation.
+    if (post['automod_blocked'] == true) {
+      Map<String, dynamic>? notice;
+      final conversationId = post['conversation_id'];
+      if (conversationId is String) {
+        try {
+          final result = await _dataSource.rpc('take_automod_notice', {
+            'target_conversation_id': conversationId,
+          });
+          notice = result is Map<String, dynamic> ? result : null;
+        } catch (_) {
+          notice = null;
+        }
+      }
+      throw AutoModBlockedException(notice?['reason'] as String?);
+    }
+    return ForumPost.fromJson(post);
   }
 
   @override

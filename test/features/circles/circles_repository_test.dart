@@ -676,6 +676,24 @@ void main() {
       ],
     });
 
+    // AutoMod drops a refused post and says why through its notice.
+    dataSource.rpcValue = {
+      'automod_blocked': true,
+      'conversation_id': 'conv-forum',
+    };
+    await expectLater(
+      repository.createForumPost(
+        channelId: 'channel-1',
+        title: 'Bad',
+        body: 'Bad words',
+      ),
+      throwsA(isA<AutoModBlockedException>()),
+    );
+    expect(dataSource.calls.last.functionName, 'take_automod_notice');
+    expect(dataSource.calls.last.params, {
+      'target_conversation_id': 'conv-forum',
+    });
+
     dataSource.rpcValue = 'tag-new';
     await repository.setForumPostTags(threadId: 'thread-3', tagIds: const []);
     await repository.pinForumPost(threadId: 'thread-3', pinned: true);

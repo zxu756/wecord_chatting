@@ -51,4 +51,35 @@ void main() {
     expect(summary, contains('and not p.is_bot'));
     expect(summary, contains("when p.is_bot then 'bot'"));
   });
+
+  test('AutoMod drops refused stickers, polls, forwards and posts', () {
+    final sql = migration('202610160035');
+    for (final name in [
+      'send_sticker',
+      'forward_message',
+      'create_poll',
+      'create_forum_post',
+    ]) {
+      final body = functionBody(sql, name);
+      expect(
+        body,
+        contains("perform set_config('wecord.automod_soft', 'on', true);"),
+        reason: name,
+      );
+      expect(
+        body,
+        contains("perform set_config('wecord.automod_soft', 'off', true);"),
+        reason: name,
+      );
+    }
+    final post = functionBody(sql, 'create_forum_post');
+    expect(post, contains('if created_message_id is null then'));
+    expect(
+      post,
+      contains(
+        'delete from public.conversations c where c.id = created_conversation_id;',
+      ),
+    );
+    expect(post, contains("'automod_blocked', true"));
+  });
 }

@@ -26,6 +26,11 @@ final offlineSessionGuardProvider = Provider<void>((ref) {
     // Signed out while the app was closed.
     unawaited(wipe());
   }
+  // Riverpod 3 pauses a provider nothing listens to, and with it the
+  // outbox's own listener on the connection. Keep it running for as long
+  // as the app does, so queued messages go out when the connection
+  // returns even with no chat open.
+  ref.listen(outboxProvider, (previous, next) {});
   ref.listen<AsyncValue<AuthUser?>>(authStateProvider, (previous, next) {
     if (!next.hasValue) {
       return;

@@ -14,8 +14,8 @@ ClipboardFiles createClipboardFiles() {
 /// pasteboard is left to the text field.
 class MacosClipboardFiles implements ClipboardFiles {
   const MacosClipboardFiles({
-    MethodChannel channel = const MethodChannel('wecord/clipboard'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('wecord/clipboard'),
+  });
 
   final MethodChannel _channel;
 

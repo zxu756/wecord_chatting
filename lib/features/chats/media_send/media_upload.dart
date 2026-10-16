@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -94,7 +95,7 @@ final chatMediaUploaderProvider = Provider<ChatMediaUploader>((ref) {
       ref.watch(supabaseClientProvider),
       anonKey: config?.supabaseAnonKey ?? '',
     );
-  } on AssertionError {
+  } on ProviderException {
     // Supabase is not set up (as in tests).
     return const _UnavailableUploader();
   }

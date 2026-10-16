@@ -357,6 +357,9 @@ void main() {
         ],
       );
       addTearDown(created.dispose);
+      // The app keeps the outbox listened to (offlineSessionGuardProvider);
+      // Riverpod 3 pauses it, and its connection listener, otherwise.
+      created.listen(outboxProvider, (previous, next) {});
       return created;
     }
 

@@ -512,7 +512,7 @@ class SupabaseChatsRepository
         'type': type.toJson(),
         'body': body,
         'attachment': attachment,
-        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        'reply_to_message_id': ?replyToMessageId,
         if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
         if (withGroup) 'attachment_group_id': attachmentGroupId,
         if (withClientId) 'client_id': clientId,

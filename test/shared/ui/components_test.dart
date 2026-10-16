@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -266,5 +267,24 @@ void main() {
       expect(spring.curve.transform(1), 1);
       expect(spring.curve.transform(0), 0);
     }
+  });
+
+  testWidgets('the macOS app keeps the title bar strip clear', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    late EdgeInsets padding;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MacosTitleBarFrame(child: child!),
+        home: Builder(
+          builder: (context) {
+            padding = MediaQuery.paddingOf(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(padding.top, WeCordSizes.macosTitleBar);
+    expect(find.byType(MacosWindowDragArea), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 }

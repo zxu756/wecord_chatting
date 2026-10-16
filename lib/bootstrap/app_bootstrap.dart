@@ -10,6 +10,7 @@ import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
+import 'package:wecord/shared/ui/macos_title_bar.dart';
 
 Future<void> runWeCordApp() async {
   final config = AppConfig.fromMap(const {
@@ -60,8 +61,10 @@ class WeCordApp extends ConsumerWidget {
         value: WeCordTheme.overlayStyleFor(Theme.of(context).brightness),
         child: WeCordAppearance(
           glassEffects: glassEffects,
-          child: PresenceActivityListener(
-            child: child ?? const SizedBox.shrink(),
+          child: MacosTitleBarFrame(
+            child: PresenceActivityListener(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         ),
       ),

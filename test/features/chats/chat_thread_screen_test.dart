@@ -1455,11 +1455,24 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Failed — tap to retry'), findsNothing);
-      expect(find.text('Retry'), findsOneWidget);
       expect(find.text('Edit and resend'), findsNothing);
       expect(find.text('Discard'), findsOneWidget);
       expect(find.byTooltip('Retry upload'), findsOneWidget);
       expect(repository.mediaSender.calls, isEmpty);
+
+      // The wait counts down, and Retry shows when it is over.
+      expect(find.text('Retry'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(
+        find.text('Slowmode is enabled. Try again in 5 seconds.'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 6));
+      expect(
+        find.text('Slowmode is over. You can send it now.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
 
       await tester.tap(find.text('Retry'));
       await _settleMedia(tester);

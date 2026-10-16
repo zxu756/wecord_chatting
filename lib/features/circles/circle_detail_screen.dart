@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/phone_home.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -18,6 +19,7 @@ import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final circleDetailProvider = FutureProvider.autoDispose
     .family<CircleDetail, String>((ref, circleId) {
@@ -64,15 +66,19 @@ class CircleDetailScreen extends ConsumerWidget {
     void refresh() => ref.invalidate(circleDetailProvider(circleId));
 
     return detail.when(
-      loading: () => Scaffold(
-        appBar: _CircleAppBar(title: tr('Circle')),
+      loading: () => CirclePageScaffold(
+        title: tr('Circle'),
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (error, stackTrace) => error is CircleMembershipLostException
           ? CircleMembershipLostView(circleId: circleId)
-          : Scaffold(
-              appBar: _CircleAppBar(title: tr('Circle')),
-              body: Center(child: Text(error.toString())),
+          : CirclePageScaffold(
+              title: tr('Circle'),
+              body: CircleEmptyState(
+                icon: Icons.error_outline_rounded,
+                title: tr('Could not load the circle.'),
+                message: error.toString(),
+              ),
             ),
       data: (detail) => CircleOnboardingGate(
         key: ValueKey('onboarding-${detail.circle.id}'),
@@ -97,20 +103,6 @@ class CircleDetailScreen extends ConsumerWidget {
   }
 }
 
-class _CircleAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const _CircleAppBar({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBar(title: Text(title));
-  }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-}
-
 /// Narrow circle layout: the phone home frame (rail, rounded panel and the
 /// floating user panel) with the channel list in the panel. Channels open
 /// full screen on top (back returns here), and so does the feed.
@@ -133,7 +125,7 @@ class CircleMobileHome extends ConsumerWidget {
         panelBuilder: (context, bottomInset) => CircleChannelSidebar(
           detail: detail,
           width: null,
-          color: PhoneHomeColors.panel(Theme.of(context).colorScheme),
+          color: context.tokens.colors.panel,
           listBottomPadding: bottomInset,
           onChanged: onChanged,
           onChangeNickname: (member) => changeCircleNickname(
@@ -196,8 +188,8 @@ class _CircleFeedPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Feed'))),
+    return CirclePageScaffold(
+      title: tr('Feed'),
       body: ref
           .watch(circleDetailProvider(circleId))
           .when(

@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_template_repository.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Circle settings → Template: saves the circle's layout under a code
 /// others can start a circle from; syncs and deletes it.
@@ -42,8 +44,8 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
   }
 
   Future<void> _create() async {
-    final result = await showDialog<(String, String?)>(
-      context: context,
+    final result = await showCircleDialog<(String, String?)>(
+      context,
       builder: (context) => const _TemplateDetailsDialog(),
     );
     if (result == null || !mounted) {
@@ -71,31 +73,24 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
   }
 
   Future<void> _delete(CircleTemplate template) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(tr('Delete template')),
-        content: Text(
-          tr(
-            'Delete "{name}"? Its code stops working. Circles already '
-            'created from it stay as they are.',
-            {'name': template.name},
-          ),
+    final confirmed = await showCircleDialog<bool>(
+      context,
+      builder: (context) => CircleDialog(
+        title: tr('Delete template'),
+        message: tr(
+          'Delete "{name}"? Its code stops working. Circles already '
+          'created from it stay as they are.',
+          {'name': template.name},
         ),
         actions: [
-          TextButton(
+          CircleDialogAction(
+            label: tr('Cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
           ),
-          FilledButton(
+          CircleDialogAction.danger(
             key: const ValueKey('template-delete-confirm'),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
+            label: tr('Delete'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -111,9 +106,110 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final template = ref.watch(circleTemplateProvider(widget.circleId));
     final value = template.valueOrNull;
+    final List<Widget> rows;
+    if (template.isLoading && value == null) {
+      rows = [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    } else if (template.hasError) {
+      rows = [
+        SettingsRow(
+          icon: Icons.error_outline,
+          title: tr('Could not load the template.'),
+        ),
+      ];
+    } else if (value == null) {
+      rows = [
+        SettingsRow(
+          key: const ValueKey('template-create-button'),
+          icon: Icons.copy_all_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Create template'),
+          onTap: _busy ? null : _create,
+        ),
+      ];
+    } else {
+      rows = [
+        SettingsRow(
+          key: const ValueKey('template-tile'),
+          icon: Icons.dashboard_customize_outlined,
+          tone: SettingsTone.accent,
+          title: value.name,
+          subtitle: [
+            if (value.description case final description?) description,
+            tr('{channels} channels · {roles} roles · used {count} times', {
+              'channels': value.channelCount,
+              'roles': value.roleCount,
+              'count': value.usageCount,
+            }),
+          ].join('\n'),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.raised,
+                    borderRadius: BorderRadius.circular(WeCordRadii.md),
+                  ),
+                  child: SelectableText(
+                    value.code,
+                    key: const ValueKey('template-code'),
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      color: c.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              WeCordIconButton(
+                key: const ValueKey('template-copy-code'),
+                tooltip: tr('Copy code'),
+                icon: Icons.copy_outlined,
+                variant: WeCordButtonVariant.ghost,
+                onPressed: () {
+                  unawaited(Clipboard.setData(ClipboardData(text: value.code)));
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(content: Text(tr('Template code copied.'))),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        SettingsRow(
+          key: const ValueKey('template-sync-button'),
+          icon: Icons.sync,
+          title: tr('Sync template'),
+          showChevron: false,
+          onTap: _busy ? null : () => _sync(value),
+        ),
+        SettingsRow(
+          key: const ValueKey('template-delete-button'),
+          icon: Icons.delete_outline,
+          title: tr('Delete template'),
+          destructive: true,
+          showChevron: false,
+          onTap: _busy ? null : () => _delete(value),
+        ),
+      ];
+    }
     return Column(
       key: const ValueKey('circle-template-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -126,100 +222,7 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
             'can create a circle from.',
           ),
         ),
-        if (template.isLoading && value == null)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (template.hasError)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(tr('Could not load the template.')),
-          )
-        else if (value == null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('template-create-button'),
-                onPressed: _busy ? null : _create,
-                icon: const Icon(Icons.copy_all_outlined),
-                label: Text(tr('Create template')),
-              ),
-            ),
-          )
-        else ...[
-          ListTile(
-            key: const ValueKey('template-tile'),
-            leading: const Icon(Icons.dashboard_customize_outlined),
-            title: Text(value.name),
-            subtitle: Text(
-              [
-                if (value.description case final description?) description,
-                tr('{channels} channels · {roles} roles · used {count} times', {
-                  'channels': value.channelCount,
-                  'roles': value.roleCount,
-                  'count': value.usageCount,
-                }),
-              ].join('\n'),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SelectableText(
-                    value.code,
-                    key: const ValueKey('template-code'),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontFamily: 'monospace',
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  key: const ValueKey('template-copy-code'),
-                  tooltip: tr('Copy code'),
-                  icon: const Icon(Icons.copy_outlined),
-                  onPressed: () {
-                    unawaited(
-                      Clipboard.setData(ClipboardData(text: value.code)),
-                    );
-                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      SnackBar(content: Text(tr('Template code copied.'))),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('template-sync-button'),
-                  onPressed: _busy ? null : () => _sync(value),
-                  icon: const Icon(Icons.sync),
-                  label: Text(tr('Sync template')),
-                ),
-                OutlinedButton.icon(
-                  key: const ValueKey('template-delete-button'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.error,
-                  ),
-                  onPressed: _busy ? null : () => _delete(value),
-                  icon: const Icon(Icons.delete_outline),
-                  label: Text(tr('Delete template')),
-                ),
-              ],
-            ),
-          ),
-        ],
+        SettingsGroup(children: rows),
       ],
     );
   }
@@ -256,45 +259,39 @@ class _TemplateDetailsDialogState extends State<_TemplateDetailsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Create template')),
+    return CircleDialog(
+      title: tr('Create template'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            key: const ValueKey('template-name-field'),
+          WeCordTextField(
+            fieldKey: const ValueKey('template-name-field'),
             controller: _name,
             autofocus: true,
             maxLength: CircleTemplate.maxNameLength,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Template name'),
-              errorText: _error,
-            ),
+            label: tr('Template name'),
+            errorText: _error,
           ),
           const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('template-description-field'),
+          WeCordTextField(
+            fieldKey: const ValueKey('template-description-field'),
             controller: _description,
             maxLength: CircleTemplate.maxDescriptionLength,
             maxLines: 2,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Description (optional)'),
-            ),
+            label: tr('Description (optional)'),
           ),
         ],
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
           key: const ValueKey('template-details-submit'),
+          label: tr('Create'),
           onPressed: _submit,
-          child: Text(tr('Create')),
         ),
       ],
     );
@@ -304,11 +301,9 @@ class _TemplateDetailsDialogState extends State<_TemplateDetailsDialog> {
 /// Asks for a template code, previews the template and creates a circle
 /// from it. Completes with the new circle's id, or null.
 Future<String?> showUseCircleTemplateSheet(BuildContext context) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => const UseCircleTemplateSheet(),
+  return showWeCordSheet<String>(
+    context,
+    builder: (context, _) => const UseCircleTemplateSheet(),
   );
 }
 
@@ -394,83 +389,86 @@ class _UseCircleTemplateSheetState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final template = _template;
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                tr('Create from a template'),
-                style: theme.textTheme.titleLarge,
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        8,
+        20,
+        16 +
+            MediaQuery.viewInsetsOf(context).bottom +
+            MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              tr('Create from a template'),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+                color: c.ink,
               ),
-              const SizedBox(height: 12),
-              if (template == null) ...[
-                TextField(
-                  key: const ValueKey('template-code-field'),
-                  controller: _code,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: tr('Template code'),
-                    errorText: _error,
-                  ),
-                  onSubmitted: (_) => _busy ? null : _preview(),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton(
-                    key: const ValueKey('template-preview-button'),
-                    onPressed: _busy ? null : _preview,
-                    child: Text(tr('Continue')),
-                  ),
-                ),
-              ] else ...[
-                CircleTemplatePreview(template: template),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const ValueKey('template-circle-name-field'),
-                  controller: _name,
-                  maxLength: 80,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: tr('Circle name'),
-                    errorText: _error,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() {
-                              _template = null;
-                              _error = null;
-                            }),
-                      child: Text(tr('Back')),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      key: const ValueKey('template-create-circle-button'),
-                      onPressed: _busy ? null : () => _create(template),
-                      child: Text(tr('Create circle')),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 16),
+          if (template == null) ...[
+            WeCordTextField(
+              fieldKey: const ValueKey('template-code-field'),
+              controller: _code,
+              autofocus: true,
+              label: tr('Template code'),
+              errorText: _error,
+              onSubmitted: (_) => _busy ? null : _preview(),
+            ),
+            const SizedBox(height: 16),
+            WeCordButton(
+              key: const ValueKey('template-preview-button'),
+              label: tr('Continue'),
+              size: WeCordButtonSize.large,
+              expand: true,
+              loading: _busy,
+              onPressed: _busy ? null : _preview,
+            ),
+          ] else ...[
+            CircleTemplatePreview(template: template),
+            const SizedBox(height: 16),
+            WeCordTextField(
+              fieldKey: const ValueKey('template-circle-name-field'),
+              controller: _name,
+              maxLength: 80,
+              label: tr('Circle name'),
+              errorText: _error,
+            ),
+            const SizedBox(height: 12),
+            WeCordButton(
+              key: const ValueKey('template-create-circle-button'),
+              label: tr('Create circle'),
+              size: WeCordButtonSize.large,
+              expand: true,
+              loading: _busy,
+              onPressed: _busy ? null : () => _create(template),
+            ),
+            const SizedBox(height: 8),
+            WeCordButton(
+              label: tr('Back'),
+              variant: WeCordButtonVariant.secondary,
+              size: WeCordButtonSize.large,
+              expand: true,
+              onPressed: _busy
+                  ? null
+                  : () => setState(() {
+                      _template = null;
+                      _error = null;
+                    }),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -485,12 +483,13 @@ class CircleTemplatePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final categoryKeys = {for (final c in template.categories) c.key};
+    final c = context.tokens.colors;
+    final categoryKeys = {
+      for (final category in template.categories) category.key,
+    };
     Widget channelRow(CircleTemplateChannel channel) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
           children: [
             Icon(
@@ -502,14 +501,15 @@ class CircleTemplatePreview extends StatelessWidget {
                 CircleChannelKind.text => Icons.tag,
               },
               size: 16,
-              color: muted,
+              color: c.muted,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 channel.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, color: c.ink),
               ),
             ),
           ],
@@ -519,41 +519,52 @@ class CircleTemplatePreview extends StatelessWidget {
 
     return Container(
       key: const ValueKey('template-preview'),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: c.well,
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             template.name,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: c.ink,
             ),
           ),
           if (template.description case final description?)
-            Text(description, style: theme.textTheme.bodyMedium),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                description,
+                style: TextStyle(fontSize: 14, color: c.ink),
+              ),
+            ),
           const SizedBox(height: 4),
           Text(
             tr('From {circle}', {'circle': template.circleName}),
-            style: theme.textTheme.labelSmall?.copyWith(color: muted),
+            style: TextStyle(fontSize: 12, color: c.muted),
           ),
-          const Divider(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Container(height: 1, color: c.lineSoft),
+          ),
           for (final channel in template.channels)
             if (channel.categoryKey == null ||
                 !categoryKeys.contains(channel.categoryKey))
               channelRow(channel),
           for (final category in template.categories) ...[
             Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 2),
+              padding: const EdgeInsets.only(top: 10, bottom: 2),
               child: Text(
-                category.name.toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: muted,
+                category.name,
+                style: TextStyle(
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
+                  color: c.subtle,
                 ),
               ),
             ),
@@ -561,22 +572,45 @@ class CircleTemplatePreview extends StatelessWidget {
               if (channel.categoryKey == category.key) channelRow(channel),
           ],
           if (template.roles.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
                 for (final role in template.roles)
-                  Chip(
-                    visualDensity: VisualDensity.compact,
-                    avatar: Icon(
-                      Icons.circle,
-                      size: 12,
-                      color: role.color == null
-                          ? muted
-                          : Color(0xFF000000 | role.color!),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
                     ),
-                    label: Text(role.name),
+                    decoration: BoxDecoration(
+                      color: c.raised,
+                      borderRadius: BorderRadius.circular(WeCordRadii.pill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: role.color == null
+                                ? c.faint
+                                : Color(0xFF000000 | role.color!),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          role.name,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: c.ink,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),

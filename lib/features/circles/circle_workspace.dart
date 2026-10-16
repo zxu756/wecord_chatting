@@ -14,24 +14,25 @@ import 'package:wecord/features/circles/circle_feed_view.dart';
 import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
-import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
-import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/presence_status.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 typedef CircleChannelViewBuilder =
     Widget Function(
@@ -234,81 +235,131 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
 
+    final c = context.tokens.colors;
+    final edge = BorderSide(color: c.lineSoft);
+    final sidebar = ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(WeCordRadii.xl),
+      ),
+      child: CircleChannelSidebar(
+        detail: detail,
+        width: WeCordSizes.sidebarMin,
+        onChangeNickname: _changeNickname,
+        onChanged: widget.onChanged,
+        selectedChannelId: selectedChannel?.id,
+        feedSelected: selectedChannel == null,
+        selectedThreadConversationId: _openThread?.conversationId,
+        onSelectChannel: (channel) {
+          setState(() {
+            _selectedChannelId = channel.id;
+            _openThread = null;
+            _openPost = null;
+          });
+          // Like Discord, clicking a voice channel joins it.
+          if (channel.isVoice) {
+            _joinVoice(channel);
+          }
+        },
+        onOpenVoice: _openVoice,
+        onSelectFeed: () => setState(() {
+          _selectedChannelId = null;
+          _openThread = null;
+          _openPost = null;
+        }),
+        onSelectThread: _selectThread,
+      ),
+    );
+
     return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CircleChannelSidebar(
-            detail: detail,
-            onChangeNickname: _changeNickname,
-            onChanged: widget.onChanged,
-            selectedChannelId: selectedChannel?.id,
-            feedSelected: selectedChannel == null,
-            selectedThreadConversationId: _openThread?.conversationId,
-            onSelectChannel: (channel) {
-              setState(() {
-                _selectedChannelId = channel.id;
-                _openThread = null;
-                _openPost = null;
-              });
-              // Like Discord, clicking a voice channel joins it.
-              if (channel.isVoice) {
-                _joinVoice(channel);
-              }
-            },
-            onOpenVoice: _openVoice,
-            onSelectFeed: () => setState(() {
-              _selectedChannelId = null;
-              _openThread = null;
-              _openPost = null;
-            }),
-            onSelectThread: _selectThread,
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: selectedChannel == null
-                ? Scaffold(
-                    appBar: AppBar(
-                      title: Text(tr('Feed')),
-                      actions: [memberToggle.toIconButton()],
-                    ),
-                    body: CircleFeedView(
-                      circleId: detail.circle.id,
-                      posts: detail.posts,
-                      onChanged: widget.onChanged,
-                    ),
-                  )
-                : widget.channelViewBuilder?.call(context, selectedChannel, [
-                        ?followChannel?.toIconButton(),
-                        memberToggle.toIconButton(),
-                        ?channelSettings?.toIconButton(),
+      backgroundColor: c.rail,
+      body: Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            sidebar,
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: c.panel,
+                  border: Border(left: edge),
+                ),
+                child: selectedChannel == null
+                    ? Scaffold(
+                        backgroundColor: c.panel,
+                        appBar: AppBar(
+                          toolbarHeight: 58,
+                          titleSpacing: 22,
+                          shape: Border(bottom: BorderSide(color: c.lineSoft)),
+                          title: Row(
+                            children: [
+                              Icon(
+                                Icons.dynamic_feed_outlined,
+                                size: 18,
+                                color: c.muted,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                tr('Feed'),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: c.ink,
+                                ),
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            memberToggle.toIconButton(),
+                            const SizedBox(width: 10),
+                          ],
+                        ),
+                        body: CircleFeedView(
+                          circleId: detail.circle.id,
+                          posts: detail.posts,
+                          onChanged: widget.onChanged,
+                        ),
+                      )
+                    : widget.channelViewBuilder
+                              ?.call(context, selectedChannel, [
+                                ?followChannel?.toIconButton(),
+                                memberToggle.toIconButton(),
+                                ?channelSettings?.toIconButton(),
+                              ]) ??
+                          _defaultChannelView(selectedChannel, [
+                            ?followChannel,
+                            memberToggle,
+                            ?channelSettings,
+                          ]),
+              ),
+            ),
+            if (_openThread case final thread?)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: c.panel,
+                  border: Border(left: edge),
+                ),
+                child: SizedBox(
+                  key: const ValueKey('circle-thread-panel'),
+                  width: CircleWorkspace.threadPanelWidth,
+                  child:
+                      widget.threadViewBuilder?.call(context, thread, [
+                        closeThread.toIconButton(),
                       ]) ??
-                      _defaultChannelView(selectedChannel, [
-                        ?followChannel,
-                        memberToggle,
-                        ?channelSettings,
-                      ]),
-          ),
-          if (_openThread case final thread?) ...[
-            const VerticalDivider(width: 1),
-            SizedBox(
-              key: const ValueKey('circle-thread-panel'),
-              width: CircleWorkspace.threadPanelWidth,
-              child:
-                  widget.threadViewBuilder?.call(context, thread, [
-                    closeThread.toIconButton(),
-                  ]) ??
-                  _defaultThreadView(thread, [closeThread]),
-            ),
-          ] else if (showMembers) ...[
-            const VerticalDivider(width: 1),
-            CircleMemberList(
-              detail: detail,
-              onlineUserIds: onlineUserIds,
-              onChangeNickname: _changeNickname,
-            ),
+                      _defaultThreadView(thread, [closeThread]),
+                ),
+              )
+            else if (showMembers)
+              DecoratedBox(
+                decoration: BoxDecoration(border: Border(left: edge)),
+                child: CircleMemberList(
+                  detail: detail,
+                  onlineUserIds: onlineUserIds,
+                  onChangeNickname: _changeNickname,
+                ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -518,31 +569,17 @@ Future<void> kickCircleMember(
   required CircleMember member,
 }) async {
   final name = member.displayName;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      title: Text(tr('Kick {name}', {'name': name})),
-      content: Text(
-        tr(
-          'Remove {name} from this circle and all of its channels? They can '
-          'rejoin with an invite.',
-          {'name': name},
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(tr('Cancel')),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(tr('Kick')),
-        ),
-      ],
+  final confirmed = await confirmCircleAction(
+    context,
+    title: tr('Kick {name}', {'name': name}),
+    message: tr(
+      'Remove {name} from this circle and all of its channels? They can '
+      'rejoin with an invite.',
+      {'name': name},
     ),
+    confirmLabel: tr('Kick'),
   );
-  if (confirmed != true || !context.mounted) {
+  if (!confirmed || !context.mounted) {
     return;
   }
   final messenger = ScaffoldMessenger.maybeOf(context);
@@ -570,8 +607,8 @@ Future<String?> showCircleNicknameDialog(
   required CircleMember member,
   required bool isSelf,
 }) {
-  return showDialog<String>(
-    context: context,
+  return showCircleDialog<String>(
+    context,
     builder: (context) => _NicknameDialog(member: member, isSelf: isSelf),
   );
 }
@@ -605,47 +642,30 @@ class _NicknameDialogState extends State<_NicknameDialog> {
     final fallbackName = profile.displayName.trim().isEmpty
         ? profile.username
         : profile.displayName;
-    return AlertDialog(
-      scrollable: true,
-      title: Text(
-        widget.isSelf ? tr('Change my nickname') : tr('Change nickname'),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.isSelf
-                ? tr('Only shown in this circle.')
-                : tr('Only shown in this circle for {name}.', {
-                    'name': fallbackName,
-                  }),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            maxLength: maxCircleNicknameLength,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Nickname'),
-              hintText: fallbackName,
-            ),
-            onSubmitted: (_) => _save(),
-          ),
-        ],
+    return CircleDialog(
+      title: widget.isSelf ? tr('Change my nickname') : tr('Change nickname'),
+      message: widget.isSelf
+          ? tr('Only shown in this circle.')
+          : tr('Only shown in this circle for {name}.', {'name': fallbackName}),
+      content: WeCordTextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: maxCircleNicknameLength,
+        label: tr('Nickname'),
+        hint: fallbackName,
+        onSubmitted: (_) => _save(),
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
         if (widget.member.nickname != null)
-          TextButton(
+          CircleDialogAction(
+            label: tr('Reset'),
             onPressed: () => Navigator.of(context).pop(''),
-            child: Text(tr('Reset')),
           ),
-        FilledButton(onPressed: _save, child: Text(tr('Save'))),
+        CircleDialogAction.primary(label: tr('Save'), onPressed: _save),
       ],
     );
   }
@@ -654,11 +674,9 @@ class _NicknameDialogState extends State<_NicknameDialog> {
 const maxCircleNicknameLength = 32;
 
 void showCircleInviteSheet(BuildContext context, CircleDetail detail) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => CircleInviteSheet(detail: detail),
+  showWeCordSheet<void>(
+    context,
+    builder: (context, _) => CircleInviteSheet(detail: detail),
   );
 }
 
@@ -670,10 +688,9 @@ void showCircleChannelCreationSheet(
   List<CircleChannelCategory> categories = const [],
   String? initialCategoryId,
 }) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  showCircleChannelPanel<void>(
+    context,
+    title: tr('Create channel'),
     builder: (context) => CircleChannelCreationSheet(
       circleId: circleId,
       categories: categories,
@@ -692,10 +709,13 @@ class CircleMemberList extends ConsumerWidget {
     required this.onlineUserIds,
     required this.onChangeNickname,
     this.width = defaultWidth,
+    this.color,
+    this.scrollController,
+    this.compact = true,
     super.key,
   });
 
-  static const defaultWidth = 240.0;
+  static const defaultWidth = 248.0;
 
   final CircleDetail detail;
   final Set<String> onlineUserIds;
@@ -703,6 +723,15 @@ class CircleMemberList extends ConsumerWidget {
 
   /// Fixed width, or null to fill the available space.
   final double? width;
+
+  /// The background; the sidebar color by default.
+  final Color? color;
+
+  /// Drives the list, e.g. inside a sheet with detents.
+  final ScrollController? scrollController;
+
+  /// Desktop density (32 avatars); phones use roomier rows.
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -731,7 +760,8 @@ class CircleMemberList extends ConsumerWidget {
     }
     online.sort(byRank);
     offline.sort(_compareNames);
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
+    final background = color ?? c.sidebar;
     final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
     final circleAvatars =
         ref.watch(circleMemberAvatarsProvider(detail.circle.id)).valueOrNull ??
@@ -744,24 +774,34 @@ class CircleMemberList extends ConsumerWidget {
     ];
 
     return Material(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: background,
       child: SizedBox(
         width: width,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
+          controller: scrollController,
+          padding: EdgeInsets.fromLTRB(
+            10,
+            compact ? 14 : 4,
+            10,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
-            for (final (label, groupMembers, isOnline) in groups)
+            for (final (index, (label, groupMembers, isOnline))
+                in groups.indexed)
               if (groupMembers.isNotEmpty) ...[
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                  child: Text(
-                    '${label.toUpperCase()} — ${groupMembers.length}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.4,
-                      color: theme.colorScheme.onSurfaceVariant,
+                  padding: EdgeInsets.fromLTRB(8, index == 0 ? 4 : 12, 8, 4),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      '$label — ${groupMembers.length}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 11.5 : 12,
+                        fontWeight: FontWeight.w700,
+                        color: c.subtle,
+                      ),
                     ),
                   ),
                 ),
@@ -769,6 +809,8 @@ class CircleMemberList extends ConsumerWidget {
                   _MemberRow(
                     member: member,
                     isOnline: isOnline,
+                    compact: compact,
+                    background: background,
                     circleAvatarUrl: circleAvatars[member.profile.id],
                     presence: presenceOf(
                       member.profile.id,
@@ -841,6 +883,8 @@ class _MemberRow extends ConsumerWidget {
   const _MemberRow({
     required this.member,
     required this.isOnline,
+    required this.compact,
+    required this.background,
     this.presence,
     this.circleAvatarUrl,
     this.roleColor,
@@ -854,6 +898,10 @@ class _MemberRow extends ConsumerWidget {
 
   final CircleMember member;
   final bool isOnline;
+  final bool compact;
+
+  /// What the row sits on, for the presence dot's ring.
+  final Color background;
 
   /// Online, Idle or Do Not Disturb; null while offline.
   final PresenceStatus? presence;
@@ -878,96 +926,134 @@ class _MemberRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     final profile = member.profile;
     final storedAvatarUrl = circleAvatarUrl ?? profile.avatarUrl;
-    final avatarUrl = ref
-        .watch(avatarDisplayUrlProvider(storedAvatarUrl))
-        .valueOrNull;
     final name = member.displayName;
     final roleIcon = switch (member.role) {
       'owner' => Icons.workspace_premium_outlined,
       'admin' => Icons.shield_outlined,
       _ => null,
     };
+    final presenceColor = switch (isOnline
+        ? presence ?? PresenceStatus.online
+        : null) {
+      PresenceStatus.online => c.success,
+      PresenceStatus.idle => c.warning,
+      PresenceStatus.doNotDisturb => c.danger,
+      _ => null,
+    };
+    final avatarSize = compact ? 32.0 : 40.0;
+    final avatar = CircleNetworkAvatar(
+      name: name,
+      size: avatarSize,
+      url: storedAvatarUrl,
+      badge: presenceColor == null
+          ? SizedBox.shrink(key: ValueKey('member-offline-${profile.id}'))
+          : PresenceDot(
+              key: ValueKey('member-online-${profile.id}'),
+              color: presenceColor,
+              size: compact ? 12 : 14,
+              ringColor: background,
+            ),
+    );
+    final status = activeCustomStatus(profile.customStatus) == null
+        ? null
+        : CustomStatusLabel(status: profile.customStatus);
+    final trailing = switch ((member.activeTimeoutUntil, roleIcon)) {
+      (final until?, _) => Tooltip(
+        message: tr('Timed out until {time}', {
+          'time': formatTimeoutEnd(until),
+        }),
+        child: Icon(
+          Icons.timer_outlined,
+          key: ValueKey('member-timed-out-${profile.id}'),
+          size: 16,
+          color: c.dangerText,
+        ),
+      ),
+      (null, final icon?) => Tooltip(
+        message: member.role == 'owner' ? tr('Owner') : tr('Admin'),
+        child: Icon(icon, size: 15, color: c.subtle),
+      ),
+      (null, null) => null,
+    };
 
     return GestureDetector(
-      onSecondaryTap: () => _showActions(context),
+      onSecondaryTapUp: (details) =>
+          _showActions(context, details.globalPosition),
       child: Opacity(
         opacity: isOnline ? 1 : 0.55,
-        child: ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          leading: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundImage: avatarUrl == null
-                    ? null
-                    : NetworkImage(avatarUrl),
-                onBackgroundImageError: avatarUrl == null
-                    ? null
-                    : (_, _) => refreshAvatarDisplayUrl(ref, storedAvatarUrl),
-                child: avatarUrl == null
-                    ? Text(name.characters.first.toUpperCase())
-                    : null,
+        child: WeCordPressable(
+          onPressed: () => _openProfile(context),
+          onLongPress: () => _showActions(context, null),
+          pressedScale: 0.98,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WeCordRadii.sm),
+          ),
+          builder: (context, states) {
+            final hovered =
+                states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.pressed);
+            return AnimatedContainer(
+              duration: WeCordMotion.quick,
+              constraints: BoxConstraints(
+                minHeight: usesTouchInput(context) ? minTouchTargetSize : 0,
               ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: PresenceIndicator(
-                  key: ValueKey(
-                    isOnline
-                        ? 'member-online-${profile.id}'
-                        : 'member-offline-${profile.id}',
+              padding: EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: compact ? 5 : 6,
+              ),
+              decoration: BoxDecoration(
+                color: hovered
+                    ? c.ink.withValues(alpha: 0.05)
+                    : c.ink.withValues(alpha: 0),
+                borderRadius: BorderRadius.circular(WeCordRadii.sm),
+              ),
+              child: Row(
+                children: [
+                  avatar,
+                  SizedBox(width: compact ? 10 : 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: compact ? 13.5 : 15,
+                                  fontWeight: roleColor == null
+                                      ? FontWeight.w600
+                                      : FontWeight.w700,
+                                  color: switch (roleColor) {
+                                    final color? => circleRoleColor(color),
+                                    null => c.ink,
+                                  },
+                                ),
+                              ),
+                            ),
+                            ProfileNameBadges(userId: profile.id),
+                          ],
+                        ),
+                        if (status != null)
+                          DefaultTextStyle.merge(
+                            style: TextStyle(fontSize: 11.5, color: c.muted),
+                            child: status,
+                          ),
+                      ],
+                    ),
                   ),
-                  status: isOnline ? presence ?? PresenceStatus.online : null,
-                  borderColor: colorScheme.surfaceContainerLow,
-                ),
+                  if (trailing != null) ...[const SizedBox(width: 6), trailing],
+                ],
               ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: switch (roleColor) {
-                    final color? => TextStyle(color: circleRoleColor(color)),
-                    null => null,
-                  },
-                ),
-              ),
-              ProfileNameBadges(userId: profile.id),
-            ],
-          ),
-          subtitle: activeCustomStatus(profile.customStatus) == null
-              ? null
-              : CustomStatusLabel(status: profile.customStatus),
-          trailing: switch ((member.activeTimeoutUntil, roleIcon)) {
-            (final until?, _) => Tooltip(
-              message: tr('Timed out until {time}', {
-                'time': formatTimeoutEnd(until),
-              }),
-              child: Icon(
-                Icons.timer_outlined,
-                key: ValueKey('member-timed-out-${profile.id}'),
-                size: 16,
-                color: colorScheme.error,
-              ),
-            ),
-            (null, final icon?) => Tooltip(
-              message: member.role == 'owner' ? tr('Owner') : tr('Admin'),
-              child: Icon(icon, size: 16),
-            ),
-            (null, null) => null,
+            );
           },
-          onTap: () => _openProfile(context),
-          onLongPress: () => _showActions(context),
         ),
       ),
     );
@@ -977,99 +1063,87 @@ class _MemberRow extends ConsumerWidget {
     context.push('${UserProfileScreen.path}/${member.profile.id}');
   }
 
-  void _showActions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        // Scrolls when a moderator's actions don't fit short phones.
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: Text(tr('View profile')),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _openProfile(context);
-                  },
-                ),
-                if (onChangeNickname != null)
-                  ListTile(
-                    leading: const Icon(Icons.badge_outlined),
-                    title: Text(tr('Change nickname')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onChangeNickname!();
-                    },
-                  ),
-                if (onManageRoles != null)
-                  ListTile(
-                    leading: const Icon(Icons.shield_outlined),
-                    title: Text(tr('Manage roles')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onManageRoles!();
-                    },
-                  ),
-                if (onTimeOut != null)
-                  ListTile(
-                    leading: const Icon(Icons.timer_outlined),
-                    title: Text(tr('Time out')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onTimeOut!();
-                    },
-                  ),
-                if (onRemoveTimeout != null)
-                  ListTile(
-                    leading: const Icon(Icons.timer_off_outlined),
-                    title: Text(tr('Remove timeout')),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onRemoveTimeout!();
-                    },
-                  ),
-                if (onKick != null)
-                  ListTile(
-                    leading: Icon(
-                      Icons.person_remove_outlined,
-                      color: Theme.of(sheetContext).colorScheme.error,
-                    ),
-                    title: Text(
-                      tr('Kick'),
-                      style: TextStyle(
-                        color: Theme.of(sheetContext).colorScheme.error,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onKick!();
-                    },
-                  ),
-                if (onBan != null)
-                  ListTile(
-                    leading: Icon(
-                      Icons.block,
-                      color: Theme.of(sheetContext).colorScheme.error,
-                    ),
-                    title: Text(
-                      tr('Ban'),
-                      style: TextStyle(
-                        color: Theme.of(sheetContext).colorScheme.error,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onBan!();
-                    },
-                  ),
-              ],
-            ),
+  Future<void> _showActions(BuildContext context, Offset? position) async {
+    final action = await showCircleActionMenu<_MemberAction>(
+      context,
+      title: member.displayName,
+      position: position,
+      items: [
+        CircleMenuItem(
+          value: _MemberAction.profile,
+          icon: Icons.person_outline,
+          label: tr('View profile'),
+        ),
+        if (onChangeNickname != null)
+          CircleMenuItem(
+            value: _MemberAction.nickname,
+            icon: Icons.badge_outlined,
+            label: tr('Change nickname'),
           ),
-        );
-      },
+        if (onManageRoles != null)
+          CircleMenuItem(
+            value: _MemberAction.roles,
+            icon: Icons.shield_outlined,
+            label: tr('Manage roles'),
+          ),
+        if (onTimeOut != null)
+          CircleMenuItem(
+            value: _MemberAction.timeOut,
+            icon: Icons.timer_outlined,
+            label: tr('Time out'),
+          ),
+        if (onRemoveTimeout != null)
+          CircleMenuItem(
+            value: _MemberAction.removeTimeout,
+            icon: Icons.timer_off_outlined,
+            label: tr('Remove timeout'),
+          ),
+        if (onKick != null)
+          CircleMenuItem(
+            value: _MemberAction.kick,
+            icon: Icons.person_remove_outlined,
+            label: tr('Kick'),
+            destructive: true,
+          ),
+        if (onBan != null)
+          CircleMenuItem(
+            value: _MemberAction.ban,
+            icon: Icons.block,
+            label: tr('Ban'),
+            destructive: true,
+          ),
+      ],
     );
+    if (!context.mounted) {
+      return;
+    }
+    switch (action) {
+      case _MemberAction.profile:
+        _openProfile(context);
+      case _MemberAction.nickname:
+        onChangeNickname?.call();
+      case _MemberAction.roles:
+        onManageRoles?.call();
+      case _MemberAction.timeOut:
+        onTimeOut?.call();
+      case _MemberAction.removeTimeout:
+        onRemoveTimeout?.call();
+      case _MemberAction.kick:
+        onKick?.call();
+      case _MemberAction.ban:
+        onBan?.call();
+      case null:
+        break;
+    }
   }
+}
+
+enum _MemberAction {
+  profile,
+  nickname,
+  roles,
+  timeOut,
+  removeTimeout,
+  kick,
+  ban,
 }

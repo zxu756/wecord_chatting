@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// A channel's webhooks, for members who can manage them.
 final channelWebhooksProvider = FutureProvider.autoDispose
@@ -57,8 +59,8 @@ class _ChannelWebhooksSectionState
   }
 
   Future<void> _create() async {
-    final name = await showDialog<String>(
-      context: context,
+    final name = await showCircleDialog<String>(
+      context,
       builder: (context) => _WebhookNameDialog(
         title: tr('New webhook'),
         action: tr('Create'),
@@ -81,8 +83,8 @@ class _ChannelWebhooksSectionState
   }
 
   Future<void> _rename(ChannelWebhook webhook) async {
-    final name = await showDialog<String>(
-      context: context,
+    final name = await showCircleDialog<String>(
+      context,
       builder: (context) => _WebhookNameDialog(
         title: tr('Rename webhook'),
         action: tr('Save'),
@@ -147,28 +149,27 @@ class _ChannelWebhooksSectionState
     required String action,
     bool destructive = false,
   }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(title),
-        content: Text(message),
+    final confirmed = await showCircleDialog<bool>(
+      context,
+      builder: (context) => CircleDialog(
+        title: title,
+        message: message,
         actions: [
-          TextButton(
+          CircleDialogAction(
+            label: tr('Cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
           ),
-          FilledButton(
-            key: const ValueKey('webhook-confirm'),
-            style: destructive
-                ? FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  )
-                : null,
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(action),
-          ),
+          destructive
+              ? CircleDialogAction.danger(
+                  key: const ValueKey('webhook-confirm'),
+                  label: action,
+                  onPressed: () => Navigator.of(context).pop(true),
+                )
+              : CircleDialogAction.primary(
+                  key: const ValueKey('webhook-confirm'),
+                  label: action,
+                  onPressed: () => Navigator.of(context).pop(true),
+                ),
         ],
       ),
     );
@@ -177,8 +178,8 @@ class _ChannelWebhooksSectionState
 
   Future<void> _showUrl(ChannelWebhookSecret secret, {required bool created}) {
     final supabaseUrl = ref.read(appConfigProvider)?.supabaseUrl;
-    return showDialog<void>(
-      context: context,
+    return showCircleDialog<void>(
+      context,
       builder: (context) => _WebhookUrlDialog(
         title: created ? tr('Webhook created') : tr('New webhook URL'),
         url: supabaseUrl == null ? null : secret.urlFor(supabaseUrl),
@@ -186,98 +187,188 @@ class _ChannelWebhooksSectionState
     );
   }
 
+  Future<void> _openMenu(ChannelWebhook webhook, Offset? position) async {
+    final action = await showCircleActionMenu<_WebhookAction>(
+      context,
+      title: webhook.name,
+      position: position,
+      items: [
+        CircleMenuItem(
+          value: _WebhookAction.rename,
+          icon: Icons.edit_outlined,
+          label: tr('Rename'),
+        ),
+        CircleMenuItem(
+          value: _WebhookAction.regenerate,
+          icon: Icons.autorenew_rounded,
+          label: tr('Regenerate URL'),
+        ),
+        CircleMenuItem(
+          value: _WebhookAction.delete,
+          icon: Icons.delete_outline,
+          label: tr('Delete'),
+          destructive: true,
+        ),
+      ],
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    unawaited(switch (action) {
+      _WebhookAction.rename => _rename(webhook),
+      _WebhookAction.regenerate => _regenerate(webhook),
+      _WebhookAction.delete => _delete(webhook),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final webhooks = ref.watch(channelWebhooksProvider(widget.channel.id));
+    final list = webhooks.valueOrNull;
     return Column(
       key: const ValueKey('channel-integrations'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(
-            tr('Integrations'),
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.primary,
+        SettingsSectionHeader(tr('Integrations')),
+        SettingsGroup(
+          children: [
+            ...webhooks.when(
+              loading: () => const [
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ],
+              error: (error, stackTrace) => [
+                _WebhookNote(tr('Could not load webhooks.')),
+              ],
+              data: (webhooks) => [
+                if (webhooks.isEmpty) _WebhookNote(tr('No webhooks yet.')),
+                for (final webhook in webhooks)
+                  _WebhookRow(
+                    key: ValueKey('webhook-${webhook.id}'),
+                    webhook: webhook,
+                    busy: _busy,
+                    onMenu: (position) => _openMenu(webhook, position),
+                  ),
+              ],
             ),
-          ),
+            SettingsRow(
+              key: const ValueKey('webhook-create-button'),
+              icon: Icons.add_rounded,
+              tone: SettingsTone.accent,
+              title: tr('New webhook'),
+              showChevron: false,
+              onTap: _busy || list == null || list.length >= 10
+                  ? null
+                  : _create,
+            ),
+          ],
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
           child: Text(
             tr(
               'Webhooks let other services post messages here. Anyone with a '
               "webhook's URL can post, so keep it secret.",
             ),
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        webhooks.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (error, stackTrace) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(tr('Could not load webhooks.')),
-          ),
-          data: (webhooks) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (webhooks.isEmpty)
-                ListTile(title: Text(tr('No webhooks yet.'))),
-              for (final webhook in webhooks)
-                ListTile(
-                  key: ValueKey('webhook-${webhook.id}'),
-                  leading: const CircleAvatar(child: Icon(Icons.smart_toy)),
-                  title: Text(
-                    webhook.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(_webhookSubtitle(webhook)),
-                  trailing: PopupMenuButton<_WebhookAction>(
-                    key: ValueKey('webhook-menu-${webhook.id}'),
-                    tooltip: tr('Webhook actions'),
-                    enabled: !_busy,
-                    onSelected: (action) => unawaited(switch (action) {
-                      _WebhookAction.rename => _rename(webhook),
-                      _WebhookAction.regenerate => _regenerate(webhook),
-                      _WebhookAction.delete => _delete(webhook),
-                    }),
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: _WebhookAction.rename,
-                        child: Text(tr('Rename')),
-                      ),
-                      PopupMenuItem(
-                        value: _WebhookAction.regenerate,
-                        child: Text(tr('Regenerate URL')),
-                      ),
-                      PopupMenuItem(
-                        value: _WebhookAction.delete,
-                        child: Text(tr('Delete')),
-                      ),
-                    ],
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('webhook-create-button'),
-                    onPressed: _busy || webhooks.length >= 10 ? null : _create,
-                    icon: const Icon(Icons.add),
-                    label: Text(tr('New webhook')),
-                  ),
-                ),
-              ),
-            ],
+            style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One webhook: bot tile, name, who made it and when it was last used,
+/// and its actions.
+class _WebhookRow extends StatelessWidget {
+  const _WebhookRow({
+    required this.webhook,
+    required this.busy,
+    required this.onMenu,
+    super.key,
+  });
+
+  final ChannelWebhook webhook;
+  final bool busy;
+  final ValueChanged<Offset?> onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+      child: Row(
+        children: [
+          ThingAvatar(
+            label: webhook.name,
+            size: 36,
+            icon: Icons.smart_toy_outlined,
+            color: c.accentSoft,
+            foregroundColor: c.accentText,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  webhook.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _webhookSubtitle(webhook),
+                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                ),
+              ],
+            ),
+          ),
+          Builder(
+            builder: (buttonContext) => WeCordIconButton(
+              key: ValueKey('webhook-menu-${webhook.id}'),
+              tooltip: tr('Webhook actions'),
+              icon: Icons.more_horiz_rounded,
+              variant: WeCordButtonVariant.ghost,
+              size: 36,
+              onPressed: busy
+                  ? null
+                  : () {
+                      final box =
+                          buttonContext.findRenderObject() as RenderBox?;
+                      onMenu(
+                        box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+                      );
+                    },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebhookNote extends StatelessWidget {
+  const _WebhookNote(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 14, color: context.tokens.colors.muted),
+      ),
     );
   }
 }
@@ -331,30 +422,26 @@ class _WebhookNameDialogState extends State<_WebhookNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(widget.title),
-      content: TextField(
-        key: const ValueKey('webhook-name-field'),
+    return CircleDialog(
+      title: widget.title,
+      content: WeCordTextField(
+        fieldKey: const ValueKey('webhook-name-field'),
         controller: _controller,
         autofocus: true,
         maxLength: ChannelWebhook.maxNameLength,
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          labelText: tr('Name'),
-          errorText: _errorText,
-        ),
+        label: tr('Name'),
+        errorText: _errorText,
         onSubmitted: (_) => _submit(),
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
           key: const ValueKey('webhook-name-submit'),
+          label: widget.action,
           onPressed: _submit,
-          child: Text(widget.action),
         ),
       ],
     );
@@ -372,43 +459,55 @@ class _WebhookUrlDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final url = this.url;
-    return AlertDialog(
-      scrollable: true,
-      title: Text(title),
+    return CircleDialog(
+      title: title,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.warning_amber, color: theme.colorScheme.error),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  tr(
-                    'Copy this URL now: it is shown only once. Anyone with it '
-                    'can post in this channel.',
-                  ),
-                  style: theme.textTheme.bodyMedium,
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: c.warningSoft,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 20,
+                  color: c.warningText,
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    tr(
+                      'Copy this URL now: it is shown only once. Anyone with it '
+                      'can post in this channel.',
+                    ),
+                    style: TextStyle(fontSize: 13.5, color: c.ink, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
+              color: c.raised,
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
             ),
             child: SelectableText(
               url ?? tr('The app does not know its server address.'),
               key: const ValueKey('webhook-url'),
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: TextStyle(
+                fontSize: 12.5,
                 fontFamily: 'monospace',
+                color: c.ink,
               ),
             ),
           ),
@@ -418,26 +517,25 @@ class _WebhookUrlDialog extends StatelessWidget {
               'POST JSON like {"content": "Hello"} to it; "username" and '
               '"avatar_url" are optional.',
             ),
-            style: theme.textTheme.bodySmall,
+            style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
           ),
         ],
       ),
       actions: [
         if (url != null)
-          TextButton.icon(
+          CircleDialogAction(
             key: const ValueKey('webhook-copy-url'),
+            label: tr('Copy'),
             onPressed: () {
               unawaited(Clipboard.setData(ClipboardData(text: url)));
               ScaffoldMessenger.maybeOf(
                 context,
               )?.showSnackBar(SnackBar(content: Text(tr('URL copied.'))));
             },
-            icon: const Icon(Icons.copy),
-            label: Text(tr('Copy')),
           ),
-        FilledButton(
+        CircleDialogAction.primary(
+          label: tr('Done'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Done')),
         ),
       ],
     );

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class CircleCreationSheet extends ConsumerStatefulWidget {
   const CircleCreationSheet({super.key});
@@ -30,8 +32,10 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final friendsFuture = ref.watch(contactsRepositoryProvider).listFriends();
     return SafeArea(
+      top: false,
       child: Padding(
         // Lifts the sheet above the keyboard, so the content scrolls
         // within the space left instead of hiding behind it.
@@ -39,95 +43,97 @@ class _CircleCreationSheetState extends ConsumerState<CircleCreationSheet> {
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
           child: FutureBuilder<List<Profile>>(
             future: friendsFuture,
             builder: (context, snapshot) {
               final friends = snapshot.data ?? const <Profile>[];
               return Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    tr('Create Circle'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TextButton.icon(
-                      key: const ValueKey('use-template-button'),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      tr('Create Circle'),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: c.ink,
                       ),
-                      onPressed: _isSaving ? null : _useTemplate,
-                      icon: const Icon(Icons.dashboard_customize_outlined),
-                      label: Text(tr('Use a template code')),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
+                  const SizedBox(height: 4),
+                  Text(
+                    tr('A home for your people: channels, voice and events.'),
+                    style: TextStyle(fontSize: 14, color: c.muted),
+                  ),
+                  const SizedBox(height: 16),
+                  WeCordTextField(
                     controller: _nameController,
                     autofocus: true,
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: tr('Circle name'),
+                    label: tr('Circle name'),
+                    errorText: _errorText,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _isSaving ? null : _createCircle(),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: WeCordButton(
+                      key: const ValueKey('use-template-button'),
+                      variant: WeCordButtonVariant.secondary,
+                      size: WeCordButtonSize.small,
+                      icon: Icons.dashboard_customize_outlined,
+                      label: tr('Use a template code'),
+                      onPressed: _isSaving ? null : _useTemplate,
                     ),
                   ),
                   if (friends.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      tr('Invite friends'),
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
+                    SettingsSectionHeader(tr('Invite friends')),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 240),
-                      child: ListView(
-                        shrinkWrap: true,
+                      constraints: const BoxConstraints(maxHeight: 248),
+                      child: SettingsGroup(
+                        color: c.well,
                         children: [
-                          for (final friend in friends)
-                            CheckboxListTile(
-                              value: _selectedFriendIds.contains(friend.id),
-                              title: Text(friend.displayLabel),
-                              subtitle: Text('@${friend.username}'),
-                              onChanged: _isSaving
-                                  ? null
-                                  : (selected) {
-                                      setState(() {
-                                        if (selected == true) {
-                                          _selectedFriendIds.add(friend.id);
-                                        } else {
-                                          _selectedFriendIds.remove(friend.id);
-                                        }
-                                      });
-                                    },
+                          Flexible(
+                            child: ListView(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              children: [
+                                for (final friend in friends)
+                                  CircleFriendPickRow(
+                                    friend: friend,
+                                    selected: _selectedFriendIds.contains(
+                                      friend.id,
+                                    ),
+                                    onChanged: _isSaving
+                                        ? null
+                                        : (selected) => setState(() {
+                                            if (selected) {
+                                              _selectedFriendIds.add(friend.id);
+                                            } else {
+                                              _selectedFriendIds.remove(
+                                                friend.id,
+                                              );
+                                            }
+                                          }),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),
                   ],
-                  if (_errorText != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _errorText!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      onPressed: _isSaving ? null : _createCircle,
-                      child: _isSaving
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(tr('Create')),
-                    ),
+                  const SizedBox(height: 20),
+                  WeCordButton(
+                    label: tr('Create'),
+                    expand: true,
+                    size: WeCordButtonSize.large,
+                    loading: _isSaving,
+                    onPressed: _isSaving ? null : _createCircle,
                   ),
                 ],
               );

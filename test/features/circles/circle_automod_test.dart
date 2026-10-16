@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class FakeRpcDataSource implements RpcDataSource {
   final calls = <({String name, Map<String, dynamic> params})>[];
@@ -164,7 +165,7 @@ void main() {
     expect(find.text('Mention spam'), findsOneWidget);
     expect(find.text('Spam'), findsOneWidget);
 
-    await tester.tap(find.byType(Switch).first);
+    await tester.tap(find.byType(WeCordSwitch).first);
     await tester.pumpAndSettle();
 
     final save = dataSource.calls.firstWhere(

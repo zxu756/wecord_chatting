@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_bot_repository.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/message_origin.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 enum _BotAction { regenerate, revoke, delete }
 
@@ -49,8 +51,8 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
   }
 
   Future<void> _create() async {
-    final result = await showDialog<(String, CircleRole?)>(
-      context: context,
+    final result = await showCircleDialog<(String, CircleRole?)>(
+      context,
       builder: (context) => _NewBotDialog(roles: widget.detail.assignableRoles),
     );
     if (result == null || !mounted) {
@@ -97,28 +99,27 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
         tr('Delete'),
       ),
     };
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(title),
-        content: Text(message),
+    final confirmed = await showCircleDialog<bool>(
+      context,
+      builder: (context) => CircleDialog(
+        title: title,
+        message: message,
         actions: [
-          TextButton(
+          CircleDialogAction(
+            label: tr('Cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
           ),
-          FilledButton(
-            key: const ValueKey('bot-action-confirm'),
-            style: action == _BotAction.regenerate
-                ? null
-                : FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(label),
-          ),
+          action == _BotAction.regenerate
+              ? CircleDialogAction.primary(
+                  key: const ValueKey('bot-action-confirm'),
+                  label: label,
+                  onPressed: () => Navigator.of(context).pop(true),
+                )
+              : CircleDialogAction.danger(
+                  key: const ValueKey('bot-action-confirm'),
+                  label: label,
+                  onPressed: () => Navigator.of(context).pop(true),
+                ),
         ],
       ),
     );
@@ -149,8 +150,8 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
 
   Future<void> _showToken(CircleBotSecret secret, {required bool created}) {
     final supabaseUrl = ref.read(appConfigProvider)?.supabaseUrl;
-    return showDialog<void>(
-      context: context,
+    return showCircleDialog<void>(
+      context,
       builder: (context) => _BotTokenDialog(
         title: created ? tr('Bot created') : tr('New bot token'),
         token: secret.token,
@@ -159,9 +160,40 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
     );
   }
 
+  Future<void> _openMenu(CircleBot bot, Offset? position) async {
+    final action = await showCircleActionMenu<_BotAction>(
+      context,
+      title: bot.name,
+      position: position,
+      items: [
+        CircleMenuItem(
+          value: _BotAction.regenerate,
+          icon: Icons.key_outlined,
+          label: tr('Reset token'),
+        ),
+        if (bot.hasToken)
+          CircleMenuItem(
+            value: _BotAction.revoke,
+            icon: Icons.key_off_outlined,
+            label: tr('Revoke token'),
+            destructive: true,
+          ),
+        CircleMenuItem(
+          value: _BotAction.delete,
+          icon: Icons.delete_outline,
+          label: tr('Delete bot'),
+          destructive: true,
+        ),
+      ],
+    );
+    if (action != null && mounted) {
+      await _act(bot, action);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final bots = ref.watch(circleBotsProvider(_circleId));
     final list = bots.valueOrNull ?? const <CircleBot>[];
     return Column(
@@ -176,64 +208,109 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
             'roles.',
           ),
         ),
-        if (bots.hasError)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(tr('Could not load the bots.')),
-          ),
-        for (final bot in list)
-          ListTile(
-            key: ValueKey('circle-bot-${bot.id}'),
-            leading: const CircleAvatar(child: Icon(Icons.smart_toy_outlined)),
-            title: Text(bot.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              [
-                if (!bot.isMember)
-                  tr('Removed from the circle')
-                else if (!bot.hasToken)
-                  tr('Token revoked'),
-                if (bot.roleNames.isNotEmpty) bot.roleNames.join(', '),
-                tr('{count} commands', {'count': bot.commandCount}),
-              ].join(' · '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: PopupMenuButton<_BotAction>(
-              key: ValueKey('circle-bot-menu-${bot.id}'),
-              tooltip: tr('Bot actions'),
-              enabled: !_busy,
-              onSelected: (action) => unawaited(_act(bot, action)),
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: _BotAction.regenerate,
-                  child: Text(tr('Reset token')),
+        SettingsGroup(
+          children: [
+            if (bots.hasError)
+              SettingsRow(
+                icon: Icons.error_outline,
+                title: tr('Could not load the bots.'),
+              ),
+            for (final bot in list)
+              Padding(
+                key: ValueKey('circle-bot-${bot.id}'),
+                padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+                child: Row(
+                  children: [
+                    ThingAvatar(
+                      label: bot.name,
+                      size: 36,
+                      icon: Icons.smart_toy_outlined,
+                      color: c.accentSoft,
+                      foregroundColor: c.accentText,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  bot.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: c.ink,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              CircleTag(
+                                label: tr('BOT'),
+                                background: c.accent,
+                                foreground: c.onAccent,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            [
+                              if (!bot.isMember)
+                                tr('Removed from the circle')
+                              else if (!bot.hasToken)
+                                tr('Token revoked'),
+                              if (bot.roleNames.isNotEmpty)
+                                bot.roleNames.join(', '),
+                              tr('{count} commands', {
+                                'count': bot.commandCount,
+                              }),
+                            ].join(' · '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12.5, color: c.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Builder(
+                      builder: (buttonContext) => WeCordIconButton(
+                        key: ValueKey('circle-bot-menu-${bot.id}'),
+                        tooltip: tr('Bot actions'),
+                        icon: Icons.more_horiz_rounded,
+                        variant: WeCordButtonVariant.ghost,
+                        size: 36,
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                final box =
+                                    buttonContext.findRenderObject()
+                                        as RenderBox?;
+                                unawaited(
+                                  _openMenu(
+                                    bot,
+                                    box?.localToGlobal(
+                                      box.size.bottomRight(Offset.zero),
+                                    ),
+                                  ),
+                                );
+                              },
+                      ),
+                    ),
+                  ],
                 ),
-                if (bot.hasToken)
-                  PopupMenuItem(
-                    value: _BotAction.revoke,
-                    child: Text(tr('Revoke token')),
-                  ),
-                PopupMenuItem(
-                  value: _BotAction.delete,
-                  child: Text(
-                    tr('Delete bot'),
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: FilledButton.tonalIcon(
+              ),
+            SettingsRow(
               key: const ValueKey('bot-create-button'),
-              onPressed: _busy || bots.isLoading ? null : _create,
-              icon: const Icon(Icons.add),
-              label: Text(tr('New bot')),
+              icon: Icons.add_rounded,
+              tone: SettingsTone.accent,
+              title: tr('New bot'),
+              showChevron: false,
+              onTap: _busy || bots.isLoading ? null : _create,
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -272,33 +349,60 @@ class _NewBotDialogState extends State<_NewBotDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('New bot')),
+    final c = context.tokens.colors;
+    const radius = BorderRadius.all(Radius.circular(WeCordRadii.lg));
+    const idle = WeCordFieldBorder(
+      borderRadius: radius,
+      borderSide: BorderSide.none,
+    );
+    return CircleDialog(
+      title: tr('New bot'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            key: const ValueKey('bot-name-field'),
+          WeCordTextField(
+            fieldKey: const ValueKey('bot-name-field'),
             controller: _name,
             autofocus: true,
             maxLength: CircleBot.maxNameLength,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Bot name'),
-              errorText: _error,
-            ),
+            label: tr('Bot name'),
+            errorText: _error,
             onSubmitted: (_) => _submit(),
           ),
           if (widget.roles.isNotEmpty) ...[
             const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 2, bottom: 6),
+              child: Text(
+                tr('Role'),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: c.muted,
+                ),
+              ),
+            ),
             DropdownButtonFormField<CircleRole?>(
               key: const ValueKey('bot-role-field'),
               initialValue: _role,
               isExpanded: true,
+              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              dropdownColor: c.panel,
+              icon: Icon(Icons.expand_more_rounded, color: c.muted),
               decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: tr('Role'),
+                filled: true,
+                fillColor: c.raised,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                border: idle,
+                enabledBorder: idle,
+                focusedBorder: WeCordFieldBorder(
+                  borderRadius: radius,
+                  borderSide: BorderSide(color: c.accent, width: 1.5),
+                ),
               ),
               items: [
                 DropdownMenuItem(child: Text(tr('No role'))),
@@ -318,14 +422,14 @@ class _NewBotDialogState extends State<_NewBotDialog> {
         ],
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
           key: const ValueKey('bot-create-submit'),
+          label: tr('Create'),
           onPressed: _submit,
-          child: Text(tr('Create')),
         ),
       ],
     );
@@ -345,50 +449,62 @@ class _BotTokenDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      scrollable: true,
-      title: Text(title),
+    final c = context.tokens.colors;
+    return CircleDialog(
+      title: title,
+      message: tr(
+        'Copy the token now: it is shown only once. Anyone with it can '
+        'act as this bot.',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            tr(
-              'Copy the token now: it is shown only once. Anyone with it can '
-              'act as this bot.',
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.raised,
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
             ),
-          ),
-          const SizedBox(height: 12),
-          SelectableText(
-            token,
-            key: const ValueKey('bot-token'),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontFamily: 'monospace',
+            child: SelectableText(
+              token,
+              key: const ValueKey('bot-token'),
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 14,
+                color: c.ink,
+              ),
             ),
           ),
           if (apiUrl case final url?) ...[
             const SizedBox(height: 12),
-            Text(tr('API address'), style: theme.textTheme.labelMedium),
-            SelectableText(url, style: theme.textTheme.bodySmall),
+            Text(
+              tr('API address'),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: c.muted,
+              ),
+            ),
+            const SizedBox(height: 2),
+            SelectableText(url, style: TextStyle(fontSize: 12.5, color: c.ink)),
           ],
         ],
       ),
       actions: [
-        TextButton.icon(
+        CircleDialogAction(
           key: const ValueKey('bot-token-copy'),
+          label: tr('Copy'),
           onPressed: () {
             unawaited(Clipboard.setData(ClipboardData(text: token)));
             ScaffoldMessenger.maybeOf(
               context,
             )?.showSnackBar(SnackBar(content: Text(tr('Token copied.'))));
           },
-          icon: const Icon(Icons.copy_outlined),
-          label: Text(tr('Copy')),
         ),
-        FilledButton(
+        CircleDialogAction.primary(
+          label: tr('Done'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Done')),
         ),
       ],
     );

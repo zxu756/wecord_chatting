@@ -8,6 +8,8 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final circleInvitePreviewProvider = FutureProvider.autoDispose
     .family<CircleInvitePreview, String>((ref, code) {
@@ -31,112 +33,160 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final preview = ref.watch(circleInvitePreviewProvider(widget.code));
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('Circle invite'))),
+    return CirclePageScaffold(
+      title: tr('Circle invite'),
+      constrainBody: false,
       body: Center(
         // Scrolls on short phones and with large text.
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: preview.when(
               loading: () => const CircularProgressIndicator(),
-              error: (error, stackTrace) => _InviteMessage(
-                icon: Icons.error_outline,
+              error: (error, stackTrace) => CircleEmptyState(
+                icon: Icons.error_outline_rounded,
                 title: tr('Could not load invite'),
                 message: error.toString(),
-                action: FilledButton(
+                action: WeCordButton(
+                  variant: WeCordButtonVariant.onPaper,
                   onPressed: () =>
                       ref.invalidate(circleInvitePreviewProvider(widget.code)),
-                  child: Text(tr('Try again')),
+                  label: tr('Try again'),
                 ),
               ),
               data: (preview) {
                 final circle = preview.circle;
                 if (circle == null || !preview.canJoin) {
-                  return _InviteMessage(
-                    icon: Icons.link_off,
+                  return CircleEmptyState(
+                    icon: Icons.link_off_rounded,
                     title: tr('Invite invalid'),
                     message: _invalidMessage(preview.invalidReason),
-                    action: OutlinedButton(
+                    action: WeCordButton(
+                      variant: WeCordButtonVariant.onPaper,
                       onPressed: () => context.go(HomeScreen.path),
-                      child: Text(tr('Back to home')),
+                      label: tr('Back to home'),
                     ),
                   );
                 }
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundImage: circle.avatarUrl == null
-                              ? null
-                              : NetworkImage(circle.avatarUrl!),
-                          child: circle.avatarUrl == null
-                              ? Text(
-                                  _initial(circle.name),
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineSmall,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          preview.alreadyMember
-                              ? tr('You are already a member of')
-                              : tr('You have been invited to join'),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          circle.name,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          circle.memberCount == 1
-                              ? tr('1 member')
-                              : tr('{count} members', {
-                                  'count': circle.memberCount,
-                                }),
-                        ),
-                        if (_errorText != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _errorText!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                return Container(
+                  decoration: BoxDecoration(
+                    color: c.panel,
+                    borderRadius: BorderRadius.circular(WeCordRadii.xxl),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          Container(
+                            height: 96,
+                            color: WeCordAvatarColors.forSeed(circle.name),
+                          ),
+                          Positioned(
+                            bottom: -36,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: ShapeDecoration(
+                                color: c.panel,
+                                shape: RoundedSuperellipseBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              child: CircleNetworkAvatar(
+                                name: circle.name,
+                                url: circle.avatarUrl,
+                                size: 72,
+                                thing: true,
+                              ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: preview.alreadyMember
-                              ? FilledButton(
-                                  onPressed: () => context.go(
-                                    '${CircleRoutes.path}/${circle.id}',
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              preview.alreadyMember
+                                  ? tr('You are already a member of')
+                                  : tr('You have been invited to join'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 14, color: c.muted),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              circle.name,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                color: c.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                PresenceDot(color: c.faint, size: 9),
+                                const SizedBox(width: 6),
+                                Text(
+                                  circle.memberCount == 1
+                                      ? tr('1 member')
+                                      : tr('{count} members', {
+                                          'count': circle.memberCount,
+                                        }),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: c.muted,
                                   ),
-                                  child: Text(tr('Open circle')),
-                                )
-                              : FilledButton(
-                                  onPressed: _isJoining ? null : _join,
-                                  child: Text(
-                                    _isJoining
+                                ),
+                              ],
+                            ),
+                            if (_errorText != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                _errorText!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: c.dangerText,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 22),
+                            preview.alreadyMember
+                                ? WeCordButton(
+                                    expand: true,
+                                    size: WeCordButtonSize.large,
+                                    onPressed: () => context.go(
+                                      '${CircleRoutes.path}/${circle.id}',
+                                    ),
+                                    label: tr('Open circle'),
+                                  )
+                                : WeCordButton(
+                                    expand: true,
+                                    size: WeCordButtonSize.large,
+                                    variant: WeCordButtonVariant.accent,
+                                    onPressed: _isJoining ? null : _join,
+                                    label: _isJoining
                                         ? tr('Joining…')
                                         : tr('Join circle'),
                                   ),
-                                ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 );
               },
@@ -171,36 +221,6 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
   }
 }
 
-class _InviteMessage extends StatelessWidget {
-  const _InviteMessage({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.action,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final Widget action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 48),
-        const SizedBox(height: 16),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 20),
-        action,
-      ],
-    );
-  }
-}
-
 String _invalidMessage(CircleInviteInvalidReason? reason) {
   return switch (reason) {
     CircleInviteInvalidReason.expired => tr('This invite has expired.'),
@@ -211,12 +231,4 @@ String _invalidMessage(CircleInviteInvalidReason? reason) {
     CircleInviteInvalidReason.notFound ||
     null => tr('This invite does not exist or is no longer available.'),
   };
-}
-
-String _initial(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return '?';
-  }
-  return trimmed.characters.first.toUpperCase();
 }

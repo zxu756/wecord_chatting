@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void openCircleAuditLogScreen(BuildContext context, String circleId) {
   Navigator.of(context).push(
@@ -129,47 +131,92 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
     _loadMore();
   }
 
+  Future<void> _pickFilter(BuildContext buttonContext) async {
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    // -1 is "All actions"; others index the filter groups.
+    const all = -1;
+    final groups = CircleAuditActionGroup.filters;
+    final picked = await showCircleActionMenu<int>(
+      context,
+      title: tr('Filter by action'),
+      position: box?.localToGlobal(box.size.bottomLeft(Offset.zero)),
+      items: [
+        CircleMenuItem(
+          value: all,
+          icon: _filter == null ? Icons.check_rounded : Icons.filter_list,
+          label: tr('All actions'),
+          tone: _filter == null ? SettingsTone.accent : SettingsTone.neutral,
+        ),
+        for (final (index, group) in groups.indexed)
+          CircleMenuItem(
+            value: index,
+            icon: _filter == group
+                ? Icons.check_rounded
+                : circleAuditGroupIcon(group),
+            label: group.label,
+            tone: _filter == group ? SettingsTone.accent : SettingsTone.neutral,
+          ),
+      ],
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    _setFilter(picked == all ? null : groups.elementAt(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = widget.now?.call() ?? DateTime.now();
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('Audit log')),
-        actions: [
-          PopupMenuButton<CircleAuditActionGroup?>(
+    final c = context.tokens.colors;
+    return CirclePageScaffold(
+      title: tr('Audit log'),
+      actions: [
+        Builder(
+          builder: (buttonContext) => WeCordIconButton(
             tooltip: tr('Filter by action'),
-            icon: Icon(
-              _filter == null ? Icons.filter_list : Icons.filter_list_alt,
-            ),
-            onSelected: _setFilter,
-            itemBuilder: (context) => [
-              CheckedPopupMenuItem<CircleAuditActionGroup?>(
-                value: null,
-                checked: _filter == null,
-                child: Text(tr('All actions')),
-              ),
-              for (final group in CircleAuditActionGroup.filters)
-                CheckedPopupMenuItem<CircleAuditActionGroup?>(
-                  value: group,
-                  checked: _filter == group,
-                  child: Text(group.label),
-                ),
-            ],
+            icon: _filter == null ? Icons.filter_list : Icons.filter_list_alt,
+            variant: WeCordButtonVariant.onPaper,
+            size: 42,
+            selected: _filter != null,
+            onPressed: () => _pickFilter(buttonContext),
           ),
-        ],
-      ),
+        ),
+      ],
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_filter case final filter?)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: InputChip(
-                  label: Text(filter.label),
-                  onDeleted: () => _setFilter(null),
-                  deleteButtonTooltipMessage: tr('Show all actions'),
+                child: WeCordPressable(
+                  key: const ValueKey('circle-audit-filter-chip'),
+                  tooltip: tr('Show all actions'),
+                  onPressed: () => _setFilter(null),
+                  builder: (context, states) => Container(
+                    height: 34,
+                    padding: const EdgeInsets.only(left: 14, right: 8),
+                    decoration: ShapeDecoration(
+                      color: c.ink,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          filter.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: c.onInk,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.close_rounded, size: 16, color: c.onInk),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -182,16 +229,22 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
   Widget _buildList(DateTime now) {
     if (_entries.isEmpty) {
       if (_error != null) {
-        return _Message(
-          text: tr('Could not load the audit log.'),
-          action: TextButton(onPressed: _loadMore, child: Text(tr('Retry'))),
+        return CircleEmptyState(
+          icon: Icons.error_outline,
+          title: tr('Could not load the audit log.'),
+          action: WeCordButton(
+            label: tr('Retry'),
+            variant: WeCordButtonVariant.onPaper,
+            onPressed: _loadMore,
+          ),
         );
       }
       if (_loading || _hasMore) {
         return const Center(child: CircularProgressIndicator());
       }
-      return _Message(
-        text: _filter == null
+      return CircleEmptyState(
+        icon: Icons.history,
+        title: _filter == null
             ? tr('Nothing has been logged yet.')
             : tr('No {group} actions logged yet.', {
                 'group': _filter!.label.toLowerCase(),
@@ -201,14 +254,20 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
     return ListView.builder(
       key: const ValueKey('circle-audit-log-list'),
       controller: _scrollController,
+      padding: circlePagePadding(context),
       itemCount: _entries.length + 1,
       itemBuilder: (context, index) {
         if (index == _entries.length) {
           if (_error != null) {
-            return Center(
-              child: TextButton(
-                onPressed: _loadMore,
-                child: Text(tr('Could not load more. Retry')),
+            return Padding(
+              padding: const EdgeInsets.all(8),
+              child: Center(
+                child: WeCordButton(
+                  label: tr('Could not load more. Retry'),
+                  variant: WeCordButtonVariant.onPaper,
+                  size: WeCordButtonSize.small,
+                  onPressed: _loadMore,
+                ),
               ),
             );
           }
@@ -220,38 +279,18 @@ class _CircleAuditLogScreenState extends ConsumerState<CircleAuditLogScreen> {
           }
           return const SizedBox(height: 16);
         }
-        return CircleAuditEntryTile(entry: _entries[index], now: now);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: CircleAuditEntryTile(entry: _entries[index], now: now),
+        );
       },
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.action});
-
-  final String text;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(text, textAlign: TextAlign.center),
-            ?action,
-          ],
-        ),
-      ),
     );
   }
 }
 
 /// One audit entry: an icon for the action, "X did Y" and when; entries
 /// with details expand to list them.
-class CircleAuditEntryTile extends StatelessWidget {
+class CircleAuditEntryTile extends StatefulWidget {
   const CircleAuditEntryTile({
     required this.entry,
     required this.now,
@@ -262,59 +301,147 @@ class CircleAuditEntryTile extends StatelessWidget {
   final DateTime now;
 
   @override
+  State<CircleAuditEntryTile> createState() => _CircleAuditEntryTileState();
+}
+
+class _CircleAuditEntryTileState extends State<CircleAuditEntryTile> {
+  var _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
+    final entry = widget.entry;
     final details = circleAuditDetails(entry);
-    final leading = CircleAvatar(
-      backgroundColor: theme.colorScheme.secondaryContainer,
-      foregroundColor: theme.colorScheme.onSecondaryContainer,
-      child: Icon(circleAuditIcon(entry.action), size: 20),
-    );
-    final title = Text.rich(
-      circleAuditSummary(entry, theme.textTheme.bodyMedium),
-      key: ValueKey('circle-audit-summary-${entry.id}'),
-    );
-    final subtitle = Text(
-      formatAuditTime(entry.createdAt, now: now),
-      style: theme.textTheme.bodySmall,
-    );
-    if (details.isEmpty) {
-      return ListTile(
-        key: ValueKey('circle-audit-${entry.id}'),
-        leading: leading,
-        title: title,
-        subtitle: subtitle,
-      );
-    }
-    return ExpansionTile(
-      key: ValueKey('circle-audit-${entry.id}'),
-      leading: leading,
-      title: title,
-      subtitle: subtitle,
-      shape: const Border(),
-      collapsedShape: const Border(),
-      expandedCrossAxisAlignment: CrossAxisAlignment.start,
-      childrenPadding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+    final expandable = details.isNotEmpty;
+    final bodyStyle = TextStyle(fontSize: 14, color: c.ink, height: 1.35);
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final detail in details)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${detail.label}: ',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: detail.value),
-                ],
+        SettingsIconTile(icon: circleAuditIcon(entry.action), size: 36),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text.rich(
+                circleAuditSummary(entry, bodyStyle),
+                key: ValueKey('circle-audit-summary-${entry.id}'),
+                style: bodyStyle,
               ),
-              style: theme.textTheme.bodySmall,
+              const SizedBox(height: 2),
+              Text(
+                formatAuditTime(entry.createdAt, now: widget.now),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: c.subtle,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (expandable) ...[
+          const SizedBox(width: 8),
+          AnimatedRotation(
+            turns: _expanded ? 0.5 : 0,
+            duration: WeCordMotion.durationOf(context, WeCordMotion.quick),
+            child: Icon(Icons.expand_more_rounded, size: 20, color: c.faint),
+          ),
+        ],
+      ],
+    );
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        row,
+        if (expandable && _expanded)
+          Container(
+            margin: const EdgeInsets.fromLTRB(48, 10, 0, 0),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            decoration: BoxDecoration(
+              color: c.well,
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final detail in details)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${detail.label}: ',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: c.ink,
+                            ),
+                          ),
+                          TextSpan(text: detail.value),
+                        ],
+                      ),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: c.muted,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
       ],
     );
+    return WeCordPressable(
+      key: ValueKey('circle-audit-${entry.id}'),
+      onPressed: expandable
+          ? () => setState(() => _expanded = !_expanded)
+          : null,
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
+      ),
+      builder: (context, states) {
+        final hovered =
+            expandable &&
+            (states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.pressed));
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: hovered
+                ? Color.alphaBlend(c.ink.withValues(alpha: 0.03), c.panel)
+                : c.panel,
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          child: content,
+        );
+      },
+    );
   }
+}
+
+/// The icon shown for a filter group in the filter menu.
+IconData circleAuditGroupIcon(CircleAuditActionGroup group) {
+  return switch (group) {
+    CircleAuditActionGroup.channel => Icons.tag,
+    CircleAuditActionGroup.category => Icons.create_new_folder_outlined,
+    CircleAuditActionGroup.role => Icons.shield_outlined,
+    CircleAuditActionGroup.member => Icons.people_outline,
+    CircleAuditActionGroup.circle => Icons.swap_horiz,
+    CircleAuditActionGroup.invite => Icons.add_link,
+    CircleAuditActionGroup.message => Icons.chat_bubble_outline,
+    CircleAuditActionGroup.thread => Icons.forum_outlined,
+    CircleAuditActionGroup.post => Icons.article_outlined,
+    CircleAuditActionGroup.forum => Icons.forum_outlined,
+    CircleAuditActionGroup.event => Icons.event_outlined,
+    CircleAuditActionGroup.webhook => Icons.smart_toy_outlined,
+    _ => Icons.history,
+  };
 }
 
 IconData circleAuditIcon(String action) {

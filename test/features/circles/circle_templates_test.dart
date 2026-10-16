@@ -202,7 +202,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('template-preview')), findsOneWidget);
     expect(find.text('From Study Hall'), findsOneWidget);
-    expect(find.text('CLASSES'), findsOneWidget);
+    expect(find.text('Classes'), findsOneWidget);
     expect(find.text('homework'), findsOneWidget);
     expect(find.text('Tutors'), findsOneWidget);
 

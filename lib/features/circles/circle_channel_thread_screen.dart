@@ -16,12 +16,13 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 typedef CircleChannelThreadBuilder =
     Widget Function(BuildContext context, List<Widget> actions);
 
 /// Full-screen circle channel, pushed from the narrow circle home. The app
-/// bar's members button opens the circle's member list as an end drawer.
+/// bar's members button opens the circle's member list in a sheet.
 class CircleChannelThreadScreen extends ConsumerStatefulWidget {
   const CircleChannelThreadScreen({
     required this.circleId,
@@ -57,12 +58,45 @@ class _CircleChannelThreadScreenState
     extends ConsumerState<CircleChannelThreadScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// The circle's member list in a sheet.
+  void _showMembers() {
+    final circleId = widget.circleId;
+    showWeCordSheet<void>(
+      context,
+      title: tr('Members'),
+      detents: const [0.6, 0.92],
+      builder: (sheetContext, scrollController) => Consumer(
+        builder: (context, ref, _) {
+          final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
+          if (detail == null) {
+            return const SizedBox.shrink();
+          }
+          return CircleMemberList(
+            detail: detail,
+            width: null,
+            compact: false,
+            color: context.tokens.colors.panel,
+            scrollController: scrollController,
+            onlineUserIds:
+                ref.watch(onlineUserIdsProvider).valueOrNull ??
+                const <String>{},
+            onChangeNickname: (member) => changeCircleNickname(
+              this.context,
+              ref,
+              circleId: circleId,
+              member: member,
+              onChanged: () => ref.invalidate(circleDetailProvider(circleId)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final circleId = widget.circleId;
     final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
-    final onlineUserIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
     CircleChannel? channel;
     if (widget.conversationType == ConversationType.channel) {
       for (final candidate in detail?.channels ?? const <CircleChannel>[]) {
@@ -104,9 +138,7 @@ class _CircleChannelThreadScreenState
       ChatThreadAction(
         tooltip: tr('Show member list'),
         icon: Icons.people_outline,
-        onPressed: detail == null
-            ? null
-            : () => _scaffoldKey.currentState?.openEndDrawer(),
+        onPressed: detail == null ? null : _showMembers,
       ),
       if (detail != null && channel != null && detail.canOpenChannelSettings)
         ChatThreadAction(
@@ -153,25 +185,6 @@ class _CircleChannelThreadScreenState
 
     return Scaffold(
       key: _scaffoldKey,
-      endDrawer: detail == null
-          ? null
-          : Drawer(
-              child: SafeArea(
-                child: CircleMemberList(
-                  detail: detail,
-                  width: null,
-                  onlineUserIds: onlineUserIds,
-                  onChangeNickname: (member) => changeCircleNickname(
-                    context,
-                    ref,
-                    circleId: circleId,
-                    member: member,
-                    onChanged: () =>
-                        ref.invalidate(circleDetailProvider(circleId)),
-                  ),
-                ),
-              ),
-            ),
       body:
           widget.threadBuilder?.call(context, [
             for (final action in actions) action.toIconButton(),

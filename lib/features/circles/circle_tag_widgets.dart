@@ -6,9 +6,11 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_tag_repository.dart';
+import 'package:wecord/features/circles/circle_ui.dart' hide CircleTag;
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
-/// A circle tag: its badge and text in a small pill.
+/// A circle tag: its badge and text in a small rounded tag.
 class CircleTagChip extends StatelessWidget {
   const CircleTagChip({required this.tag, this.circleName, super.key});
 
@@ -19,26 +21,25 @@ class CircleTagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: c.successSoft,
+        borderRadius: BorderRadius.circular(WeCordRadii.xs),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(tag.badge.icon, size: 11, color: theme.colorScheme.primary),
-          const SizedBox(width: 2),
+          Icon(tag.badge.icon, size: 11, color: c.successText),
+          const SizedBox(width: 3),
           Text(
             tag.text,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
+            style: TextStyle(
+              color: c.successText,
+              fontWeight: FontWeight.w800,
               fontSize: 10,
-              height: 1.2,
+              height: 1.3,
             ),
           ),
         ],
@@ -166,8 +167,13 @@ class _CircleTagSectionState extends ConsumerState<CircleTagSection> {
       _controller.text = current.value?.text ?? '';
       _badge = current.value?.badge ?? CircleTagBadge.star;
     }
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final previewText = _controller.text.trim();
+    final labelStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: c.muted,
+    );
     return Column(
       key: const ValueKey('circle-tag-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -179,82 +185,81 @@ class _CircleTagSectionState extends ConsumerState<CircleTagSection> {
             'Leaving the circle removes it.',
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: TextField(
-            key: const ValueKey('circle-tag-field'),
-            controller: _controller,
-            enabled: !_busy && current.hasValue,
-            maxLength: CircleTag.maxLength,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Tag'),
-              hintText: tr('2 to 4 characters'),
-              errorText: _error,
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(tr('Badge'), style: theme.textTheme.labelLarge),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
+        CircleCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final badge in CircleTagBadge.values)
-                IconButton(
-                  key: ValueKey('circle-tag-badge-${badge.value}'),
-                  isSelected: badge == _badge,
-                  style: IconButton.styleFrom(
-                    backgroundColor: badge == _badge
-                        ? theme.colorScheme.primaryContainer
-                        : null,
-                  ),
-                  icon: Icon(badge.icon),
-                  color: badge == _badge
-                      ? theme.colorScheme.onPrimaryContainer
-                      : theme.colorScheme.onSurfaceVariant,
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() => _badge = badge),
-                ),
-            ],
-          ),
-        ),
-        if (previewText.isNotEmpty && circleTagProblem(previewText) == null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Row(
-              children: [
-                Text(tr('Preview'), style: theme.textTheme.bodySmall),
-                const SizedBox(width: 8),
-                CircleTagChip(
-                  tag: CircleTag(text: previewText, badge: _badge),
-                ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton(
-                key: const ValueKey('circle-tag-save'),
-                onPressed: _busy || !current.hasValue ? null : () => _save(),
-                child: Text(tr('Save tag')),
+              WeCordTextField(
+                fieldKey: const ValueKey('circle-tag-field'),
+                controller: _controller,
+                enabled: !_busy && current.hasValue,
+                maxLength: CircleTag.maxLength,
+                label: tr('Tag'),
+                hint: tr('2 to 4 characters'),
+                errorText: _error,
+                onChanged: (_) => setState(() {}),
               ),
-              if (current.valueOrNull != null)
-                OutlinedButton(
-                  key: const ValueKey('circle-tag-remove'),
-                  onPressed: _busy ? null : () => _save(remove: true),
-                  child: Text(tr('Turn off tag')),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 8),
+                child: Text(tr('Badge'), style: labelStyle),
+              ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final badge in CircleTagBadge.values)
+                    WeCordIconButton(
+                      key: ValueKey('circle-tag-badge-${badge.value}'),
+                      tooltip: tr('Badge'),
+                      icon: badge.icon,
+                      size: 40,
+                      iconSize: 20,
+                      variant: badge == _badge
+                          ? WeCordButtonVariant.primary
+                          : WeCordButtonVariant.secondary,
+                      selected: badge == _badge,
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _badge = badge),
+                    ),
+                ],
+              ),
+              if (previewText.isNotEmpty &&
+                  circleTagProblem(previewText) == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: [
+                      Text(tr('Preview'), style: labelStyle),
+                      const SizedBox(width: 8),
+                      CircleTagChip(
+                        tag: CircleTag(text: previewText, badge: _badge),
+                      ),
+                    ],
+                  ),
                 ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  WeCordButton(
+                    key: const ValueKey('circle-tag-save'),
+                    label: tr('Save tag'),
+                    onPressed: _busy || !current.hasValue
+                        ? null
+                        : () => _save(),
+                  ),
+                  if (current.valueOrNull != null)
+                    WeCordButton(
+                      key: const ValueKey('circle-tag-remove'),
+                      label: tr('Turn off tag'),
+                      variant: WeCordButtonVariant.secondary,
+                      onPressed: _busy ? null : () => _save(remove: true),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -276,17 +281,15 @@ class CircleTagSettingTile extends ConsumerWidget {
         : ref.watch(profileBadgesProvider(userId)).valueOrNull ??
               ProfileBadges.none;
     final tag = badges.tag;
-    return ListTile(
+    return SettingsRow(
       key: const ValueKey('circle-tag-setting'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.sell_outlined),
-      title: Text(tr('Circle tag')),
-      subtitle: Text(
-        tag == null
-            ? tr('Show the tag of one of your circles next to your name')
-            : badges.tagCircleName ?? tag.text,
-      ),
+      icon: Icons.sell_outlined,
+      title: tr('Circle tag'),
+      subtitle: tag == null
+          ? tr('Show the tag of one of your circles next to your name')
+          : badges.tagCircleName ?? tag.text,
       trailing: tag == null ? null : CircleTagChip(tag: tag),
+      showChevron: true,
       onTap: () => unawaited(_choose(context, ref, userId)),
     );
   }
@@ -296,11 +299,10 @@ class CircleTagSettingTile extends ConsumerWidget {
     WidgetRef ref,
     String? userId,
   ) async {
-    final choice = await showModalBottomSheet<_TagChoice>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (context) => const _CircleTagPickerSheet(),
+    final choice = await showWeCordSheet<_TagChoice>(
+      context,
+      title: tr('Circle tag'),
+      builder: (context, _) => const _CircleTagPickerSheet(),
     );
     if (choice == null || !context.mounted) {
       return;
@@ -332,27 +334,31 @@ class _CircleTagPickerSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final circles = ref.watch(tagCirclesProvider);
     final list = circles.valueOrNull ?? const <TagCircle>[];
     final noneSelected = list.every((circle) => !circle.isSelected);
-    return SafeArea(
+    Widget? check(bool selected) =>
+        selected ? Icon(Icons.check_rounded, size: 20, color: c.accent) : null;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        16 + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-            child: Text(tr('Circle tag'), style: theme.textTheme.titleLarge),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: Text(
               tr(
                 'Only circles you are in that turned on a tag are listed. '
                 'Leaving the circle removes it.',
               ),
-              style: theme.textTheme.bodyMedium,
+              style: TextStyle(fontSize: 14, color: c.muted, height: 1.4),
             ),
           ),
           if (circles.isLoading && !circles.hasValue)
@@ -365,47 +371,42 @@ class _CircleTagPickerSheet extends ConsumerWidget {
               padding: const EdgeInsets.all(24),
               child: Text(tr('Could not load your circles.')),
             )
-          else
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  ListTile(
-                    key: const ValueKey('circle-tag-none'),
-                    leading: const Icon(Icons.block),
-                    title: Text(tr('No tag')),
-                    trailing: noneSelected ? const Icon(Icons.check) : null,
+          else ...[
+            SettingsGroup(
+              color: c.well,
+              children: [
+                SettingsRow(
+                  key: const ValueKey('circle-tag-none'),
+                  icon: Icons.block,
+                  title: tr('No tag'),
+                  trailing: check(noneSelected),
+                  showChevron: false,
+                  onTap: () =>
+                      Navigator.of(context).pop(const _TagChoice(null)),
+                ),
+                for (final circle in list)
+                  SettingsRow(
+                    key: ValueKey('circle-tag-choice-${circle.circleId}'),
+                    icon: circle.tag.badge.icon,
+                    tone: SettingsTone.success,
+                    title: circle.circleName,
+                    subtitle: circle.tag.text,
+                    trailing: check(circle.isSelected),
+                    showChevron: false,
                     onTap: () =>
-                        Navigator.of(context).pop(const _TagChoice(null)),
+                        Navigator.of(context).pop(_TagChoice(circle.circleId)),
                   ),
-                  for (final circle in list)
-                    ListTile(
-                      key: ValueKey('circle-tag-choice-${circle.circleId}'),
-                      leading: CircleTagChip(tag: circle.tag),
-                      title: Text(
-                        circle.circleName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: circle.isSelected
-                          ? const Icon(Icons.check)
-                          : null,
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pop(_TagChoice(circle.circleId)),
-                    ),
-                  if (list.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                      child: Text(
-                        tr('None of your circles has a tag yet.'),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-          const SizedBox(height: 8),
+            if (list.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+                child: Text(
+                  tr('None of your circles has a tag yet.'),
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                ),
+              ),
+          ],
         ],
       ),
     );

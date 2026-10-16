@@ -22,6 +22,7 @@ import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void main() {
   testWidgets('the rail creates a circle', (tester) async {
@@ -58,12 +59,12 @@ void main() {
     await tester.tap(find.text('Create a circle'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.bySemanticsLabel('Circle name'),
+      find.widgetWithText(WeCordTextField, 'Circle name'),
       'Close Friends',
     );
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Ada'));
+    await tester.tap(find.text('Ada'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
     await tester.pumpAndSettle();
 
     expect(circlesRepository.createdCircleName, 'Close Friends');
@@ -131,7 +132,7 @@ void main() {
     await tester.tap(find.text('Join with invite'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'not a code');
-    await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Join'));
     await tester.pump();
     expect(find.text('Enter an invite code or link'), findsOneWidget);
 
@@ -139,7 +140,7 @@ void main() {
       find.byType(TextField),
       'https://wecord.example/#/invite/AbCdEfGh23',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Join'));
     await tester.pumpAndSettle();
 
     expect(find.text('Invite abcdefgh23'), findsOneWidget);
@@ -175,7 +176,7 @@ void main() {
     expect(find.text('Book Club'), findsOneWidget);
     expect(find.text('4 members'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Join circle'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Join circle'));
     await tester.pumpAndSettle();
 
     expect(repository.previewedCodes, ['abcdefgh23']);
@@ -245,7 +246,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('1 member'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Open circle'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Open circle'));
     await tester.pumpAndSettle();
 
     expect(repository.acceptedCodes, isEmpty);
@@ -324,7 +325,7 @@ void main() {
     expect(clipboard.last, '/invite/oldcode234');
 
     await tester.tap(find.text('1 day'));
-    await tester.tap(find.text('10 uses'));
+    await tester.tap(find.text('10'));
     await tester.pump();
     await tester.tap(find.text('Create link'));
     await tester.pumpAndSettle();

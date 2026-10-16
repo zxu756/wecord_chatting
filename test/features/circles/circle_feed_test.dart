@@ -21,6 +21,7 @@ import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void main() {
   testWidgets('feed composer creates text posts', (tester) async {
@@ -88,8 +89,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Comment'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Comment'), 'Looks good');
-    await tester.tap(find.widgetWithText(FilledButton, 'Comment'));
+    await tester.enterText(find.byType(TextField).last, 'Looks good');
+    await tester.tap(find.widgetWithText(WeCordButton, 'Comment'));
     await tester.pumpAndSettle();
     expect(repository.commentedPostId, 'post-1');
     expect(repository.commentBody, 'Looks good');
@@ -116,7 +117,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Report'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Submit report'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Submit report'));
     await tester.pumpAndSettle();
 
     expect(repository.reportedPostId, 'post-1');

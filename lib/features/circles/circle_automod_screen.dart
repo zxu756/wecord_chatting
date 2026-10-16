@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/circles/circle_automod_repository.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void openCircleAutoModScreen(BuildContext context, CircleDetail detail) {
   Navigator.of(context).push(
@@ -27,42 +29,32 @@ class CircleAutoModScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rules = ref.watch(circleAutoModRulesProvider(_circleId));
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('AutoMod'))),
+    final c = context.tokens.colors;
+    return CirclePageScaffold(
+      title: tr('AutoMod'),
       body: rules.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(tr('Could not load AutoMod rules.')),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () =>
-                      ref.invalidate(circleAutoModRulesProvider(_circleId)),
-                  child: Text(tr('Try again')),
-                ),
-              ],
-            ),
+        error: (error, stackTrace) => CircleEmptyState(
+          icon: Icons.gpp_maybe_outlined,
+          title: tr('Could not load AutoMod rules.'),
+          action: WeCordButton(
+            label: tr('Try again'),
+            onPressed: () =>
+                ref.invalidate(circleAutoModRulesProvider(_circleId)),
           ),
         ),
         data: (rules) => ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: circlePagePadding(context),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
               child: Text(
                 tr(
                   'AutoMod checks messages as they are sent in this '
                   "circle's channels. Members who can manage the circle "
                   'are never checked.',
                 ),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 14, color: c.muted, height: 1.4),
               ),
             ),
             for (final kind in AutoModRuleKind.values)
@@ -130,6 +122,12 @@ String autoModRuleSummary(AutoModRule rule) {
   return actions.isEmpty ? what : '$what · $actions';
 }
 
+SettingsTone _kindTone(AutoModRuleKind kind) => switch (kind) {
+  AutoModRuleKind.keyword => SettingsTone.accent,
+  AutoModRuleKind.mentionSpam => SettingsTone.warning,
+  AutoModRuleKind.spam => SettingsTone.danger,
+};
+
 class _KindSection extends ConsumerWidget {
   const _KindSection({
     required this.kind,
@@ -143,47 +141,38 @@ class _KindSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final canAdd = rules.length < kind.maxPerCircle;
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SettingsGroup(
         children: [
-          ListTile(
-            leading: Icon(_kindIcon(kind)),
-            title: Text(
-              autoModKindTitle(kind),
-              style: theme.textTheme.titleMedium,
-            ),
-            subtitle: Text(_kindDescription(kind)),
+          SettingsRow(
+            icon: _kindIcon(kind),
+            tone: _kindTone(kind),
+            title: autoModKindTitle(kind),
+            subtitle: _kindDescription(kind),
           ),
           for (final rule in rules)
-            ListTile(
+            SettingsRow(
               key: ValueKey('automod-rule-${rule.id}'),
-              contentPadding: const EdgeInsets.only(left: 72, right: 8),
-              title: Text(rule.name),
-              subtitle: Text(autoModRuleSummary(rule)),
+              title: rule.name,
+              subtitle: autoModRuleSummary(rule),
               onTap: () => _openEditor(context, rule),
-              trailing: Switch(
+              trailing: WeCordSwitch(
                 value: rule.enabled,
+                semanticLabel: rule.name,
                 onChanged: (enabled) =>
                     _setEnabled(context, ref, rule, enabled),
               ),
             ),
           if (canAdd)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  key: ValueKey('automod-add-${kind.key}'),
-                  onPressed: () =>
-                      _openEditor(context, AutoModRule.draft(kind)),
-                  icon: const Icon(Icons.add),
-                  label: Text(tr('Create rule')),
-                ),
-              ),
+            SettingsRow(
+              key: ValueKey('automod-add-${kind.key}'),
+              icon: Icons.add_rounded,
+              tone: SettingsTone.accent,
+              title: tr('Create rule'),
+              showChevron: false,
+              onTap: () => _openEditor(context, AutoModRule.draft(kind)),
             ),
         ],
       ),
@@ -421,28 +410,15 @@ class _AutoModRuleEditorState extends ConsumerState<AutoModRuleEditor> {
     if (id == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('Delete rule')),
-        content: Text(
-          tr('Delete {name}? AutoMod stops checking for it.', {
-            'name': widget.rule.name,
-          }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('Delete')),
-          ),
-        ],
-      ),
+    final confirmed = await confirmCircleAction(
+      context,
+      title: tr('Delete rule'),
+      message: tr('Delete {name}? AutoMod stops checking for it.', {
+        'name': widget.rule.name,
+      }),
+      confirmLabel: tr('Delete'),
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     setState(() => _saving = true);
@@ -463,185 +439,237 @@ class _AutoModRuleEditorState extends ConsumerState<AutoModRuleEditor> {
     }
   }
 
+  Future<void> _chooseAlertChannel() async {
+    final channelId = await showCircleActionMenu<String>(
+      context,
+      title: tr('Alert channel'),
+      items: [
+        for (final channel in _alertChannels)
+          CircleMenuItem(
+            value: channel.id,
+            icon: channel.id == _alertChannelId
+                ? Icons.check_rounded
+                : Icons.tag,
+            tone: channel.id == _alertChannelId
+                ? SettingsTone.accent
+                : SettingsTone.neutral,
+            label: '#${channel.name}',
+          ),
+      ],
+    );
+    if (channelId != null && mounted) {
+      setState(() => _alertChannelId = channelId);
+    }
+  }
+
+  List<(String, int)> get _durationOptions => [
+    for (final (label, duration) in circleTimeoutDurations)
+      (tr(label), duration.inSeconds),
+    if (_timeoutSeconds case final seconds?
+        when !circleTimeoutDurations.any(
+          (option) => option.$2.inSeconds == seconds,
+        ))
+      (tr('{count} seconds', {'count': seconds}), seconds),
+  ];
+
+  Future<void> _chooseDuration() async {
+    final seconds = await showCircleActionMenu<int>(
+      context,
+      title: tr('Duration'),
+      items: [
+        for (final (label, value) in _durationOptions)
+          CircleMenuItem(
+            value: value,
+            icon: value == _timeoutSeconds
+                ? Icons.check_rounded
+                : Icons.timer_outlined,
+            tone: value == _timeoutSeconds
+                ? SettingsTone.accent
+                : SettingsTone.neutral,
+            label: label,
+          ),
+      ],
+    );
+    if (seconds != null && mounted) {
+      setState(() => _timeoutSeconds = seconds);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final numbers = [FilteringTextInputFormatter.digitsOnly];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isNew ? tr('Create rule') : tr('Edit rule')),
-        actions: [
-          if (!_isNew)
-            IconButton(
-              tooltip: tr('Delete rule'),
-              onPressed: _saving ? null : _delete,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(
-              key: const ValueKey('automod-save'),
-              onPressed: _saving ? null : _save,
-              child: Text(tr('Save')),
-            ),
+    String? alertChannelName;
+    for (final channel in _alertChannels) {
+      if (channel.id == _alertChannelId) {
+        alertChannelName = '#${channel.name}';
+      }
+    }
+    String? durationLabel;
+    for (final (label, value) in _durationOptions) {
+      if (value == _timeoutSeconds) {
+        durationLabel = label;
+      }
+    }
+    return CirclePageScaffold(
+      title: _isNew ? tr('Create rule') : tr('Edit rule'),
+      actions: [
+        if (!_isNew)
+          WeCordIconButton(
+            tooltip: tr('Delete rule'),
+            icon: Icons.delete_outline,
+            variant: WeCordButtonVariant.ghost,
+            onPressed: _saving ? null : _delete,
           ),
-        ],
-      ),
+        const SizedBox(width: 4),
+        WeCordButton(
+          key: const ValueKey('automod-save'),
+          label: tr('Save'),
+          size: WeCordButtonSize.medium,
+          loading: _saving,
+          onPressed: _saving ? null : _save,
+        ),
+      ],
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: circlePagePadding(context),
         children: [
           // Shown on top, where it is seen after tapping Save.
-          if (_error case final error?) ...[
-            Text(
-              error,
-              key: const ValueKey('automod-error'),
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            autoModKindTitle(_kind),
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('automod-name'),
-            controller: _name,
-            maxLength: AutoModLimits.nameLength,
-            decoration: InputDecoration(labelText: tr('Rule name')),
-          ),
-          const SizedBox(height: 8),
-          ..._triggerFields(numbers),
-          const Divider(height: 32),
-          Text(tr('Actions'), style: theme.textTheme.titleMedium),
-          SwitchListTile(
-            key: const ValueKey('automod-block'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr('Block message')),
-            subtitle: Text(tr('Keep the message from being sent.')),
-            value: _block,
-            onChanged: (value) => setState(() => _block = value),
-          ),
-          if (_block)
-            TextField(
-              key: const ValueKey('automod-reason'),
-              controller: _blockReason,
-              maxLength: AutoModLimits.blockReasonLength,
-              decoration: InputDecoration(
-                labelText: tr('Custom message (optional)'),
-                helperText: tr(
-                  'Shown to members when their message is blocked.',
+          if (_error case final error?)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: c.dangerSoft,
+                borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              ),
+              child: Text(
+                error,
+                key: const ValueKey('automod-error'),
+                style: TextStyle(
+                  color: c.dangerText,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          SwitchListTile(
-            key: const ValueKey('automod-alert'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr('Send alert')),
-            subtitle: Text(
-              tr('Post who sent what, and where, in a channel you choose.'),
-            ),
-            value: _alert,
-            onChanged: (value) => setState(() => _alert = value),
-          ),
-          if (_alert)
-            DropdownButtonFormField<String>(
-              key: const ValueKey('automod-alert-channel'),
-              initialValue:
-                  _alertChannels.any((channel) => channel.id == _alertChannelId)
-                  ? _alertChannelId
-                  : null,
-              decoration: InputDecoration(labelText: tr('Alert channel')),
-              items: [
-                for (final channel in _alertChannels)
-                  DropdownMenuItem(
-                    value: channel.id,
-                    child: Text('#${channel.name}'),
-                  ),
+          SettingsSectionHeader(autoModKindTitle(_kind)),
+          CircleCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                WeCordTextField(
+                  fieldKey: const ValueKey('automod-name'),
+                  controller: _name,
+                  maxLength: AutoModLimits.nameLength,
+                  label: tr('Rule name'),
+                ),
+                const SizedBox(height: 8),
+                ..._triggerFields(numbers),
               ],
-              onChanged: (value) => setState(() => _alertChannelId = value),
-            ),
-          SwitchListTile(
-            key: const ValueKey('automod-timeout'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(tr('Time out member')),
-            subtitle: Text(
-              tr(
-                "They can still read, but can't send messages, react, start "
-                'threads or join voice until it ends.',
-              ),
-            ),
-            value: _timeoutSeconds != null,
-            onChanged: (value) => setState(
-              () => _timeoutSeconds = value
-                  ? circleTimeoutDurations.first.$2.inSeconds
-                  : null,
             ),
           ),
-          if (_timeoutSeconds != null)
-            DropdownButtonFormField<int>(
-              key: const ValueKey('automod-timeout-duration'),
-              initialValue: _timeoutSeconds,
-              decoration: InputDecoration(labelText: tr('Duration')),
-              items: [
-                for (final (label, duration) in circleTimeoutDurations)
-                  DropdownMenuItem(
-                    value: duration.inSeconds,
-                    child: Text(tr(label)),
+          SettingsSectionHeader(tr('Actions')),
+          SettingsGroup(
+            separatorIndent: 14,
+            children: [
+              SettingsRow.toggle(
+                key: const ValueKey('automod-block'),
+                title: tr('Block message'),
+                subtitle: tr('Keep the message from being sent.'),
+                value: _block,
+                onChanged: (value) => setState(() => _block = value),
+              ),
+              if (_block)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                  child: WeCordTextField(
+                    fieldKey: const ValueKey('automod-reason'),
+                    controller: _blockReason,
+                    maxLength: AutoModLimits.blockReasonLength,
+                    label: tr('Custom message (optional)'),
+                    helperText: tr(
+                      'Shown to members when their message is blocked.',
+                    ),
                   ),
-                if (!circleTimeoutDurations.any(
-                  (option) => option.$2.inSeconds == _timeoutSeconds,
-                ))
-                  DropdownMenuItem(
-                    value: _timeoutSeconds,
-                    child: Text(
-                      tr('{count} seconds', {'count': _timeoutSeconds}),
+                ),
+              SettingsRow.toggle(
+                key: const ValueKey('automod-alert'),
+                title: tr('Send alert'),
+                subtitle: tr(
+                  'Post who sent what, and where, in a channel you choose.',
+                ),
+                value: _alert,
+                onChanged: (value) => setState(() => _alert = value),
+              ),
+              if (_alert)
+                SettingsRow(
+                  key: const ValueKey('automod-alert-channel'),
+                  icon: Icons.tag,
+                  title: tr('Alert channel'),
+                  value: alertChannelName,
+                  onTap: _chooseAlertChannel,
+                ),
+              SettingsRow.toggle(
+                key: const ValueKey('automod-timeout'),
+                title: tr('Time out member'),
+                subtitle: tr(
+                  "They can still read, but can't send messages, react, "
+                  'start threads or join voice until it ends.',
+                ),
+                value: _timeoutSeconds != null,
+                onChanged: (value) => setState(
+                  () => _timeoutSeconds = value
+                      ? circleTimeoutDurations.first.$2.inSeconds
+                      : null,
+                ),
+              ),
+              if (_timeoutSeconds != null)
+                SettingsRow(
+                  key: const ValueKey('automod-timeout-duration'),
+                  icon: Icons.timer_outlined,
+                  title: tr('Duration'),
+                  value: durationLabel,
+                  onTap: _chooseDuration,
+                ),
+            ],
+          ),
+          SettingsSectionHeader(tr('Exempt roles')),
+          CircleCard(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final role in widget.detail.roles)
+                  WeCordChip(
+                    label: role.isDefault ? '@everyone' : role.name,
+                    selected: _exemptRoles.contains(role.id),
+                    onPressed: () => setState(
+                      () => _exemptRoles.contains(role.id)
+                          ? _exemptRoles.remove(role.id)
+                          : _exemptRoles.add(role.id),
                     ),
                   ),
               ],
-              onChanged: (value) => setState(() => _timeoutSeconds = value),
             ),
-          const Divider(height: 32),
-          Text(tr('Exempt roles'), style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final role in widget.detail.roles)
-                FilterChip(
-                  label: Text(role.isDefault ? '@everyone' : role.name),
-                  selected: _exemptRoles.contains(role.id),
-                  onSelected: (selected) => setState(
-                    () => selected
-                        ? _exemptRoles.add(role.id)
-                        : _exemptRoles.remove(role.id),
-                  ),
-                ),
-            ],
           ),
-          const SizedBox(height: 16),
-          Text(tr('Exempt channels'), style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final channel in widget.detail.channels)
-                FilterChip(
-                  label: Text('#${channel.name}'),
-                  selected: _exemptChannels.contains(channel.id),
-                  onSelected: (selected) => setState(
-                    () => selected
-                        ? _exemptChannels.add(channel.id)
-                        : _exemptChannels.remove(channel.id),
+          SettingsSectionHeader(tr('Exempt channels')),
+          CircleCard(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final channel in widget.detail.channels)
+                  WeCordChip(
+                    label: '#${channel.name}',
+                    selected: _exemptChannels.contains(channel.id),
+                    onPressed: () => setState(
+                      () => _exemptChannels.contains(channel.id)
+                          ? _exemptChannels.remove(channel.id)
+                          : _exemptChannels.add(channel.id),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -651,74 +679,64 @@ class _AutoModRuleEditorState extends ConsumerState<AutoModRuleEditor> {
     switch (_kind) {
       case AutoModRuleKind.keyword:
         return [
-          TextField(
-            key: const ValueKey('automod-keywords'),
+          WeCordTextField(
+            fieldKey: const ValueKey('automod-keywords'),
             controller: _keywords,
             minLines: 2,
             maxLines: 6,
-            decoration: InputDecoration(
-              labelText: tr('Keywords'),
-              helperText: tr(
-                'Separate with commas. Keywords match whole words; use * '
-                'for parts of words: *cat matches wildcat, cat* matches '
-                'catch, *cat* matches anywhere.',
-              ),
-              helperMaxLines: 4,
+            label: tr('Keywords'),
+            helperText: tr(
+              'Separate with commas. Keywords match whole words; use * '
+              'for parts of words: *cat matches wildcat, cat* matches '
+              'catch, *cat* matches anywhere.',
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('automod-patterns'),
+          WeCordTextField(
+            fieldKey: const ValueKey('automod-patterns'),
             controller: _patterns,
             minLines: 1,
             maxLines: 6,
-            decoration: InputDecoration(
-              labelText: tr('Regex patterns (optional)'),
-              helperText: tr(
-                'One regular expression per line, up to {count}. Matching '
-                'ignores case.',
-                {'count': AutoModLimits.patterns},
-              ),
-              helperMaxLines: 3,
+            label: tr('Regex patterns (optional)'),
+            helperText: tr(
+              'One regular expression per line, up to {count}. Matching '
+              'ignores case.',
+              {'count': AutoModLimits.patterns},
             ),
           ),
         ];
       case AutoModRuleKind.mentionSpam:
         return [
-          TextField(
-            key: const ValueKey('automod-mention-limit'),
+          WeCordTextField(
+            fieldKey: const ValueKey('automod-mention-limit'),
             controller: _mentionLimit,
             keyboardType: TextInputType.number,
             inputFormatters: numbers,
-            decoration: InputDecoration(
-              labelText: tr('Unique mentions allowed per message'),
-              helperText: tr(
-                'Messages with more user and role mentions than this match.',
-              ),
+            label: tr('Unique mentions allowed per message'),
+            helperText: tr(
+              'Messages with more user and role mentions than this match.',
             ),
           ),
         ];
       case AutoModRuleKind.spam:
         return [
-          TextField(
-            key: const ValueKey('automod-message-limit'),
+          WeCordTextField(
+            fieldKey: const ValueKey('automod-message-limit'),
             controller: _messageLimit,
             keyboardType: TextInputType.number,
             inputFormatters: numbers,
-            decoration: InputDecoration(labelText: tr('Messages allowed')),
+            label: tr('Messages allowed'),
           ),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('automod-window'),
+          const SizedBox(height: 12),
+          WeCordTextField(
+            fieldKey: const ValueKey('automod-window'),
             controller: _windowSeconds,
             keyboardType: TextInputType.number,
             inputFormatters: numbers,
-            decoration: InputDecoration(
-              labelText: tr('Within seconds'),
-              helperText: tr(
-                "Sending more messages than this across the circle's "
-                'channels in that time matches.',
-              ),
+            label: tr('Within seconds'),
+            helperText: tr(
+              "Sending more messages than this across the circle's "
+              'channels in that time matches.',
             ),
           ),
         ];

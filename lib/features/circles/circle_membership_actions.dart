@@ -5,9 +5,11 @@ import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Asks to confirm, then leaves the circle and goes back to the circle
 /// list.
@@ -16,30 +18,16 @@ Future<void> leaveCircle(
   required CircleDetail detail,
 }) async {
   final name = detail.circle.name;
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      scrollable: true,
-      title: Text(tr('Leave {name}', {'name': name})),
-      content: Text(
-        tr(
-          'Leave this circle and all of its channels? You can only rejoin '
-          'with an invite.',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(tr('Cancel')),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(tr('Leave')),
-        ),
-      ],
+  final confirmed = await confirmCircleAction(
+    context,
+    title: tr('Leave {name}', {'name': name}),
+    message: tr(
+      'Leave this circle and all of its channels? You can only rejoin '
+      'with an invite.',
     ),
+    confirmLabel: tr('Leave'),
   );
-  if (confirmed != true || !context.mounted) {
+  if (!confirmed || !context.mounted) {
     return;
   }
   final messenger = ScaffoldMessenger.maybeOf(context);
@@ -74,8 +62,8 @@ Future<void> transferCircleOwnership(
   BuildContext context, {
   required CircleDetail detail,
 }) async {
-  final newOwner = await showDialog<CircleMember>(
-    context: context,
+  final newOwner = await showCircleDialog<CircleMember>(
+    context,
     builder: (context) => _TransferOwnershipDialog(detail: detail),
   );
   if (newOwner == null || !context.mounted) {
@@ -138,87 +126,142 @@ class _TransferOwnershipDialogState extends State<_TransferOwnershipDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final candidates = [
       for (final member in widget.detail.members)
         if (!member.isCurrentUser) member,
     ];
     final circleName = widget.detail.circle.name;
 
-    return AlertDialog(
-      scrollable: true,
-      title: Text(tr('Transfer ownership')),
+    return CircleDialog(
+      title: tr('Transfer ownership'),
+      message: tr(
+        'The new owner gets every permission. You stay in the circle as '
+        'a member without roles.',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            tr(
-              'The new owner gets every permission. You stay in the circle as '
-              'a member without roles.',
-            ),
-          ),
-          const SizedBox(height: 12),
           if (candidates.isEmpty)
             Text(
               tr(
                 'Invite someone first: there is nobody to hand the circle to.',
               ),
-              style: theme.textTheme.bodySmall,
+              style: TextStyle(fontSize: 13, color: c.muted),
             )
           else
-            for (final member in candidates)
-              ListTile(
-                key: ValueKey('transfer-owner-${member.profile.id}'),
-                contentPadding: EdgeInsets.zero,
-                selected: member.profile.id == _selected?.profile.id,
-                leading: CircleAvatar(
-                  backgroundImage: member.profile.avatarUrl == null
-                      ? null
-                      : NetworkImage(member.profile.avatarUrl!),
-                  child: member.profile.avatarUrl == null
-                      ? Text(_initial(member.displayName))
-                      : null,
-                ),
-                title: Text(
-                  member.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  '@${member.profile.username}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: member.profile.id == _selected?.profile.id
-                    ? const Icon(Icons.check_circle)
-                    : null,
-                onTap: () => setState(() => _selected = member),
-              ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('transfer-confirm-name'),
-            controller: _nameController,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: tr('Type the circle name to confirm'),
-              hintText: circleName,
+            SettingsGroup(
+              color: c.well,
+              separatorIndent: 62,
+              children: [
+                for (final member in candidates)
+                  _CandidateRow(
+                    key: ValueKey('transfer-owner-${member.profile.id}'),
+                    member: member,
+                    selected: member.profile.id == _selected?.profile.id,
+                    onTap: () => setState(() => _selected = member),
+                  ),
+              ],
             ),
+          const SizedBox(height: 16),
+          WeCordTextField(
+            fieldKey: const ValueKey('transfer-confirm-name'),
+            controller: _nameController,
+            label: tr('Type the circle name to confirm'),
+            hint: circleName,
           ),
         ],
       ),
       actions: [
-        TextButton(
+        CircleDialogAction(
+          label: tr('Cancel'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
+        CircleDialogAction.danger(
+          label: tr('Transfer'),
           onPressed: _confirmed
               ? () => Navigator.of(context).pop(_selected)
               : null,
-          child: Text(tr('Transfer')),
         ),
       ],
+    );
+  }
+}
+
+/// A member the circle can be handed to, with a check when picked.
+class _CandidateRow extends StatelessWidget {
+  const _CandidateRow({
+    required this.member,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final CircleMember member;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      onPressed: onTap,
+      selected: selected,
+      pressedScale: 1,
+      shape: const RoundedRectangleBorder(),
+      builder: (context, states) {
+        final hovered =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          color: selected
+              ? c.accentSoft
+              : hovered
+              ? c.ink.withValues(alpha: 0.04)
+              : c.ink.withValues(alpha: 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            children: [
+              CircleNetworkAvatar(
+                name: member.displayName,
+                url: member.profile.avatarUrl,
+                size: 36,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      member.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
+                      ),
+                    ),
+                    Text(
+                      '@${member.profile.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: c.muted),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(Icons.check_circle, size: 22, color: c.accent)
+              else
+                Icon(Icons.circle_outlined, size: 22, color: c.faint),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -250,8 +293,9 @@ class _CircleMembershipLostViewState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Scaffold(
+      backgroundColor: c.rail,
       body: SafeArea(
         bottom: false,
         child: Row(
@@ -259,38 +303,21 @@ class _CircleMembershipLostViewState
           children: [
             CircleRail(selectedCircleId: widget.circleId),
             Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.group_off_outlined,
-                        size: 48,
-                        color: theme.colorScheme.outline,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        tr("You're no longer a member of this circle"),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        tr(
-                          'You left it or were removed. You can rejoin with '
-                          'an invite.',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        onPressed: () => context.go(HomeScreen.path),
-                        child: Text(tr('Back to home')),
-                      ),
-                    ],
+              child: Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: PanelSurface(
+                  color: c.paper,
+                  child: CircleEmptyState(
+                    icon: Icons.group_off_outlined,
+                    title: tr("You're no longer a member of this circle"),
+                    message: tr(
+                      'You left it or were removed. You can rejoin with '
+                      'an invite.',
+                    ),
+                    action: WeCordButton(
+                      label: tr('Back to home'),
+                      onPressed: () => context.go(HomeScreen.path),
+                    ),
                   ),
                 ),
               ),
@@ -300,9 +327,4 @@ class _CircleMembershipLostViewState
       ),
     );
   }
-}
-
-String _initial(String value) {
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
 }

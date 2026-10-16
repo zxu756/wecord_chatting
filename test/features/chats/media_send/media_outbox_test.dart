@@ -12,6 +12,7 @@ import 'package:wecord/features/chats/media_send/media_outbox.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/media_send/outbox_media.dart';
 import 'package:wecord/features/chats/media_send/pending_media_store.dart';
+import 'package:wecord/features/chats/media_send/send_failure.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -585,6 +586,44 @@ void main() {
         expect(await cache.readOutbox('user-1'), isEmpty);
       },
     );
+
+    test('a failed album keeps its reason after a restart', () async {
+      final first = container();
+      first.read(outboxProvider);
+      await pumpEventQueue();
+      providerUploader.failures.addAll([
+        const UploadException(413, 'too big'),
+        const UploadException(413, 'too big'),
+      ]);
+      final outbox = first.read(outboxProvider.notifier);
+      await outbox.enqueueMedia(
+        conversationId: 'conversation-1',
+        items: [item('a.jpg'), item('b.jpg')],
+      );
+      await outbox.startSending();
+      await pumpEventQueue();
+      expect(
+        first.read(outboxProvider).map((e) => e.state),
+        everyElement(OutboxState.failed),
+      );
+      first.dispose();
+
+      final restarted = container();
+      restarted.read(outboxProvider);
+      await pumpEventQueue(times: 40);
+
+      final entries = restarted.read(outboxProvider);
+      expect(entries, hasLength(2));
+      expect(entries.map((e) => e.state), everyElement(OutboxState.failed));
+      expect(entries.map((e) => e.error), everyElement(isA<UploadException>()));
+      expect(
+        sendFailureReason(entries.first.error),
+        'Files can be up to 50 MB.',
+      );
+      expect(isRetryableFailure(entries.first.error), isFalse);
+      // Nothing was sent again on its own.
+      expect(providerSender.calls, isEmpty);
+    });
 
     test('cancelling one attachment of an album drops only that one', () async {
       final c = container(online: false);

@@ -13,6 +13,7 @@ import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../features/circles/circle_detail_screen_test.dart' as circle_fakes;
 import '../features/circles/circle_emojis_test.dart' as emoji_fakes;
@@ -96,11 +97,16 @@ void main() {
       await pumpStandalone(tester, world, const AuthScreen());
       expect(find.text('Sign in'), findsWidgets);
 
-      await tester.tap(find.text('Create account'));
+      final toggle = find.byKey(const ValueKey('auth-toggle-mode'));
+      await tester.ensureVisible(toggle);
+      await settle(tester);
+      await tester.tap(toggle);
       await settle(tester);
       expect(find.text('Username'), findsOneWidget);
+      await tester.ensureVisible(find.text('Username'));
+      await settle(tester);
 
-      await tester.tap(find.widgetWithText(TextFormField, 'Username'));
+      await tester.tap(find.widgetWithText(WeCordTextField, 'Username'));
       await showKeyboard(tester, viewport);
       expectFullyVisible(tester, find.byType(EditableText).first);
     });
@@ -114,7 +120,13 @@ void main() {
       final world = PhoneWorld();
       await world.open(tester, ChatsScreen.path);
 
-      expect(find.text(bart.displayName), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-dm-dm-1')),
+          matching: find.text(bart.displayName),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('home-dm-dm-1')),
@@ -127,7 +139,7 @@ void main() {
 
       // Phones open conversation actions with a long press.
       expect(find.byTooltip('Conversation actions'), findsNothing);
-      await tester.longPress(find.text(bart.displayName));
+      await tester.longPress(find.byKey(const ValueKey('home-dm-dm-1')));
       await settle(tester);
       expect(find.text('Unpin chat'), findsOneWidget);
     });

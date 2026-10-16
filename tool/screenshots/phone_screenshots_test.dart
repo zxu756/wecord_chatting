@@ -14,6 +14,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/features/auth/set_new_password_screen.dart';
+import 'package:wecord/features/auth/two_factor_challenge_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -107,6 +110,31 @@ void main() {
     );
     await settle(tester);
   }
+
+  screen('00-sign-in', (tester, world) async {
+    world.auth.user = null;
+    await pumpStandalone(tester, world, const AuthScreen());
+  });
+
+  screen('00b-create-account', (tester, world) async {
+    world.auth.user = null;
+    await pumpStandalone(tester, world, const AuthScreen());
+    final toggle = find.byKey(const ValueKey('auth-toggle-mode'));
+    await tester.ensureVisible(toggle);
+    await settle(tester);
+    await tester.tap(toggle);
+    await settle(tester);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 400));
+  });
+
+  screen('00c-two-step-code', (tester, world) async {
+    await pumpStandalone(tester, world, const TwoFactorChallengeScreen());
+    FocusManager.instance.primaryFocus?.unfocus();
+  });
+
+  screen('00d-new-password', (tester, world) async {
+    await pumpStandalone(tester, world, const SetNewPasswordScreen());
+  });
 
   screen('01-chats-list', (tester, world) async {
     await world.open(tester, ChatsScreen.path);

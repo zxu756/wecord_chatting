@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -11,11 +12,16 @@ import 'package:wecord/shared/models/poll.dart';
 final _callStarted = RegExp(r'^(.+) started a call\.$');
 final _callEnded = RegExp(r' started a call that lasted .+\.$');
 
+/// One line about a conversation's latest message: its [text], and an
+/// [icon] for photos, GIFs, voice messages, files and calls.
+typedef ConversationPreview = ({IconData? icon, String text});
+
 /// One line about [conversation]'s latest message for conversation lists:
-/// plain text without markdown, a label for images, GIFs, voice messages,
-/// files, polls, stickers and calls, and "You: …" for the user's own messages.
-/// Null when the conversation has no messages yet.
-String? conversationPreviewText(
+/// plain text without markdown, a small icon and a label for images, GIFs,
+/// voice messages, files and calls, a label for polls and stickers, and
+/// "You: …" for the user's own messages. Null when the conversation has no
+/// messages yet.
+ConversationPreview? conversationPreview(
   ConversationSummary conversation, {
   String? currentUserId,
 }) {
@@ -26,16 +32,19 @@ String? conversationPreviewText(
   }
   // The server sends this for recalled messages, whatever their type.
   if (body == 'Message deleted') {
-    return tr('Message deleted');
+    return (icon: null, text: tr('Message deleted'));
   }
-  final text = switch (type ?? MessageType.text) {
-    MessageType.text when gifUrlIn(body) != null => tr('[GIF]'),
-    MessageType.text => plainTextFromMarkdown(body),
-    MessageType.image => tr('[Image]'),
-    MessageType.voice => tr('[Voice]'),
-    MessageType.file => tr('[File]'),
-    MessageType.poll => pollPreviewText(body),
-    MessageType.sticker => stickerPreviewText(body),
+  final (IconData? icon, String text) = switch (type ?? MessageType.text) {
+    MessageType.text when gifUrlIn(body) != null => (
+      Icons.gif_box_outlined,
+      tr('GIF'),
+    ),
+    MessageType.text => (null, plainTextFromMarkdown(body)),
+    MessageType.image => (Icons.image_outlined, tr('Image')),
+    MessageType.voice => (Icons.mic_none_rounded, tr('Voice message')),
+    MessageType.file => (Icons.attach_file_rounded, tr('File')),
+    MessageType.poll => (null, pollPreviewText(body)),
+    MessageType.sticker => (null, stickerPreviewText(body)),
     MessageType.system => _systemPreview(body),
   };
   final own =
@@ -43,17 +52,29 @@ String? conversationPreviewText(
       type != MessageType.system &&
       conversation.lastMessageWebhookName == null &&
       conversation.lastMessageSenderId == currentUserId;
-  return own ? tr('You: {message}', {'message': text}) : text;
+  return (
+    icon: icon,
+    text: own ? tr('You: {message}', {'message': text}) : text,
+  );
 }
 
-String _systemPreview(String body) {
+/// The text of [conversationPreview] alone.
+String? conversationPreviewText(
+  ConversationSummary conversation, {
+  String? currentUserId,
+}) => conversationPreview(conversation, currentUserId: currentUserId)?.text;
+
+(IconData?, String) _systemPreview(String body) {
   if (_callEnded.hasMatch(body)) {
-    return tr('Call ended');
+    return (Icons.call_outlined, tr('Call ended'));
   }
   if (_callStarted.firstMatch(body) case final match?) {
-    return tr('{name} started a call', {'name': match.group(1)});
+    return (
+      Icons.call_outlined,
+      tr('{name} started a call', {'name': match.group(1)}),
+    );
   }
-  return body;
+  return (null, body);
 }
 
 /// How long ago [time] was, as briefly as a conversation list shows it:

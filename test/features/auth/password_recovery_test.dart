@@ -11,6 +11,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/features/auth/set_new_password_screen.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import '../../shared/navigation/app_router_test.dart' as router_fakes;
 
@@ -129,7 +130,7 @@ void main() {
     );
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Email'),
+      find.widgetWithText(WeCordTextField, 'Email'),
       'ada@example.com',
     );
     await tester.tap(find.text('Forgot password?'));
@@ -170,7 +171,9 @@ void main() {
     );
     expect(find.text('Forgot password?'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Create account'));
+    await tester.ensureVisible(find.byKey(const ValueKey('auth-toggle-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('auth-toggle-mode')));
     await tester.pump();
     expect(find.text('Forgot password?'), findsNothing);
   });

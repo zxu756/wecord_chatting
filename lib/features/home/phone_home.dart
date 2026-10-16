@@ -1,12 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
-import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
@@ -16,31 +17,27 @@ import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/presence_status.dart';
+import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
-/// Colors of the phone home: the rail a shade darker than the panel beside
-/// it, in both themes.
+/// Colors of the phone home, for code that only has a ColorScheme: the
+/// rail, its items and the white panel beside it (design tokens).
 abstract final class PhoneHomeColors {
-  static bool _light(ColorScheme colors) =>
-      colors.brightness == Brightness.light;
+  static WeCordPalette _palette(ColorScheme colors) =>
+      colors.brightness == Brightness.dark
+      ? WeCordPalette.dark
+      : WeCordPalette.light;
 
-  static Color rail(ColorScheme colors) => _light(colors)
-      ? colors.surfaceContainerHigh
-      : colors.surfaceContainerLowest;
+  static Color rail(ColorScheme colors) => _palette(colors).rail;
 
-  /// Rail icons that are neither selected nor hovered.
-  static Color railItem(ColorScheme colors) => _light(colors)
-      ? colors.surfaceContainerLowest
-      : colors.surfaceContainerHigh;
+  /// Rail icons that are not selected.
+  static Color railItem(ColorScheme colors) => _palette(colors).railItem;
 
-  static Color panel(ColorScheme colors) => _light(colors)
-      ? colors.surfaceContainerLowest
-      : colors.surfaceContainerLow;
+  static Color panel(ColorScheme colors) => _palette(colors).panel;
 
-  /// Buttons, tiles and the user panel on top of the panel.
-  static Color raised(ColorScheme colors) => _light(colors)
-      ? colors.surfaceContainerHigh
-      : colors.surfaceContainerHighest;
+  /// Buttons and tiles on top of the panel.
+  static Color raised(ColorScheme colors) => _palette(colors).raised;
 }
 
 /// Builds the panel beside the rail; lists end [bottomInset] above the
@@ -49,9 +46,9 @@ typedef PhoneHomePanelBuilder =
     Widget Function(BuildContext context, double bottomInset);
 
 /// The phone home, edge to edge: the circle rail runs down the left from
-/// under the status bar, a panel with a rounded top-left corner fills the
-/// rest, and the user panel floats at the bottom above the home indicator
-/// (with the voice panel above it during a call).
+/// under the status bar, a white panel with a 28 top-left corner fills the
+/// rest, and the glass user panel floats at the bottom across both, above
+/// the home indicator (with the voice panel above it during a call).
 class PhoneHomeFrame extends ConsumerStatefulWidget {
   const PhoneHomeFrame({
     required this.panelBuilder,
@@ -68,59 +65,60 @@ class PhoneHomeFrame extends ConsumerStatefulWidget {
   /// The circle the rail highlights.
   final String? selectedCircleId;
 
-  static const panelRadius = 28.0;
+  static const panelRadius = WeCordRadii.xxl;
 
   @override
   ConsumerState<PhoneHomeFrame> createState() => _PhoneHomeFrameState();
 }
 
 class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame> {
-  static const _gap = 8.0;
+  static const _gap = 10.0;
 
   /// Height of the floating panels, measured after layout.
-  var _floatingHeight = PhoneUserPanel.height;
+  var _floatingHeight = FloatingUserPanel.phoneHeight;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final tokens = context.tokens;
+    final c = tokens.colors;
     final padding = MediaQuery.paddingOf(context);
-    final railColor = PhoneHomeColors.rail(colors);
-    // On phones with a home indicator the panel sits just above it.
-    final floatingBottom = padding.bottom > 0 ? padding.bottom : _gap;
+    // The panel starts just under the status bar; the rail's first item a
+    // little lower.
+    final panelTop = math.max(padding.top, 12.0);
+    // On phones with a home indicator the user panel sits just above it.
+    final floatingBottom = math.max(padding.bottom, 12.0);
     final bottomInset = floatingBottom + _floatingHeight + _gap;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: WeCordTheme.overlayStyleFor(theme.brightness),
+      value: WeCordTheme.overlayStyleFor(tokens.brightness),
       child: Material(
         key: const ValueKey('phone-home'),
-        color: railColor,
+        color: c.rail,
         child: Stack(
           children: [
             Positioned.fill(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  CircleRail(
-                    homeSelected: widget.homeSelected,
-                    selectedCircleId: widget.selectedCircleId,
-                    color: railColor,
-                    itemColor: PhoneHomeColors.railItem(colors),
-                    padding: EdgeInsets.only(
-                      top: padding.top + 4,
-                      bottom: bottomInset + _gap,
+                  Padding(
+                    padding: EdgeInsets.only(left: padding.left),
+                    child: CircleRail(
+                      phone: true,
+                      homeSelected: widget.homeSelected,
+                      selectedCircleId: widget.selectedCircleId,
+                      padding: EdgeInsets.only(
+                        top: panelTop + 7,
+                        bottom: bottomInset + _gap,
+                      ),
                     ),
                   ),
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.only(top: padding.top + _gap),
-                      child: ClipRRect(
+                      padding: EdgeInsets.only(top: panelTop),
+                      child: PanelSurface(
                         key: const ValueKey('phone-home-panel'),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(PhoneHomeFrame.panelRadius),
-                        ),
                         child: Material(
-                          color: PhoneHomeColors.panel(colors),
+                          type: MaterialType.transparency,
                           child: MediaQuery.removePadding(
                             context: context,
                             removeTop: true,
@@ -154,13 +152,13 @@ class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame> {
                   children: [
                     if (ref.watch(voiceSessionProvider) != null) ...[
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(WeCordRadii.xl),
                         child: VoiceConnectedPanel(
                           onOpen: (session) =>
                               context.push(voiceSessionPath(session)),
                         ),
                       ),
-                      const SizedBox(height: _gap),
+                      const SizedBox(height: 8),
                     ],
                     const PhoneUserPanel(),
                   ],
@@ -211,208 +209,96 @@ class _RenderSizeReporter extends RenderProxyBox {
   }
 }
 
-/// The signed-in user floating at the bottom of the phone home: avatar
-/// with presence (opens the profile and settings), name and status (opens
-/// the status picker) and a bell for notifications.
+/// The signed-in user's name for panels: display name, else username.
+String userPanelName(Profile? profile) {
+  if (profile == null) {
+    return '';
+  }
+  return profile.displayName.trim().isNotEmpty
+      ? profile.displayName
+      : profile.username;
+}
+
+/// "Online · Planning the weekend": presence, then the custom status.
+String userPanelStatusLine(PresenceStatus presence, CustomStatus? status) {
+  final custom = status?.label.trim() ?? '';
+  return custom.isEmpty ? presence.label : '${presence.label} · $custom';
+}
+
+/// Opens the presence picker, with the custom status behind it.
+Future<void> showUserStatusPicker(
+  BuildContext context,
+  WidgetRef ref,
+  CustomStatus? status,
+) {
+  return showPresenceStatusSheet(
+    context,
+    onEditCustomStatus: () async {
+      final saved = await showCustomStatusSheet(context, current: status);
+      if (saved == true) {
+        ref.invalidate(currentProfileProvider);
+      }
+    },
+  );
+}
+
+/// The signed-in user floating in glass at the bottom of the phone home:
+/// avatar with presence (opens the profile and settings), name and status
+/// (opens the status picker) and a bell for notifications.
 class PhoneUserPanel extends ConsumerWidget {
   const PhoneUserPanel({super.key});
 
-  static const height = 60.0;
+  static const height = FloatingUserPanel.phoneHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final background = PhoneHomeColors.raised(colors);
+    final tokens = context.tokens;
     final profile = ref.watch(currentProfileProvider).valueOrNull;
     // Invisible (or online status hidden) shows as such here, though
     // others see the user offline.
     final presence = ref.watch(ownPresenceProvider);
     final status = activeCustomStatus(profile?.customStatus);
-    final name = profile == null
-        ? ''
-        : profile.displayName.trim().isNotEmpty
-        ? profile.displayName
-        : profile.username;
+    final name = userPanelName(profile);
     final inboxCount = ref.watch(inboxBadgeCountProvider);
 
-    final radius = BorderRadius.circular(22);
-    return DecoratedBox(
+    return KeyedSubtree(
       key: const ValueKey('phone-user-panel'),
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.45 : 0.12,
-            ),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+      child: FloatingUserPanel(
+        key: const ValueKey('phone-user-panel-status'),
+        title: name,
+        subtitle: userPanelStatusLine(presence, status),
+        semanticLabel: tr('Set your status'),
+        onTap: profile == null
+            ? null
+            : () => showUserStatusPicker(context, ref, status),
+        avatar: WeCordPressable(
+          key: const ValueKey('phone-user-panel-avatar'),
+          tooltip: tr('You'),
+          semanticLabel: tr('You'),
+          shape: const CircleBorder(),
+          onPressed: () => context.push(SettingsScreen.path),
+          builder: (context, states) => ResolvedAvatar(
+            name: name,
+            avatarUrl: profile?.avatarUrl,
+            showPresence: true,
+            presence: presence,
+            ringColor: tokens.glass.solidFill,
+            dotKey: ValueKey('phone-user-panel-presence-${presence.value}'),
+          ),
+        ),
+        actions: [
+          WeCordIconButton(
+            key: const ValueKey('phone-notifications-button'),
+            icon: Icons.notifications_none_rounded,
+            tooltip: tr('Notifications'),
+            variant: WeCordButtonVariant.onPaper,
+            size: 46,
+            iconSize: 22,
+            badgeCount: inboxCount,
+            onPressed: () => context.push(InboxScreen.path),
           ),
         ],
       ),
-      child: Material(
-        color: background,
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: height),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                Tooltip(
-                  message: tr('You'),
-                  child: InkResponse(
-                    key: const ValueKey('phone-user-panel-avatar'),
-                    radius: 24,
-                    onTap: () => context.push(SettingsScreen.path),
-                    child: SizedBox.square(
-                      dimension: 44,
-                      child: Center(
-                        child: PresenceAvatar(
-                          title: name,
-                          avatarUrl: profile?.avatarUrl,
-                          radius: 18,
-                          presence: presence,
-                          borderColor: background,
-                          dotKey: ValueKey(
-                            'phone-user-panel-presence-${presence.value}',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: InkWell(
-                    key: const ValueKey('phone-user-panel-status'),
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: profile == null
-                        ? null
-                        : () => showPresenceStatusSheet(
-                            context,
-                            onEditCustomStatus: () async {
-                              final saved = await showCustomStatusSheet(
-                                context,
-                                current: status,
-                              );
-                              if (saved == true) {
-                                ref.invalidate(currentProfileProvider);
-                              }
-                            },
-                          ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 4,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.keyboard_arrow_down,
-                                size: 18,
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                          Text(
-                            status?.label ?? presence.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const ValueKey('phone-notifications-button'),
-                  tooltip: tr('Notifications'),
-                  style: IconButton.styleFrom(
-                    backgroundColor: PhoneHomeColors.panel(colors),
-                    minimumSize: const Size.square(44),
-                  ),
-                  onPressed: () => context.push(InboxScreen.path),
-                  icon: Badge(
-                    isLabelVisible: inboxCount > 0,
-                    label: Text(inboxCount > 99 ? '99+' : '$inboxCount'),
-                    child: const Icon(Icons.notifications_none),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// An avatar with a [PresenceIndicator] in its bottom-right corner,
-/// outlined in [borderColor] (the background behind it).
-class PresenceAvatar extends StatelessWidget {
-  const PresenceAvatar({
-    required this.title,
-    required this.avatarUrl,
-    required this.radius,
-    required this.borderColor,
-    this.presence,
-    this.showPresence = true,
-    this.dotKey,
-    super.key,
-  });
-
-  final String title;
-  final String? avatarUrl;
-  final double radius;
-  final Color borderColor;
-
-  /// Null shows them offline.
-  final PresenceStatus? presence;
-
-  /// False hides the indicator (group chats).
-  final bool showPresence;
-  final Key? dotKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        FallbackAvatar(title: title, avatarUrl: avatarUrl, radius: radius),
-        if (showPresence)
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: PresenceIndicator(
-              key: dotKey,
-              status: presence,
-              borderColor: borderColor,
-              size: (radius * 0.7).clamp(12.0, 16.0),
-            ),
-          ),
-      ],
     );
   }
 }

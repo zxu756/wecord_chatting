@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/auth/auth_layout.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Shown after the app was opened from a password reset link: the user is
 /// signed in and chooses a new password (or keeps the old one).
@@ -70,79 +72,69 @@ class _SetNewPasswordScreenState extends ConsumerState<SetNewPasswordScreen> {
     final email = ref.watch(
       authStateProvider.select((state) => state.valueOrNull?.email),
     );
-    final title = tr('Set a new password');
 
-    return Scaffold(
-      appBar: AppBar(title: Text(title), automaticallyImplyLeading: false),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: AutofillGroup(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(24),
-              children: [
-                Text(title, style: Theme.of(context).textTheme.headlineMedium),
-                if (email != null && email.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    tr('Choose a new password for {email}.', {'email': email}),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                TextField(
-                  key: const ValueKey('new-password'),
-                  controller: _passwordController,
-                  decoration: InputDecoration(labelText: tr('New password')),
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const ValueKey('confirm-new-password'),
-                  controller: _confirmationController,
-                  decoration: InputDecoration(
-                    labelText: tr('Confirm new password'),
-                  ),
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _save(),
-                ),
-                if (_error case final error?) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    error,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(tr('Save password')),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: _saving
-                      ? null
-                      : () => ref
-                            .read(passwordRecoveryPendingProvider.notifier)
-                            .finish(),
-                  child: Text(tr('Keep my current password')),
-                ),
-              ],
-            ),
-          ),
+    return AuthPage(
+      footer: Center(
+        child: AuthLink(
+          label: tr('Keep my current password'),
+          fontSize: 14,
+          onPressed: _saving
+              ? null
+              : () => ref
+                    .read(passwordRecoveryPendingProvider.notifier)
+                    .finish(),
         ),
       ),
+      children: [
+        const AuthIconTile(Icons.key_rounded),
+        const SizedBox(height: 22),
+        AuthHeading(
+          title: tr('Set a new password'),
+          subtitle: email == null || email.isEmpty
+              ? null
+              : tr('Choose a new password for {email}.', {'email': email}),
+        ),
+        const SizedBox(height: 26),
+        AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              WeCordTextField(
+                fieldKey: const ValueKey('new-password'),
+                controller: _passwordController,
+                label: tr('New password'),
+                onPaper: true,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              WeCordTextField(
+                fieldKey: const ValueKey('confirm-new-password'),
+                controller: _confirmationController,
+                label: tr('Confirm new password'),
+                onPaper: true,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _save(),
+              ),
+            ],
+          ),
+        ),
+        if (_error case final error?) ...[
+          const SizedBox(height: 16),
+          AuthError(error),
+        ],
+        const SizedBox(height: 22),
+        WeCordButton(
+          label: tr('Save password'),
+          size: WeCordButtonSize.large,
+          expand: true,
+          loading: _saving,
+          onPressed: _save,
+        ),
+      ],
     );
   }
 }

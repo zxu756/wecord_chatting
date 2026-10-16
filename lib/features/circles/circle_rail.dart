@@ -12,7 +12,7 @@ import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
-import 'package:wecord/shared/ui/macos_title_bar.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
   (ref) {
@@ -42,12 +42,15 @@ final directUnreadCountProvider = Provider.autoDispose<int>((ref) {
   return count;
 });
 
-/// The app's main navigation, modelled on a server switcher: Home (direct
-/// messages and friends) on top, then the user's circles, then adding a
-/// circle and exploring. Icons morph from a circle to a rounded square and
-/// grow a left pill when hovered or selected. Circles with unread messages
-/// show a short pill and a red badge for mentions; muted circles are dimmed
-/// without the pill but keep the mention badge.
+/// The app's main navigation down the left edge: Messages (direct messages
+/// and friends) on top, a short divider, the user's circles as squircles,
+/// then adding a circle and exploring. Messages fills with ink while open;
+/// a pill on the left edge marks the open circle (30 tall), unread circles
+/// (8) and the one under the pointer (20). Mentions show a red count; muted
+/// circles are dimmed and lose the unread pill but keep their mentions.
+///
+/// Phones ([phone]) use a 68 wide rail with 46 items; desktop a 72 wide
+/// rail with 44 items that keeps the macOS traffic lights clear.
 class CircleRail extends ConsumerWidget {
   const CircleRail({
     this.selectedCircleId,
@@ -57,20 +60,22 @@ class CircleRail extends ConsumerWidget {
     this.color,
     this.itemColor,
     this.padding,
+    this.phone = false,
     super.key,
   });
 
-  static const width = 72.0;
+  static const width = WeCordSizes.railDesktop;
+  static const phoneWidth = WeCordSizes.railPhone;
 
-  /// The rail's background; surfaceContainerHigh by default.
+  /// The rail's background; tokens.colors.rail by default.
   final Color? color;
 
-  /// The background of items that are neither selected nor hovered;
-  /// surfaceContainerLowest by default.
+  /// The background of the Messages, add and explore items while not
+  /// selected; tokens.colors.railItem by default.
   final Color? itemColor;
 
   /// Space around the items, e.g. for the status bar on phones. By default
-  /// 12 above and below, plus room for the traffic lights in the macOS app.
+  /// room for the traffic lights in the macOS app, else a small gap.
   final EdgeInsetsGeometry? padding;
 
   final String? selectedCircleId;
@@ -85,76 +90,123 @@ class CircleRail extends ConsumerWidget {
   /// Opens the voice channel of the current call.
   final ValueChanged<VoiceSession>? onOpenVoice;
 
+  /// The phone rail: narrower, with bigger items.
+  final bool phone;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     final circles =
         ref.watch(circleSummariesProvider).valueOrNull ??
         const <CircleSummary>[];
     final directUnread = ref.watch(directUnreadCountProvider);
-    final background = color ?? colorScheme.surfaceContainerHigh;
+    final background = color ?? c.rail;
+    final itemFill = itemColor ?? c.railItem;
+    final itemSize = phone ? 46.0 : 44.0;
+    final railWidth = phone ? phoneWidth : width;
+
+    CircleRailItem item({
+      required Key key,
+      required String tooltip,
+      required VoidCallback onTap,
+      required Widget avatar,
+      bool selected = false,
+      bool unread = false,
+      int mentionCount = 0,
+      bool muted = false,
+      bool showPill = true,
+    }) => CircleRailItem(
+      key: key,
+      tooltip: tooltip,
+      onTap: onTap,
+      selected: selected,
+      unread: unread,
+      mentionCount: mentionCount,
+      muted: muted,
+      size: itemSize,
+      railWidth: railWidth,
+      badgeBorderColor: background,
+      badgeOnTop: phone,
+      showPill: showPill,
+      child: avatar,
+    );
 
     return Container(
       key: const ValueKey('circle-rail'),
-      width: width,
+      width: railWidth,
       color: background,
       child: ListView(
         padding:
             padding ??
-            EdgeInsets.only(top: 12 + macosTitleBarInset, bottom: 12),
+            EdgeInsets.only(
+              top: drawsUnderMacosTitleBar ? 50 : 14,
+              bottom: 96,
+            ),
         children: [
-          CircleRailItem(
+          item(
             key: const ValueKey('circle-rail-home'),
             tooltip: tr('Direct messages'),
             selected: homeSelected,
-            color: itemColor,
-            badgeBorderColor: background,
+            // On phones the ink fill alone marks Messages as open.
+            showPill: !phone,
             mentionCount: directUnread,
             onTap: () => context.go(HomeScreen.path),
-            child: const Icon(Icons.forum_outlined),
+            avatar: ThingAvatar(
+              size: itemSize,
+              icon: Icons.chat_bubble_outline_rounded,
+              color: homeSelected ? c.ink : itemFill,
+              foregroundColor: homeSelected ? c.onInk : c.ink,
+            ),
           ),
           Center(
             child: Container(
-              width: 32,
+              width: 24,
               height: 2,
-              margin: const EdgeInsets.symmetric(vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: 2),
               decoration: BoxDecoration(
-                color: colorScheme.outlineVariant,
+                color: c.track,
                 borderRadius: BorderRadius.circular(1),
               ),
             ),
           ),
           for (final circle in circles)
-            CircleRailItem(
+            item(
               key: ValueKey('circle-rail-${circle.id}'),
               tooltip: circle.name,
               selected: circle.id == selectedCircleId,
-              color: itemColor,
-              badgeBorderColor: background,
               unread: circle.unreadCount > 0,
               mentionCount: circle.mentionCount,
               muted: circle.isMuted,
               onTap: () => context.go('${CircleRoutes.path}/${circle.id}'),
-              image: circle.avatarUrl == null
-                  ? null
-                  : NetworkImage(circle.avatarUrl!),
-              child: Text(_initials(circle.name)),
+              avatar: ThingAvatar(
+                label: circle.name,
+                size: itemSize,
+                image: circle.avatarUrl == null
+                    ? null
+                    : NetworkImage(circle.avatarUrl!),
+              ),
             ),
-          CircleRailItem(
+          item(
             key: const ValueKey('circle-rail-add'),
             tooltip: tr('Add a circle'),
-            color: itemColor,
-            badgeBorderColor: background,
             onTap: () => showAddCircleSheet(context),
-            child: const Icon(Icons.add),
+            avatar: ThingAvatar(
+              size: itemSize,
+              icon: Icons.add_rounded,
+              color: itemFill,
+              foregroundColor: c.successText,
+            ),
           ),
-          CircleRailItem(
+          item(
             key: const ValueKey('circle-rail-explore'),
             tooltip: tr('Search and explore'),
-            color: itemColor,
-            badgeBorderColor: background,
             onTap: () => openPage(context, GlobalMessageSearchScreen.path),
-            child: const Icon(Icons.explore_outlined),
+            avatar: ThingAvatar(
+              size: itemSize,
+              icon: Icons.explore_outlined,
+              color: itemFill,
+              foregroundColor: c.ink,
+            ),
           ),
           if (showVoiceIndicator)
             Center(child: VoiceRailIndicator(onOpen: onOpenVoice)),
@@ -164,7 +216,11 @@ class CircleRail extends ConsumerWidget {
   }
 }
 
-class CircleRailItem extends StatefulWidget {
+/// One rail entry: [child] (usually a ThingAvatar of [size]) centred in
+/// the rail, the selection pill on the rail's left edge and a red mention
+/// count on a corner. Hover tints nothing but grows the pill; presses
+/// scale; tooltips name it.
+class CircleRailItem extends StatelessWidget {
   const CircleRailItem({
     required this.tooltip,
     required this.onTap,
@@ -173,18 +229,13 @@ class CircleRailItem extends StatefulWidget {
     this.unread = false,
     this.mentionCount = 0,
     this.muted = false,
-    this.image,
-    this.color,
+    this.size = 44,
+    this.railWidth = CircleRail.width,
     this.badgeBorderColor,
+    this.badgeOnTop = false,
+    this.showPill = true,
     super.key,
   });
-
-  /// Background while neither selected nor hovered; surfaceContainerLowest
-  /// by default.
-  final Color? color;
-
-  /// Outline of the mention badge, the rail's background.
-  final Color? badgeBorderColor;
 
   final String tooltip;
   final VoidCallback onTap;
@@ -200,172 +251,97 @@ class CircleRailItem extends StatefulWidget {
   /// Muted items are dimmed and never show the unread pill, but still show
   /// the mention badge.
   final bool muted;
-  final ImageProvider? image;
 
-  @override
-  State<CircleRailItem> createState() => _CircleRailItemState();
-}
+  final double size;
+  final double railWidth;
 
-class _CircleRailItemState extends State<CircleRailItem> {
-  static const _duration = Duration(milliseconds: 150);
+  /// Ring cut around the mention badge: the rail's background.
+  final Color? badgeBorderColor;
 
-  var _hovered = false;
+  /// The mention badge on the top-right corner (phones) instead of the
+  /// bottom right.
+  final bool badgeOnTop;
+
+  /// Whether selection shows the pill (Messages on phones shows its fill).
+  final bool showPill;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final active = widget.selected || _hovered;
-    final pillHeight = widget.selected
-        ? 40.0
-        : _hovered
-        ? 20.0
-        : (widget.unread && !widget.muted ? 8.0 : 0.0);
-    final dimmed = widget.muted && !active;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: SizedBox(
-        height: 48,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              left: 0,
-              child: AnimatedContainer(
-                key: const ValueKey('circle-rail-pill'),
-                duration: _duration,
-                curve: Curves.easeOut,
-                width: 4,
-                height: pillHeight,
-                decoration: BoxDecoration(
-                  color: colorScheme.onSurface,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(4),
-                  ),
-                ),
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      onPressed: onTap,
+      tooltip: tooltip,
+      semanticLabel: tooltip,
+      selected: selected,
+      pressedScale: 0.94,
+      shape: RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(size / 3),
+      ),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        final pillHeight = selected && showPill
+            ? 30.0
+            : hovered && !selected
+            ? 20.0
+            : (unread && !muted && !selected ? 8.0 : 0.0);
+        final dimmed = muted && !selected && !hovered;
+        Widget avatar = Opacity(
+          key: const ValueKey('circle-rail-icon'),
+          opacity: dimmed ? 0.4 : 1,
+          child: child,
+        );
+        if (mentionCount > 0) {
+          final badge = IgnorePointer(
+            child: KeyedSubtree(
+              key: const ValueKey('circle-mention-badge'),
+              child: CountBadge(
+                count: mentionCount,
+                size: 18,
+                ringColor: badgeBorderColor ?? c.rail,
               ),
             ),
-            Opacity(
-              key: const ValueKey('circle-rail-icon'),
-              opacity: dimmed ? 0.4 : 1,
-              child: Tooltip(
-                message: widget.tooltip,
-                preferBelow: false,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onEnter: (_) => setState(() => _hovered = true),
-                  onExit: (_) => setState(() => _hovered = false),
-                  child: GestureDetector(
-                    onTap: widget.onTap,
-                    child: AnimatedContainer(
-                      duration: _duration,
-                      curve: Curves.easeOut,
-                      width: 48,
-                      height: 48,
-                      clipBehavior: Clip.antiAlias,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: active
-                            ? colorScheme.primary
-                            : widget.color ??
-                                  colorScheme.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(active ? 16 : 24),
-                        image: widget.image == null
-                            ? null
-                            : DecorationImage(
-                                image: widget.image!,
-                                fit: BoxFit.cover,
-                              ),
-                      ),
-                      child: widget.image != null
-                          ? null
-                          : IconTheme.merge(
-                              data: IconThemeData(
-                                color: active
-                                    ? colorScheme.onPrimary
-                                    : colorScheme.onSurface,
-                              ),
-                              child: DefaultTextStyle.merge(
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: active
-                                      ? colorScheme.onPrimary
-                                      : colorScheme.onSurface,
-                                ),
-                                child: widget.child,
-                              ),
-                            ),
+          );
+          avatar = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              avatar,
+              if (badgeOnTop)
+                Positioned(right: -6, top: -6, child: badge)
+              else
+                Positioned(right: -6, bottom: -6, child: badge),
+            ],
+          );
+        }
+        return SizedBox(
+          width: railWidth,
+          height: size + 10,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 0,
+                child: AnimatedContainer(
+                  key: const ValueKey('circle-rail-pill'),
+                  duration: WeCordMotion.durationOf(
+                    context,
+                    WeCordMotion.base,
+                  ),
+                  curve: WeCordMotion.standard,
+                  width: 4,
+                  height: pillHeight,
+                  decoration: BoxDecoration(
+                    color: c.ink,
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(3),
                     ),
                   ),
                 ),
               ),
-            ),
-            if (widget.mentionCount > 0)
-              Positioned(
-                right: 8,
-                bottom: 0,
-                child: IgnorePointer(
-                  child: CircleMentionBadge(
-                    count: widget.mentionCount,
-                    borderColor:
-                        widget.badgeBorderColor ??
-                        colorScheme.surfaceContainerHigh,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Red count of unread mentions, capped at 99+.
-class CircleMentionBadge extends StatelessWidget {
-  const CircleMentionBadge({required this.count, this.borderColor, super.key});
-
-  final int count;
-
-  /// Outline that separates the badge from the icon underneath.
-  final Color? borderColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final borderColor = this.borderColor;
-    return Container(
-      key: const ValueKey('circle-mention-badge'),
-      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      decoration: BoxDecoration(
-        color: colorScheme.error,
-        borderRadius: BorderRadius.circular(11),
-        border: borderColor == null
-            ? null
-            : Border.all(color: borderColor, width: 3),
-      ),
-      // Centred inside the minimum size without growing to fill the parent.
-      child: Align(
-        widthFactor: 1,
-        heightFactor: 1,
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: TextStyle(
-            color: colorScheme.onError,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            height: 1,
+              avatar,
+            ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
-}
-
-String _initials(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return '?';
-  }
-  return trimmed.characters.first.toUpperCase();
 }

@@ -2320,7 +2320,7 @@ void main() {
 
       expect(pillHeight(tester, 'read'), 0);
       expect(pillHeight(tester, 'unread'), 8);
-      expect(pillHeight(tester, 'selected'), 40);
+      expect(pillHeight(tester, 'selected'), 30);
       expect(find.byKey(const ValueKey('circle-mention-badge')), findsNothing);
     });
 

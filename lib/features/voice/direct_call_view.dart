@@ -185,20 +185,28 @@ class DirectCallBar extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                count == 1
-                    ? tr('{name} is in a call', {
-                        'name': call.participants.single.name,
-                      })
-                    : tr('{count} people are in a call', {'count': count}),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: c.ink,
-                ),
-              ),
+              child: count == 1
+                  ? _NameInSentence(
+                      key: const ValueKey('direct-call-join-text'),
+                      template: tr('{name} is in a call'),
+                      name: call.participants.single.name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: c.ink,
+                      ),
+                    )
+                  : Text(
+                      tr('{count} people are in a call', {'count': count}),
+                      key: const ValueKey('direct-call-join-text'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: c.ink,
+                      ),
+                    ),
             ),
             VoiceRoundButton(
               key: const ValueKey('direct-call-join-video'),
@@ -441,6 +449,81 @@ class _IncomingCallCard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A one-line sentence around a name ("{name} is in a call", already
+/// translated): a long name is cut short, never the rest of the sentence.
+class _NameInSentence extends StatelessWidget {
+  const _NameInSentence({
+    required this.template,
+    required this.name,
+    required this.style,
+    super.key,
+  });
+
+  /// The sentence with a `{name}` placeholder.
+  final String template;
+  final String name;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = template.indexOf('{name}');
+    if (at < 0) {
+      return Text(
+        template,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final before = template.substring(0, at);
+    final after = template.substring(at + '{name}'.length);
+    final sentence = '$before$name$after';
+    return Semantics(
+      label: sentence,
+      excludeSemantics: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: '$before$after',
+              style: DefaultTextStyle.of(context).style.merge(style),
+            ),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout();
+          final rest = painter.width;
+          painter.dispose();
+          // Too narrow for the sentence plus a bit of the name: cut the
+          // whole line instead.
+          if (rest + 48 > constraints.maxWidth) {
+            return Text(
+              sentence,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            );
+          }
+          return Row(
+            children: [
+              if (before.isNotEmpty) Text(before, maxLines: 1, style: style),
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                ),
+              ),
+              if (after.isNotEmpty) Text(after, maxLines: 1, style: style),
+            ],
+          );
+        },
       ),
     );
   }

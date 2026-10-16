@@ -18,6 +18,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/models/voice.dart';
 
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
@@ -280,6 +281,26 @@ void main() {
     await world.open(tester, '/circles/circle-1');
     await showKeyboard(tester, notchedPhone);
   }, desktop: false);
+
+  // 7. The join strip with a long name.
+  screen('call-strip-long-name', (tester, world, desktop) async {
+    world.voice.calls = [
+      DirectCall(
+        callId: 'call-1',
+        conversationId: 'dm-1',
+        startedBy: bart.id,
+        createdAt: DateTime.now().toUtc(),
+        participants: [
+          DirectCallParticipant(
+            userId: bart.id,
+            username: bart.username,
+            displayName: '${bart.displayName} of Somewhere Far Away',
+          ),
+        ],
+      ),
+    ];
+    await openThread(tester, world);
+  });
 
   // MARKER: more screens
 }

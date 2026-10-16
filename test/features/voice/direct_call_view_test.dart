@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -88,7 +89,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Bob is in a call'), findsOneWidget);
+      expect(find.bySemanticsLabel('Bob is in a call'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('direct-call-join')));
       await tester.pump();
       await tester.pump();
@@ -101,6 +102,54 @@ void main() {
       expect(find.byTooltip('Disconnect'), findsOneWidget);
       await leaveCall(tester);
     });
+  });
+
+  testWidgets('a long name is cut short, not the sentence', (tester) async {
+    tester.view.physicalSize = const Size(600, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const longName =
+        'Bartholomew Montgomery-Fitzgerald the Third of Somewhere Far Away';
+    repository.calls = [
+      DirectCall(
+        callId: 'call-1',
+        conversationId: 'dm-bob',
+        startedBy: 'user-2',
+        createdAt: DateTime.utc(2026, 10, 14, 9),
+        participants: const [
+          DirectCallParticipant(
+            userId: 'user-2',
+            username: 'bart',
+            displayName: longName,
+          ),
+        ],
+      ),
+    ];
+    await tester.pumpWidget(
+      app(const DirectCallBar(conversationId: 'dm-bob', title: 'Bart')),
+    );
+    await tester.pump();
+
+    final strip = find.byKey(const ValueKey('direct-call-join-text'));
+    RenderParagraph paragraph(String text) => tester.renderObject(
+      find.descendant(of: strip, matching: find.text(text)),
+    );
+    expect(paragraph(longName).didExceedMaxLines, isTrue);
+    expect(paragraph(' is in a call').didExceedMaxLines, isFalse);
+    expect(find.bySemanticsLabel('$longName is in a call'), findsOneWidget);
+    // Join stays on screen.
+    final join = tester.getRect(find.byKey(const ValueKey('direct-call-join')));
+    expect(join.right, lessThanOrEqualTo(600));
+
+    // Too narrow for the sentence: the whole line is cut, nothing
+    // overflows.
+    tester.view.physicalSize = const Size(320, 800);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(
+      find.descendant(of: strip, matching: find.text('$longName is in a call')),
+      findsOneWidget,
+    );
   });
 
   group('incoming calls', () {

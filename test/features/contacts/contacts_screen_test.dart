@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/chat_status.dart';
@@ -20,6 +21,7 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void main() {
   testWidgets('shows search results and sends friend requests', (tester) async {
@@ -35,14 +37,14 @@ void main() {
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('@ada'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.tap(find.text('Add'));
     await tester.pump();
 
     expect(repository.searchQueries, ['Ada', 'Ada']);
     expect(repository.sentRequests, ['user-2']);
-    expect(find.widgetWithText(FilledButton, 'Requested'), findsOneWidget);
-    final requestedButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Requested'),
+    expect(find.widgetWithText(WeCordButton, 'Requested'), findsOneWidget);
+    final requestedButton = tester.widget<WeCordButton>(
+      find.widgetWithText(WeCordButton, 'Requested'),
     );
     expect(requestedButton.onPressed, isNull);
   });
@@ -78,10 +80,10 @@ void main() {
     expect(find.text('Incoming requests'), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('@ada'), findsOneWidget);
-    final incomingAvatar = tester.widget<CircleAvatar>(
-      find.byType(CircleAvatar).first,
+    final incomingAvatar = tester.widget<PersonAvatar>(
+      find.byType(PersonAvatar).first,
     );
-    final incomingImage = incomingAvatar.backgroundImage;
+    final incomingImage = incomingAvatar.image;
     expect(incomingImage, isA<NetworkImage>());
     expect(
       (incomingImage! as NetworkImage).url,
@@ -91,13 +93,13 @@ void main() {
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('@grace'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Accept').first);
+    await tester.tap(find.text('Accept').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Ada Lovelace'), findsNothing);
     expect(find.text('Grace Hopper'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Reject').first);
+    await tester.tap(find.text('Reject').first);
     await tester.pumpAndSettle();
 
     expect(repository.acceptedRequests, ['request-1']);
@@ -125,8 +127,8 @@ void main() {
     expect(find.text('Friends'), findsNWidgets(2));
     expect(find.text('Grace Hopper'), findsOneWidget);
     expect(find.text('@grace'), findsOneWidget);
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-    final image = avatar.backgroundImage;
+    final avatar = tester.widget<PersonAvatar>(find.byType(PersonAvatar));
+    final image = avatar.image;
     expect(image, isA<NetworkImage>());
     expect(
       (image! as NetworkImage).url,
@@ -177,8 +179,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Edit alias'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Alias'), '  Countess  ');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.enterText(find.byType(EditableText).last, '  Countess  ');
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(repository.aliasUpdates, [
@@ -188,8 +190,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Edit alias'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Alias'), '   ');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.enterText(find.byType(EditableText).last, '   ');
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(repository.aliasUpdates, [
@@ -213,8 +215,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Edit alias'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Alias'), 'Ada L.');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.enterText(find.byType(EditableText).last, 'Ada L.');
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(find.text('Edit alias'), findsOneWidget);
@@ -234,8 +236,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Edit alias'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.bySemanticsLabel('Alias'), 'A' * 49);
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.enterText(find.byType(EditableText).last, 'A' * 49);
+    await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
     await tester.pump();
 
     expect(repository.aliasUpdates, isEmpty);
@@ -307,7 +309,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Message'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Message'));
     await tester.pumpAndSettle();
 
     expect(chatsRepository.directConversationUserIds, ['friend-1']);
@@ -373,18 +375,18 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'New Group'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'New Group'));
     await tester.pumpAndSettle();
     expect(
-      find.widgetWithText(CheckboxListTile, 'Amazing Grace'),
+      find.widgetWithText(FriendPickerRow, 'Amazing Grace'),
       findsOneWidget,
     );
-    expect(find.widgetWithText(CheckboxListTile, 'Ada L.'), findsOneWidget);
+    expect(find.widgetWithText(FriendPickerRow, 'Ada L.'), findsOneWidget);
     await tester.enterText(find.bySemanticsLabel('Group name'), 'Launch Crew');
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Amazing Grace'));
-    await tester.tap(find.widgetWithText(CheckboxListTile, 'Ada L.'));
+    await tester.tap(find.widgetWithText(FriendPickerRow, 'Amazing Grace'));
+    await tester.tap(find.widgetWithText(FriendPickerRow, 'Ada L.'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create'));
     await tester.pumpAndSettle();
 
     expect(chatsRepository.createdGroupTitle, 'Launch Crew');

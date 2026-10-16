@@ -57,7 +57,7 @@ void main() {
 
     expect(find.text('Updated by Grace Lovelace'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Invite friends'));
+    await tester.tap(find.text('Invite friends'));
     await tester.pumpAndSettle();
 
     expect(find.text('Ada L.'), findsOneWidget);

@@ -6,12 +6,17 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
-import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
+import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/navigation/paper_page_header.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 final contactsSearchQueryProvider = StateProvider.autoDispose<String>((ref) {
   return '';
@@ -43,6 +48,10 @@ final sentFriendRequestIdsProvider = StateProvider.autoDispose<Set<String>>((
   return const {};
 });
 
+/// Whether the friends list shows everyone or only who is online.
+final _onlineOnlyProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// Friends: find people to add, answer requests, and the friends list.
 class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
 
@@ -50,17 +59,36 @@ class ContactsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Friends'))),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          _SearchSection(),
-          SizedBox(height: 24),
-          _IncomingRequestsSection(),
-          SizedBox(height: 24),
-          _FriendsSection(),
-        ],
+      backgroundColor: c.paper,
+      body: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: ListView(
+              padding: EdgeInsets.only(
+                bottom: 24 + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                PaperPageHeader(title: tr('Friends')),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SearchSection(),
+                      _IncomingRequestsSection(),
+                      _FriendsSection(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -71,24 +99,31 @@ class _SearchSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
     final query = ref.watch(contactsSearchQueryProvider).trim();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            labelText: tr('Search profiles'),
-          ),
+        SettingsSectionHeader(tr('Add friend')),
+        WeCordTextField(
+          hint: tr('Search profiles'),
+          prefixIcon: Icons.person_search_outlined,
+          onPaper: true,
           textInputAction: TextInputAction.search,
           onChanged: (value) {
             ref.read(contactsSearchQueryProvider.notifier).state = value;
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         if (query.isEmpty)
-          Text(tr('Search by username.'))
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              tr('Search by username.'),
+              style: TextStyle(fontSize: 12.5, color: c.muted),
+            ),
+          )
         else
           ref
               .watch(contactsSearchResultsProvider)
@@ -97,12 +132,13 @@ class _SearchSection extends ConsumerWidget {
                 error: (error, stackTrace) => _ErrorText(error),
                 data: (profiles) {
                   if (profiles.isEmpty) {
-                    return Text(tr('No matching profiles.'));
+                    return _Note(tr('No matching profiles.'));
                   }
-                  return Column(
+                  return SettingsGroup(
+                    separatorIndent: 72,
                     children: [
                       for (final profile in profiles)
-                        _ProfileTile(
+                        _PersonRow(
                           profile: profile,
                           onTap: () => context.push('/profile/${profile.id}'),
                           trailing: _AddFriendButton(profile: profile),
@@ -127,7 +163,14 @@ class _AddFriendButton extends ConsumerWidget {
         .watch(sentFriendRequestIdsProvider)
         .contains(profile.id);
 
-    return FilledButton(
+    return WeCordButton(
+      key: ValueKey('add-friend-${profile.id}'),
+      label: requested ? tr('Requested') : tr('Add'),
+      icon: requested ? Icons.check_rounded : Icons.person_add_alt_1_rounded,
+      size: WeCordButtonSize.small,
+      variant: requested
+          ? WeCordButtonVariant.secondary
+          : WeCordButtonVariant.accent,
       onPressed: requested
           ? null
           : () async {
@@ -139,7 +182,6 @@ class _AddFriendButton extends ConsumerWidget {
               });
               ref.invalidate(contactsSearchResultsProvider);
             },
-      child: Text(requested ? tr('Requested') : tr('Add')),
     );
   }
 }
@@ -151,55 +193,73 @@ class _IncomingRequestsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final requests = ref.watch(incomingFriendRequestsProvider);
 
-    return _Section(
-      title: tr('Incoming requests'),
-      child: requests.when(
-        loading: () => _LoadingRow(label: tr('Loading requests')),
-        error: (error, stackTrace) => _ErrorText(error),
-        data: (requests) {
-          if (requests.isEmpty) {
-            return Text(tr('No incoming requests.'));
-          }
-          return Column(
-            children: [
-              for (final incomingRequest in requests)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: _ProfileAvatar(profile: incomingRequest.requester),
-                  title: Text(incomingRequest.requester.displayName),
-                  subtitle: Text('@${incomingRequest.requester.username}'),
-                  onTap: () {
-                    context.push('/profile/${incomingRequest.requester.id}');
-                  },
-                  trailing: Wrap(
-                    spacing: 8,
-                    children: [
-                      FilledButton(
-                        onPressed: () async {
-                          await ref
-                              .read(contactsRepositoryProvider)
-                              .acceptFriendRequest(incomingRequest.request.id);
-                          ref.invalidate(incomingFriendRequestsProvider);
-                          ref.invalidate(friendsProvider);
-                        },
-                        child: Text(tr('Accept')),
-                      ),
-                      OutlinedButton(
-                        onPressed: () async {
-                          await ref
-                              .read(contactsRepositoryProvider)
-                              .rejectFriendRequest(incomingRequest.request.id);
-                          ref.invalidate(incomingFriendRequestsProvider);
-                        },
-                        child: Text(tr('Reject')),
-                      ),
-                    ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsSectionHeader(tr('Incoming requests')),
+        requests.when(
+          loading: () => _LoadingRow(label: tr('Loading requests')),
+          error: (error, stackTrace) => _ErrorText(error),
+          data: (requests) {
+            if (requests.isEmpty) {
+              return _Note(tr('No incoming requests.'));
+            }
+            return SettingsGroup(
+              separatorIndent: 72,
+              children: [
+                for (final incomingRequest in requests)
+                  _PersonRow(
+                    key: ValueKey(
+                      'friend-request-${incomingRequest.request.id}',
+                    ),
+                    profile: incomingRequest.requester,
+                    showAlias: false,
+                    onTap: () {
+                      context.push('/profile/${incomingRequest.requester.id}');
+                    },
+                    below: Row(
+                      children: [
+                        Expanded(
+                          child: WeCordButton(
+                            label: tr('Accept'),
+                            size: WeCordButtonSize.small,
+                            expand: true,
+                            onPressed: () async {
+                              await ref
+                                  .read(contactsRepositoryProvider)
+                                  .acceptFriendRequest(
+                                    incomingRequest.request.id,
+                                  );
+                              ref.invalidate(incomingFriendRequestsProvider);
+                              ref.invalidate(friendsProvider);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: WeCordButton(
+                            label: tr('Reject'),
+                            size: WeCordButtonSize.small,
+                            variant: WeCordButtonVariant.secondary,
+                            expand: true,
+                            onPressed: () async {
+                              await ref
+                                  .read(contactsRepositoryProvider)
+                                  .rejectFriendRequest(
+                                    incomingRequest.request.id,
+                                  );
+                              ref.invalidate(incomingFriendRequestsProvider);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -211,57 +271,115 @@ class _FriendsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final friends = ref.watch(friendsProvider);
     final query = ref.watch(friendsSearchQueryProvider).trim().toLowerCase();
+    final onlineOnly = ref.watch(_onlineOnlyProvider);
+    final onlineIds =
+        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+    final statuses = ref.watch(presenceStatusesProvider).valueOrNull;
+    PresenceStatus? presence(String id) =>
+        presenceOf(id, onlineUserIds: onlineIds, statuses: statuses);
 
-    return _Section(
-      title: tr('Friends'),
-      trailing: friends.maybeWhen(
-        data: (friends) => _NewGroupButton(friends: friends),
-        orElse: () => const _NewGroupButton(friends: []),
-      ),
-      child: friends.when(
-        loading: () => _LoadingRow(label: tr('Loading friends')),
-        error: (error, stackTrace) => _ErrorText(error),
-        data: (friends) {
-          if (friends.isEmpty) {
-            return Text(tr('No friends yet.'));
-          }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsSectionHeader(
+          tr('Friends'),
+          trailing: friends.maybeWhen(
+            data: (friends) => _NewGroupButton(friends: friends),
+            orElse: () => const _NewGroupButton(friends: []),
+          ),
+        ),
+        friends.when(
+          loading: () => _LoadingRow(label: tr('Loading friends')),
+          error: (error, stackTrace) => _ErrorText(error),
+          data: (friends) {
+            if (friends.isEmpty) {
+              return _Note(tr('No friends yet.'));
+            }
 
-          final visibleFriends = query.isEmpty
-              ? friends
-              : friends
-                    .where((friend) {
-                      return friend.displayName.toLowerCase().contains(query) ||
-                          friend.displayLabel.toLowerCase().contains(query) ||
-                          friend.username.toLowerCase().contains(query);
-                    })
-                    .toList(growable: false);
+            final online = [
+              for (final friend in friends)
+                if (presence(friend.id) != null) friend,
+            ];
+            // Online first, then everyone else.
+            final ordered = [
+              ...online,
+              for (final friend in friends)
+                if (presence(friend.id) == null) friend,
+            ];
+            final matching = query.isEmpty
+                ? ordered
+                : ordered
+                      .where((friend) {
+                        return friend.displayName.toLowerCase().contains(
+                              query,
+                            ) ||
+                            friend.displayLabel.toLowerCase().contains(query) ||
+                            friend.username.toLowerCase().contains(query);
+                      })
+                      .toList(growable: false);
+            final visibleFriends = onlineOnly
+                ? matching
+                      .where((friend) => presence(friend.id) != null)
+                      .toList(growable: false)
+                : matching;
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Search friends'),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    WeCordChip(
+                      key: const ValueKey('friends-filter-all'),
+                      label: tr('All'),
+                      count: friends.length,
+                      onPaper: true,
+                      selected: !onlineOnly,
+                      onPressed: () =>
+                          ref.read(_onlineOnlyProvider.notifier).state = false,
+                    ),
+                    const SizedBox(width: 6),
+                    WeCordChip(
+                      key: const ValueKey('friends-filter-online'),
+                      label: tr('Online'),
+                      count: online.length,
+                      onPaper: true,
+                      selected: onlineOnly,
+                      onPressed: () =>
+                          ref.read(_onlineOnlyProvider.notifier).state = true,
+                    ),
+                  ],
                 ),
-                onChanged: (value) {
-                  ref.read(friendsSearchQueryProvider.notifier).state = value;
-                },
-              ),
-              const SizedBox(height: 12),
-              if (visibleFriends.isEmpty)
-                Text(tr('No matching friends.'))
-              else
-                for (final friend in visibleFriends)
-                  _ProfileTile(
-                    profile: friend,
-                    onTap: () => context.push('/profile/${friend.id}'),
-                    trailing: _FriendActions(profile: friend),
+                const SizedBox(height: 10),
+                WeCordTextField(
+                  hint: tr('Search friends'),
+                  prefixIcon: Icons.search_rounded,
+                  onPaper: true,
+                  onChanged: (value) {
+                    ref.read(friendsSearchQueryProvider.notifier).state = value;
+                  },
+                ),
+                const SizedBox(height: 10),
+                if (visibleFriends.isEmpty)
+                  _Note(tr('No matching friends.'))
+                else
+                  SettingsGroup(
+                    separatorIndent: 72,
+                    children: [
+                      for (final friend in visibleFriends)
+                        _PersonRow(
+                          key: ValueKey('friend-${friend.id}'),
+                          profile: friend,
+                          presence: presenceColor(context, presence(friend.id)),
+                          onTap: () => context.push('/profile/${friend.id}'),
+                          trailing: _FriendActions(profile: friend),
+                        ),
+                    ],
                   ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -278,19 +396,20 @@ class _NewGroupButton extends ConsumerStatefulWidget {
 class _NewGroupButtonState extends ConsumerState<_NewGroupButton> {
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
+    return WeCordButton(
+      key: const ValueKey('contacts-new-group'),
+      label: tr('New Group'),
+      icon: Icons.group_add_outlined,
+      size: WeCordButtonSize.small,
+      variant: WeCordButtonVariant.onPaper,
       onPressed: widget.friends.length < 2 ? null : _openGroupCreation,
-      icon: const Icon(Icons.group_add_outlined),
-      label: Text(tr('New Group')),
     );
   }
 
   Future<void> _openGroupCreation() async {
-    final result = await showModalBottomSheet<GroupCreationResult>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
+    final result = await showWeCordSheet<GroupCreationResult>(
+      context,
+      builder: (context, scrollController) {
         return GroupCreationSheet(friends: widget.friends);
       },
     );
@@ -324,24 +443,22 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
 
   @override
   Widget build(BuildContext context) {
-    final icon = _opening
-        ? const SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        : const Icon(Icons.chat_bubble_outline);
     // Phones keep the friend's name readable with an icon-only button.
     if (isCompactWidth(MediaQuery.sizeOf(context).width)) {
-      return IconButton.filled(
+      return WeCordIconButton(
+        icon: Icons.chat_bubble_outline_rounded,
         tooltip: tr('Message'),
+        size: 38,
         onPressed: _opening ? null : _openConversation,
-        icon: icon,
       );
     }
-    return FilledButton.icon(
-      onPressed: _opening ? null : _openConversation,
-      icon: icon,
-      label: Text(tr('Message')),
+    return WeCordButton(
+      label: tr('Message'),
+      icon: Icons.chat_bubble_outline_rounded,
+      size: WeCordButtonSize.small,
+      variant: WeCordButtonVariant.secondary,
+      loading: _opening,
+      onPressed: _openConversation,
     );
   }
 
@@ -393,122 +510,135 @@ class _FriendActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 4,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
+        WeCordIconButton(
+          icon: Icons.edit_outlined,
           tooltip: tr('Edit alias'),
-          icon: const Icon(Icons.edit_outlined),
+          size: 38,
+          variant: WeCordButtonVariant.ghost,
           onPressed: () async {
-            final saved = await showModalBottomSheet<bool>(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              builder: (context) => ContactAliasSheet(profile: profile),
+            final saved = await showWeCordSheet<bool>(
+              context,
+              builder: (context, scrollController) =>
+                  ContactAliasSheet(profile: profile),
             );
             if (saved == true) {
               ref.invalidate(friendsProvider);
             }
           },
         ),
+        const SizedBox(width: 2),
         _MessageFriendButton(profile: profile),
       ],
     );
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child, this.trailing});
-
-  final String title;
-  final Widget child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            if (trailing != null) trailing!,
-          ],
-        ),
-        const SizedBox(height: 8),
-        child,
-      ],
-    );
-  }
-}
-
-class _ProfileTile extends StatelessWidget {
-  const _ProfileTile({required this.profile, this.trailing, this.onTap});
+/// A person in a friends list group: avatar, name and @username, with
+/// actions at the end or [below] the name.
+class _PersonRow extends StatelessWidget {
+  const _PersonRow({
+    required this.profile,
+    this.trailing,
+    this.below,
+    this.onTap,
+    this.presence,
+    this.showAlias = true,
+    super.key,
+  });
 
   final Profile profile;
   final Widget? trailing;
+  final Widget? below;
   final VoidCallback? onTap;
+  final Color? presence;
+
+  /// Requests show the name people chose, not the alias.
+  final bool showAlias;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _ProfileAvatar(profile: profile),
-      title: Text(
-        profile.displayLabel,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final c = context.tokens.colors;
+    final name = showAlias ? profile.displayLabel : profile.displayName;
+    return WeCordPressable(
+      onPressed: onTap,
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.md),
       ),
-      subtitle: Text(
-        '@${profile.username}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      onTap: onTap,
-      trailing: trailing,
+      builder: (context, states) {
+        final highlighted =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          color: c.ink.withValues(alpha: highlighted ? 0.04 : 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            crossAxisAlignment: below == null
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              ProfileAvatar(
+                name: name,
+                avatarUrl: profile.avatarUrl,
+                presence: presence,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
+                      ),
+                    ),
+                    Text(
+                      '@${profile.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: c.muted),
+                    ),
+                    if (below != null) ...[const SizedBox(height: 10), below!],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-class _ProfileAvatar extends ConsumerWidget {
-  const _ProfileAvatar({required this.profile});
+/// A quiet line of text in place of an empty list.
+class _Note extends StatelessWidget {
+  const _Note(this.text);
 
-  final Profile profile;
+  final String text;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final displayUrl = ref.watch(avatarDisplayUrlProvider(profile.avatarUrl));
-    final image = displayUrl.valueOrNull == null
-        ? null
-        : NetworkImage(displayUrl.valueOrNull!);
-    return CircleAvatar(
-      backgroundImage: image,
-      onBackgroundImageError: image == null
-          ? null
-          : (_, _) => refreshAvatarDisplayUrl(ref, profile.avatarUrl),
-      child: image == null ? Text(_initials(profile.displayLabel)) : null,
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      decoration: BoxDecoration(
+        color: c.panel,
+        borderRadius: BorderRadius.circular(WeCordRadii.xl),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 14, color: c.muted)),
     );
   }
-}
-
-String _initials(String value) {
-  final parts = value
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  final first = parts.first.characters.first;
-  final second = parts.length > 1 ? parts.last.characters.first : '';
-  return '$first$second'.toUpperCase();
 }
 
 class _LoadingRow extends StatelessWidget {
@@ -518,15 +648,19 @@ class _LoadingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const SizedBox.square(
-          dimension: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-        const SizedBox(width: 12),
-        Text(label),
-      ],
+    final c = context.tokens.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(fontSize: 14, color: c.muted)),
+        ],
+      ),
     );
   }
 }
@@ -538,9 +672,12 @@ class _ErrorText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      error.toString(),
-      style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Text(
+        error.toString(),
+        style: TextStyle(color: context.tokens.colors.dangerText),
+      ),
     );
   }
 }

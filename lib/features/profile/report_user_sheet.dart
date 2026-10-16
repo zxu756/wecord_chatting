@@ -5,13 +5,13 @@ import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/report_reason.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 Future<void> showReportUserSheet(BuildContext context, Profile profile) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (_) => ReportUserSheet(profile: profile),
+  return showWeCordSheet<void>(
+    context,
+    title: tr('Report {name}', {'name': profile.displayLabel}),
+    builder: (_, _) => ReportUserSheet(profile: profile),
   );
 }
 
@@ -74,80 +74,85 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return SafeArea(
+      top: false,
       child: Padding(
         // Lifts the sheet above the keyboard, so the content scrolls
         // within the space left instead of hiding behind it.
         padding: EdgeInsets.only(bottom: bottomInset),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                tr('Report {name}', {'name': widget.profile.displayLabel}),
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
                 tr(
                   'Choose the closest reason. You can add details if helpful.',
                 ),
-                style: theme.textTheme.bodyMedium,
+                style: TextStyle(fontSize: 14, height: 1.45, color: c.muted),
               ),
-              const SizedBox(height: 16),
-              RadioGroup<ReportReason>(
-                groupValue: _reason,
-                onChanged: (value) {
-                  if (_isSubmitting || value == null) {
-                    return;
-                  }
-                  setState(() => _reason = value);
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 14),
+              Semantics(
+                container: true,
+                label: tr('Reason'),
+                child: SettingsGroup(
+                  key: const ValueKey('report-reasons'),
+                  color: c.well,
+                  separatorIndent: 14,
                   children: [
                     for (final reason in ReportReason.values)
-                      RadioListTile<ReportReason>(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(reason.label),
-                        value: reason,
-                        enabled: !_isSubmitting,
+                      SettingsRow(
+                        key: ValueKey('report-reason-${reason.value}'),
+                        title: reason.label,
+                        trailing: reason == _reason
+                            ? Icon(
+                                Icons.check_rounded,
+                                size: 20,
+                                color: c.accent,
+                              )
+                            : const SizedBox(width: 20),
+                        onTap: _isSubmitting
+                            ? null
+                            : () {
+                                WeCordHaptics.selection();
+                                setState(() => _reason = reason);
+                              },
                       ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              TextField(
+              const SizedBox(height: 14),
+              WeCordTextField(
+                fieldKey: const ValueKey('report-details'),
                 controller: _detailsController,
                 enabled: !_isSubmitting,
+                label: tr('Details'),
                 maxLength: 1000,
                 maxLines: 4,
+                minLines: 3,
                 inputFormatters: [LengthLimitingTextInputFormatter(1000)],
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Details'),
-                ),
               ),
               if (_errorText != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   _errorText!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
+                  style: TextStyle(fontSize: 13.5, color: c.dangerText),
                 ),
               ],
               const SizedBox(height: 16),
-              FilledButton(
+              WeCordButton(
+                key: const ValueKey('report-submit'),
+                label: _isSubmitting
+                    ? tr('Submitting...')
+                    : tr('Submit report'),
+                size: WeCordButtonSize.large,
+                variant: WeCordButtonVariant.danger,
+                expand: true,
                 onPressed: _isSubmitting ? null : _submit,
-                child: Text(
-                  _isSubmitting ? tr('Submitting...') : tr('Submit report'),
-                ),
               ),
             ],
           ),

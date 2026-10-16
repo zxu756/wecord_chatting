@@ -4,6 +4,7 @@ import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the sheet to set, change or clear the current user's status.
 /// Resolves to true when the status was saved or cleared.
@@ -11,12 +12,10 @@ Future<bool?> showCustomStatusSheet(
   BuildContext context, {
   CustomStatus? current,
 }) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
-    builder: (context) => CustomStatusSheet(current: current),
+  return showWeCordSheet<bool>(
+    context,
+    title: tr('Set a status'),
+    builder: (context, _) => CustomStatusSheet(current: current),
   );
 }
 
@@ -87,9 +86,10 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final emoji = _emoji;
     return SafeArea(
+      top: false,
       child: Padding(
         // Lifts the sheet above the keyboard, so the content scrolls
         // within the space left instead of hiding behind it.
@@ -97,80 +97,106 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(tr('Set a status'), style: theme.textTheme.titleLarge),
-              const SizedBox(height: 16),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton.outlined(
+                  WeCordPressable(
+                    key: const ValueKey('custom-status-emoji'),
                     tooltip: emoji == null
                         ? tr('Choose emoji')
                         : tr('Change emoji'),
+                    semanticLabel: emoji == null
+                        ? tr('Choose emoji')
+                        : tr('Change emoji'),
+                    shape: const CircleBorder(),
+                    pressedScale: 0.92,
                     onPressed: _saving ? null : _pickEmoji,
-                    icon: emoji == null
-                        ? const Icon(Icons.add_reaction_outlined)
-                        : Text(emoji, style: const TextStyle(fontSize: 20)),
+                    builder: (context, states) => AnimatedContainer(
+                      duration: WeCordMotion.quick,
+                      width: 52,
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: states.contains(WidgetState.hovered)
+                            ? c.raisedStrong
+                            : c.raised,
+                        shape: BoxShape.circle,
+                      ),
+                      child: emoji == null
+                          ? Icon(
+                              Icons.add_reaction_outlined,
+                              size: 22,
+                              color: c.ink,
+                            )
+                          : Text(emoji, style: const TextStyle(fontSize: 24)),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
+                    child: WeCordTextField(
+                      fieldKey: const ValueKey('custom-status-text'),
                       controller: _textController,
                       enabled: !_saving,
                       maxLength: CustomStatus.maxTextLength,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        labelText: tr("What's happening?"),
-                        suffixIcon: _isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: tr('Remove emoji and text'),
-                                icon: const Icon(Icons.close),
-                                onPressed: () => setState(() {
-                                  _emoji = null;
-                                  _textController.clear();
-                                }),
+                      hint: tr("What's happening?"),
+                      suffix: _isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: tr('Remove emoji and text'),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 20,
+                                color: c.muted,
                               ),
-                      ),
+                              onPressed: () => setState(() {
+                                _emoji = null;
+                                _textController.clear();
+                              }),
+                            ),
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<CustomStatusDuration>(
-                initialValue: _duration,
-                decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
-                  labelText: tr('Clear after'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
+                child: Text(
+                  tr('Clear after'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: c.subtle,
+                  ),
                 ),
-                items: [
+              ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
                   for (final duration in CustomStatusDuration.values)
-                    DropdownMenuItem(
-                      value: duration,
-                      child: Text(duration.label),
+                    WeCordChip(
+                      key: ValueKey('custom-status-duration-${duration.name}'),
+                      label: duration.label,
+                      selected: duration == _duration,
+                      onPressed: _saving
+                          ? null
+                          : () => setState(() => _duration = duration),
                     ),
                 ],
-                onChanged: _saving
-                    ? null
-                    : (duration) {
-                        if (duration != null) {
-                          setState(() => _duration = duration);
-                        }
-                      },
               ),
               if (_errorText != null) ...[
                 const SizedBox(height: 12),
                 Text(
                   _errorText!,
-                  style: TextStyle(color: theme.colorScheme.error),
+                  style: TextStyle(fontSize: 13.5, color: c.dangerText),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               // Stacks the buttons when they do not fit on one line.
               OverflowBar(
                 alignment: MainAxisAlignment.spaceBetween,
@@ -178,28 +204,33 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
                 overflowSpacing: 8,
                 children: [
                   if (widget.current != null)
-                    TextButton.icon(
+                    WeCordButton(
+                      key: const ValueKey('custom-status-clear'),
+                      label: tr('Clear status'),
+                      icon: Icons.backspace_outlined,
+                      variant: WeCordButtonVariant.ghost,
                       onPressed: _saving ? null : () => _save(clear: true),
-                      icon: const Icon(Icons.backspace_outlined),
-                      label: Text(tr('Clear status')),
                     )
                   else
                     const SizedBox.shrink(),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextButton(
+                      WeCordButton(
+                        label: tr('Cancel'),
+                        variant: WeCordButtonVariant.secondary,
                         onPressed: _saving
                             ? null
                             : () => Navigator.of(context).pop(),
-                        child: Text(tr('Cancel')),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(
+                      WeCordButton(
+                        key: const ValueKey('custom-status-save'),
+                        label: tr('Save'),
+                        loading: _saving,
                         onPressed: _saving || _isEmpty
                             ? null
                             : () => _save(clear: false),
-                        child: Text(tr('Save')),
                       ),
                     ],
                   ),

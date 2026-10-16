@@ -229,9 +229,9 @@ List<String> _keys(AppShortcut? shortcut, {String? single}) {
   };
 }
 
-/// Lists the keyboard shortcuts.
-Future<void> showKeyboardShortcutsHelp(BuildContext context) {
-  final rows = <(List<String>, String)>[
+/// The keyboard shortcuts with their keys, for the help and settings.
+List<(List<String>, String)> keyboardShortcutRows() {
+  return <(List<String>, String)>[
     (_keys(AppShortcut.quickSwitcher), tr('Find or jump to a conversation')),
     (_keys(AppShortcut.previous), tr('Previous channel or conversation')),
     (_keys(AppShortcut.next), tr('Next channel or conversation')),
@@ -245,6 +245,11 @@ Future<void> showKeyboardShortcutsHelp(BuildContext context) {
     ),
     (_keys(AppShortcut.shortcutsHelp), tr('Show keyboard shortcuts')),
   ];
+}
+
+/// Lists the keyboard shortcuts.
+Future<void> showKeyboardShortcutsHelp(BuildContext context) {
+  final rows = keyboardShortcutRows();
   return showDialog<void>(
     context: context,
     builder: (context) {

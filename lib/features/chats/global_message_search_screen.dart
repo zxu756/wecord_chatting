@@ -10,6 +10,8 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/discovery.dart';
+import 'package:wecord/shared/navigation/paper_page_header.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class GlobalMessageSearchScreen extends ConsumerStatefulWidget {
   const GlobalMessageSearchScreen({super.key});
@@ -40,34 +42,48 @@ class _GlobalMessageSearchScreenState
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Search'))),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: tr('Search WeCord'),
-                prefixIcon: const Icon(Icons.search),
-              ),
-              textInputAction: TextInputAction.search,
-              onChanged: _scheduleSearch,
+      backgroundColor: c.paper,
+      body: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PaperPageHeader(title: tr('Search')),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  child: WeCordTextField(
+                    controller: _controller,
+                    autofocus: true,
+                    onPaper: true,
+                    hint: tr('Search WeCord'),
+                    prefixIcon: Icons.search_rounded,
+                    textInputAction: TextInputAction.search,
+                    onChanged: _scheduleSearch,
+                  ),
+                ),
+                Expanded(child: _buildBody(context)),
+              ],
             ),
           ),
-          Expanded(child: _buildBody(context)),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildBody(BuildContext context) {
+    final c = context.tokens.colors;
     final normalizedQuery = _query.trim();
     if (normalizedQuery.isEmpty) {
-      return Center(child: Text(tr('Search messages, groups, and Circles')));
+      return _SearchHint(
+        icon: Icons.manage_search_rounded,
+        text: tr('Search messages, groups, and Circles'),
+      );
     }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -79,29 +95,36 @@ class _GlobalMessageSearchScreenState
           child: Text(
             error.toString(),
             textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            style: TextStyle(color: c.dangerText),
           ),
         ),
       );
     }
     final results = _results ?? const <DiscoveryResult>[];
     if (results.isEmpty) {
-      return Center(child: Text(tr('No matching results')));
+      return _SearchHint(
+        icon: Icons.search_off_rounded,
+        text: tr('No matching results'),
+      );
     }
     final grouped = _groupResults(results);
     return ListView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
-        for (final entry in grouped.entries) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-            child: Text(
-              entry.key,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
+        for (final entry in grouped.entries)
+          SettingsGroup(
+            header: entry.key,
+            separatorIndent: 66,
+            children: [
+              for (final result in entry.value)
+                _DiscoveryResultTile(result: result),
+            ],
           ),
-          for (final result in entry.value)
-            _DiscoveryResultTile(result: result),
-        ],
       ],
     );
   }
@@ -160,20 +183,105 @@ class _DiscoveryResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(_iconFor(result.type)),
-      title: Text(result.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: result.subtitle == null
-          ? null
-          : Text(
-              // Message bodies are markdown with `<:name:id>` emoji.
-              result.type == DiscoveryResultType.message
-                  ? plainTextFromMarkdown(result.subtitle!)
-                  : result.subtitle!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+    final c = context.tokens.colors;
+    final subtitle = result.subtitle;
+    final leading = switch (result.type) {
+      DiscoveryResultType.contact => PersonAvatar(name: result.title, size: 40),
+      DiscoveryResultType.group ||
+      DiscoveryResultType.circle => ThingAvatar(label: result.title, size: 40),
+      DiscoveryResultType.circleChannel || DiscoveryResultType.message =>
+        SettingsIconTile(icon: _iconFor(result.type), size: 40),
+    };
+    return WeCordPressable(
+      onPressed: () => _openResult(context, result),
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.md),
+      ),
+      builder: (context, states) {
+        final highlighted =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          color: c.ink.withValues(alpha: highlighted ? 0.04 : 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              leading,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          // Message bodies are markdown with `<:name:id>`
+                          // emoji.
+                          result.type == DiscoveryResultType.message
+                              ? plainTextFromMarkdown(subtitle)
+                              : subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: c.muted,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A quiet icon and line of text in place of results.
+class _SearchHint extends StatelessWidget {
+  const _SearchHint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Align(
+      alignment: const Alignment(0, -0.4),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SettingsIconTile(icon: icon, size: 56),
+            const SizedBox(height: 14),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: c.muted),
             ),
-      onTap: () => _openResult(context, result),
+          ],
+        ),
+      ),
     );
   }
 }

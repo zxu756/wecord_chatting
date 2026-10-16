@@ -11,11 +11,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -843,6 +845,185 @@ void main() {
     await tester.tap(composer);
     await tester.enterText(composer, '/');
     await showKeyboard(tester, notchedPhone);
+  });
+
+  // Redesign: inbox, friends, groups, search.
+  const desktopWide = PhoneViewport(
+    name: '1440x900',
+    size: Size(1440, 900),
+    devicePixelRatio: 1,
+  );
+
+  screen('r2-inbox', (tester, world) async {
+    await world.open(tester, '/notifications');
+  });
+
+  screen('r2-inbox-mentions', (tester, world) async {
+    await world.open(tester, '/notifications');
+    await tester.tap(find.byKey(const ValueKey('inbox-filter-mentions')));
+  });
+
+  screen('r2-friends', (tester, world) async {
+    await world.open(tester, '/contacts');
+  });
+
+  screen('r2-friends-search', (tester, world) async {
+    await world.open(tester, '/contacts');
+    await tester.enterText(find.byType(TextField).first, 'member');
+  });
+
+  screen('r2-new-group', (tester, world) async {
+    await world.open(tester, '/contacts');
+    await tester.tap(find.byKey(const ValueKey('contacts-new-group')));
+  });
+
+  screen('r2-group-details', (tester, world) async {
+    await openThread(
+      tester,
+      world,
+      id: 'group-1',
+      title: groupDetail.title,
+      type: ConversationType.group,
+    );
+    await tester.tap(_tooltip('Group details'));
+  });
+
+  screen('r2-search', (tester, world) async {
+    await world.open(tester, '/search/messages');
+    await tester.enterText(find.byType(TextField), 'release');
+    await tester.pump(const Duration(milliseconds: 500));
+  });
+
+  screen('r2-w-inbox', viewport: desktopWide, (tester, world) async {
+    await world.open(tester, '/notifications');
+  });
+
+  screen('r2-w-friends', viewport: desktopWide, (tester, world) async {
+    await world.open(tester, '/contacts');
+  });
+  // Redesign: settings and profile.
+  Future<void> openSettingsWindow(
+    WidgetTester tester,
+    PhoneWorld world, [
+    String? section,
+  ]) async {
+    await world.open(tester, '/me');
+    await settle(tester);
+    if (section != null) {
+      await tester.tap(find.byKey(ValueKey('settings-nav-$section')));
+    }
+  }
+
+  void desktopScreen(
+    String name,
+    Future<void> Function(WidgetTester tester, PhoneWorld world) open,
+  ) {
+    testWidgets(name, (tester) async {
+      // Desktop platform, so keyboard-only parts (shortcuts) show.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        usePhoneViewport(tester, desktopWide);
+        final world = PhoneWorld();
+        await open(tester, world);
+        await shoot(tester, name);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  }
+
+  screen('r1-settings', (tester, world) async {
+    await world.open(tester, '/me');
+  });
+
+  screen('r1-settings-scrolled', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.drag(
+      find.byKey(const ValueKey('settings-page-list')),
+      const Offset(0, -700),
+    );
+  });
+
+  screen('r1-settings-bottom', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.drag(
+      find.byKey(const ValueKey('settings-page-list')),
+      const Offset(0, -3000),
+    );
+  });
+
+  screen('r1-profile-edit', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.tap(find.byKey(const ValueKey('settings-account-card')));
+  });
+
+  screen('r1-status-sheet', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.tap(find.byKey(const ValueKey('presence-status-tile')));
+  });
+
+  screen('r1-custom-status-sheet', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.tap(_text('Brewing ideas'));
+  });
+
+  screen('r1-language-sheet', (tester, world) async {
+    await world.open(tester, '/me');
+    await tester.tap(find.byKey(const ValueKey('app-language-row')));
+  });
+
+  screen('r1-two-factor', (tester, world) async {
+    await world.open(tester, '/me');
+    final tile = find.byKey(const ValueKey('two-factor-settings-tile'));
+    await tester.scrollUntilVisible(
+      tile,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await settle(tester);
+    await tester.tap(tile);
+  });
+
+  screen('r1-profile-page', (tester, world) async {
+    await world.open(tester, '/profile/user-2');
+  });
+
+  screen('r1-profile-sheet', (tester, world) async {
+    await world.open(tester, '/contacts');
+    showUserProfileSheet(tester.element(find.byType(Scaffold).first), 'user-2');
+  });
+
+  screen('r1-profile-more', (tester, world) async {
+    await world.open(tester, '/profile/user-2');
+    await tester.tap(_tooltip('More'));
+  });
+
+  desktopScreen('r1-w-settings', (tester, world) async {
+    await openSettingsWindow(tester, world);
+  });
+
+  desktopScreen('r1-w-settings-profile', (tester, world) async {
+    await openSettingsWindow(tester, world, 'profile');
+  });
+
+  desktopScreen('r1-w-settings-privacy', (tester, world) async {
+    await openSettingsWindow(tester, world, 'privacy');
+  });
+
+  desktopScreen('r1-w-settings-notifications', (tester, world) async {
+    await openSettingsWindow(tester, world, 'notifications');
+  });
+
+  desktopScreen('r1-w-settings-shortcuts', (tester, world) async {
+    await openSettingsWindow(tester, world, 'shortcuts');
+  });
+
+  desktopScreen('r1-w-settings-language', (tester, world) async {
+    await openSettingsWindow(tester, world, 'language');
+  });
+
+  desktopScreen('r1-w-profile', (tester, world) async {
+    await world.open(tester, '/profile/user-2');
   });
 }
 

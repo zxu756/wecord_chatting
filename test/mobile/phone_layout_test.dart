@@ -8,7 +8,9 @@ import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
+import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -620,9 +622,10 @@ void main() {
       // Add Friends opens the Friends page full screen; back returns.
       await tester.tap(find.byKey(const ValueKey('phone-home-add-friends')));
       await settle(tester);
-      expect(find.widgetWithText(AppBar, 'Friends'), findsOneWidget);
+      expect(find.byType(ContactsScreen), findsOneWidget);
+      expect(find.text('Friends'), findsWidgets);
       expect(userPanel, findsNothing);
-      await tester.tap(find.byType(BackButton));
+      await tester.tap(find.byKey(const ValueKey('paper-page-back')));
       await settle(tester);
       expect(userPanel, findsOneWidget);
 
@@ -637,15 +640,16 @@ void main() {
       // The avatar opens You, the bell the notifications.
       await tester.tap(find.byKey(const ValueKey('phone-user-panel-avatar')));
       await settle(tester);
-      expect(find.widgetWithText(AppBar, 'You'), findsOneWidget);
-      await tester.tap(find.byType(BackButton));
+      expect(find.byKey(const ValueKey('settings-screen')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
       await settle(tester);
       await tester.tap(
         find.byKey(const ValueKey('phone-notifications-button')),
       );
       await settle(tester);
-      expect(find.widgetWithText(AppBar, 'Notifications'), findsOneWidget);
-      await tester.tap(find.byType(BackButton));
+      expect(find.byType(InboxScreen), findsOneWidget);
+      expect(find.text('Notifications'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('paper-page-back')));
       await settle(tester);
       expect(phoneHome, findsOneWidget);
 
@@ -803,7 +807,7 @@ void main() {
       await popTopRoute(tester);
 
       // Opened from a link, back goes home.
-      await tester.tap(find.byType(BackButton));
+      await tester.tap(find.byKey(const ValueKey('paper-page-back')));
       await settle(tester);
       expect(phoneHome, findsOneWidget);
     });
@@ -814,8 +818,8 @@ void main() {
     ) async {
       final world = PhoneWorld();
       await world.open(tester, '/me');
-      expect(find.widgetWithText(AppBar, 'You'), findsOneWidget);
-      await tester.tap(find.byType(BackButton));
+      expect(find.byKey(const ValueKey('settings-screen')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
       await settle(tester);
       expect(phoneHome, findsOneWidget);
     });
@@ -2002,8 +2006,10 @@ void main() {
       final world = PhoneWorld();
       await world.open(tester, '/profile/user-2');
       expect(find.textContaining('Deep focus'), findsOneWidget);
+      // Report waits behind More.
+      await tester.tap(find.byTooltip('More'));
+      await settle(tester);
       final report = find.text('Report');
-      await scrollIntoView(tester, report);
       await tester.tap(report);
       await settle(tester);
       await tester.ensureVisible(find.byType(EditableText).last);

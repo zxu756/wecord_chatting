@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_tag_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// A circle tag: its badge and text in a small pill.
 class CircleTagChip extends StatelessWidget {
@@ -276,17 +277,15 @@ class CircleTagSettingTile extends ConsumerWidget {
         : ref.watch(profileBadgesProvider(userId)).valueOrNull ??
               ProfileBadges.none;
     final tag = badges.tag;
-    return ListTile(
+    return SettingsRow(
       key: const ValueKey('circle-tag-setting'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.sell_outlined),
-      title: Text(tr('Circle tag')),
-      subtitle: Text(
-        tag == null
-            ? tr('Show the tag of one of your circles next to your name')
-            : badges.tagCircleName ?? tag.text,
-      ),
+      icon: Icons.sell_outlined,
+      title: tr('Circle tag'),
+      subtitle: tag == null
+          ? tr('Show the tag of one of your circles next to your name')
+          : badges.tagCircleName ?? tag.text,
       trailing: tag == null ? null : CircleTagChip(tag: tag),
+      showChevron: true,
       onTap: () => unawaited(_choose(context, ref, userId)),
     );
   }

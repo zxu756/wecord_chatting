@@ -96,4 +96,16 @@ void main() {
     // Still the stage-aware definition of 202610160018.
     expect(body, contains("'stage_speaker', channel.kind = 'stage'"));
   });
+
+  test('webhooks post into announcement channels', () {
+    final sql = migration('202610160037');
+    final body = functionBody(sql, 'create_channel_webhook');
+    expect(
+      body,
+      contains("if channel.kind not in ('text', 'announcement') then"),
+    );
+    expect(body, isNot(contains("if channel.kind <> 'text' then")));
+    // Publishing stays manual.
+    expect(sql, isNot(contains('publish_message(')));
+  });
 }

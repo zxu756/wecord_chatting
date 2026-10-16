@@ -338,7 +338,8 @@ class _CircleChannelSettingsScreenState
           key: ValueKey('channel-follows-${channel.id}'),
           channel: channel,
         ),
-      if (channel.kind == CircleChannelKind.text &&
+      // Announcement channels take webhooks too; publishing stays manual.
+      if (channel.isTextLike &&
           detail.canInChannel(channel, CirclePermission.manageWebhooks))
         ChannelWebhooksSection(
           key: ValueKey('channel-webhooks-${channel.id}'),

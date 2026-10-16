@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
@@ -13,6 +14,148 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 
 void main() {
+  group('paged history', () {
+    test('fetchMessageRows passes the cursor and page size through', () async {
+      final dataSource = FakeChatsDataSource()
+        ..messageRows = [
+          {'id': 'message-1'},
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+      final cursor = MessageCursor(
+        DateTime.utc(2026, 5, 18),
+        'message-9',
+        timestamp: '2026-05-18T00:00:00.123456+00:00',
+      );
+
+      final rows = await repository.fetchMessageRows(
+        'conversation-1',
+        before: cursor,
+        limit: 30,
+      );
+
+      expect(rows, hasLength(1));
+      final call = dataSource.pageCalls.single;
+      expect(call.conversationId, 'conversation-1');
+      expect(call.before, cursor);
+      expect(call.before!.queryTimestamp, '2026-05-18T00:00:00.123456+00:00');
+      expect(call.after, isNull);
+      expect(call.limit, 30);
+    });
+
+    test('fetchReactions maps rows by message and skips empty asks', () async {
+      final dataSource = FakeChatsDataSource()
+        ..reactionRows = [
+          {
+            'message_id': 'message-1',
+            'reactions': [
+              {'emoji': '👍', 'count': 2, 'reacted_by_me': true},
+            ],
+          },
+        ];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      expect(await repository.fetchReactions('conversation-1', const []), {});
+      expect(dataSource.reactionCalls, isEmpty);
+      final reactions = await repository.fetchReactions('conversation-1', [
+        'message-1',
+        'message-2',
+      ]);
+
+      expect(reactions.keys, ['message-1']);
+      expect(dataSource.reactionCalls.single, ['message-1', 'message-2']);
+    });
+
+    test('sendQueuedTextMessage sends its client id once', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['send_text_message'] = 'message-7';
+      final sent = <String>[];
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+        onMessageSent: (id) async => sent.add(id),
+      );
+
+      final id = await repository.sendQueuedTextMessage(
+        conversationId: 'conversation-1',
+        clientId: '11111111-1111-4111-8111-111111111111',
+        body: '  hello  ',
+      );
+
+      expect(id, 'message-7');
+      expect(sent, ['message-7']);
+      final call = dataSource.rpcCalls.single;
+      expect(call.functionName, 'send_text_message');
+      expect(call.params['client_id'], '11111111-1111-4111-8111-111111111111');
+      expect(call.params['body'], 'hello');
+      expect(call.params['mentions'], isEmpty);
+    });
+
+    test('sendQueuedTextMessage turns refusals into exceptions', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcErrors['send_text_message'] = const PostgrestException(
+          message: 'Slowmode is enabled. Try again in 9 seconds.',
+          code: 'P0001',
+          details: 'slowmode_remaining_seconds=9',
+        );
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+
+      await expectLater(
+        repository.sendQueuedTextMessage(
+          conversationId: 'conversation-1',
+          clientId: '11111111-1111-4111-8111-111111111111',
+          body: 'hello',
+        ),
+        throwsA(
+          isA<SlowmodeException>().having(
+            (error) => error.remainingSeconds,
+            'remainingSeconds',
+            9,
+          ),
+        ),
+      );
+    });
+
+    test('messageFromRow reads embedded aliases', () {
+      final repository = SupabaseChatsRepository.withDataSource(
+        FakeChatsDataSource(),
+        currentUserId: () => 'user-1',
+      );
+
+      final message = repository.messageFromRow({
+        'id': 'message-1',
+        'conversation_id': 'conversation-1',
+        'sender_id': 'user-2',
+        'type': 'text',
+        'body': 'Hi',
+        'created_at': '2026-05-18T04:30:00.000Z',
+        'client_id': '11111111-1111-4111-8111-111111111111',
+        'sender': {
+          'id': 'user-2',
+          'username': 'grace',
+          'display_name': 'Grace Hopper',
+          'bio': '',
+          'created_at': '2026-05-18T04:30:00.000Z',
+          'updated_at': '2026-05-18T04:30:00.000Z',
+          'contact_alias': [
+            {'alias': 'Amazing Grace'},
+          ],
+        },
+      });
+
+      expect(message.clientId, '11111111-1111-4111-8111-111111111111');
+      expect(message.sender?.alias, 'Amazing Grace');
+    });
+  });
+
   test(
     'listConversations maps summary rows and preserves unread counts',
     () async {
@@ -2345,6 +2488,67 @@ class FakeChatsDataSource implements ChatsDataSource {
     messageChangeConversationIds.add(conversationId);
     return _messageChanges
         .putIfAbsent(conversationId, () => StreamController<void>.broadcast())
+        .stream;
+  }
+
+  final pageCalls =
+      <
+        ({
+          String conversationId,
+          MessageCursor? before,
+          MessageCursor? after,
+          int limit,
+        })
+      >[];
+  final byIdCalls = <List<String>>[];
+  final reactionCalls = <List<String>>[];
+  var reactionRows = <Map<String, dynamic>>[];
+  final threadEventControllers = <String, StreamController<ThreadEvent>>{};
+
+  @override
+  Future<List<Map<String, dynamic>>> listMessagePage(
+    String conversationId, {
+    MessageCursor? before,
+    MessageCursor? after,
+    required int limit,
+  }) async {
+    pageCalls.add((
+      conversationId: conversationId,
+      before: before,
+      after: after,
+      limit: limit,
+    ));
+    return messageRows;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listMessagesByIds(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    byIdCalls.add(messageIds);
+    return [
+      for (final row in messageRows)
+        if (messageIds.contains(row['id'])) row,
+    ];
+  }
+
+  @override
+  Future<List<dynamic>> listMessageReactions(
+    String conversationId,
+    List<String> messageIds,
+  ) async {
+    reactionCalls.add(messageIds);
+    return reactionRows;
+  }
+
+  @override
+  Stream<ThreadEvent> threadEvents(String conversationId) {
+    return threadEventControllers
+        .putIfAbsent(
+          conversationId,
+          () => StreamController<ThreadEvent>.broadcast(),
+        )
         .stream;
   }
 

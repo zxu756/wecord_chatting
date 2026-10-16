@@ -18,6 +18,7 @@ import 'package:wecord/shared/l10n/zh/zh_file_preview.dart';
 import 'package:wecord/shared/l10n/zh/zh_layout.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
+import 'package:wecord/shared/l10n/zh/zh_offline.dart';
 import 'package:wecord/shared/l10n/zh/zh_phone_home.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
@@ -57,6 +58,7 @@ const zhAreas = <Map<String, String>>[
   zhLayout,
   zhBackendFixes,
   zhDiscovery,
+  zhOffline,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

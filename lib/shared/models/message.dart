@@ -73,6 +73,7 @@ class ChatMessage {
     this.crosspost,
     this.publishedAt,
     this.interaction,
+    this.clientId,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -116,6 +117,7 @@ class ChatMessage {
       crosspost: MessageCrosspost.maybeFromJson(json['crosspost']),
       publishedAt: _parseOptionalTimestamp(json['published_at']),
       interaction: MessageInteraction.maybeFromJson(json['interaction']),
+      clientId: json['client_id'] as String?,
     );
   }
 
@@ -180,6 +182,10 @@ class ChatMessage {
 
   /// A bot's answer to a member's slash command.
   final MessageInteraction? interaction;
+
+  /// The id the sender's app gave the message when it was written, so a
+  /// send retried from the outbox is stored once.
+  final String? clientId;
 
   /// Posted through a webhook: shown under the webhook's name, not as a
   /// message of [senderId] (the webhook's creator).
@@ -362,6 +368,7 @@ class ChatMessage {
           : webhookAvatarUrl as String?,
       crosspost: crosspost,
       interaction: interaction,
+      clientId: clientId,
       publishedAt: identical(publishedAt, _sentinel)
           ? this.publishedAt
           : publishedAt as DateTime?,

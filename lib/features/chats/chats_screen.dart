@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/message_history.dart';
+import 'package:wecord/features/chats/offline/chat_cache.dart';
+import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -23,15 +27,115 @@ class ChatThreadRouteExtra {
   final String? circleId;
 }
 
+/// The current user's conversations. With the offline cache, the last
+/// known list shows at once (and while offline) and is replaced when the
+/// server answers; reconnecting loads it again.
 final conversationsProvider =
-    FutureProvider.autoDispose<List<ConversationSummary>>((ref) {
+    FutureProvider.autoDispose<List<ConversationSummary>>((ref) async {
       final repository = ref.watch(chatsRepositoryProvider);
+      ref.watch(reconnectCountProvider);
       final subscription = repository.conversationChanges().listen((_) {
         ref.invalidateSelf();
       });
       ref.onDispose(subscription.cancel);
-      return repository.listConversations();
+      if (repository is! ConversationRowsSource) {
+        return repository.listConversations();
+      }
+      final rowsSource = repository as ConversationRowsSource;
+      final memo = ref.read(_conversationRowsMemoProvider);
+      final cache = ref.watch(chatCacheProvider);
+      final userId = ref.watch(authRepositoryProvider).currentUser?.id;
+
+      List<ConversationSummary> parse(List<Map<String, dynamic>> rows) {
+        return [
+          for (final row in rows)
+            if (_tryConversation(row) case final conversation?) conversation,
+        ];
+      }
+
+      void keep(List<Map<String, dynamic>> rows) {
+        if (userId != null) {
+          unawaited(
+            cache.writeConversations(userId, rows).catchError((Object _) {}),
+          );
+        }
+      }
+
+      // Answered after the cached list was shown (see below).
+      if (memo.take(userId) case final fresh?) {
+        return parse(fresh);
+      }
+      final request = rowsSource.listConversationRows();
+      List<Map<String, dynamic>>? cached;
+      if (userId != null && !memo.shownOnce) {
+        try {
+          cached = await cache.readConversations(userId);
+        } catch (_) {
+          cached = null;
+        }
+      }
+      if (cached == null || cached.isEmpty) {
+        final rows = await request;
+        memo.shownOnce = true;
+        keep(rows);
+        return parse(rows);
+      }
+      // Show the cached list now, and the server's when it answers.
+      memo.shownOnce = true;
+      var disposed = false;
+      ref.onDispose(() => disposed = true);
+      unawaited(
+        request.then(
+          (rows) {
+            keep(rows);
+            memo.put(userId, rows);
+            if (!disposed) {
+              ref.invalidateSelf();
+            }
+          },
+          onError: (Object _) {
+            // Offline: the cached list stays until the connection returns.
+          },
+        ),
+      );
+      return parse(cached);
     });
+
+ConversationSummary? _tryConversation(Map<String, dynamic> row) {
+  try {
+    return ConversationSummary.fromJson(row);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Hands the server's list to the next build of [conversationsProvider]
+/// after the cached one was shown.
+class _ConversationRowsMemo {
+  String? _userId;
+  List<Map<String, dynamic>>? _rows;
+
+  /// The cache is read on the first build only; later builds (realtime
+  /// changes) go to the server.
+  var shownOnce = false;
+
+  void put(String? userId, List<Map<String, dynamic>> rows) {
+    _userId = userId;
+    _rows = rows;
+  }
+
+  List<Map<String, dynamic>>? take(String? userId) {
+    final rows = _userId == userId ? _rows : null;
+    _rows = null;
+    _userId = null;
+    return rows;
+  }
+}
+
+final _conversationRowsMemoProvider = Provider<_ConversationRowsMemo>((ref) {
+  ref.watch(chatsRepositoryProvider);
+  return _ConversationRowsMemo();
+});
 
 /// The direct messages route. Phones list direct and group chats on Home,
 /// wide layouts in the Home sidebar beside the Friends page; conversations

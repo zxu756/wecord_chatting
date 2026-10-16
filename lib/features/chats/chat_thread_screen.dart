@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
+import 'package:wecord/features/chats/chat_thread_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
@@ -21,13 +22,19 @@ import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
+import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_forward_sheet.dart';
+import 'package:wecord/features/chats/message_list_view.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/chats/offline/connectivity_banner.dart';
+import 'package:wecord/features/chats/offline/outbox.dart';
+import 'package:wecord/features/chats/offline/outbox_provider.dart';
+import 'package:wecord/features/chats/pending_message.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
@@ -70,22 +77,8 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-final chatThreadProvider = FutureProvider.autoDispose
-    .family<ChatThreadData, String>((ref, conversationId) async {
-      final repository = ref.watch(chatsRepositoryProvider);
-      final subscription = repository.threadChanges(conversationId).listen((_) {
-        ref.invalidateSelf();
-      });
-      ref.onDispose(subscription.cancel);
-      final results = await Future.wait([
-        repository.listMessages(conversationId),
-        repository.listReadMarkers(conversationId),
-      ]);
-      return ChatThreadData(
-        messages: results[0] as List<ChatMessage>,
-        readMarkers: results[1] as List<ConversationReadMarker>,
-      );
-    });
+export 'package:wecord/features/chats/chat_thread_controller.dart'
+    show ChatThreadData, chatThreadProvider;
 
 final chatActivityProvider = StreamProvider.autoDispose
     .family<ConversationActivity, String>((ref, conversationId) {
@@ -122,13 +115,6 @@ final chatConversationSummaryProvider = FutureProvider.autoDispose
           .watch(chatsRepositoryProvider)
           .getConversationSummary(conversationId);
     });
-
-class ChatThreadData {
-  const ChatThreadData({required this.messages, required this.readMarkers});
-
-  final List<ChatMessage> messages;
-  final List<ConversationReadMarker> readMarkers;
-}
 
 /// A chat thread app bar action: an icon button when there is room, and a
 /// labelled entry in the More menu on phones.
@@ -434,6 +420,27 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// post's unread replies.
   var _newRepliesDismissed = false;
   final _messageKeys = <String, GlobalKey>{};
+  final _messageIdsByKey = <Key, String>{};
+
+  /// The list items built last, by message, with what they were built
+  /// from (see the list's item builder).
+  final _itemCache = <String, (Object, Widget)>{};
+
+  /// The message the list is built around (see [MessageListView]); null
+  /// for the default (the newest in chats, the first in forum posts).
+  String? _anchorId;
+
+  /// Whether a chat keeps its newest message in view as messages arrive
+  /// (the reader is at the bottom of the conversation's latest messages).
+  var _following = true;
+
+  /// The reader's read position when the chat opened, until the message
+  /// it points at is loaded and the NEW divider placed.
+  ConversationReadMarker? _initialReadMarker;
+  var _dividerPending = false;
+  var _forumStartRequested = false;
+  ChatThreadData? _threadData;
+  _ThreadLayout? _layout;
   String? _highlightedMessageId;
   Timer? _highlightTimer;
 
@@ -534,6 +541,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _unseenMessageCount = 0;
       _newRepliesDismissed = false;
       _messageKeys.clear();
+      _messageIdsByKey.clear();
+      _itemCache.clear();
+      _anchorId = null;
+      _following = true;
+      _initialReadMarker = null;
+      _dividerPending = false;
+      _forumStartRequested = false;
+      _threadData = null;
+      _layout = null;
       _highlightTimer?.cancel();
       _highlightedMessageId = null;
       _slowmodeRetryAt = null;
@@ -625,6 +641,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   @override
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
+    final pendingEntries = ref.watch(
+      conversationOutboxProvider(widget.conversationId),
+    );
     final activity = ref.watch(chatActivityProvider(widget.conversationId));
     final profileLayout = ref.watch(
       panelLayoutProvider.select(
@@ -1054,6 +1073,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               : null,
         );
         final banners = <Widget>[
+          const ConnectivityBanner(
+            key: ValueKey('chat-connectivity-banner'),
+            padding: EdgeInsets.only(top: 6, bottom: 2),
+          ),
           if (canCall)
             DirectCallBar(conversationId: widget.conversationId, title: title),
           if (conversationType == ConversationType.group &&
@@ -1091,23 +1114,36 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
           ),
           data: (data) {
-            final messages = data.messages;
-            final visibleMessages = ref
-                .read(chatsRepositoryProvider)
-                .searchThreadMessages(messages, _messageSearchQuery);
-            final messagesById = {
-              for (final message in messages) message.id: message,
-            };
-            final fullOldestToNewest = _messagesOldestToNewest(messages);
             _captureNewMessageDivider(
-              fullOldestToNewest,
-              data.readMarkers,
+              data,
+              _layoutFor(
+                data,
+                pending: pendingEntries,
+                currentUserId: currentUserId,
+              ).fullOldestToNewest,
               currentUserId,
             );
-            _trackUnseenMessages(fullOldestToNewest, currentUserId);
-            _markReadAfterLoad(messages);
+            // Again when the divider moved: grouping breaks at it.
+            final layout = _layoutFor(
+              data,
+              pending: pendingEntries,
+              currentUserId: currentUserId,
+            );
+            final messages = data.messages;
+            final fullOldestToNewest = layout.fullOldestToNewest;
+            final messagesById = layout.messagesById;
+            _trackUnseenMessages(
+              fullOldestToNewest,
+              currentUserId,
+              detached: data.hasNewer,
+            );
+            if (!data.hasNewer) {
+              _markReadAfterLoad(fullOldestToNewest);
+            }
             _reconcileActiveMessageState(messagesById);
-            if (messages.isEmpty || visibleMessages.isEmpty) {
+            _afterThreadData(data);
+            final display = layout.display;
+            if (display.isEmpty) {
               return Padding(
                 padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
                 child: Center(
@@ -1125,54 +1161,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               );
             }
 
-            final visibleOldestToNewest = _messagesOldestToNewest(
-              visibleMessages,
-            );
             final searching = _messageSearchQuery.trim().isNotEmpty;
-            // Chats list newest first from the bottom; forum posts read
-            // top down from the opening post.
-            final ordered = widget.forumPost
-                ? visibleOldestToNewest
-                : visibleOldestToNewest.reversed.toList(growable: false);
-            final latestOutgoingReadState = _latestOutgoingReadState(
-              messages: fullOldestToNewest,
-              readMarkers: data.readMarkers,
-              currentUserId: currentUserId,
-            );
-            // Grouping compares neighbours, which search results are not.
-            final followUpIds = !searching
-                ? _followUpMessageIds(
-                    visibleOldestToNewest,
-                    newMessageDividerId: _newMessageDividerId,
-                  )
-                : <String>{};
-            // The first message of each day gets a day separator.
-            final dayStartIds = <String>{
-              if (!searching)
-                for (final (index, message) in visibleOldestToNewest.indexed)
-                  if (index == 0 ||
-                      !_isSameLocalDay(
-                        visibleOldestToNewest[index - 1].createdAt,
-                        message.createdAt,
-                      ))
-                    message.id,
-            };
-            // A forum post opens with its first message; replies start
-            // their own group under it.
-            final openingPostId = widget.forumPost
-                ? fullOldestToNewest
-                      .where((message) => message.type != MessageType.system)
-                      .firstOrNull
-                      ?.id
-                : null;
-            if (openingPostId != null) {
-              final index = visibleOldestToNewest.indexWhere(
-                (message) => message.id == openingPostId,
-              );
-              if (index >= 0 && index + 1 < visibleOldestToNewest.length) {
-                followUpIds.remove(visibleOldestToNewest[index + 1].id);
-              }
-            }
+            final followUpIds = layout.followUpIds;
+            final dayStartIds = layout.dayStartIds;
+            final openingPostId = layout.openingPostId;
+            final latestOutgoingReadState = layout.latestOutgoingReadState;
             final showSenders = canStartThreads || isThread;
             // Messages without an embedded sender (still sending) fall
             // back to the current user's own profile.
@@ -1199,149 +1192,216 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   file,
             ];
 
-            final list = ListView.builder(
-              key: const ValueKey('chat-message-list'),
-              controller: _scrollController,
-              reverse: !widget.forumPost,
-              padding: EdgeInsets.fromLTRB(
-                sidePadding,
-                topInset + (desktop ? 18 : 10),
-                sidePadding,
-                bottomInset + 14,
-              ),
-              itemCount: ordered.length,
-              itemBuilder: (context, index) {
-                final message = ordered[index];
-                final Widget bubble;
-                if (message.type == MessageType.system) {
-                  bubble = _SystemMessageLine(
-                    message: message,
-                    onOpenPinnedMessage: _scrollToMessage,
-                  );
-                } else if (message.id == openingPostId) {
-                  bubble = _MessageBubble(
-                    message: message,
-                    messagesById: messagesById,
-                    isCurrentUser: message.isSentBy(currentUserId),
-                    sender: _senderFor(message, membersById),
-                    isOpeningPost: true,
-                    postTitle: title,
-                    replyCount: messages
-                        .where(
-                          (other) =>
-                              other.id != message.id &&
-                              other.type != MessageType.system &&
-                              other.recalledAt == null,
-                        )
-                        .length,
-                    isFollowUp: false,
-                    hasFollowUp: false,
-                    showReadReceipt: false,
-                    desktop: desktop,
-                    cards: cards,
-                    canCompose: canSend,
-                    onReply: _startReply,
-                    onEdit: _startEdit,
-                    onForward: _showForwardSheet,
-                    onDelete: _deleteMessage,
-                    canModerate: canDeleteAsModerator(message),
-                    circleId: _circleId,
-                    onPreviewImage: _previewImage,
-                    onToggleReaction: _toggleReaction,
-                    onShowReactors: _showReactors,
-                    canPin: canPinMessages,
-                    onTogglePin: _togglePin,
-                    onRemoveEmbed: _removeEmbed,
-                    canStartThread: false,
-                    pollActions: pollActions,
-                  );
-                } else {
-                  final isCurrentUser = message.isSentBy(currentUserId);
-                  final newerIndex = widget.forumPost ? index + 1 : index - 1;
-                  final newerMessage =
-                      newerIndex < 0 || newerIndex >= ordered.length
-                      ? null
-                      : ordered[newerIndex];
-                  bubble = _MessageBubble(
-                    message: message,
-                    messagesById: messagesById,
-                    isCurrentUser: isCurrentUser,
-                    sender: _senderFor(
+            Widget buildMessageItem(int index) {
+              final message = display[index];
+              final pendingEntry = layout.pendingById[message.id];
+              final Widget bubble;
+              if (message.type == MessageType.system) {
+                bubble = _SystemMessageLine(
+                  message: message,
+                  onOpenPinnedMessage: _scrollToMessage,
+                );
+              } else if (message.id == openingPostId) {
+                bubble = _MessageBubble(
+                  message: message,
+                  messagesById: messagesById,
+                  isCurrentUser: message.isSentBy(currentUserId),
+                  sender: _senderFor(message, membersById),
+                  isOpeningPost: true,
+                  postTitle: title,
+                  replyCount: layout.openingPostReplyCount,
+                  isFollowUp: false,
+                  hasFollowUp: false,
+                  showReadReceipt: false,
+                  desktop: desktop,
+                  cards: cards,
+                  canCompose: canSend,
+                  onReply: _startReply,
+                  onEdit: _startEdit,
+                  onForward: _showForwardSheet,
+                  onDelete: _deleteMessage,
+                  canModerate: canDeleteAsModerator(message),
+                  circleId: _circleId,
+                  onPreviewImage: _previewImage,
+                  onToggleReaction: _toggleReaction,
+                  onShowReactors: _showReactors,
+                  canPin: canPinMessages,
+                  onTogglePin: _togglePin,
+                  onRemoveEmbed: _removeEmbed,
+                  canStartThread: false,
+                  pollActions: pollActions,
+                );
+              } else {
+                final isCurrentUser = message.isSentBy(currentUserId);
+                final newerMessage = index + 1 < display.length
+                    ? display[index + 1]
+                    : null;
+                bubble = _MessageBubble(
+                  message: message,
+                  messagesById: messagesById,
+                  isCurrentUser: isCurrentUser,
+                  sender: _senderFor(
+                    message,
+                    membersById,
+                    fallbackProfile: isCurrentUser ? ownProfile : null,
+                  ),
+                  // Direct chats name the other person in the title.
+                  showSenderName: showSenders && !isCurrentUser,
+                  isFollowUp: followUpIds.contains(message.id),
+                  hasFollowUp:
+                      newerMessage != null &&
+                      followUpIds.contains(newerMessage.id),
+                  showReadReceipt:
+                      pendingEntry == null &&
+                      latestOutgoingReadState.latestOutgoingMessageId ==
+                          message.id &&
+                      latestOutgoingReadState.isRead,
+                  mentionsMe: _mentionsUser(message, currentUserId),
+                  desktop: desktop,
+                  cards: cards,
+                  canCompose: canSend && pendingEntry == null,
+                  onReply: _startReply,
+                  onEdit: _startEdit,
+                  onForward: _showForwardSheet,
+                  onDelete: _deleteMessage,
+                  canModerate: canDeleteAsModerator(message),
+                  circleId: _circleId,
+                  onPreviewImage: _previewImage,
+                  onToggleReaction: _toggleReaction,
+                  onShowReactors: _showReactors,
+                  canPin: canPinMessages && pendingEntry == null,
+                  onTogglePin: _togglePin,
+                  onRemoveEmbed: _removeEmbed,
+                  canStartThread:
+                      canStartThreads && canSend && pendingEntry == null,
+                  onOpenThread: _openOrCreateThread,
+                  pollActions: pollActions,
+                  onPublish: canPublish(message) && pendingEntry == null
+                      ? _publishMessage
+                      : null,
+                );
+              }
+              final framed = pendingEntry == null
+                  ? bubble
+                  : PendingMessageFrame(
+                      entry: pendingEntry,
+                      alignEnd: !cards,
+                      onRetry: () => _retryPending(pendingEntry.clientId),
+                      onDiscard: () => _discardPending(pendingEntry),
+                      child: bubble,
+                    );
+              final highlighted = AnimatedContainer(
+                duration: WeCordMotion.durationOf(
+                  context,
+                  const Duration(milliseconds: 300),
+                ),
+                decoration: BoxDecoration(
+                  color: message.id == _highlightedMessageId
+                      ? c.accent.withValues(alpha: 0.12)
+                      : c.accent.withValues(alpha: 0),
+                  borderRadius: BorderRadius.circular(
+                    cards ? 0 : WeCordRadii.md,
+                  ),
+                ),
+                child: framed,
+              );
+              final showDay =
+                  dayStartIds.contains(message.id) &&
+                  message.id != openingPostId;
+              final showNew = message.id == _newMessageDividerId;
+              return KeyedSubtree(
+                key: _keyForMessage(message.id),
+                child: showDay || showNew
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (showDay)
+                            ChatDaySeparator(time: message.createdAt),
+                          if (showNew)
+                            ChatNewMessagesDivider(
+                              inset: cards ? (desktop ? 24 : 14) : 0,
+                            ),
+                          highlighted,
+                        ],
+                      )
+                    : highlighted,
+              );
+            }
+
+            Widget messageAt(int index) {
+              final message = display[index];
+              final pendingEntry = layout.pendingById[message.id];
+              // Everything the item shows that may change. While it stays
+              // the same, the item built last time is used again, so a
+              // build of the screen (typing, the composer, a new message)
+              // does not rebuild the messages already on screen.
+              final sender = message.type == MessageType.system
+                  ? null
+                  : _senderFor(
                       message,
                       membersById,
-                      fallbackProfile: isCurrentUser ? ownProfile : null,
-                    ),
-                    // Direct chats name the other person in the title.
-                    showSenderName: showSenders && !isCurrentUser,
-                    isFollowUp: followUpIds.contains(message.id),
-                    hasFollowUp:
-                        newerMessage != null &&
-                        followUpIds.contains(newerMessage.id),
-                    showReadReceipt:
-                        latestOutgoingReadState.latestOutgoingMessageId ==
-                            message.id &&
-                        latestOutgoingReadState.isRead,
-                    mentionsMe: _mentionsUser(message, currentUserId),
-                    desktop: desktop,
-                    cards: cards,
-                    canCompose: canSend,
-                    onReply: _startReply,
-                    onEdit: _startEdit,
-                    onForward: _showForwardSheet,
-                    onDelete: _deleteMessage,
-                    canModerate: canDeleteAsModerator(message),
-                    circleId: _circleId,
-                    onPreviewImage: _previewImage,
-                    onToggleReaction: _toggleReaction,
-                    onShowReactors: _showReactors,
-                    canPin: canPinMessages,
-                    onTogglePin: _togglePin,
-                    onRemoveEmbed: _removeEmbed,
-                    canStartThread: canStartThreads && canSend,
-                    onOpenThread: _openOrCreateThread,
-                    pollActions: pollActions,
-                    onPublish: canPublish(message) ? _publishMessage : null,
-                  );
-                }
-                final highlighted = AnimatedContainer(
-                  duration: WeCordMotion.durationOf(
-                    context,
-                    const Duration(milliseconds: 300),
-                  ),
-                  decoration: BoxDecoration(
-                    color: message.id == _highlightedMessageId
-                        ? c.accent.withValues(alpha: 0.12)
-                        : c.accent.withValues(alpha: 0),
-                    borderRadius: BorderRadius.circular(
-                      cards ? 0 : WeCordRadii.md,
-                    ),
-                  ),
-                  child: bubble,
-                );
-                final showDay =
-                    dayStartIds.contains(message.id) &&
-                    message.id != openingPostId;
-                final showNew = message.id == _newMessageDividerId;
-                return KeyedSubtree(
-                  key: _messageKeys.putIfAbsent(message.id, GlobalKey.new),
-                  child: showDay || showNew
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (showDay)
-                              ChatDaySeparator(time: message.createdAt),
-                            if (showNew)
-                              ChatNewMessagesDivider(
-                                inset: cards ? (desktop ? 24 : 14) : 0,
-                              ),
-                            highlighted,
-                          ],
-                        )
-                      : highlighted,
-                );
-              },
+                      fallbackProfile: message.isSentBy(currentUserId)
+                          ? ownProfile
+                          : null,
+                    );
+              final newer = index + 1 < display.length
+                  ? display[index + 1]
+                  : null;
+              final signature = (
+                message,
+                messagesById[message.replyToMessageId],
+                pendingEntry,
+                followUpIds.contains(message.id),
+                newer != null && followUpIds.contains(newer.id),
+                latestOutgoingReadState.latestOutgoingMessageId == message.id &&
+                    latestOutgoingReadState.isRead,
+                (sender?.name, sender?.avatarUrl, sender?.roleColor),
+                (desktop, cards, showSenders, canSend, canStartThreads),
+                (
+                  canPinMessages,
+                  canModeratePolls,
+                  canDeleteAsModerator(message),
+                  canPublish(message),
+                ),
+                _circleId,
+                message.id == _highlightedMessageId,
+                dayStartIds.contains(message.id),
+                message.id == _newMessageDividerId,
+                message.id == openingPostId
+                    ? (title, layout.openingPostReplyCount)
+                    : null,
+              );
+              final cached = _itemCache[message.id];
+              if (cached != null && cached.$1 == signature) {
+                return cached.$2;
+              }
+              final item = buildMessageItem(index);
+              _itemCache[message.id] = (signature, item);
+              return item;
+            }
+
+            final list = LayoutBuilder(
+              builder: (context, listConstraints) => MessageListView(
+                key: const ValueKey('chat-message-list'),
+                controller: _scrollController,
+                forum: widget.forumPost,
+                itemCount: display.length,
+                anchorIndex: _anchorIndexFor(display, data),
+                indexOfMessage: (id) => layout.displayIndex[id],
+                messageIdOfKey: (key) => _messageIdsByKey[key],
+                itemBuilder: messageAt,
+                viewportHeight: listConstraints.maxHeight,
+                sidePadding: sidePadding,
+                topPadding: topInset + (desktop ? 18 : 10),
+                bottomPadding: bottomInset + 14,
+                loadingOlder: data.isLoadingOlder,
+                loadingNewer: data.isLoadingNewer,
+                onScrollEnd: _handleScrollEnd,
+              ),
             );
-            final showJumpToLatest = !_isAtBottom && _unseenMessageCount > 0;
+            final showJumpToLatest =
+                (!_isAtBottom && _unseenMessageCount > 0) ||
+                (data.hasNewer && !widget.forumPost && !searching);
             final newRepliesId = _newMessageDividerId;
             final showJumpToNewReplies =
                 widget.forumPost &&
@@ -1389,7 +1449,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     bottom: bottomInset + 10,
                     child: _JumpPill(
                       tooltip: tr('Jump to latest'),
-                      label: _unseenMessageCount == 1
+                      label: _unseenMessageCount == 0
+                          ? tr('Jump to latest')
+                          : _unseenMessageCount == 1
                           ? tr('1 new message')
                           : tr('{count} new messages', {
                               'count': _unseenMessageCount,
@@ -1576,27 +1638,254 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   /// Remembers where the reader left off before the thread marks itself read,
-  /// so the NEW divider stays put for as long as the thread stays open.
+  /// so the NEW divider stays put for as long as the thread stays open. When
+  /// the last read message is older than the loaded pages, the divider is
+  /// placed once scrolling loads it.
   void _captureNewMessageDivider(
+    ChatThreadData data,
     List<ChatMessage> oldestToNewest,
-    List<ConversationReadMarker> readMarkers,
     String? currentUserId,
   ) {
-    if (_hasCapturedReadPosition) {
+    if (!_hasCapturedReadPosition) {
+      // The offline copy has no read markers; wait for the server's.
+      if (data.isFromCache && data.readMarkers.isEmpty) {
+        return;
+      }
+      _hasCapturedReadPosition = true;
+      _dividerPending = true;
+      _initialReadMarker = data.readMarkers
+          .where((marker) => marker.userId == currentUserId)
+          .firstOrNull;
+    }
+    if (!_dividerPending) {
       return;
     }
-    _hasCapturedReadPosition = true;
+    final marker = _initialReadMarker;
+    if (currentUserId == null || marker == null) {
+      _dividerPending = false;
+      _newMessageDividerId = null;
+      return;
+    }
+    final lastReadId = marker.lastReadMessageId;
+    final lastReadLoaded =
+        lastReadId != null &&
+        oldestToNewest.any((message) => message.id == lastReadId);
+    if (!lastReadLoaded && data.hasOlder) {
+      // Further back than the loaded pages.
+      return;
+    }
+    _dividerPending = false;
     _newMessageDividerId = _firstUnreadMessageId(
       messages: oldestToNewest,
-      readMarkers: readMarkers,
+      readMarkers: [marker],
       currentUserId: currentUserId,
     );
   }
 
+  /// The layout of the loaded messages: sorted, searched, grouped. Worked
+  /// out again only when they (or the search, the NEW divider or the
+  /// outbox) change, not on every build.
+  _ThreadLayout _layoutFor(
+    ChatThreadData data, {
+    required List<OutboxEntry> pending,
+    required String? currentUserId,
+  }) {
+    _threadData = data;
+    final previous = _layout;
+    if (previous != null &&
+        identical(previous.messages, data.messages) &&
+        identical(previous.readMarkers, data.readMarkers) &&
+        identical(previous.pending, pending) &&
+        previous.query == _messageSearchQuery &&
+        previous.dividerId == _newMessageDividerId &&
+        previous.currentUserId == currentUserId) {
+      return previous;
+    }
+    final layout = _ThreadLayout.build(
+      messages: data.messages,
+      readMarkers: data.readMarkers,
+      pending: pending,
+      query: _messageSearchQuery,
+      dividerId: _newMessageDividerId,
+      currentUserId: currentUserId,
+      forumPost: widget.forumPost,
+      search: (messages, query) => ref
+          .read(chatsRepositoryProvider)
+          .searchThreadMessages(messages, query),
+    );
+    _layout = layout;
+    _itemCache.removeWhere((id, _) => !layout.displayIndex.containsKey(id));
+    return layout;
+  }
+
+  GlobalKey _keyForMessage(String messageId) {
+    return _messageKeys.putIfAbsent(messageId, () {
+      final key = GlobalKey();
+      _messageIdsByKey[key] = messageId;
+      return key;
+    });
+  }
+
+  /// The oldest-first index of the message the list is built around.
+  int _anchorIndexFor(List<ChatMessage> display, ChatThreadData data) {
+    if (display.isEmpty) {
+      return 0;
+    }
+    final index = _anchorId == null ? null : _layout?.displayIndex[_anchorId];
+    if (widget.forumPost) {
+      if (index != null) {
+        return index;
+      }
+      _anchorId = display.first.id;
+      return 0;
+    }
+    if ((_following && !data.hasNewer) || index == null) {
+      _anchorId = display.last.id;
+      return display.length - 1;
+    }
+    return index;
+  }
+
+  /// After the thread's data changed: loads more when the loaded messages
+  /// do not fill the screen, and starts forum posts from their opening
+  /// post.
+  void _afterThreadData(ChatThreadData data) {
+    if (widget.forumPost &&
+        !_forumStartRequested &&
+        data.hasOlder &&
+        !data.hasNewer) {
+      _forumStartRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          return;
+        }
+        await ref
+            .read(chatThreadProvider(widget.conversationId).notifier)
+            .startFromBeginning();
+        if (!mounted) {
+          return;
+        }
+        setState(() => _anchorId = null);
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(0);
+        }
+      });
+    }
+    if (data.hasOlder || data.hasNewer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadMoreIfNeeded();
+        }
+      });
+    }
+  }
+
+  /// Loads the next page in a direction when the reader is close to the
+  /// loaded end there.
+  void _loadMoreIfNeeded() {
+    final data = _threadData;
+    if (data == null ||
+        !_scrollController.hasClients ||
+        _messageSearchQuery.trim().isNotEmpty) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) {
+      return;
+    }
+    final towardOldest = widget.forumPost
+        ? position.pixels - position.minScrollExtent
+        : position.maxScrollExtent - position.pixels;
+    final towardNewest = widget.forumPost
+        ? position.maxScrollExtent - position.pixels
+        : position.pixels - position.minScrollExtent;
+    final reach = position.viewportDimension * 1.5;
+    final notifier = ref.read(
+      chatThreadProvider(widget.conversationId).notifier,
+    );
+    if (data.hasOlder && !data.isLoadingOlder && towardOldest < reach) {
+      unawaited(notifier.loadOlder());
+    }
+    if (data.hasNewer && !data.isLoadingNewer && towardNewest < reach) {
+      unawaited(notifier.loadNewer());
+    }
+  }
+
+  /// When a chat comes to rest at the bottom of its latest messages, the
+  /// newest one becomes the anchor again, so arriving messages stay in
+  /// view. Nothing moves on screen.
+  void _handleScrollEnd() {
+    if (widget.forumPost || !_scrollController.hasClients) {
+      return;
+    }
+    final data = _threadData;
+    final display = _layout?.display;
+    if (data == null || data.hasNewer || display == null || display.isEmpty) {
+      return;
+    }
+    final position = _scrollController.position;
+    final fromBottom = position.pixels - position.minScrollExtent;
+    if (fromBottom > _bottomScrollThreshold) {
+      return;
+    }
+    final newestId = display.last.id;
+    if (_following && _anchorId == newestId) {
+      return;
+    }
+    setState(() {
+      _anchorId = newestId;
+      _following = true;
+    });
+    if (position.minScrollExtent < 0) {
+      // The newest message's edge becomes offset 0.
+      _scrollController.jumpTo(math.max(0.0, fromBottom));
+    }
+  }
+
+  Future<void> _retryPending(String clientId) async {
+    await ref.read(outboxProvider.notifier).retry(clientId);
+  }
+
+  /// Long-pressing a failed message offers to delete it.
+  Future<void> _discardPending(OutboxEntry entry) async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        scrollable: true,
+        title: Text(tr('Delete unsent message?')),
+        content: Text(tr("It hasn't been sent and will be removed.")),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(tr('Cancel')),
+          ),
+          FilledButton(
+            key: const ValueKey('pending-discard-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(tr('Delete')),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && mounted) {
+      ref.read(outboxProvider.notifier).discard(entry.clientId);
+    }
+  }
+
+  /// Counts messages that arrived while the reader was scrolled up. Not
+  /// while [detached] from the latest messages (after a jump): pages loaded
+  /// then are history, not news.
   void _trackUnseenMessages(
     List<ChatMessage> oldestToNewest,
-    String? currentUserId,
-  ) {
+    String? currentUserId, {
+    bool detached = false,
+  }) {
+    if (detached) {
+      _latestMessageId = null;
+      _latestSeenMessageId = null;
+      _unseenMessageCount = 0;
+      return;
+    }
     final previousLatestMessageId = _latestMessageId;
     _latestMessageId = oldestToNewest.isEmpty ? null : oldestToNewest.last.id;
     // Reversed chats keep the newest message in view by themselves; forum
@@ -1636,10 +1925,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       isAtBottom = true;
     } else {
       final position = _scrollController.position;
+      if (!position.hasContentDimensions) {
+        return;
+      }
       // Forum posts are not reversed, so their latest end is at the bottom.
+      // Chats measure from the newest loaded message (offset 0 is the
+      // anchor's, which newer messages may be below).
       isAtBottom = widget.forumPost
           ? position.maxScrollExtent - position.pixels <= _bottomScrollThreshold
-          : position.pixels <= _bottomScrollThreshold;
+          : position.pixels - position.minScrollExtent <=
+                _bottomScrollThreshold;
+      _loadMoreIfNeeded();
+    }
+    if (!isAtBottom && !widget.forumPost) {
+      // The reader scrolled up: arriving messages no longer move the list.
+      _following = false;
     }
     if (isAtBottom == _isAtBottom) {
       return;
@@ -1657,17 +1957,71 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (!_scrollController.hasClients) {
       return;
     }
+    if (_threadData?.hasNewer == true) {
+      // Back from a jump in history: load the latest page.
+      unawaited(_returnToLatest());
+      return;
+    }
     if (widget.forumPost) {
       unawaited(_scrollToEnd());
       return;
     }
-    unawaited(
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      ),
+    final position = _scrollController.position;
+    if (position.hasContentDimensions &&
+        position.pixels - position.minScrollExtent >
+            position.viewportDimension * 4) {
+      // Far up: straight to the newest message.
+      setState(() {
+        _anchorId = null;
+        _following = true;
+      });
+      _scrollController.jumpTo(0);
+      return;
+    }
+    unawaited(_scrollToBottom());
+  }
+
+  Future<void> _returnToLatest() async {
+    await ref
+        .read(chatThreadProvider(widget.conversationId).notifier)
+        .jumpToLatest();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _anchorId = null;
+      _following = true;
+    });
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+      if (widget.forumPost) {
+        unawaited(_scrollToEnd());
+      }
+    }
+  }
+
+  /// Scrolls a chat down to its newest loaded message; the list builds
+  /// lazily, so its extent may grow on the way.
+  Future<void> _scrollToBottom() async {
+    await _scrollController.animateTo(
+      _scrollController.position.minScrollExtent,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
     );
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      if (position.pixels <= position.minScrollExtent) {
+        break;
+      }
+      _scrollController.jumpTo(position.minScrollExtent);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (mounted) {
+      _handleScrollEnd();
+    }
   }
 
   /// Scrolls a forum post to its latest reply. The list builds lazily, so
@@ -1829,6 +2183,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
 
+    final outbox = ref.read(outboxProvider.notifier);
+    if (outbox.isAvailable) {
+      await _sendThroughOutbox(outbox, messageBody, composerText: body);
+      return;
+    }
+
     final replyingTo = _replyingTo;
     setState(() {
       _isSending = true;
@@ -1863,7 +2223,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       if (mounted) {
         _saveDraft();
       }
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -1879,6 +2239,76 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         setState(() {
           _isSending = false;
         });
+      }
+    }
+  }
+
+  /// Sends through the outbox: the message shows as sending at once and
+  /// the composer is free again; when the network fails it is sent again
+  /// later. A refusal (slowmode, AutoMod) puts the text back.
+  Future<void> _sendThroughOutbox(
+    OutboxNotifier outbox,
+    String messageBody, {
+    required String composerText,
+  }) async {
+    final replyingTo = _replyingTo;
+    final replyPreview = replyingTo == null
+        ? null
+        : _replyPreviewForMessage(replyingTo);
+    // Mentions point into the body as sent, after emoji become tokens.
+    final encodedBody = _encodeCustomEmoji(messageBody);
+    final entry = outbox.enqueue(
+      conversationId: widget.conversationId,
+      body: encodedBody,
+      replyToMessageId: replyingTo?.id,
+      replyPreview: replyPreview,
+      mentions: _mentionsForBody(encodedBody),
+    );
+    if (entry == null) {
+      return;
+    }
+    _composerController.clear();
+    _mentionDraft.clear();
+    _emojiDraft.clear();
+    setState(() {
+      _emojiQuery = null;
+      _isMentioning = false;
+      _mentionQuery = '';
+      _slashQuery = null;
+      _replyingTo = null;
+      _pendingDraftReplyId = null;
+      _sendError = null;
+    });
+    _saveDraft();
+    unawaited(_setTyping(false));
+    if (!_isAtBottom || _threadData?.hasNewer == true) {
+      _jumpToLatest();
+    }
+    final result = await outbox.sendNow(entry.clientId);
+    if (!mounted) {
+      return;
+    }
+    if (result case OutboxRefused(:final error)) {
+      outbox.discard(entry.clientId);
+      if (_composerController.text.isEmpty) {
+        _composerController.value = TextEditingValue(
+          text: composerText,
+          selection: TextSelection.collapsed(offset: composerText.length),
+        );
+        if (replyingTo != null && _editingMessage == null) {
+          _replyingTo = replyingTo;
+        }
+        _saveDraft();
+      }
+      switch (error) {
+        case SlowmodeException():
+          _waitOutSlowmode(error);
+        case SendRefusedException():
+          _showSendRefusal(error);
+        default:
+          setState(() {
+            _sendError = tr('Could not send message. Try again.');
+          });
       }
     }
   }
@@ -1899,7 +2329,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _emojiQuery = null;
       _editingMessage = null;
       unawaited(_restoreDraft());
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } on SendRefusedException catch (error) {
       _showSendRefusal(error);
     } catch (_) {
@@ -1972,7 +2402,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             conversationId: widget.conversationId,
             image: image,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -2018,7 +2448,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             mimeType: file.mimeType,
             bytes: file.bytes,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -2064,7 +2494,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             conversationId: widget.conversationId,
             body: gif.url,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -2089,7 +2519,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       conversationId: widget.conversationId,
     );
     if (posted == true && mounted) {
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     }
   }
 
@@ -2098,7 +2528,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(chatsRepositoryProvider)
           .votePoll(messageId: message.id, optionIds: optionIds);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } catch (_) {
       _showSnackBar(tr('Could not record your vote. Try again.'));
       rethrow;
@@ -2130,7 +2560,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
     try {
       await ref.read(chatsRepositoryProvider).endPoll(messageId: message.id);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } catch (_) {
       _showSnackBar(tr('Could not end the poll. Try again.'));
     }
@@ -2216,7 +2646,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             mimeType: recording.mimeType,
             durationMs: recording.durationMs,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -2359,7 +2789,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             conversationId: widget.conversationId,
             stickerId: sticker.id,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
@@ -2727,7 +3157,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(chatsRepositoryProvider)
           .recallMessage(messageId: message.id);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -2745,7 +3175,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(chatsRepositoryProvider)
           .toggleMessageReaction(messageId: message.id, emoji: emoji);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -2766,7 +3196,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       } else {
         await repository.pinMessage(messageId: message.id);
       }
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
       ref.invalidate(pinnedMessagesProvider(widget.conversationId));
     } on PinnedMessageLimitException {
       _showSnackBar(
@@ -2788,7 +3218,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       final delivered = await ref
           .read(announcementRepositoryProvider)
           .publish(message.id);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
       _showSnackBar(switch (delivered) {
         0 => tr('Published. No channels follow this one yet.'),
         1 => tr('Published to 1 channel.'),
@@ -2804,7 +3234,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(chatsRepositoryProvider)
           .setMessageSuppressEmbeds(messageId: message.id, suppress: true);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
     } catch (_) {
       _showSnackBar(tr('Could not remove the link preview. Try again.'));
     }
@@ -2854,7 +3284,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             rootMessageId: message.id,
             title: title,
           );
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: message.id);
       ref.invalidate(conversationsProvider);
       if (!mounted) {
         return;
@@ -2895,7 +3325,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       await ref
           .read(chatsRepositoryProvider)
           .unpinMessage(messageId: messageId);
-      ref.invalidate(chatThreadProvider(widget.conversationId));
+      _refreshThread(messageId: messageId);
       ref.invalidate(pinnedMessagesProvider(widget.conversationId));
     } catch (_) {
       _showSnackBar(tr('Could not unpin message. Try again.'));
@@ -2921,9 +3351,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
-  /// Scrolls the thread to [messageId] and briefly highlights it. The list is
-  /// built lazily, so walk up from the newest message until it is built.
+  /// Scrolls the thread to [messageId] and briefly highlights it, loading
+  /// the pages around it when it is not loaded. The message becomes the
+  /// list's anchor, so it is built at once, and is then centred.
   Future<void> _scrollToMessage(String messageId) async {
+    final notifier = ref.read(
+      chatThreadProvider(widget.conversationId).notifier,
+    );
     final messages =
         ref
             .read(chatThreadProvider(widget.conversationId))
@@ -2931,41 +3365,32 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ?.messages ??
         const <ChatMessage>[];
     if (!messages.any((message) => message.id == messageId)) {
-      _showSnackBar(tr('That message is not loaded.'));
-      return;
+      final found = notifier.isPaged && await notifier.jumpTo(messageId);
+      if (!mounted) {
+        return;
+      }
+      if (!found) {
+        _showSnackBar(tr('That message is not loaded.'));
+        return;
+      }
     }
     if (_messageSearchQuery.trim().isNotEmpty) {
       setState(() {
         _searchController.clear();
         _messageSearchQuery = '';
       });
-      await WidgetsBinding.instance.endOfFrame;
     }
     if (!mounted || !_scrollController.hasClients) {
       return;
     }
-
-    if (_messageKeys[messageId]?.currentContext == null) {
-      _scrollController.jumpTo(0);
-      for (var attempt = 0; attempt < 500; attempt++) {
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted || !_scrollController.hasClients) {
-          return;
-        }
-        if (_messageKeys[messageId]?.currentContext != null) {
-          break;
-        }
-        final position = _scrollController.position;
-        if (position.pixels >= position.maxScrollExtent) {
-          break;
-        }
-        _scrollController.jumpTo(
-          (position.pixels + position.viewportDimension * 0.8).clamp(
-            0.0,
-            position.maxScrollExtent,
-          ),
-        );
-      }
+    setState(() {
+      _anchorId = messageId;
+      _following = false;
+    });
+    _scrollController.jumpTo(0);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scrollController.hasClients) {
+      return;
     }
 
     final targetContext = _messageKeys[messageId]?.currentContext;
@@ -2993,6 +3418,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         });
       }
     });
+  }
+
+  /// Brings the loaded messages up to date after an action, on
+  /// [messageId] when it was about one message.
+  void _refreshThread({String? messageId}) {
+    unawaited(
+      ref
+          .read(chatThreadProvider(widget.conversationId).notifier)
+          .refresh(messageId: messageId),
+    );
   }
 
   void _showSnackBar(String text) {
@@ -4843,8 +5278,20 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
     }
   }
 
+  String get _urlKey =>
+      SignedUrlCache.keyFor(widget.attachment.bucket, widget.attachment.path);
+
+  /// Reused while valid, so scrolling back to an image does not sign and
+  /// load it again.
   Future<String> _loadImageUrl() {
-    return ref.read(chatsRepositoryProvider).createImageUrl(widget.attachment);
+    return ref
+        .read(chatSignedUrlCacheProvider)
+        .get(
+          _urlKey,
+          () => ref
+              .read(chatsRepositoryProvider)
+              .createImageUrl(widget.attachment),
+        );
   }
 
   /// The signed URL may have expired while the chat stayed open: sign it
@@ -4856,6 +5303,7 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
     _resigned = true;
     scheduleMicrotask(() {
       if (mounted) {
+        ref.read(chatSignedUrlCacheProvider).evict(_urlKey);
         setState(() {
           _imageUrl = _loadImageUrl();
         });
@@ -4883,6 +5331,9 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
       padding: EdgeInsets.only(top: widget.framed ? 6 : 0),
       child: FutureBuilder<String>(
         future: _imageUrl,
+        initialData: _resigned
+            ? null
+            : ref.read(chatSignedUrlCacheProvider).peek(_urlKey),
         builder: (context, snapshot) {
           final url = snapshot.data;
           if (url == null) {
@@ -5951,4 +6402,166 @@ class _LatestOutgoingReadState {
 
   final String? latestOutgoingMessageId;
   final bool isRead;
+}
+
+/// The loaded messages laid out for the list (see
+/// `_ChatThreadScreenState._layoutFor`).
+class _ThreadLayout {
+  _ThreadLayout._({
+    required this.messages,
+    required this.readMarkers,
+    required this.pending,
+    required this.query,
+    required this.dividerId,
+    required this.currentUserId,
+    required this.fullOldestToNewest,
+    required this.messagesById,
+    required this.display,
+    required this.displayIndex,
+    required this.pendingById,
+    required this.followUpIds,
+    required this.dayStartIds,
+    required this.openingPostId,
+    required this.openingPostReplyCount,
+    required this.latestOutgoingReadState,
+  });
+
+  factory _ThreadLayout.build({
+    required List<ChatMessage> messages,
+    required List<ConversationReadMarker> readMarkers,
+    required List<OutboxEntry> pending,
+    required String query,
+    required String? dividerId,
+    required String? currentUserId,
+    required bool forumPost,
+    required List<ChatMessage> Function(List<ChatMessage>, String) search,
+  }) {
+    final searching = query.trim().isNotEmpty;
+    final fullOldestToNewest = _isOldestFirst(messages)
+        ? messages
+        : _messagesOldestToNewest(messages);
+    final messagesById = {
+      for (final message in fullOldestToNewest) message.id: message,
+    };
+    final visible = searching
+        ? _messagesOldestToNewest(search(fullOldestToNewest, query))
+        : fullOldestToNewest;
+    // Messages still in the outbox follow the loaded ones, unless the
+    // stored copy already arrived.
+    final storedClientIds = {
+      for (final message in fullOldestToNewest)
+        if (message.clientId case final clientId?) clientId,
+    };
+    final pendingById = <String, OutboxEntry>{};
+    final pendingMessages = <ChatMessage>[];
+    if (!searching && currentUserId != null) {
+      for (final entry in pending) {
+        if (storedClientIds.contains(entry.clientId)) {
+          continue;
+        }
+        pendingById[entry.pendingMessageId] = entry;
+        pendingMessages.add(entry.toPendingMessage(currentUserId));
+      }
+    }
+    final display = pendingMessages.isEmpty
+        ? visible
+        : [...visible, ...pendingMessages];
+    final displayIndex = {
+      for (final (index, message) in display.indexed) message.id: index,
+    };
+    // Grouping compares neighbours, which search results are not.
+    final followUpIds = !searching
+        ? _followUpMessageIds(display, newMessageDividerId: dividerId)
+        : <String>{};
+    // The first message of each day gets a day separator.
+    final dayStartIds = <String>{
+      if (!searching)
+        for (final (index, message) in display.indexed)
+          if (index == 0 ||
+              !_isSameLocalDay(display[index - 1].createdAt, message.createdAt))
+            message.id,
+    };
+    // A forum post opens with its first message; replies start their own
+    // group under it.
+    final openingPostId = forumPost
+        ? fullOldestToNewest
+              .where((message) => message.type != MessageType.system)
+              .firstOrNull
+              ?.id
+        : null;
+    var openingPostReplyCount = 0;
+    if (openingPostId != null) {
+      final index = displayIndex[openingPostId];
+      if (index != null && index + 1 < display.length) {
+        followUpIds.remove(display[index + 1].id);
+      }
+      openingPostReplyCount = fullOldestToNewest
+          .where(
+            (other) =>
+                other.id != openingPostId &&
+                other.type != MessageType.system &&
+                other.recalledAt == null,
+          )
+          .length;
+    }
+    return _ThreadLayout._(
+      messages: messages,
+      readMarkers: readMarkers,
+      pending: pending,
+      query: query,
+      dividerId: dividerId,
+      currentUserId: currentUserId,
+      fullOldestToNewest: fullOldestToNewest,
+      messagesById: messagesById,
+      display: display,
+      displayIndex: displayIndex,
+      pendingById: pendingById,
+      followUpIds: followUpIds,
+      dayStartIds: dayStartIds,
+      openingPostId: openingPostId,
+      openingPostReplyCount: openingPostReplyCount,
+      latestOutgoingReadState: _latestOutgoingReadState(
+        messages: fullOldestToNewest,
+        readMarkers: readMarkers,
+        currentUserId: currentUserId,
+      ),
+    );
+  }
+
+  // What it was built from.
+  final List<ChatMessage> messages;
+  final List<ConversationReadMarker> readMarkers;
+  final List<OutboxEntry> pending;
+  final String query;
+  final String? dividerId;
+  final String? currentUserId;
+
+  /// Every loaded message, oldest first.
+  final List<ChatMessage> fullOldestToNewest;
+  final Map<String, ChatMessage> messagesById;
+
+  /// What the list shows, oldest first: the search results, or the loaded
+  /// messages and then the ones still sending.
+  final List<ChatMessage> display;
+  final Map<String, int> displayIndex;
+
+  /// Outbox entries by the id their message shows under.
+  final Map<String, OutboxEntry> pendingById;
+  final Set<String> followUpIds;
+  final Set<String> dayStartIds;
+  final String? openingPostId;
+  final int openingPostReplyCount;
+  final _LatestOutgoingReadState latestOutgoingReadState;
+}
+
+bool _isOldestFirst(List<ChatMessage> messages) {
+  for (var index = 1; index < messages.length; index++) {
+    final previous = messages[index - 1];
+    final message = messages[index];
+    final byTime = previous.createdAt.compareTo(message.createdAt);
+    if (byTime > 0 || (byTime == 0 && previous.id.compareTo(message.id) > 0)) {
+      return false;
+    }
+  }
+  return true;
 }

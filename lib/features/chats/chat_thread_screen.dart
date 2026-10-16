@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/swipe_to_reply.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
@@ -1177,6 +1178,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 member.profile.id: member,
             };
             final sidePadding = cards ? 0.0 : (desktop ? 40.0 : 14.0);
+            // Touch screens swipe a message sideways to reply.
+            final touch = usesTouchInput(context);
             _galleryFiles = () => [
               for (final message in fullOldestToNewest)
                 if (PreviewFile.fromMessage(
@@ -1282,8 +1285,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       : null,
                 );
               }
+              final swipeable =
+                  touch &&
+                      canSend &&
+                      pendingEntry == null &&
+                      message.type != MessageType.system &&
+                      message.id != openingPostId &&
+                      message.recalledAt == null
+                  ? SwipeToReply(
+                      key: ValueKey('swipe-reply-${message.id}'),
+                      // Bubbles swipe away from their side; channel cards
+                      // all sit on the left and swipe right.
+                      towardsEnd: cards || !message.isSentBy(currentUserId),
+                      onReply: () => _startReply(message),
+                      child: bubble,
+                    )
+                  : bubble;
               final framed = pendingEntry == null
-                  ? bubble
+                  ? swipeable
                   : PendingMessageFrame(
                       entry: pendingEntry,
                       alignEnd: !cards,
@@ -1357,7 +1376,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 latestOutgoingReadState.latestOutgoingMessageId == message.id &&
                     latestOutgoingReadState.isRead,
                 (sender?.name, sender?.avatarUrl, sender?.roleColor),
-                (desktop, cards, showSenders, canSend, canStartThreads),
+                (desktop, cards, showSenders, canSend, canStartThreads, touch),
                 (
                   canPinMessages,
                   canModeratePolls,

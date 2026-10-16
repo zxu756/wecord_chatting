@@ -234,5 +234,18 @@ void main() {
       type: ConversationType.group,
     );
   }, desktop: false);
+  // 3. Swipe to reply, held past the threshold.
+  screen('swipe-to-reply', (tester, world, desktop) async {
+    await openThread(tester, world);
+    final incoming = find.textContaining('Forwarding this one');
+    await reveal(tester, incoming);
+    final gesture = await tester.startGesture(tester.getCenter(incoming));
+    for (var i = 0; i < 6; i++) {
+      await gesture.moveBy(const Offset(16, 0));
+      await tester.pump();
+    }
+    addTearDown(gesture.up);
+  }, desktop: false);
+
   // MARKER: more screens
 }

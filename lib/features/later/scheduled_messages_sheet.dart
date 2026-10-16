@@ -133,7 +133,9 @@ class _ScheduledMessagesSheetState
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    final messages = ref.watch(scheduledMessagesProvider(widget.conversationId));
+    final messages = ref.watch(
+      scheduledMessagesProvider(widget.conversationId),
+    );
     final localizations = MaterialLocalizations.of(context);
     final use24 = MediaQuery.alwaysUse24HourFormatOf(context);
     final now = clock.now();

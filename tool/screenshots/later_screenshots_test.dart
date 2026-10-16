@@ -17,6 +17,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -111,22 +112,21 @@ void main() {
     );
   }
 
-  FakeScheduledMessagesRepository queue() =>
-      FakeScheduledMessagesRepository([
-        scheduled(
-          's1',
-          'Happy birthday, Bart! Hope the trail run goes well.',
-          const Duration(hours: 17, minutes: 30),
-        ),
-        scheduled('s2', 'Standup notes are in the doc', const Duration(days: 2)),
-        scheduled(
-          's3',
-          'Remember the tripod',
-          const Duration(minutes: -12),
-          failed: true,
-          error: 'automod:Spam',
-        ),
-      ]);
+  FakeScheduledMessagesRepository queue() => FakeScheduledMessagesRepository([
+    scheduled(
+      's1',
+      'Happy birthday, Bart! Hope the trail run goes well.',
+      const Duration(hours: 17, minutes: 30),
+    ),
+    scheduled('s2', 'Standup notes are in the doc', const Duration(days: 2)),
+    scheduled(
+      's3',
+      'Remember the tripod',
+      const Duration(minutes: -12),
+      failed: true,
+      error: 'automod:Spam',
+    ),
+  ]);
 
   List<Override> scheduledOverrides(FakeScheduledMessagesRepository queue) => [
     scheduledMessagesRepositoryProvider.overrideWithValue(queue),
@@ -159,6 +159,73 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('scheduled-banner')));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('scheduled-edit-s1')));
+    await settle(tester);
+  });
+
+  MessageReminder reminder(
+    String id,
+    Duration after, {
+    String body = 'Bring the tripod',
+    bool available = true,
+  }) {
+    return MessageReminder(
+      id: id,
+      conversationId: 'dm-1',
+      messageId: available ? 'm-$id' : null,
+      remindAt: DateTime.now().add(after).toUtc(),
+      senderId: bart.id,
+      senderName: available ? bart.displayName : '',
+      body: available ? body : '',
+      available: available,
+    );
+  }
+
+  FakeRemindersRepository reminders() => FakeRemindersRepository([
+    reminder('r1', const Duration(minutes: -4)),
+    reminder(
+      'r2',
+      const Duration(minutes: -50),
+      body: 'The trailhead moved to the north lot, parking is free until 9.',
+    ),
+    reminder('r3', const Duration(minutes: -120), available: false),
+    reminder('r4', const Duration(hours: 3), body: 'Send Grace the photos'),
+  ]);
+
+  screen('r1-remind-sheet', (tester) async {
+    await openChat(tester);
+    await tester.longPress(
+      find.textContaining('Also this', findRichText: true).first,
+    );
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('message-remind')));
+    await settle(tester);
+  });
+
+  screen('r2-message-menu', (tester) async {
+    await openChat(tester);
+    await tester.longPress(
+      find.textContaining('Also this', findRichText: true).first,
+    );
+    await settle(tester);
+  });
+
+  screen('r3-notifications-reminders', (tester) async {
+    final world = PhoneWorld()
+      ..extraOverrides = [
+        remindersRepositoryProvider.overrideWithValue(reminders()),
+      ];
+    await world.open(tester, '/notifications');
+    await settle(tester);
+  });
+
+  screen('r4-reminders-filter', (tester) async {
+    final world = PhoneWorld()
+      ..extraOverrides = [
+        remindersRepositoryProvider.overrideWithValue(reminders()),
+      ];
+    await world.open(tester, '/notifications');
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('inbox-filter-reminders')));
     await settle(tester);
   });
 }

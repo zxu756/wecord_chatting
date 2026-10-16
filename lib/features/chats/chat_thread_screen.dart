@@ -73,6 +73,8 @@ import 'package:wecord/features/file_preview/file_preview_scope.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/later/later_time.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/later_cards.dart' show laterPreview;
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_sheet.dart';
 import 'package:wecord/features/later/when_sheet.dart';
@@ -720,12 +722,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     // A scheduled message that went out shows up here; its list follows.
     ref.listen(
-      chatThreadProvider(widget.conversationId).select(
-        (state) => state.value?.messages.lastOrNull?.id,
-      ),
-      (_, _) => ref.invalidate(
-        scheduledMessagesProvider(widget.conversationId),
-      ),
+      chatThreadProvider(
+        widget.conversationId,
+      ).select((state) => state.value?.messages.lastOrNull?.id),
+      (_, _) =>
+          ref.invalidate(scheduledMessagesProvider(widget.conversationId)),
     );
     ref.listen(pendingMessageJumpProvider, (_, jump) {
       if (jump != null &&
@@ -1324,6 +1325,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onRemoveEmbed: _removeEmbed,
                   canStartThread: false,
                   pollActions: pollActions,
+                  onRemind: _remindAbout,
                 );
               } else {
                 final isCurrentUser = message.isSentBy(currentUserId);
@@ -1370,6 +1372,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onRemoveEmbed: _removeEmbed,
                   canStartThread:
                       canStartThreads && canSend && pendingEntry == null,
+                  onRemind: _remindAbout,
                   onOpenThread: _openOrCreateThread,
                   pollActions: pollActions,
                   onPublish: canPublish(message) && pendingEntry == null
@@ -3379,6 +3382,45 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
+  /// "Remind me": picks a time, then the message comes back in
+  /// Notifications (and as a notification and push) then.
+  Future<void> _remindAbout(ChatMessage message) async {
+    final preview = laterPreview(
+      conversationId: message.conversationId,
+      body: message.body,
+      type: message.type,
+    );
+    final when = await showWhenSheet(
+      context,
+      title: tr('Remind me'),
+      subtitle: preview,
+      picks: remindPicks,
+    );
+    if (when == null || !mounted) {
+      return;
+    }
+    try {
+      await ref.read(remindersRepositoryProvider).set(message.id, when);
+    } catch (_) {
+      _showSnackBar(tr('Could not set the reminder. Try again.'));
+      return;
+    }
+    ref.invalidate(remindersProvider);
+    if (!mounted) {
+      return;
+    }
+    _showSnackBar(
+      tr('Reminder set for {time}', {
+        'time': describeWhen(
+          MaterialLocalizations.of(context),
+          when.toLocal(),
+          DateTime.now(),
+          alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+        ),
+      }),
+    );
+  }
+
   Future<void> _openScheduledMessages() {
     return showScheduledMessagesSheet(
       context,
@@ -4315,7 +4357,12 @@ class _MessageBubble extends StatelessWidget {
     this.canModerate = false,
     this.circleId,
     this.onPublish,
+    this.onRemind,
   });
+
+  /// Sets a reminder about this message ("Remind me"); null for messages
+  /// that cannot have one.
+  final Future<void> Function(ChatMessage message)? onRemind;
 
   /// Publishes this announcement to the following channels; null when the
   /// current user cannot (or it is not an unpublished announcement).
@@ -5219,6 +5266,13 @@ class _MessageBubble extends StatelessWidget {
               ? tr('Create thread')
               : tr('Open thread'),
           onSelected: () => unawaited(onOpenThread!(message)),
+        ),
+      if (onRemind case final remind? when !_isPending && !_isRecalled)
+        MessageAction(
+          key: const ValueKey('message-remind'),
+          icon: Icons.alarm_add_outlined,
+          label: tr('Remind me'),
+          onSelected: () => unawaited(remind(message)),
         ),
       if (imageAttachment != null)
         MessageAction(

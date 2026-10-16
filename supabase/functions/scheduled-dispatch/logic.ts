@@ -9,6 +9,9 @@ export interface PushTarget {
   circle_id: string | null;
   title: string;
   body: string;
+  /// Notifications with the same tag replace each other; the conversation
+  /// by default.
+  tag?: string;
 }
 
 /// Where tapping the notification opens the app (hash routes on the web),

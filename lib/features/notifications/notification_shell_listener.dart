@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 
 class NotificationShellListener extends ConsumerStatefulWidget {
@@ -74,6 +76,18 @@ class _NotificationShellListenerState
       :final eventId,
     )) {
       context.go(CircleEventsScreen.pathFor(circleId, eventId: eventId));
+      return;
+    }
+    // Reminders open the conversation at the message.
+    if (parseReminderNotificationPayload(conversationId) case (
+      conversationId: final reminderConversationId,
+      :final messageId,
+    )) {
+      ref.read(pendingMessageJumpProvider.notifier).state = MessageJump(
+        conversationId: reminderConversationId,
+        messageId: messageId,
+      );
+      context.go('${ChatsScreen.path}/$reminderConversationId');
       return;
     }
     context.go('${ChatsScreen.path}/$conversationId');

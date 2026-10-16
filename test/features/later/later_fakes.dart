@@ -1,3 +1,4 @@
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/push/push_gateway.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -108,4 +109,48 @@ class RecordingPushRepository implements PushRepository {
 
   @override
   Future<void> notifyCall(String callId) async {}
+}
+
+/// In-memory reminders.
+class FakeRemindersRepository implements RemindersRepository {
+  FakeRemindersRepository([List<MessageReminder> initial = const []])
+    : reminders = [...initial];
+
+  final List<MessageReminder> reminders;
+  final setCalls = <({String messageId, DateTime at})>[];
+  final dismissed = <String>[];
+
+  /// What the next claim returns (and then clears).
+  var due = <LocalReminder>[];
+  var claims = 0;
+  var failClaims = false;
+  Object? failSetWith;
+
+  @override
+  Future<List<MessageReminder>> list() async => [...reminders];
+
+  @override
+  Future<void> set(String messageId, DateTime remindAt) async {
+    if (failSetWith case final error?) {
+      throw error;
+    }
+    setCalls.add((messageId: messageId, at: remindAt));
+  }
+
+  @override
+  Future<void> dismiss(String id) async {
+    dismissed.add(id);
+    reminders.removeWhere((reminder) => reminder.id == id);
+  }
+
+  @override
+  Future<List<LocalReminder>> claimDue() async {
+    claims++;
+    if (failClaims) {
+      throw StateError('offline');
+    }
+    final result = due;
+    due = [];
+    return result;
+  }
 }

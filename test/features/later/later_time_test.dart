@@ -180,10 +180,7 @@ void main() {
       // 23 or 25 hours apart, still "tomorrow".
       final now = DateTime(2026, 11, 1, 0, 30);
       final when = DateTime(2026, 11, 2, 0, 15);
-      expect(
-        describeWhen(localizations, when, now),
-        startsWith('Tomorrow'),
-      );
+      expect(describeWhen(localizations, when, now), startsWith('Tomorrow'));
       final late = DateTime(2026, 10, 31, 23, 50);
       expect(
         describeWhen(localizations, DateTime(2026, 11, 1, 0, 10), late),

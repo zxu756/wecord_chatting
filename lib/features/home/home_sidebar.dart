@@ -11,6 +11,7 @@ import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/home/phone_messages_panel.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
@@ -62,8 +63,13 @@ class HomeSidebar extends ConsumerWidget {
     final requestCount =
         ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
     final unreadInbox =
-        ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
-        0;
+        (ref
+                .watch(inboxProvider)
+                .value
+                ?.where((item) => item.isUnread)
+                .length ??
+            0) +
+        ref.watch(firedRemindersProvider).length;
     final conversations = ref.watch(conversationsProvider);
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};

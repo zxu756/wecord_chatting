@@ -9,6 +9,7 @@
 begin;
 
 \i supabase/migrations/202610170010_scheduled_messages.sql
+\i supabase/migrations/202610170011_message_reminders.sql
 
 create temp table ids (name text primary key, id uuid not null);
 grant all on ids to public;
@@ -249,5 +250,131 @@ select pg_temp.check(
    from public.scheduled_messages where body = 'second')
   and not exists (select 1 from public.messages where body = 'second')
 );
+
+-- ---------------------------------------------------------------- reminders
+
+-- Ada got a message from Bob (the group had Ada removed above: add her back).
+select pg_temp.act_as(null);
+insert into public.conversation_members (conversation_id, user_id, role)
+select id, '00000000-0000-4000-8000-0000000000a1', 'member' from ids where name = 'group';
+insert into public.messages (conversation_id, sender_id, type, body)
+select id, '00000000-0000-4000-8000-0000000000b1', 'text', 'Bring the tripod' from ids where name = 'group';
+insert into ids
+select 'tripod', m.id from public.messages m where m.body = 'Bring the tripod';
+
+select pg_temp.act_as('a');
+create temp table reminder_ids (id uuid);
+grant all on reminder_ids to public;
+insert into reminder_ids
+select public.set_message_reminder((select id from ids where name = 'tripod'), now() + interval '1 hour');
+
+do $$
+begin
+  begin
+    perform public.set_message_reminder((select id from ids where name = 'tripod'), now() - interval '1 day');
+    raise exception 'FAILED: a past reminder was accepted';
+  exception when sqlstate '22023' then
+    raise notice 'ok: a reminder in the past is refused';
+  end;
+end;
+$$;
+
+select pg_temp.check(
+  'an upcoming reminder lists as not fired with the message',
+  (select count(*) = 1 and bool_and(not fired and available and body = 'Bring the tripod' and sender_display_name = 'Bob')
+   from public.list_my_reminders())
+);
+
+-- Setting it again moves it rather than adding another.
+select public.set_message_reminder((select id from ids where name = 'tripod'), now() + interval '3 hours');
+select pg_temp.check(
+  'one open reminder per message',
+  (select count(*) = 1 from public.list_my_reminders())
+  and (select count(*) = 1 from public.message_reminders)
+);
+
+-- Others cannot see it or remind about what they cannot read.
+select pg_temp.act_as('b');
+select pg_temp.check(
+  'reminders are private',
+  (select count(*) = 0 from public.list_my_reminders())
+  and (select count(*) = 0 from public.message_reminders)
+);
+select pg_temp.act_as('c');
+do $$
+begin
+  perform public.set_message_reminder((select id from ids where name = 'tripod'), now() + interval '1 hour');
+  raise exception 'FAILED: reminded about a message in a group Cy is not in';
+exception when sqlstate 'P0002' then
+  raise notice 'ok: no reminders about messages the caller cannot read';
+end;
+$$;
+
+-- Time passes: the reminder is fired for the list, and the open app is told
+-- once.
+select pg_temp.act_as(null);
+update public.message_reminders set remind_at = now() - interval '2 minutes';
+select pg_temp.act_as('a');
+select pg_temp.check(
+  'a due reminder lists as fired',
+  (select count(*) = 1 and bool_and(fired) from public.list_my_reminders())
+);
+create temp table claimed_local (n integer);
+grant all on claimed_local to public;
+insert into claimed_local select count(*) from public.claim_local_reminders();
+insert into claimed_local select count(*) from public.claim_local_reminders();
+select pg_temp.check(
+  'the open app is told once, with the sender and text',
+  (select array_agg(n order by ctid) = array[1, 0] from claimed_local)
+);
+
+-- The push: claimed once for Ada's subscription, "Reminder" / "Bob: text".
+select pg_temp.act_as(null);
+insert into public.push_subscriptions (user_id, endpoint, p256dh, auth)
+values (
+  '00000000-0000-4000-8000-0000000000a1',
+  'https://push.example.com/ada',
+  repeat('p', 60),
+  repeat('a', 20)
+);
+create temp table pushes as select * from public.claim_reminder_pushes();
+select pg_temp.check(
+  'the reminder is pushed once as "Reminder" with the sender and text',
+  (select count(*) = 1 and bool_and(title = 'Reminder' and body = 'Bob: Bring the tripod'
+     and endpoint = 'https://push.example.com/ada' and tag like 'reminder-%') from pushes)
+  and (select count(*) = 0 from public.claim_reminder_pushes())
+);
+
+-- Do Not Disturb keeps the push back, and a deleted message reads as
+-- unavailable.
+insert into public.messages (conversation_id, sender_id, type, body)
+select id, '00000000-0000-4000-8000-0000000000b1', 'text', 'Second thing' from ids where name = 'group';
+select pg_temp.act_as('a');
+select public.set_message_reminder((select id from public.messages where body = 'Second thing'), now() + interval '1 hour');
+select pg_temp.act_as(null);
+update public.message_reminders set remind_at = now() - interval '1 minute'
+where message_id = (select id from public.messages where body = 'Second thing');
+insert into public.user_privacy_settings (user_id, presence_status)
+values ('00000000-0000-4000-8000-0000000000a1', 'dnd')
+on conflict (user_id) do update set presence_status = 'dnd';
+select pg_temp.check('Do Not Disturb holds the push back', (select count(*) = 0 from public.claim_reminder_pushes()));
+
+update public.messages set recalled_at = now(), body = '' where body = 'Second thing';
+select pg_temp.act_as('a');
+select pg_temp.check(
+  'a deleted message reads as unavailable',
+  (select count(*) = 1 from public.list_my_reminders() where not available and body is null)
+);
+
+-- Dismissing takes it off the list; the cron call copes.
+select public.dismiss_message_reminder(r.reminder_id) from public.list_my_reminders() r;
+select pg_temp.check('dismissed reminders are gone', (select count(*) = 0 from public.list_my_reminders()));
+select pg_temp.act_as(null);
+do $$
+begin
+  perform public.run_later_dispatch();
+  raise notice 'ok: the cron call copes with reminders';
+end;
+$$;
 
 rollback;

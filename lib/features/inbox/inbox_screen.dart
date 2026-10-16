@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -8,6 +10,8 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
+import 'package:wecord/features/later/later_cards.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -32,14 +36,16 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
       0;
   final requests = ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
-  return unread + requests;
+  final reminders = ref.watch(firedRemindersProvider).length;
+  return unread + requests + reminders;
 });
 
 /// Which notifications the inbox shows.
-enum InboxFilter { all, mentions, replies, friends }
+enum InboxFilter { all, mentions, replies, reminders, friends }
 
-/// Mentions of and replies to the current user, with pending friend
-/// requests on top. Chips narrow it to mentions, replies or requests.
+/// Mentions of and replies to the current user and reminders that came
+/// due, with pending friend requests on top. Chips narrow it to mentions,
+/// replies, reminders or requests.
 class InboxScreen extends ConsumerStatefulWidget {
   const InboxScreen({super.key});
 
@@ -55,8 +61,22 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
   Future<void> _refresh() async {
     ref
       ..invalidate(incomingFriendRequestsProvider)
+      ..invalidate(remindersProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
+  }
+
+  Future<void> _dismissReminder(MessageReminder reminder) async {
+    try {
+      await ref.read(remindersRepositoryProvider).dismiss(reminder.id);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(tr('Something went wrong. Try again.'))),
+        );
+      }
+    }
+    ref.invalidate(remindersProvider);
   }
 
   @override
@@ -79,6 +99,12 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         circle.id: circle,
     };
     final items = inbox.value ?? const <InboxItem>[];
+    final firedReminders = ref.watch(firedRemindersProvider);
+    final upcomingReminders = [
+      for (final reminder
+          in ref.watch(remindersProvider).value ?? const <MessageReminder>[])
+        if (!firedReminders.contains(reminder)) reminder,
+    ];
     final unreadMentions = items
         .where((item) => item.isUnread && item.reason != InboxReason.reply)
         .length;
@@ -88,14 +114,41 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
     final showRequests =
         _filter == InboxFilter.all || _filter == InboxFilter.friends;
+    final showFiredReminders =
+        _filter == InboxFilter.all || _filter == InboxFilter.reminders;
     final visibleItems = switch (_filter) {
       InboxFilter.all => items,
       InboxFilter.mentions =>
         items.where((item) => item.reason != InboxReason.reply).toList(),
       InboxFilter.replies =>
         items.where((item) => item.reason == InboxReason.reply).toList(),
-      InboxFilter.friends => const <InboxItem>[],
+      InboxFilter.reminders || InboxFilter.friends => const <InboxItem>[],
     };
+    Widget reminderCard(MessageReminder reminder, {required bool upcoming}) {
+      final conversation = conversations[reminder.conversationId];
+      return ReminderCard(
+        id: reminder.id,
+        senderName: reminder.available ? reminder.senderName : '',
+        senderAvatarUrl: reminder.available ? reminder.senderAvatarUrl : null,
+        preview: laterPreview(
+          conversationId: reminder.conversationId,
+          body: reminder.body,
+          type: reminder.type,
+        ),
+        available: reminder.available,
+        at: reminder.remindAt,
+        upcoming: upcoming,
+        place: conversationPlaceLabel(conversation, circles),
+        onJump: () => openMessage(
+          context,
+          ref,
+          conversationId: reminder.conversationId,
+          messageId: reminder.messageId,
+          conversation: conversation,
+        ),
+        onDismiss: () => unawaited(_dismissReminder(reminder)),
+      );
+    }
 
     Widget chip(InboxFilter filter, String label, [int? count]) {
       return WeCordChip(
@@ -135,12 +188,44 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 ],
               ],
             ),
-          for (final item in visibleItems)
-            _InboxCard(
-              item: item,
-              conversation: conversations[item.conversationId],
-              circles: circles,
+          // Mentions, replies and due reminders, newest first.
+          for (final entry in [
+            for (final item in visibleItems) (item.createdAt, item),
+            if (showFiredReminders)
+              for (final reminder in firedReminders)
+                (reminder.remindAt, reminder),
+          ]..sort((a, b) => b.$1.compareTo(a.$1)))
+            switch (entry.$2) {
+              final InboxItem item => _InboxCard(
+                item: item,
+                conversation: conversations[item.conversationId],
+                circles: circles,
+              ),
+              final MessageReminder reminder => reminderCard(
+                reminder,
+                upcoming: false,
+              ),
+              _ => const SizedBox.shrink(),
+            },
+          if (_filter == InboxFilter.reminders &&
+              upcomingReminders.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  tr('Upcoming'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: c.subtle,
+                  ),
+                ),
+              ),
             ),
+            for (final reminder in upcomingReminders)
+              reminderCard(reminder, upcoming: true),
+          ],
         ];
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -199,6 +284,12 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                       ),
                       const SizedBox(width: 6),
                       chip(InboxFilter.replies, tr('Replies'), unreadReplies),
+                      const SizedBox(width: 6),
+                      chip(
+                        InboxFilter.reminders,
+                        tr('Reminders'),
+                        firedReminders.length,
+                      ),
                       const SizedBox(width: 6),
                       chip(InboxFilter.friends, tr('Friends'), requests.length),
                     ],
@@ -596,26 +687,7 @@ class _InboxCard extends StatelessWidget {
 
   /// "#channel · Circle", the thread or group title, or nothing for a
   /// direct message (the sender says it all).
-  String? _placeLabel() {
-    final conversation = this.conversation;
-    if (conversation == null) {
-      return null;
-    }
-    final title = conversation.title?.trim();
-    final circleName = circles[conversation.circleId]?.name;
-    return switch (conversation.type) {
-      ConversationType.direct => null,
-      ConversationType.group => title,
-      ConversationType.channel => [
-        if (title != null && title.isNotEmpty) '#$title',
-        ?circleName,
-      ].join(' · '),
-      ConversationType.thread => [
-        if (title != null && title.isNotEmpty) title,
-        ?circleName,
-      ].join(' · '),
-    };
-  }
+  String? _placeLabel() => conversationPlaceLabel(conversation, circles);
 }
 
 /// The message as one line of text, as in the pinned message list.

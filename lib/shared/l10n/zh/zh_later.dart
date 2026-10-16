@@ -38,4 +38,17 @@ const zhLater = <String, String>{
   'AutoMod blocked it: {reason}': 'AutoMod 拦截了它：{reason}',
   'You have too many scheduled messages.': '定时消息太多了。',
   "You can't send messages here.": '你不能在这里发送消息。',
+
+  // Reminders.
+  'Remind me': '提醒我',
+  'Reminder': '提醒',
+  'Reminders': '提醒',
+  'Reminder set': '已设提醒',
+  'Reminder set for {time}': '已设提醒：{time}',
+  'Reminds you {time}': '将在 {time} 提醒你',
+  'Cancel reminder': '取消提醒',
+  'Upcoming': '即将到来',
+  'Could not set the reminder. Try again.': '无法设置提醒，请重试。',
+  'A message you wanted to be reminded about': '你想被提醒的一条消息',
+  'Message unavailable': '消息不可用',
 };

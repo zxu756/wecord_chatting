@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
@@ -22,6 +23,7 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 import '../circles/circle_detail_screen_test.dart' as circle_fakes;
+import '../later/later_fakes.dart';
 
 void main() {
   test('does not notify on initial snapshot', () async {
@@ -739,6 +741,131 @@ void main() {
     });
   });
 
+  group('message reminders', () {
+    test('a reminder that came due shows a notification', () async {
+      final reminders = FakeRemindersRepository()
+        ..due = [
+          const LocalReminder(
+            id: 'r1',
+            conversationId: 'c1',
+            messageId: 'm1',
+            senderName: 'Bob',
+            body: '**Bring** the tripod',
+            type: MessageType.text,
+          ),
+        ];
+      var changed = 0;
+      final harness = NotificationCoordinatorHarness(
+        remindersRepository: reminders,
+        onRemindersChanged: () => changed++,
+      );
+      harness.seed([]);
+
+      await harness.start();
+
+      final shown = harness.notifications.single;
+      expect(shown.title, 'Reminder');
+      expect(shown.body, 'Bob: Bring the tripod');
+      expect(shown.payload, 'message:c1:m1');
+      expect(parseReminderNotificationPayload(shown.payload), (
+        conversationId: 'c1',
+        messageId: 'm1',
+      ));
+      expect(changed, 1);
+    });
+
+    test('previews off hide the text', () async {
+      final reminders = FakeRemindersRepository()
+        ..due = [
+          const LocalReminder(
+            id: 'r1',
+            conversationId: 'c1',
+            senderName: 'Bob',
+            body: 'secret',
+            type: MessageType.text,
+          ),
+        ];
+      final harness = NotificationCoordinatorHarness(
+        remindersRepository: reminders,
+        previewsEnabled: false,
+      );
+      harness.seed([]);
+
+      await harness.start();
+
+      expect(harness.notifications.single.body, isNot(contains('secret')));
+      // Without a message to jump to, the conversation opens.
+      expect(harness.notifications.single.payload, 'c1');
+    });
+
+    test(
+      'are asked about every few poll ticks, and not twice at once',
+      () async {
+        final reminders = FakeRemindersRepository();
+        final harness = NotificationCoordinatorHarness(
+          remindersRepository: reminders,
+        );
+        harness.seed([]);
+        await harness.start();
+        expect(reminders.claims, 1);
+
+        for (var tick = 0; tick < 6; tick++) {
+          await harness.poll([]);
+        }
+        // The first tick of a round asks.
+        expect(reminders.claims, 2);
+      },
+    );
+
+    test('Do Not Disturb and disabled notifications keep them quiet', () async {
+      for (final quiet in [
+        NotificationCoordinatorHarness(
+          remindersRepository: FakeRemindersRepository()
+            ..due = [
+              const LocalReminder(
+                id: 'r1',
+                conversationId: 'c1',
+                senderName: 'Bob',
+                body: 'hi',
+                type: MessageType.text,
+              ),
+            ],
+          doNotDisturb: () => true,
+        ),
+        NotificationCoordinatorHarness(
+          remindersRepository: FakeRemindersRepository()
+            ..due = [
+              const LocalReminder(
+                id: 'r1',
+                conversationId: 'c1',
+                senderName: 'Bob',
+                body: 'hi',
+                type: MessageType.text,
+              ),
+            ],
+          notificationsEnabled: false,
+        ),
+      ]) {
+        quiet.seed([]);
+        await quiet.start();
+        expect(quiet.notifications, isEmpty);
+      }
+    });
+
+    test('a failing server does not break the coordinator', () async {
+      final reminders = FakeRemindersRepository()..failClaims = true;
+      final harness = NotificationCoordinatorHarness(
+        remindersRepository: reminders,
+      );
+      harness.seed([harness.summary(id: 'c1')]);
+      await harness.start();
+      await harness.emit([
+        harness.summary(id: 'c1', unreadCount: 1, body: 'still works'),
+      ]);
+      expect(harness.notifications.single.body, 'still works');
+    });
+  });
+
   test('stops listening after dispose', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);
@@ -760,6 +887,8 @@ class NotificationCoordinatorHarness {
     CirclesRepository? circlesRepository,
     DateTime Function()? now,
     bool Function()? doNotDisturb,
+    RemindersRepository? remindersRepository,
+    void Function()? onRemindersChanged,
   }) : _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
        _notificationService = _ThrowingFakeLocalNotificationService(),
@@ -776,6 +905,8 @@ class NotificationCoordinatorHarness {
       authRepository: _authRepository,
       chatsRepository: _chatsRepository,
       circlesRepository: circlesRepository,
+      remindersRepository: remindersRepository,
+      onRemindersChanged: onRemindersChanged,
       preferencesRepository: _preferencesRepository,
       notificationService: _notificationService,
       activeConversationId: () => _activeConversationId,

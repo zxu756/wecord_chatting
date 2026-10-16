@@ -45,7 +45,10 @@ void main() {
     );
   }
 
-  Future<void> scheduleFor(WidgetTester tester, Future<void> Function() open) async {
+  Future<void> scheduleFor(
+    WidgetTester tester,
+    Future<void> Function() open,
+  ) async {
     await tester.enterText(find.byType(TextField), 'Happy birthday!');
     await tester.pump();
     await open();
@@ -63,9 +66,8 @@ void main() {
 
     await scheduleFor(
       tester,
-      () => tester.longPress(
-        find.byKey(const ValueKey('composer-send-button')),
-      ),
+      () =>
+          tester.longPress(find.byKey(const ValueKey('composer-send-button'))),
     );
 
     // Queued for tomorrow at 9, not sent.

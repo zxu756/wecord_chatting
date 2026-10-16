@@ -2,8 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_sheet.dart';
 import 'package:wecord/features/later/when_sheet.dart';
@@ -50,7 +49,9 @@ Widget _host(
     ],
     child: MaterialApp(
       theme: dark ? WeCordTheme.dark() : WeCordTheme.light(),
-      home: Scaffold(body: Align(alignment: Alignment.bottomCenter, child: child)),
+      home: Scaffold(
+        body: Align(alignment: Alignment.bottomCenter, child: child),
+      ),
     ),
   );
 }
@@ -82,7 +83,11 @@ void main() {
 
     test('names why a message was not sent', () {
       expect(
-        _scheduled('s', 'x', status: ScheduledMessageStatus.failed).failureReason,
+        _scheduled(
+          's',
+          'x',
+          status: ScheduledMessageStatus.failed,
+        ).failureReason,
         'It could not be sent.',
       );
       expect(
@@ -173,7 +178,10 @@ void main() {
       });
       expect(find.byKey(const ValueKey('when-inOneHour')), findsOneWidget);
       expect(find.byKey(const ValueKey('when-tonight')), findsOneWidget);
-      expect(find.byKey(const ValueKey('when-tomorrowMorning')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('when-tomorrowMorning')),
+        findsOneWidget,
+      );
       expect(find.text('Today 4:30 PM'), findsOneWidget);
       expect(find.text('Today 8:00 PM'), findsOneWidget);
       expect(find.text('Tomorrow 9:00 AM'), findsOneWidget);
@@ -397,7 +405,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('scheduled-error')), findsOneWidget);
-      expect(find.text('You have too many scheduled messages.'), findsOneWidget);
+      expect(
+        find.text('You have too many scheduled messages.'),
+        findsOneWidget,
+      );
       expect(find.text('Happy birthday!'), findsOneWidget);
     });
 
@@ -443,7 +454,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('scheduled-edit-save')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('scheduled-edit-error')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('scheduled-edit-error')),
+        findsOneWidget,
+      );
       expect(repository.messages.single.body, 'Happy birthday!');
     });
   });

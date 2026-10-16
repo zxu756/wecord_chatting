@@ -1,5 +1,5 @@
-// Pushes for things the database sends on its own: scheduled messages
-// (and, from 202610170011, reminders).
+// Pushes for things the database does on its own: scheduled messages that
+// were sent and reminders that came due.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
 // is due and, when pushes are waiting, wakes this function through pg_net:
@@ -68,6 +68,15 @@ Deno.serve(async (request) => {
     targets.push(...((data ?? []) as PushTarget[]));
   }
 
+  // Reminders that came due: "Reminder" / "{sender}: {text}".
+  const { data: reminders, error: reminderError } = await admin.rpc(
+    "claim_reminder_pushes",
+  );
+  if (reminderError) {
+    return json({ error: "lookup_failed" }, 500);
+  }
+  targets.push(...((reminders ?? []) as PushTarget[]));
+
   const gone: string[] = [];
   let delivered = 0;
   await Promise.all(targets.map(async (target) => {
@@ -75,7 +84,7 @@ Deno.serve(async (request) => {
       const status = await sendWebPush(keys, target, {
         title: target.title,
         body: target.body,
-        tag: target.conversation_id,
+        tag: target.tag ?? target.conversation_id,
         url: targetPath(target),
       }, { nowSeconds: Math.floor(Date.now() / 1000) });
       if (status === 404 || status === 410) {

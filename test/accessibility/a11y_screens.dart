@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/circles/circle_rpc.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -14,6 +16,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
 
 import '../features/discovery/discovery_fakes.dart';
+import '../features/later/later_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -251,6 +254,59 @@ final moreA11yScreens = <A11yScreen>[
     await tester.tap(
       find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
     );
+    await settle(tester);
+  }),
+  A11yScreen('scheduled-messages', (tester, world) async {
+    world.extraOverrides = [
+      scheduledMessagesRepositoryProvider.overrideWithValue(
+        FakeScheduledMessagesRepository([
+          ScheduledMessage(
+            id: 's1',
+            conversationId: 'dm-1',
+            body: 'Happy birthday, Bart!',
+            sendAt: DateTime.now().add(const Duration(hours: 5)).toUtc(),
+          ),
+          ScheduledMessage(
+            id: 's2',
+            conversationId: 'dm-1',
+            body: 'Standup notes',
+            sendAt: DateTime.now().subtract(const Duration(minutes: 9)).toUtc(),
+            status: ScheduledMessageStatus.failed,
+            lastError: 'automod:Spam',
+          ),
+        ]),
+      ),
+    ];
+    await _openThread(tester, world);
+    await tester.tap(find.byKey(const ValueKey('scheduled-banner')));
+    await settle(tester);
+  }),
+  A11yScreen('reminders', (tester, world) async {
+    world.extraOverrides = [
+      remindersRepositoryProvider.overrideWithValue(
+        FakeRemindersRepository([
+          MessageReminder(
+            id: 'r1',
+            conversationId: 'dm-1',
+            messageId: 'm1',
+            remindAt: DateTime.now().subtract(const Duration(minutes: 4)),
+            senderName: 'Bart the Bold',
+            body: 'Bring the tripod',
+          ),
+          MessageReminder(
+            id: 'r2',
+            conversationId: 'dm-1',
+            remindAt: DateTime.now().add(const Duration(hours: 3)),
+            senderName: 'Bart the Bold',
+            body: 'Send Grace the photos',
+            messageId: 'm2',
+          ),
+        ]),
+      ),
+    ];
+    await world.open(tester, '/notifications');
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('inbox-filter-reminders')));
     await settle(tester);
   }),
   A11yScreen(

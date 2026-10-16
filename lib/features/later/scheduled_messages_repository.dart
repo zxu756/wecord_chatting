@@ -150,7 +150,9 @@ final scheduledMessagesRepositoryProvider =
 /// The current user's scheduled messages in a conversation.
 final scheduledMessagesProvider = FutureProvider.autoDispose
     .family<List<ScheduledMessage>, String>((ref, conversationId) {
-      return ref.watch(scheduledMessagesRepositoryProvider).list(conversationId);
+      return ref
+          .watch(scheduledMessagesRepositoryProvider)
+          .list(conversationId);
     });
 
 class SupabaseScheduledMessagesRepository

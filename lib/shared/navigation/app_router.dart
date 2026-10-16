@@ -18,6 +18,7 @@ import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
@@ -149,6 +150,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: GlobalMessageSearchScreen.path,
             builder: (context, state) => const GlobalMessageSearchScreen(),
+          ),
+          GoRoute(
+            path: DiscoveryScreen.path,
+            builder: (context, state) => const DiscoveryScreen(),
           ),
           GoRoute(
             path: '/chats/:conversationId',
@@ -400,6 +405,8 @@ ShellPlacement _placementFor(GoRouterState state) {
         homeSelected: true,
         homeSection: HomeSection.inbox,
       );
+    case DiscoveryScreen.path:
+      return const ShellPlacement(exploreSelected: true);
     // Wide layouts show settings as a window over Home.
     case SettingsScreen.path:
       return const ShellPlacement(

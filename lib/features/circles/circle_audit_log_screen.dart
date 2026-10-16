@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/discovery/circle_discovery_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -440,6 +441,7 @@ IconData circleAuditGroupIcon(CircleAuditActionGroup group) {
     CircleAuditActionGroup.forum => Icons.forum_outlined,
     CircleAuditActionGroup.event => Icons.event_outlined,
     CircleAuditActionGroup.webhook => Icons.smart_toy_outlined,
+    CircleAuditActionGroup.discovery => Icons.explore_outlined,
     _ => Icons.history,
   };
 }
@@ -510,6 +512,7 @@ IconData circleAuditIcon(String action) {
     'automod_alert' => Icons.campaign_outlined,
     'automod_timeout' => Icons.timer_outlined,
     'onboarding_update' => Icons.rule,
+    'discovery_update' => Icons.explore_outlined,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
     'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
@@ -768,6 +771,11 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
             ),
     'automod_timeout' => (tr('AutoMod timed out {target}'), {}),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
+    'discovery_update' => switch (_newValue(changes['is_public'])) {
+      true => (tr('{actor} made the circle public'), {}),
+      false => (tr('{actor} made the circle private'), {}),
+      _ => (tr('{actor} updated the discovery settings'), {}),
+    },
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),
@@ -890,6 +898,11 @@ String _labelFor(String key) {
     'rule_count' => tr('Rules'),
     'welcome_message_changed' => tr('Welcome message changed'),
     'deny' => tr('Denied'),
+    'is_public' => tr('Public'),
+    'description' => tr('Description'),
+    'category' => tr('Category'),
+    'language' => tr('Language'),
+    'tags' => tr('Tags'),
     _ =>
       key.isEmpty
           ? key
@@ -919,6 +932,15 @@ String _formatValue(String key, Object? value) {
   }
   if (value is bool) {
     return value ? tr('on') : tr('off');
+  }
+  if (value is List) {
+    return value.isEmpty ? tr('none') : value.join(', ');
+  }
+  if (key == 'category' && value is String) {
+    return DiscoveryCategory.fromJson(value)?.label ?? value;
+  }
+  if (key == 'language' && value is String) {
+    return DiscoveryLanguages.label(value);
   }
   if ((key == 'slowmode_seconds' ||
           key == 'window_seconds' ||

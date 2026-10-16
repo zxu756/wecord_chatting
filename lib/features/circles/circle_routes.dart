@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/circles/circle_creation_sheet.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -11,7 +13,7 @@ abstract final class CircleRoutes {
   static const path = '/circles';
 }
 
-enum _AddCircleChoice { create, join }
+enum _AddCircleChoice { create, join, explore }
 
 /// Asks whether to create a circle or join one with an invite, then does it.
 Future<void> showAddCircleSheet(BuildContext context) async {
@@ -71,6 +73,15 @@ Future<void> showAddCircleSheet(BuildContext context) async {
                   onTap: () =>
                       Navigator.of(sheetContext).pop(_AddCircleChoice.join),
                 ),
+                SettingsRow(
+                  key: const ValueKey('add-circle-explore'),
+                  icon: Icons.explore_outlined,
+                  tone: SettingsTone.warning,
+                  title: tr('Explore public circles'),
+                  subtitle: tr('Find communities anyone can join.'),
+                  onTap: () =>
+                      Navigator.of(sheetContext).pop(_AddCircleChoice.explore),
+                ),
               ],
             ),
           ],
@@ -89,6 +100,8 @@ Future<void> showAddCircleSheet(BuildContext context) async {
       );
     case _AddCircleChoice.join:
       await joinCircleWithInvite(context);
+    case _AddCircleChoice.explore:
+      openPage(context, DiscoveryScreen.path);
   }
 }
 

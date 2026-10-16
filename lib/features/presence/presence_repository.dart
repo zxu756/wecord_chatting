@@ -228,6 +228,9 @@ class SupabasePresenceDataSource implements PresenceDataSource {
 
   static const channelName = 'online-users';
 
+  /// How often a visible, online client tells the server it is here.
+  static const heartbeatInterval = Duration(minutes: 2);
+
   final SupabaseClient _client;
 
   @override
@@ -253,6 +256,25 @@ class SupabasePresenceDataSource implements PresenceDataSource {
     late StreamController<Map<String, PresenceStatus>> controller;
     var subscribed = false;
     var tracking = false;
+    Timer? heartbeat;
+
+    // Discovery counts members online from these heartbeats (see
+    // touch_presence); older servers without it just fail quietly.
+    void beat(bool online) {
+      unawaited(
+        _client
+            .rpc<void>('touch_presence', params: {'is_online': online})
+            .then<void>((_) {}, onError: (Object _) {}),
+      );
+    }
+
+    void stopBeating() {
+      if (heartbeat != null) {
+        heartbeat?.cancel();
+        heartbeat = null;
+        beat(false);
+      }
+    }
 
     void emit() {
       if (controller.isClosed) {
@@ -273,9 +295,14 @@ class SupabasePresenceDataSource implements PresenceDataSource {
           tracking = false;
           unawaited(channel.untrack());
         }
+        stopBeating();
         return;
       }
       tracking = true;
+      if (heartbeat == null) {
+        beat(true);
+        heartbeat = Timer.periodic(heartbeatInterval, (_) => beat(true));
+      }
       unawaited(
         channel.track({
           'user_id': currentUserId,
@@ -309,6 +336,7 @@ class SupabasePresenceDataSource implements PresenceDataSource {
       },
       onCancel: () async {
         ownStatus.removeListener(sync);
+        stopBeating();
         if (tracking) {
           await channel.untrack();
         }

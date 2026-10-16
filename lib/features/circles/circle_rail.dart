@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
-import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
@@ -55,6 +55,7 @@ class CircleRail extends ConsumerWidget {
   const CircleRail({
     this.selectedCircleId,
     this.homeSelected = false,
+    this.exploreSelected = false,
     this.showVoiceIndicator = false,
     this.onOpenVoice,
     this.color,
@@ -82,6 +83,9 @@ class CircleRail extends ConsumerWidget {
 
   /// Whether Home (direct messages, friends, notifications) is open.
   final bool homeSelected;
+
+  /// Whether Explore (public circles) is open.
+  final bool exploreSelected;
 
   /// Shows the current call's controls at the bottom, for pages without a
   /// sidebar (which would show the voice panel instead).
@@ -138,10 +142,7 @@ class CircleRail extends ConsumerWidget {
       child: ListView(
         padding:
             padding ??
-            EdgeInsets.only(
-              top: drawsUnderMacosTitleBar ? 50 : 14,
-              bottom: 96,
-            ),
+            EdgeInsets.only(top: drawsUnderMacosTitleBar ? 50 : 14, bottom: 96),
         children: [
           item(
             key: const ValueKey('circle-rail-home'),
@@ -199,13 +200,15 @@ class CircleRail extends ConsumerWidget {
           ),
           item(
             key: const ValueKey('circle-rail-explore'),
-            tooltip: tr('Search and explore'),
-            onTap: () => openPage(context, GlobalMessageSearchScreen.path),
+            tooltip: tr('Explore circles'),
+            selected: exploreSelected,
+            showPill: !phone,
+            onTap: () => openPage(context, DiscoveryScreen.path),
             avatar: ThingAvatar(
               size: itemSize,
-              icon: Icons.explore_outlined,
-              color: itemFill,
-              foregroundColor: c.ink,
+              icon: exploreSelected ? Icons.explore : Icons.explore_outlined,
+              color: exploreSelected ? c.ink : itemFill,
+              foregroundColor: exploreSelected ? c.onInk : c.ink,
             ),
           ),
           if (showVoiceIndicator)
@@ -322,10 +325,7 @@ class CircleRailItem extends StatelessWidget {
                 left: 0,
                 child: AnimatedContainer(
                   key: const ValueKey('circle-rail-pill'),
-                  duration: WeCordMotion.durationOf(
-                    context,
-                    WeCordMotion.base,
-                  ),
+                  duration: WeCordMotion.durationOf(context, WeCordMotion.base),
                   curve: WeCordMotion.standard,
                   width: 4,
                   height: pillHeight,

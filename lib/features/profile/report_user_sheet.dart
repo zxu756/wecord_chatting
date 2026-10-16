@@ -8,23 +8,63 @@ import 'package:wecord/shared/models/report_reason.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 Future<void> showReportUserSheet(BuildContext context, Profile profile) {
-  return showWeCordSheet<void>(
+  return showWeCordSheet<bool>(
     context,
     title: tr('Report {name}', {'name': profile.displayLabel}),
     builder: (_, _) => ReportUserSheet(profile: profile),
   );
 }
 
-class ReportUserSheet extends ConsumerStatefulWidget {
+/// Sends a report with the chosen reason and details.
+typedef ReportSubmit =
+    Future<void> Function(ReportReason reason, String details);
+
+/// Shows the report sheet for anything reportable (a circle, say);
+/// true once [onSubmit] succeeded.
+Future<bool?> showReportSheet(
+  BuildContext context, {
+  required String title,
+  required ReportSubmit onSubmit,
+}) {
+  return showWeCordSheet<bool>(
+    context,
+    title: title,
+    builder: (_, _) => ReportSheet(onSubmit: onSubmit),
+  );
+}
+
+/// Reports [profile] with report_user.
+class ReportUserSheet extends ConsumerWidget {
   const ReportUserSheet({super.key, required this.profile});
 
   final Profile profile;
 
   @override
-  ConsumerState<ReportUserSheet> createState() => _ReportUserSheetState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ReportSheet(
+      onSubmit: (reason, details) => ref
+          .read(profileRepositoryProvider)
+          .reportUser(
+            targetUserId: profile.id,
+            reason: reason,
+            details: details,
+          ),
+    );
+  }
 }
 
-class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
+/// A reason to pick, optional details and Submit. Pops with true once
+/// [onSubmit] succeeded.
+class ReportSheet extends ConsumerStatefulWidget {
+  const ReportSheet({super.key, required this.onSubmit});
+
+  final ReportSubmit onSubmit;
+
+  @override
+  ConsumerState<ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends ConsumerState<ReportSheet> {
   final _detailsController = TextEditingController();
   ReportReason _reason = ReportReason.spam;
   bool _isSubmitting = false;
@@ -46,17 +86,11 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
     });
 
     try {
-      await ref
-          .read(profileRepositoryProvider)
-          .reportUser(
-            targetUserId: widget.profile.id,
-            reason: _reason,
-            details: _detailsController.text,
-          );
+      await widget.onSubmit(_reason, _detailsController.text);
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) {
         return;

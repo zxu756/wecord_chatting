@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -162,6 +163,14 @@ class _ManageGroup extends StatelessWidget {
           tone: SettingsTone.success,
           title: tr('Onboarding'),
           onTap: () => openCircleOnboardingSettings(context, detail),
+        ),
+        SettingsRow(
+          key: const ValueKey('circle-settings-discovery'),
+          icon: Icons.explore_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Discovery'),
+          subtitle: tr('Public listing in Explore'),
+          onTap: () => openCircleDiscoverySettings(context, detail),
         ),
       ],
       if (detail.canViewAuditLog)

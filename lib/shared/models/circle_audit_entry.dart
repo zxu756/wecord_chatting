@@ -115,6 +115,7 @@ enum CircleAuditActionGroup {
   sticker('sticker', 'Stickers'),
   automod('automod', 'AutoMod'),
   onboarding('onboarding', 'Onboarding'),
+  discovery('discovery', 'Discovery'),
   other('', 'Other');
 
   const CircleAuditActionGroup(this.filter, this._label);
@@ -153,5 +154,6 @@ enum CircleAuditActionGroup {
     sticker,
     automod,
     onboarding,
+    discovery,
   ];
 }

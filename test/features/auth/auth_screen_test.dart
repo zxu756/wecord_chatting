@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void main() {
   testWidgets('submits sign in credentials', (tester) async {
@@ -18,14 +19,16 @@ void main() {
     );
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Email'),
+      find.widgetWithText(WeCordTextField, 'Email'),
       '  ada@example.com  ',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Password'),
+      find.widgetWithText(WeCordTextField, 'Password'),
       'password123',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.ensureVisible(find.widgetWithText(WeCordButton, 'Sign in'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(WeCordButton, 'Sign in'));
     await tester.pump();
 
     expect(repository.signInCalls, [
@@ -45,26 +48,30 @@ void main() {
       ),
     );
 
-    await tester.tap(find.widgetWithText(TextButton, 'Create account'));
+    await tester.ensureVisible(find.byKey(const ValueKey('auth-toggle-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('auth-toggle-mode')));
     await tester.pump();
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Username'),
+      find.widgetWithText(WeCordTextField, 'Username'),
       'ada',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Display name'),
+      find.widgetWithText(WeCordTextField, 'Display name'),
       'Ada Lovelace',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Email'),
+      find.widgetWithText(WeCordTextField, 'Email'),
       'ada@example.com',
     );
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Password'),
+      find.widgetWithText(WeCordTextField, 'Password'),
       'password123',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.ensureVisible(find.widgetWithText(WeCordButton, 'Create account'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create account'));
     await tester.pump();
 
     expect(repository.signUpCalls, [
@@ -87,9 +94,13 @@ void main() {
       ),
     );
 
-    await tester.tap(find.widgetWithText(TextButton, 'Create account'));
+    await tester.ensureVisible(find.byKey(const ValueKey('auth-toggle-mode')));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
+    await tester.tap(find.byKey(const ValueKey('auth-toggle-mode')));
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(WeCordButton, 'Create account'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create account'));
     await tester.pump();
 
     expect(find.text('Username is required.'), findsOneWidget);

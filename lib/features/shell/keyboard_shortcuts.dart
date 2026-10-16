@@ -12,6 +12,7 @@ import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -265,7 +266,12 @@ Future<void> showKeyboardShortcutsHelp(BuildContext context) {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(label, style: theme.textTheme.bodyMedium),
+                        child: Text(
+                          label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: context.tokens.colors.ink,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       for (final (index, key) in keys.indexed) ...[
@@ -279,9 +285,10 @@ Future<void> showKeyboardShortcutsHelp(BuildContext context) {
           ),
         ),
         actions: [
-          TextButton(
+          WeCordButton(
+            label: tr('Close'),
+            variant: WeCordButtonVariant.secondary,
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(tr('Close')),
           ),
         ],
       );
@@ -296,22 +303,22 @@ class _KeyCap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      constraints: const BoxConstraints(minWidth: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outline, width: 2),
-        ),
+        color: c.raised,
+        borderRadius: BorderRadius.circular(WeCordRadii.xs),
+        border: Border.all(color: c.line),
       ),
       child: Text(
         label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: colorScheme.onSurface,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: c.ink,
         ),
       ),
     );

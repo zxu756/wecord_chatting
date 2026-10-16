@@ -3,9 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -270,12 +271,12 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final results = _results();
     final highlighted = results.isEmpty
         ? -1
         : _highlighted.clamp(0, results.length - 1);
 
+    final c = context.tokens.colors;
     return Dialog(
       key: const ValueKey('quick-switcher'),
       alignment: const Alignment(0, -0.5),
@@ -283,7 +284,7 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 520),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -297,10 +298,24 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
                   controller: _controller,
                   autofocus: true,
                   textInputAction: TextInputAction.go,
+                  style: TextStyle(fontSize: 16, color: c.ink),
                   decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: c.raised,
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: c.subtle,
+                    ),
                     hintText: tr('Where would you like to go?'),
+                    hintStyle: TextStyle(fontSize: 16, color: c.subtle),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    border: _fieldBorder(c.raised, 0),
+                    enabledBorder: _fieldBorder(c.raised, 0),
+                    focusedBorder: _fieldBorder(c.accent, 1.5),
                   ),
                   onChanged: (_) => setState(() => _highlighted = 0),
                   onSubmitted: (_) => _pick(results),
@@ -315,12 +330,13 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
                           tr('Nothing matches. Try another name.'),
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: c.muted,
                           ),
                         ),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         itemCount: results.length,
                         itemBuilder: (context, index) => _QuickSwitchTile(
                           item: results[index],
@@ -330,14 +346,15 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
                         ),
                       ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                tr(
-                  'Tip: start with @ for direct messages, # for channels or * '
-                  'for circles.',
-                ),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
+                child: Text(
+                  tr(
+                    'Tip: start with @ for direct messages, # for channels '
+                    'or * for circles.',
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(color: c.subtle),
                 ),
               ),
             ],
@@ -361,18 +378,24 @@ class _QuickSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final leading = switch (item.kind) {
-      QuickSwitchKind.channel => CircleAvatar(
-        radius: 16,
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        child: Icon(Icons.tag, size: 18, color: colorScheme.onSurfaceVariant),
+      QuickSwitchKind.channel => ThingAvatar(
+        size: 32,
+        icon: Icons.tag_rounded,
+        color: c.raised,
+        foregroundColor: c.muted,
       ),
-      _ => FallbackAvatar(
-        title: item.title,
+      QuickSwitchKind.circle || QuickSwitchKind.group => ResolvedAvatar(
+        name: item.title,
         avatarUrl: item.avatarUrl,
-        radius: 16,
+        size: 32,
+        squircle: true,
+      ),
+      QuickSwitchKind.direct => ResolvedAvatar(
+        name: item.title,
+        avatarUrl: item.avatarUrl,
+        size: 32,
       ),
     };
     final kindLabel = switch (item.kind) {
@@ -381,15 +404,26 @@ class _QuickSwitchTile extends StatelessWidget {
       QuickSwitchKind.channel => item.subtitle ?? tr('Channel'),
       QuickSwitchKind.circle => tr('Circle'),
     };
-    return Material(
+    return WeCordPressable(
       key: ValueKey('quick-switch-${item.id}'),
-      color: highlighted ? colorScheme.secondaryContainer : Colors.transparent,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      onPressed: onTap,
+      selected: highlighted,
+      pressedScale: 0.99,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          curve: WeCordMotion.standard,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: highlighted
+                ? c.raised
+                : hovered
+                ? c.well
+                : c.panel,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Row(
             children: [
               leading,
@@ -400,8 +434,9 @@ class _QuickSwitchTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontWeight: item.unread ? FontWeight.w700 : null,
+                    fontSize: 15,
+                    color: c.ink,
+                    fontWeight: item.unread ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ),
@@ -411,15 +446,24 @@ class _QuickSwitchTile extends StatelessWidget {
                   kindLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: c.subtle,
                   ),
                 ),
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
+
+WeCordFieldBorder _fieldBorder(Color color, double width) => WeCordFieldBorder(
+  borderRadius: BorderRadius.circular(WeCordRadii.lg),
+  borderSide: width == 0
+      ? BorderSide.none
+      : BorderSide(color: color, width: width),
+);

@@ -1795,7 +1795,11 @@ Future<void> pumpStandalone(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [...world.overrides, ...extraOverrides],
-      child: MaterialApp(theme: _theme(), home: child),
+      child: MaterialApp(
+        theme: _theme(),
+        debugShowCheckedModeBanner: false,
+        home: child,
+      ),
     ),
   );
   await settle(tester);

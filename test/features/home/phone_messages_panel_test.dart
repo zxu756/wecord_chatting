@@ -25,6 +25,7 @@ import 'package:wecord/shared/models/media_attachment.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/presence_status.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
@@ -80,13 +81,13 @@ void main() {
     expect(find.text('See you soon'), findsOneWidget);
     expect(find.text('9d'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
-    final avatar = tester.widget<CircleAvatar>(
+    final avatar = tester.widget<PersonAvatar>(
       find.descendant(
         of: find.byKey(const ValueKey('home-dm-conversation-1')),
-        matching: find.byType(CircleAvatar),
+        matching: find.byType(PersonAvatar),
       ),
     );
-    final image = avatar.backgroundImage;
+    final image = avatar.image;
     expect(image, isA<NetworkImage>());
     expect(
       (image! as NetworkImage).url,
@@ -153,11 +154,11 @@ void main() {
 
     expect(find.byKey(const ValueKey('conversation-draft')), findsOneWidget);
     expect(
-      find.textContaining('[Draft] half written', findRichText: true),
+      find.textContaining('Draft half written', findRichText: true),
       findsOneWidget,
     );
     expect(find.text('See you soon'), findsNothing);
-    expect(find.text('[GIF]'), findsOneWidget);
+    expect(find.text('GIF'), findsOneWidget);
 
     PresenceStatus? statusIn(String conversationId) {
       return tester
@@ -265,9 +266,10 @@ void main() {
     await tester.pumpWidget(_app(repository));
     await tester.pump();
 
-    expect(find.text('[Voice]'), findsOneWidget);
-    expect(find.text('[Image]'), findsOneWidget);
-    expect(find.text('[File]'), findsOneWidget);
+    expect(find.text('Voice message'), findsOneWidget);
+    expect(find.text('Image'), findsOneWidget);
+    expect(find.text('File'), findsOneWidget);
+    expect(find.byIcon(Icons.call_outlined), findsNWidgets(2));
     expect(find.text('Call ended'), findsOneWidget);
     expect(find.text('Ada started a call'), findsOneWidget);
   });
@@ -293,12 +295,13 @@ void main() {
     await tester.pump();
 
     expect(find.text('Launch Crew'), findsOneWidget);
-    expect(find.text('[Image]'), findsOneWidget);
+    expect(find.text('Image'), findsOneWidget);
+    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
     expect(find.byIcon(Icons.push_pin), findsOneWidget);
     expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
     // The latest message replaces the member count.
     expect(find.text('3 members'), findsNothing);
-    expect(find.byType(Badge), findsOneWidget);
+    expect(find.byType(CountBadge), findsOneWidget);
   });
 
   testWidgets('long press opens the conversation actions', (tester) async {

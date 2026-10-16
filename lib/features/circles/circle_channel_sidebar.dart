@@ -642,7 +642,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               const Divider(height: 1),
               VoiceConnectedPanel(onOpen: widget.onOpenVoice),
             ],
-            if (wide) ...[const Divider(height: 1), const UserPanel()],
+            // The shell floats the user panel over this space.
+            if (wide) const SizedBox(height: UserPanel.reservedHeight),
           ],
         ),
       ),

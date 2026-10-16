@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_controller.dart';
+import 'package:wecord/features/auth/auth_layout.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
@@ -32,85 +34,112 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
-    final title = _isCreatingAccount ? tr('Create account') : tr('Sign in');
+    final c = context.tokens.colors;
+    final creating = _isCreatingAccount;
+    final title = creating ? tr('Create account') : tr('Sign in');
+    final busy = state.isLoading;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.all(24),
+    return AuthPage(
+      footer: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              creating ? tr('Already have an account?') : tr('New here?'),
+              style: TextStyle(fontSize: 14, color: c.muted),
+            ),
+          ),
+          const SizedBox(width: 4),
+          AuthLink(
+            key: const ValueKey('auth-toggle-mode'),
+            label: creating ? tr('Sign in') : tr('Create account'),
+            fontSize: 14,
+            onPressed: busy ? null : _toggleMode,
+          ),
+        ],
+      ),
+      children: [
+        const AuthAvatarCluster(),
+        const SizedBox(height: 22),
+        AuthHeading(
+          title: creating
+              ? tr('Make yourself\nat home.')
+              : tr('Your friends,\nall in one place.'),
+          subtitle: creating
+              ? tr('Pick a username your friends can find you by.')
+              : tr('Sign in to WeCord for direct messages, groups and circles.'),
+        ),
+        const SizedBox(height: 26),
+        AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(title, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 24),
-              if (_isCreatingAccount) ...[
-                TextFormField(
+              if (creating) ...[
+                WeCordTextField(
+                  fieldKey: const ValueKey('auth-username'),
                   controller: _usernameController,
-                  decoration: InputDecoration(labelText: tr('Username')),
+                  label: tr('Username'),
+                  onPaper: true,
                   textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.newUsername],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
+                WeCordTextField(
+                  fieldKey: const ValueKey('auth-display-name'),
                   controller: _displayNameController,
-                  decoration: InputDecoration(labelText: tr('Display name')),
+                  label: tr('Display name'),
+                  onPaper: true,
                   textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
                 ),
                 const SizedBox(height: 12),
               ],
-              TextFormField(
+              WeCordTextField(
+                fieldKey: const ValueKey('auth-email'),
                 controller: _emailController,
-                decoration: InputDecoration(labelText: tr('Email')),
+                label: tr('Email'),
+                onPaper: true,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
               ),
               const SizedBox(height: 12),
-              TextFormField(
+              WeCordTextField(
+                fieldKey: const ValueKey('auth-password'),
                 controller: _passwordController,
-                decoration: InputDecoration(labelText: tr('Password')),
+                label: tr('Password'),
+                labelTrailing: creating
+                    ? null
+                    : AuthLink(
+                        key: const ValueKey('auth-forgot-password'),
+                        label: tr('Forgot password?'),
+                        onPressed: busy ? null : _forgotPassword,
+                      ),
+                onPaper: true,
                 obscureText: true,
                 textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                onFieldSubmitted: (_) => _submit(),
-              ),
-              if (!_isCreatingAccount)
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: TextButton(
-                    onPressed: state.isLoading ? null : _forgotPassword,
-                    child: Text(tr('Forgot password?')),
-                  ),
-                ),
-              if (state.errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  state.errorMessage!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: state.isLoading ? null : _submit,
-                child: state.isLoading
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(title),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: state.isLoading ? null : _toggleMode,
-                child: Text(
-                  _isCreatingAccount ? tr('Sign in') : tr('Create account'),
-                ),
+                autofillHints: [
+                  creating ? AutofillHints.newPassword : AutofillHints.password,
+                ],
+                onSubmitted: (_) => _submit(),
               ),
             ],
           ),
         ),
-      ),
+        if (state.errorMessage != null) ...[
+          const SizedBox(height: 16),
+          AuthError(state.errorMessage!),
+        ],
+        const SizedBox(height: 22),
+        WeCordButton(
+          key: const ValueKey('auth-submit'),
+          label: title,
+          size: WeCordButtonSize.large,
+          expand: true,
+          loading: busy,
+          onPressed: _submit,
+        ),
+      ],
     );
   }
 
@@ -209,41 +238,46 @@ class _ForgotPasswordDialogState extends ConsumerState<ForgotPasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     return AlertDialog(
       title: Text(tr('Reset your password')),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            tr(
-              "Enter your account's email and we'll send you a link to set "
-              'a new password.',
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              tr(
+                "Enter your account's email and we'll send you a link to set "
+                'a new password.',
+              ),
+              style: TextStyle(fontSize: 15, color: c.muted),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('forgot-password-email'),
-            controller: _emailController,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: tr('Email'),
+            const SizedBox(height: 16),
+            WeCordTextField(
+              fieldKey: const ValueKey('forgot-password-email'),
+              controller: _emailController,
+              autofocus: true,
+              label: tr('Email'),
               errorText: _error,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              onSubmitted: (_) => _send(),
             ),
-            keyboardType: TextInputType.emailAddress,
-            autofillHints: const [AutofillHints.email],
-            onSubmitted: (_) => _send(),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
-        TextButton(
+        WeCordButton(
+          label: tr('Cancel'),
+          variant: WeCordButtonVariant.secondary,
           onPressed: _sending ? null : () => Navigator.of(context).pop(false),
-          child: Text(tr('Cancel')),
         ),
-        FilledButton(
-          onPressed: _sending ? null : _send,
-          child: Text(tr('Send link')),
+        WeCordButton(
+          label: tr('Send link'),
+          loading: _sending,
+          onPressed: _send,
         ),
       ],
     );

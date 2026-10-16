@@ -5,7 +5,9 @@
 //      who should hear about it (see claim_push_delivery), at most once.
 // POST {call_id} → the same for the "started a call" notice of a call the
 //      caller started, so the others' devices ring.
-// Both answer 503 push_not_configured until VAPID_PUBLIC_KEY and
+// POST {task_item_id} → the same for the assignments the caller just made on
+//      a list item (see claim_task_assignment_push).
+// All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { readVapidKeys, sendWebPush } from "./webpush.ts";
@@ -86,10 +88,12 @@ Deno.serve(async (request) => {
 
   let messageId: unknown;
   let callId: unknown;
+  let taskItemId: unknown;
   try {
     const body = await request.json();
     messageId = body?.message_id;
     callId = body?.call_id;
+    taskItemId = body?.task_item_id;
   } catch {
     return json({ error: "invalid_body" }, 400);
   }
@@ -100,7 +104,9 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  if (typeof callId === "string" && uuidPattern.test(callId)) {
+  const isTaskPush = typeof taskItemId === "string" &&
+    uuidPattern.test(taskItemId);
+  if (!isTaskPush && typeof callId === "string" && uuidPattern.test(callId)) {
     // claim_push_delivery checks the notice was sent by the caller.
     const { data: call } = await admin
       .from("direct_calls")
@@ -109,14 +115,22 @@ Deno.serve(async (request) => {
       .maybeSingle();
     messageId = call?.system_message_id;
   }
-  if (typeof messageId !== "string" || !uuidPattern.test(messageId)) {
+  if (
+    !isTaskPush &&
+    (typeof messageId !== "string" || !uuidPattern.test(messageId))
+  ) {
     return json({ error: "invalid_message" }, 400);
   }
   // Checks the caller sent it and claims it, so it is pushed only once.
-  const { data, error } = await admin.rpc("claim_push_delivery", {
-    target_message_id: messageId,
-    caller_id: user.id,
-  });
+  const { data, error } = isTaskPush
+    ? await admin.rpc("claim_task_assignment_push", {
+      target_item_id: taskItemId,
+      caller_id: user.id,
+    })
+    : await admin.rpc("claim_push_delivery", {
+      target_message_id: messageId,
+      caller_id: user.id,
+    });
   if (error) {
     return json({ error: "lookup_failed" }, 500);
   }

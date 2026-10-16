@@ -7,6 +7,10 @@
 
 begin;
 
+-- The behaviour scripts run side by side (flutter test runs files in
+-- parallel) and each applies DDL: take turns so they cannot deadlock.
+do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
+
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql
 \i supabase/migrations/202610170004_album_push.sql

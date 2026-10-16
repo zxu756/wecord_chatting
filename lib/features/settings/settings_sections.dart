@@ -16,6 +16,7 @@ import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/privacy/devices_screen.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/voice_settings_screen.dart';
@@ -837,6 +838,13 @@ class PrivacySettingsGroup extends ConsumerWidget {
           trailing: twoFactorOn == null ? null : _StateLabel(on: twoFactorOn),
           showChevron: true,
           onTap: () => openTwoFactorSettings(context),
+        ),
+        SettingsRow(
+          key: const ValueKey('devices-tile'),
+          icon: Icons.devices_other_rounded,
+          title: tr('Devices'),
+          subtitle: tr('See where you are signed in and sign devices out'),
+          onTap: () => openDevices(context),
         ),
         SettingsRow(
           key: const ValueKey('blocked-users-tile'),

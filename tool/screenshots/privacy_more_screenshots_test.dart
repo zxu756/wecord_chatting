@@ -28,6 +28,7 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 import '../../test/features/chats/media_send/media_fakes.dart';
+import '../../test/features/privacy/privacy_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -238,6 +239,21 @@ void main() {
         ),
       ),
     );
+  });
+
+  // 3. Devices.
+  screen('devices', (tester, world, desktop) async {
+    world.extraOverrides = deviceOverrides();
+    if (desktop) {
+      await world.open(tester, '/me');
+      await tester.tap(find.byKey(const ValueKey('settings-nav-privacy')));
+      await settle(tester);
+    } else {
+      await world.open(tester, '/me');
+    }
+    final tile = find.byKey(const ValueKey('devices-tile'));
+    await scrollIntoView(tester, tile);
+    await tester.tap(tile);
   });
 
   // MARKER: more screens

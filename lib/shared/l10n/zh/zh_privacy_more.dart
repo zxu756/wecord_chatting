@@ -52,4 +52,32 @@ const zhPrivacyMore = <String, String>{
   'Could not load this photo.': '无法加载这张照片。',
   'View once · gone when you close it': '阅后即焚 · 关闭后消失',
   'Screenshots and screen recordings can\'t be blocked.': '截屏和录屏无法被阻止。',
+
+  // Devices.
+  'Devices': '设备',
+  'See where you are signed in and sign devices out': '查看你在哪些设备上登录，并退出设备',
+  'Active just now': '刚刚活跃',
+  'Active {count} minutes ago': '{count} 分钟前活跃',
+  'Active 1 hour ago': '1 小时前活跃',
+  'Active {count} hours ago': '{count} 小时前活跃',
+  'Active 1 day ago': '1 天前活跃',
+  'Active {count} days ago': '{count} 天前活跃',
+  'Active now': '当前活跃',
+  'Sign out {device}?': '要退出{device}吗？',
+  'It will be signed out the next time it connects to WeCord.':
+      '它下次连接 WeCord 时会被退出登录。',
+  'Could not sign that device out.': '无法退出该设备。',
+  'Sign out of all other devices?': '退出所有其他设备？',
+  'Every device except this one will need to sign in again.':
+      '除本设备外，所有设备都需要重新登录。',
+  'Could not sign the other devices out.': '无法退出其他设备。',
+  'Unknown device': '未知设备',
+  'Could not load your devices.': '无法加载你的设备。',
+  'This device': '本设备',
+  'Other devices': '其他设备',
+  'Signed out devices need your password (and a code, if you use two-step verification) to come back.':
+      '被退出的设备需要你的密码（若启用两步验证，还需验证码）才能重新登录。',
+  'No other devices are signed in.': '没有其他已登录的设备。',
+  'Sign out of all other devices': '退出所有其他设备',
+  'WeCord {version}': 'WeCord {version}',
 };

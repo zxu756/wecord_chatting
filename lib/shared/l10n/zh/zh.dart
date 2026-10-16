@@ -17,6 +17,7 @@ import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_design.dart';
 import 'package:wecord/shared/l10n/zh/zh_discovery.dart';
 import 'package:wecord/shared/l10n/zh/zh_file_preview.dart';
+import 'package:wecord/shared/l10n/zh/zh_later.dart';
 import 'package:wecord/shared/l10n/zh/zh_layout.dart';
 import 'package:wecord/shared/l10n/zh/zh_media_send.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
@@ -71,6 +72,7 @@ const zhAreas = <Map<String, String>>[
   zhAlbums,
   zhA11y,
   zhNoise,
+  zhLater,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

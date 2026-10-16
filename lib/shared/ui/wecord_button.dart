@@ -199,12 +199,16 @@ class WeCordIconButton extends StatelessWidget {
     this.badgeCount,
     this.selected = false,
     this.focusNode,
+    this.onLongPress,
     super.key,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
+
+  /// A long press (the tooltip then does not show on long press).
+  final VoidCallback? onLongPress;
   final WeCordButtonVariant variant;
   final double size;
   final double? iconSize;
@@ -230,6 +234,7 @@ class WeCordIconButton extends StatelessWidget {
         : size;
     return WeCordPressable(
       onPressed: onPressed,
+      onLongPress: onLongPress,
       tooltip: tooltip,
       semanticLabel: tooltip,
       selected: selected,

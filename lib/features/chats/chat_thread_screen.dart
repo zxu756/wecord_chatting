@@ -72,6 +72,10 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/file_preview/file_preview_scope.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/later/later_time.dart';
+import 'package:wecord/features/later/scheduled_messages_repository.dart';
+import 'package:wecord/features/later/scheduled_messages_sheet.dart';
+import 'package:wecord/features/later/when_sheet.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -714,6 +718,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A scheduled message that went out shows up here; its list follows.
+    ref.listen(
+      chatThreadProvider(widget.conversationId).select(
+        (state) => state.value?.messages.lastOrNull?.id,
+      ),
+      (_, _) => ref.invalidate(
+        scheduledMessagesProvider(widget.conversationId),
+      ),
+    );
     ref.listen(pendingMessageJumpProvider, (_, jump) {
       if (jump != null &&
           ref.read(chatThreadProvider(widget.conversationId)).hasValue) {
@@ -1632,6 +1645,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     isEditing: _editingMessage != null,
                     onChanged: _handleComposerChanged,
                     onSend: _sendMessage,
+                    onSchedule: _scheduleMessage,
+                    scheduledBanner: ScheduledMessagesBanner(
+                      conversationId: widget.conversationId,
+                      onOpen: _openScheduledMessages,
+                    ),
                     onPickImage: _pickPhotosAndVideos,
                     onPickFile: _pickFilesForTray,
                     attachmentTray: MediaTray(
@@ -3286,6 +3304,87 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
     _saveDraft();
     unawaited(_setTyping(false));
+  }
+
+  /// Queues the text in the composer to be sent later, at a time chosen
+  /// in a sheet (quick picks or a date and time).
+  Future<void> _scheduleMessage() async {
+    final body = _composerController.text.trim();
+    if (body.isEmpty) {
+      _showSnackBar(tr('Write a message to schedule.'));
+      return;
+    }
+    if (_editingMessage != null || _isSending) {
+      return;
+    }
+    final command = parseSlashCommand(
+      body,
+      context: _slashContext,
+      random: ref.read(slashCommandRandomProvider),
+    );
+    final String messageBody;
+    switch (command) {
+      case SlashSendText(body: final commandBody):
+        messageBody = commandBody;
+      case null when parseBotSlashCommand(body, _slashContext) == null:
+        messageBody = body;
+      default:
+        _showSnackBar(tr("Commands can't be scheduled."));
+        return;
+    }
+    final when = await showWhenSheet(
+      context,
+      title: tr('Schedule message'),
+      picks: schedulePicks,
+    );
+    if (when == null || !mounted) {
+      return;
+    }
+    final encodedBody = _encodeCustomEmoji(messageBody);
+    try {
+      await ref
+          .read(scheduledMessagesRepositoryProvider)
+          .create(
+            conversationId: widget.conversationId,
+            body: encodedBody,
+            sendAt: when,
+            mentions: [
+              for (final mention in _mentionsForBody(encodedBody))
+                mention.toJson(),
+            ],
+          );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _sendError = scheduleErrorText(error));
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    // A scheduled message is a plain text message: a reply's quote is not
+    // kept.
+    _cancelReply();
+    _clearComposerAfterCommand();
+    ref.invalidate(scheduledMessagesProvider(widget.conversationId));
+    _showSnackBar(
+      tr('Scheduled for {time}', {
+        'time': describeWhen(
+          MaterialLocalizations.of(context),
+          when.toLocal(),
+          DateTime.now(),
+          alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+        ),
+      }),
+    );
+  }
+
+  Future<void> _openScheduledMessages() {
+    return showScheduledMessagesSheet(
+      context,
+      conversationId: widget.conversationId,
+      onSent: _refreshThread,
+    );
   }
 
   /// Runs a command that changes something other than the conversation,
@@ -5842,6 +5941,7 @@ class _Composer extends StatelessWidget {
     required this.isEditing,
     required this.onChanged,
     required this.onSend,
+    required this.onSchedule,
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
@@ -5858,10 +5958,14 @@ class _Composer extends StatelessWidget {
     required this.onCancelEdit,
     required this.availableHeight,
     this.attachmentTray,
+    this.scheduledBanner,
   });
 
   /// The tray of files waiting to be sent, above the composer pill.
   final Widget? attachmentTray;
+
+  /// The strip counting this conversation's scheduled messages.
+  final Widget? scheduledBanner;
 
   /// Focus of the text field.
   final FocusNode focusNode;
@@ -5903,6 +6007,10 @@ class _Composer extends StatelessWidget {
   final bool isEditing;
   final ValueChanged<String> onChanged;
   final Future<void> Function() onSend;
+
+  /// Schedules the text in the field for later (long-press or right-click
+  /// on the send button).
+  final Future<void> Function() onSchedule;
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
@@ -5972,6 +6080,12 @@ class _Composer extends StatelessWidget {
                     icon: Icons.poll_outlined,
                     label: tr('Create poll'),
                     onSelected: () => unawaited(onCreatePoll()),
+                  ),
+                  GlassMenuEntry(
+                    key: const ValueKey('composer-schedule-entry'),
+                    icon: Icons.schedule_send_outlined,
+                    label: tr('Schedule message'),
+                    onSelected: () => unawaited(onSchedule()),
                   ),
                   GlassMenuEntry(
                     icon: Icons.sticky_note_2_outlined,
@@ -6071,19 +6185,32 @@ class _Composer extends StatelessWidget {
       variant: WeCordButtonVariant.ghost,
       onPressed: isRecordingVoice ? null : () => unawaited(onInsertEmoji()),
     );
-    Widget sendButton() => WeCordIconButton(
-      key: const ValueKey('composer-send-button'),
-      tooltip: isEditing ? tr('Save edit') : tr('Send'),
-      icon: isEditing ? Icons.check_rounded : Icons.arrow_upward_rounded,
-      size: buttonSize,
-      iconSize: 22,
-      variant: WeCordButtonVariant.accent,
-      onPressed: isBusy || isSlowed
-          ? null
-          : () {
-              WeCordHaptics.light();
-              unawaited(onSend());
-            },
+    void schedule() {
+      WeCordHaptics.light();
+      unawaited(onSchedule());
+    }
+
+    // Long-press (touch) or right-click schedules instead of sending;
+    // screen readers get the long press as an action, and the attach menu
+    // has an entry for keyboards.
+    Widget sendButton() => GestureDetector(
+      excludeFromSemantics: true,
+      onSecondaryTap: isEditing || isBusy ? null : schedule,
+      child: WeCordIconButton(
+        key: const ValueKey('composer-send-button'),
+        tooltip: isEditing ? tr('Save edit') : tr('Send'),
+        icon: isEditing ? Icons.check_rounded : Icons.arrow_upward_rounded,
+        size: buttonSize,
+        iconSize: 22,
+        variant: WeCordButtonVariant.accent,
+        onLongPress: isEditing || isBusy ? null : schedule,
+        onPressed: isBusy || isSlowed
+            ? null
+            : () {
+                WeCordHaptics.light();
+                unawaited(onSend());
+              },
+      ),
     );
     final mic = WeCordIconButton(
       key: const ValueKey('composer-mic-button'),
@@ -6321,6 +6448,7 @@ class _Composer extends StatelessWidget {
                 attachmentTray!,
                 const SizedBox(height: 6),
               ],
+              ?scheduledBanner,
               pill,
             ],
           ),

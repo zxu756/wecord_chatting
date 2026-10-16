@@ -283,7 +283,9 @@ the WeCord components in new and restyled screens.
   `⌘K`/`Ctrl K` hint in the sidebar search.
 - **Reduced motion**: springs collapse to zero duration; glass goes solid;
   animated pictures (GIFs) hold their first frame under a play button
-  (`MotionSafeImage`); videos do not start by themselves.
+  (`MotionSafeImage`) in message pictures, album tiles, the full-screen
+  viewer and avatars (avatars under 72 px just stay still: the button would
+  cover them); videos do not start by themselves.
 - **High contrast**: the platform's "Increase contrast" selects
   `WeCordTheme.light/dark(highContrast: true)` (`MaterialApp.highContrastTheme`):
   `WeCordPalette.lightHighContrast` / `darkHighContrast` (ink black/white,

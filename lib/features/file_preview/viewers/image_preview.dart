@@ -215,8 +215,11 @@ class _ImagePreviewState extends ConsumerState<ImagePreview>
     }
     return _zoomable(
       file,
-      Image(
+      // A GIF stands still on its first frame under reduced motion, with a
+      // play button.
+      MotionSafeImage(
         image: image,
+        animated: isAnimatedImage(url: file.name, mimeType: file.mimeType),
         fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
         semanticLabel: file.name,

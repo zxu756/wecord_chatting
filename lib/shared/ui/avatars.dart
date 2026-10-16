@@ -1,5 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
+import 'package:wecord/shared/ui/motion.dart';
+import 'package:wecord/shared/ui/motion_safe_image.dart';
+
+/// Avatars at least this big get a play button over an animated picture
+/// held on its first frame under reduced motion; smaller ones just stay
+/// still (the button would cover the avatar).
+const double avatarPlayButtonMinSize = 72;
+
+/// An animated avatar picture (GIF) held still on its first frame, when the
+/// platform asks for reduced motion; null when [image] can be drawn as it
+/// is.
+Widget? heldAvatarPicture(
+  BuildContext context, {
+  required ImageProvider? image,
+  required double size,
+  ImageErrorListener? onError,
+}) {
+  if (image == null ||
+      !WeCordMotion.reduceMotion(context) ||
+      !imageProviderAnimates(image)) {
+    return null;
+  }
+  return MotionSafeImage(
+    image: image,
+    width: size,
+    height: size,
+    fit: BoxFit.cover,
+    excludeFromSemantics: true,
+    playButton: size >= avatarPlayButtonMinSize,
+    errorBuilder: onError == null
+        ? null
+        : (context, error, stack) {
+            onError(error, stack);
+            return SizedBox.square(dimension: size);
+          },
+  );
+}
 
 /// Fills for avatars without a picture, picked from the name so a person
 /// or circle keeps its color everywhere.
@@ -128,14 +165,21 @@ class PersonAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fill = color ?? WeCordAvatarColors.forSeed(name);
+    final held = heldAvatarPicture(
+      context,
+      image: image,
+      size: size,
+      onError: onImageError,
+    );
     Widget circle = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
+      clipBehavior: held == null ? Clip.none : Clip.antiAlias,
       decoration: BoxDecoration(
         color: fill,
         shape: BoxShape.circle,
-        image: image == null
+        image: image == null || held != null
             ? null
             : DecorationImage(
                 image: image!,
@@ -143,17 +187,19 @@ class PersonAvatar extends StatelessWidget {
                 onError: onImageError,
               ),
       ),
-      child: image == null
-          ? Text(
-              avatarInitial(name),
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: size * 0.39,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            )
-          : null,
+      child:
+          held ??
+          (image == null
+              ? Text(
+                  avatarInitial(name),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: size * 0.39,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                )
+              : null),
     );
 
     final corner =
@@ -234,14 +280,21 @@ class ThingAvatar extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius ?? size / 3),
     );
     final foreground = foregroundColor ?? Colors.white;
+    final held = heldAvatarPicture(
+      context,
+      image: image,
+      size: size,
+      onError: onImageError,
+    );
     Widget tile = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
+      clipBehavior: held == null ? Clip.none : Clip.antiAlias,
       decoration: ShapeDecoration(
         color: fill,
         shape: shape,
-        image: image == null
+        image: image == null || held != null
             ? null
             : DecorationImage(
                 image: image!,
@@ -249,19 +302,21 @@ class ThingAvatar extends StatelessWidget {
                 onError: onImageError,
               ),
       ),
-      child: image != null
-          ? null
-          : icon != null
-          ? Icon(icon, color: foreground, size: size * 0.44)
-          : Text(
-              avatarInitial(label),
-              style: TextStyle(
-                color: foreground,
-                fontSize: size * 0.37,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
+      child:
+          held ??
+          (image != null
+              ? null
+              : icon != null
+              ? Icon(icon, color: foreground, size: size * 0.44)
+              : Text(
+                  avatarInitial(label),
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: size * 0.37,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                )),
     );
     // The squircle is skipped (or named by [semanticLabel]); a badge on its
     // corner keeps its own words ("3 unread").

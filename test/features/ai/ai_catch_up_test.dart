@@ -1,23 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/ai/ai_catch_up.dart';
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
-import 'package:wecord/features/auth/auth_repository.dart';
-import 'package:wecord/features/chats/chat_thread_screen.dart';
-import 'package:wecord/features/chats/chats_repository.dart';
-import 'package:wecord/features/presence/presence_repository.dart';
-import 'package:wecord/features/settings/settings_repository.dart';
-import 'package:wecord/shared/models/chat_status.dart';
-import 'package:wecord/shared/models/conversation.dart';
-import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
-import '../chats/chat_thread_screen_test.dart' as chat_fakes;
-import '../file_preview/file_preview_fakes.dart';
+import 'ai_chat_app.dart';
 import 'ai_fakes.dart';
 
 Widget _card(
@@ -169,69 +159,11 @@ void main() {
   });
 
   group('in a chat', () {
-    ChatMessage message(String id, String sender, String body, int minute) {
-      return ChatMessage(
-        id: id,
-        conversationId: 'conversation-1',
-        senderId: sender,
-        type: MessageType.text,
-        body: body,
-        createdAt: DateTime.utc(2026, 5, 18, 4, minute),
-      );
-    }
-
     Widget app(
       FakeAiRepository ai, {
       int unread = 0,
       AiEnabledStore? enabledStore,
-    }) {
-      final repository = chat_fakes.FakeChatsRepository()
-        ..conversations = [
-          ConversationSummary(
-            id: 'conversation-1',
-            type: ConversationType.direct,
-            unreadCount: unread,
-          ),
-        ]
-        ..messages = [
-          message('message-1', 'user-1', 'Read already', 1),
-          message('message-2', 'user-2', 'First unread', 2),
-          message('message-3', 'user-2', 'Second unread', 3),
-        ]
-        ..readMarkers = const [
-          ConversationReadMarker(
-            userId: 'user-1',
-            lastReadMessageId: 'message-1',
-          ),
-        ];
-      return ProviderScope(
-        overrides: [
-          chatsRepositoryProvider.overrideWithValue(repository),
-          onlineUserIdsProvider.overrideWith(
-            (ref) => const Stream<Set<String>>.empty(),
-          ),
-          settingsRepositoryProvider.overrideWithValue(
-            chat_fakes.FakeSettingsRepository(),
-          ),
-          ...filePreviewOverrides(),
-          authRepositoryProvider.overrideWithValue(
-            chat_fakes.FakeAuthRepository()
-              ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
-          ),
-          aiRepositoryProvider.overrideWithValue(ai),
-          aiEnabledStoreProvider.overrideWithValue(
-            enabledStore ?? InMemoryAiEnabledStore(),
-          ),
-        ],
-        child: MaterialApp(
-          theme: WeCordTheme.light(),
-          home: const ChatThreadScreen(
-            conversationId: 'conversation-1',
-            title: 'Ada Lovelace',
-          ),
-        ),
-      );
-    }
+    }) => AiChatHarness(ai, unread: unread, enabledStore: enabledStore).build();
 
     void useDesktopSize(WidgetTester tester) {
       tester.view.devicePixelRatio = 1;

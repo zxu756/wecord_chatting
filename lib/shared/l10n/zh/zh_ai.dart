@@ -14,6 +14,17 @@ const zhAi = <String, String>{
   'Make it more polite / friendly': '更礼貌、更友好',
   'Make it more formal': '更正式',
   'Translate to…': '翻译成…',
+  // Rewrite sheet.
+  'Rewrite with AI': '用 AI 改写',
+  'Write a message first, then use AI to polish it.': '先写好消息，再用 AI 润色。',
+  'This message is too long for AI to rewrite.': '这条消息太长，AI 无法改写。',
+  'Your message': '你的消息',
+  'Suggestion': 'AI 建议',
+  'Working on it…': '处理中…',
+  'Written by AI. Nothing is sent until you send it.':
+      '由 AI 生成，在你发送之前不会发出任何内容。',
+  'Replace': '替换',
+  'Insert below': '插入下方',
   // Errors.
   "AI features aren't set up on this server yet.": '此服务器尚未设置 AI 功能。',
   "You've reached today's AI limit of {limit} requests. It resets tomorrow.":

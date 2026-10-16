@@ -3,7 +3,9 @@
 // through: sign in, home, chat threads with their menus, circles, voice,
 // settings, notifications, contacts, search, profile and discovery.
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
@@ -13,6 +15,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
 
+import '../features/ai/ai_fakes.dart';
 import '../features/discovery/discovery_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
@@ -269,6 +272,32 @@ final moreA11yScreens = <A11yScreen>[
     viewport: desktopViewport,
     desktop: true,
   ),
+  A11yScreen('ai-rewrite-sheet', (tester, world) async {
+    world.extraOverrides = _aiOverrides();
+    await _openThread(tester, world);
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-composer-field')),
+      'helo wrld, how are u',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('composer-ai-button')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('ai-rewrite-fix')));
+    await settle(tester);
+  }),
+  A11yScreen('ai-catch-up', (tester, world) async {
+    world.extraOverrides = _aiOverrides();
+    await _openThread(tester, world);
+    await tester.tap(find.byTooltip(tr('More')));
+    await settle(tester);
+    await tester.tap(find.text(tr('Summarize')));
+    await settle(tester);
+  }),
+];
+
+List<Override> _aiOverrides() => [
+  aiRepositoryProvider.overrideWithValue(FakeAiRepository()),
+  aiEnabledStoreProvider.overrideWithValue(InMemoryAiEnabledStore()),
 ];
 
 /// Every screen the guard and the screenshot tool visit.

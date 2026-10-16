@@ -10,6 +10,8 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/ai/ai_catch_up.dart';
+import 'package:wecord/features/ai/ai_composer_button.dart';
+import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
@@ -649,6 +651,39 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
       _activeConversationController.state = conversationId;
     });
+  }
+
+  /// Opens the AI rewrite sheet for the draft (the composer's AI button,
+  /// ⌘/Ctrl+Shift+E). Nothing is sent from it.
+  void _openAiRewrite() {
+    if (!ref.read(aiAvailableProvider(_circleId)) ||
+        _isRecordingVoice ||
+        _isSending ||
+        _isSendingVoice ||
+        !mounted) {
+      return;
+    }
+    void setDraft(String text) {
+      _composerController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      _handleComposerChanged(text);
+      _composerFocus.requestFocus();
+    }
+
+    unawaited(
+      showAiRewriteSheet(
+        context,
+        draft: _composerController.text,
+        conversationId: widget.conversationId,
+        onReplace: setDraft,
+        onInsertBelow: (text) {
+          final current = _composerController.text.trimRight();
+          setDraft(current.isEmpty ? text : '$current\n$text');
+        },
+      ),
+    );
   }
 
   void _toggleMessageSearch() {
@@ -1657,6 +1692,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     onSend: _sendMessage,
                     onPickImage: _pickPhotosAndVideos,
                     onPickFile: _pickFilesForTray,
+                    aiButton: AiComposerButton(
+                      circleId: circleId,
+                      size: desktop ? 36 : 40,
+                      onPressed: _isSending || _isSendingVoice
+                          ? null
+                          : _openAiRewrite,
+                    ),
                     attachmentTray: MediaTray(
                       conversationId: widget.conversationId,
                       desktop: desktop,
@@ -3292,6 +3334,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           return KeyEventResult.ignored;
         }
         _startEdit(message);
+        return KeyEventResult.handled;
+      case ComposerShortcut.rewriteWithAi:
+        if (!ref.read(aiAvailableProvider(_circleId))) {
+          return KeyEventResult.ignored;
+        }
+        _openAiRewrite();
         return KeyEventResult.handled;
       case null:
         return KeyEventResult.ignored;
@@ -5883,7 +5931,12 @@ class _Composer extends StatelessWidget {
     required this.onCancelEdit,
     required this.availableHeight,
     this.attachmentTray,
+    this.aiButton,
   });
+
+  /// The AI rewrite button (see [AiComposerButton]); on phones it only
+  /// shows once there is a draft.
+  final Widget? aiButton;
 
   /// The tray of files waiting to be sent, above the composer pill.
   final Widget? attachmentTray;
@@ -6183,6 +6236,7 @@ class _Composer extends StatelessWidget {
           ]
         : desktop
         ? <Widget>[
+            ?aiButton,
             gif,
             emoji,
             mic,
@@ -6190,6 +6244,12 @@ class _Composer extends StatelessWidget {
             sending ?? sendButton(),
           ]
         : <Widget>[
+            if (aiButton case final ai?)
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, _) =>
+                    value.text.trim().isEmpty ? const SizedBox.shrink() : ai,
+              ),
             emoji,
             gif,
             const SizedBox(width: 2),

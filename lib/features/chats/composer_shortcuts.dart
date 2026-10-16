@@ -10,6 +10,9 @@ enum ComposerShortcut {
 
   /// Up in an empty field: edit the latest message the user sent.
   editLast,
+
+  /// Cmd/Ctrl+Shift+E: rewrite the draft with AI.
+  rewriteWithAi,
 }
 
 /// The shortcut [event] triggers in a message field holding [text], or
@@ -23,6 +26,12 @@ ComposerShortcut? composerShortcutFor(KeyEvent event, {required String text}) {
     return ComposerShortcut.escape;
   }
   final keyboard = HardwareKeyboard.instance;
+  if (key == LogicalKeyboardKey.keyE &&
+      keyboard.isShiftPressed &&
+      (keyboard.isMetaPressed || keyboard.isControlPressed) &&
+      !keyboard.isAltPressed) {
+    return ComposerShortcut.rewriteWithAi;
+  }
   if (key == LogicalKeyboardKey.arrowUp &&
       text.isEmpty &&
       !keyboard.isShiftPressed &&

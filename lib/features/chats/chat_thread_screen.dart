@@ -1238,7 +1238,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             final touch = usesTouchInput(context);
             _galleryFiles = () => [
               for (final message in fullOldestToNewest)
-                if (PreviewFile.fromMessage(
+                ?PreviewFile.fromMessage(
                       message,
                       senderName: _senderFor(
                         message,
@@ -1247,9 +1247,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             ? ownProfile
                             : null,
                       ).name,
-                    )
-                    case final file?)
-                  file,
+                    ),
             ];
 
             Widget buildMessageItem(int index) {
@@ -6568,7 +6566,7 @@ class _ThreadLayout {
     // stored copy already arrived.
     final storedClientIds = {
       for (final message in fullOldestToNewest)
-        if (message.clientId case final clientId?) clientId,
+        ?message.clientId,
     };
     final pendingById = <String, OutboxEntry>{};
     final pendingMessages = <ChatMessage>[];

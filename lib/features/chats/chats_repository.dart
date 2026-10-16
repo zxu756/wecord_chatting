@@ -575,7 +575,7 @@ class SupabaseChatsRepository
       'sender_id': _requireCurrentUserId(),
       'type': MessageType.text.toJson(),
       'body': trimmedBody,
-      if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+      'reply_to_message_id': ?replyToMessageId,
       if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
     };
     await _send(conversationId, () => _dataSource.insertMessage(values));

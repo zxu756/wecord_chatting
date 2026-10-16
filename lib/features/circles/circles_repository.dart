@@ -483,7 +483,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     final channelId = await _dataSource.rpc('create_circle_channel', {
       'target_circle_id': circleId,
       'channel_name': name.trim(),
-      if (categoryId != null) 'target_category_id': categoryId,
+      'target_category_id': ?categoryId,
       if (kind != CircleChannelKind.text) 'target_kind': kind.value,
     });
     return channelId as String;

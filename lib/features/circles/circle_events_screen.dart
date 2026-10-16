@@ -455,9 +455,7 @@ class CircleEventCard extends StatelessWidget {
                           runSpacing: 4,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            if (circleEventStatusBadge(context, status)
-                                case final badge?)
-                              badge,
+                            ?circleEventStatusBadge(context, status),
                             Text(
                               formatCircleEventTime(context, event, now: now),
                               style: TextStyle(

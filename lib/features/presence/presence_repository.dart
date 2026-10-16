@@ -316,7 +316,7 @@ class SupabasePresenceDataSource implements PresenceDataSource {
       onListen: () {
         // Until the first sync, only the current user is known to be here.
         controller.add({
-          if (ownStatus.value case final status?) currentUserId: status,
+          currentUserId: ?ownStatus.value,
         });
         ownStatus.addListener(sync);
         channel = _client

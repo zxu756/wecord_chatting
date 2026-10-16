@@ -104,7 +104,7 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
       }
       engine.restore([
         for (final json in saved)
-          if (_tryEntry(json) case final entry?) entry,
+          ?_tryEntry(json),
       ]);
       unawaited(engine.drain());
     } catch (_) {

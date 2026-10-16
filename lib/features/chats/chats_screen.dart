@@ -49,7 +49,7 @@ final conversationsProvider =
       List<ConversationSummary> parse(List<Map<String, dynamic>> rows) {
         return [
           for (final row in rows)
-            if (_tryConversation(row) case final conversation?) conversation,
+            ?_tryConversation(row),
         ];
       }
 

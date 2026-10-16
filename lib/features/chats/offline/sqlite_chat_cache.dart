@@ -95,7 +95,7 @@ class SqliteChatCache implements ChatCache {
     }
     return [
       for (final row in rows)
-        if (_decode(row['row_json']) case final decoded?) decoded,
+        ?_decode(row['row_json']),
     ];
   }
 
@@ -141,7 +141,7 @@ class SqliteChatCache implements ChatCache {
     );
     return [
       for (final row in rows)
-        if (_decode(row['row_json']) case final decoded?) decoded,
+        ?_decode(row['row_json']),
     ];
   }
 
@@ -191,7 +191,7 @@ class SqliteChatCache implements ChatCache {
     );
     return [
       for (final row in rows)
-        if (_decode(row['entry_json']) case final decoded?) decoded,
+        ?_decode(row['entry_json']),
     ];
   }
 

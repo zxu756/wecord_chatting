@@ -1518,7 +1518,7 @@ class _ChannelOverwriteEditorSheetState
           child: wide
               ? Row(
                   children: [
-                    if (remove != null) remove,
+                    ?remove,
                     const Spacer(),
                     cancel,
                     const SizedBox(width: 8),

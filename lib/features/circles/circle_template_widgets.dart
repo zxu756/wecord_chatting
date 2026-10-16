@@ -142,7 +142,7 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
           tone: SettingsTone.accent,
           title: value.name,
           subtitle: [
-            if (value.description case final description?) description,
+            ?value.description,
             tr('{channels} channels · {roles} roles · used {count} times', {
               'channels': value.channelCount,
               'roles': value.roleCount,

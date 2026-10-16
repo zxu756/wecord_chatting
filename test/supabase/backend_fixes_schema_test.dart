@@ -82,4 +82,18 @@ void main() {
     );
     expect(post, contains("'automod_blocked', true"));
   });
+
+  test('voice tokens wait for the circle rules', () {
+    final sql = migration('202610160036');
+    final body = functionBody(sql, 'can_current_user_connect_voice');
+    expect(
+      body,
+      contains(
+        'if public.circle_member_needs_rules(channel.circle_id, auth.uid()) then\n'
+        '    return null;',
+      ),
+    );
+    // Still the stage-aware definition of 202610160018.
+    expect(body, contains("'stage_speaker', channel.kind = 'stage'"));
+  });
 }

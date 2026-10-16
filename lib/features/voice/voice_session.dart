@@ -22,6 +22,11 @@ final voiceCallConnectorProvider = Provider<VoiceCallConnector>((ref) {
   return const LiveKitVoiceCallConnector();
 });
 
+/// Whether this device can run the AI noise filter.
+final voiceAiNoiseSupportedProvider = FutureProvider<bool>((ref) {
+  return ref.watch(voiceCallConnectorProvider).aiNoiseSupported();
+});
+
 final voiceScreenSourcePickerProvider = Provider<VoiceScreenSourcePicker>((
   ref,
 ) {
@@ -143,6 +148,7 @@ class VoiceSession {
     this.stageSpeaker = false,
     this.stageInvited = false,
     this.handRaised = false,
+    this.noiseMode = VoiceNoiseMode.standard,
   });
 
   /// The circle and voice channel, for a voice channel; null in a call.
@@ -191,6 +197,9 @@ class VoiceSession {
   /// On a stage: the current user raised their hand to speak.
   final bool handRaised;
 
+  /// The noise suppression the microphone is using.
+  final VoiceNoiseMode noiseMode;
+
   /// In a stage's audience, where the microphone stays off.
   bool get stageListener => stage && !stageSpeaker;
 
@@ -228,6 +237,7 @@ class VoiceSession {
     bool? stageSpeaker,
     bool? stageInvited,
     bool? handRaised,
+    VoiceNoiseMode? noiseMode,
   }) {
     return VoiceSession(
       circleId: circleId,
@@ -250,6 +260,7 @@ class VoiceSession {
       stageSpeaker: stageSpeaker ?? this.stageSpeaker,
       stageInvited: stageInvited ?? this.stageInvited,
       handRaised: handRaised ?? this.handRaised,
+      noiseMode: noiseMode ?? this.noiseMode,
     );
   }
 }
@@ -469,6 +480,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       selfDeaf: carried?.selfDeaf,
       participants: call.participants,
       quality: call.quality,
+      noiseMode: call.noiseMode,
       pushToTalk: _settings.pushToTalk,
       transmitting: false,
     );
@@ -706,6 +718,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     state = session.copyWith(
       participants: call.participants,
       quality: call.quality,
+      noiseMode: call.noiseMode,
     );
   }
 

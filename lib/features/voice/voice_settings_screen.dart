@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -28,6 +30,17 @@ class VoiceSettingsScreen extends ConsumerWidget {
     final key = settings.pushToTalkKey;
     final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
     final soundboardPercent = (settings.soundboardVolume * 100).round();
+    // In a call, what the microphone really uses; otherwise what this
+    // device can do (the server's say comes with the call).
+    final session = ref.watch(voiceSessionProvider);
+    final aiSupported = ref.watch(voiceAiNoiseSupportedProvider).value;
+    final noiseMode = session != null && session.isConnected
+        ? session.noiseMode
+        : aiSupported == null
+        ? null
+        : aiSupported
+        ? VoiceNoiseMode.ai
+        : VoiceNoiseMode.standard;
 
     Widget note(String text) {
       return Padding(
@@ -170,7 +183,17 @@ class VoiceSettingsScreen extends ConsumerWidget {
                       icon: Icons.noise_aware_rounded,
                       tone: SettingsTone.accent,
                       title: tr('Noise suppression'),
-                      subtitle: tr('Filters out background noise.'),
+                      subtitle: switch (settings.noiseSuppression
+                          ? noiseMode
+                          : null) {
+                        VoiceNoiseMode.ai =>
+                          '${tr('Filters out background noise.')}\n'
+                              '${tr('AI noise suppression active')}',
+                        VoiceNoiseMode.standard =>
+                          '${tr('Filters out background noise.')}\n'
+                              '${tr('Standard noise suppression (AI not available on this device)')}',
+                        null => tr('Filters out background noise.'),
+                      },
                       value: settings.noiseSuppression,
                       onChanged: controller.setNoiseSuppression,
                     ),

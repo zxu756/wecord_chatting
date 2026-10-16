@@ -3,6 +3,15 @@ import 'package:flutter/widgets.dart';
 /// How well the current user's connection to the voice server works.
 enum VoiceConnectionQuality { unknown, lost, poor, good, excellent }
 
+/// Which noise suppression a call's microphone uses while the setting is on.
+enum VoiceNoiseMode {
+  /// What the platform provides (WebRTC / Apple voice processing).
+  standard,
+
+  /// LiveKit's AI noise filter (Krisp).
+  ai,
+}
+
 /// One person in a connected voice call, as the media connection sees it.
 @immutable
 class VoiceCallParticipant {
@@ -41,6 +50,11 @@ abstract interface class VoiceCall implements Listenable {
 
   VoiceConnectionQuality get quality;
 
+  /// The noise suppression in use. It can fall back to
+  /// [VoiceNoiseMode.standard] during the call if the AI filter stops
+  /// working.
+  VoiceNoiseMode get noiseMode;
+
   /// Completes when the room disconnects on its own (network loss, kicked
   /// by the server), not after [disconnect].
   Future<void> get disconnected;
@@ -75,6 +89,10 @@ abstract interface class VoiceCallConnector {
     VoiceAudioProcessing audio = const VoiceAudioProcessing(),
     Map<String, double> userVolumes = const {},
   });
+
+  /// Whether this device (or browser) can run the AI noise filter. Whether
+  /// the server allows it is only known once a call connects.
+  Future<bool> aiNoiseSupported();
 }
 
 /// How the microphone is cleaned up before it is sent, where the platform

@@ -277,6 +277,7 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   List<VoiceCallParticipant> remotes = const [];
   bool localSpeaking = false;
   VoiceConnectionQuality connectionQuality = VoiceConnectionQuality.good;
+  VoiceNoiseMode mode = VoiceNoiseMode.standard;
 
   bool get microphone => _microphone;
 
@@ -317,6 +318,9 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   @override
   VoiceConnectionQuality get quality => connectionQuality;
+
+  @override
+  VoiceNoiseMode get noiseMode => mode;
 
   @override
   Future<void> get disconnected => _disconnected.future;
@@ -370,10 +374,16 @@ class FakeVoiceCallConnector implements VoiceCallConnector {
   final calls = <FakeVoiceCall>[];
   Object? error;
 
+  /// Whether the device can run the AI noise filter.
+  bool aiNoise = false;
+
   /// Set before connecting to shape the next call.
   void Function(FakeVoiceCall call)? prepare;
 
   FakeVoiceCall get last => calls.last;
+
+  @override
+  Future<bool> aiNoiseSupported() async => aiNoise;
 
   @override
   Future<VoiceCall> connect({

@@ -16,6 +16,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
@@ -246,6 +247,21 @@ void main() {
     }
     addTearDown(gesture.up);
   }, desktop: false);
+
+  // 4. Video previews in the conversation lists.
+  screen('preview-video', (tester, world, desktop) async {
+    world.chats.conversations = [
+      for (final conversation in phoneConversations)
+        conversation.id == 'dm-2'
+            ? conversation.copyWith(
+                lastMessageBody: '',
+                lastMessageType: MessageType.file,
+                lastMessageAttachmentKind: 'video',
+              )
+            : conversation,
+    ];
+    await world.open(tester, ChatsScreen.path);
+  });
 
   // MARKER: more screens
 }

@@ -3438,4 +3438,29 @@ void main() {
     ).readAsStringSync();
     expect(giphy, contains('get("GIPHY_API_KEY")'));
   });
+
+  test('summaries say whether the latest file is a video', () {
+    final sql = allMigrationSql();
+    final summaries = functionBody(sql, 'list_conversation_summaries');
+    expect(summaries, contains('last_message_attachment_kind text'));
+    expect(
+      summaries,
+      contains("when last_message.attachment->>'kind' = 'video'"),
+    );
+    expect(summaries, contains("like 'video/%' then 'video'"));
+    expect(summaries, contains('last_message.attachment,'));
+    // Still everything the webhook version returned.
+    expect(summaries, contains('last_message_webhook_name'));
+    expect(summaries, contains('slowmode_seconds'));
+    final migration = File(
+      'supabase/migrations/202610160050_summary_attachment_kind.sql',
+    ).readAsStringSync();
+    expect(
+      migration,
+      contains(
+        'grant execute on function public.list_conversation_summaries() '
+        'to authenticated;',
+      ),
+    );
+  });
 }

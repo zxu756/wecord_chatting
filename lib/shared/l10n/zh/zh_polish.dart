@@ -5,4 +5,7 @@ const zhPolish = <String, String>{
   'Message #{name}': '发消息到 #{name}',
   'Message @{name}': '发消息给 @{name}',
   'Message {name}': '发消息到 {name}',
+
+  // Conversation previews.
+  'Video': '视频',
 };

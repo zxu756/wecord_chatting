@@ -48,6 +48,7 @@ class ConversationSummary {
     this.lastMessageAt,
     this.lastMessageType,
     this.lastMessageWebhookName,
+    this.lastMessageAttachmentKind,
     this.pinnedAt,
     this.mutedUntil,
     this.isMuted = false,
@@ -84,6 +85,8 @@ class ConversationSummary {
           ? null
           : MessageType.fromJson(json['last_message_type'] as String),
       lastMessageWebhookName: json['last_message_webhook_name'] as String?,
+      lastMessageAttachmentKind:
+          json['last_message_attachment_kind'] as String?,
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       pinnedAt: _parseOptionalTimestamp(json['pinned_at']),
       mutedUntil: _parseOptionalTimestamp(json['muted_until']),
@@ -135,6 +138,15 @@ class ConversationSummary {
   /// The webhook name the latest message was posted under, if a webhook
   /// posted it (then it is not the sender's own message).
   final String? lastMessageWebhookName;
+
+  /// What a file message carries: 'video' or 'file' (null for other
+  /// messages, and from servers that don't say).
+  final String? lastMessageAttachmentKind;
+
+  /// Whether the latest message is a video file.
+  bool get lastMessageIsVideo =>
+      lastMessageType == MessageType.file &&
+      lastMessageAttachmentKind == 'video';
   final int unreadCount;
   final DateTime? pinnedAt;
   final DateTime? mutedUntil;
@@ -200,6 +212,7 @@ class ConversationSummary {
     Object? lastMessageAt = _sentinel,
     Object? lastMessageType = _sentinel,
     Object? lastMessageWebhookName = _sentinel,
+    Object? lastMessageAttachmentKind = _sentinel,
     int? unreadCount,
     Object? pinnedAt = _sentinel,
     Object? mutedUntil = _sentinel,
@@ -238,6 +251,9 @@ class ConversationSummary {
       lastMessageWebhookName: identical(lastMessageWebhookName, _sentinel)
           ? this.lastMessageWebhookName
           : lastMessageWebhookName as String?,
+      lastMessageAttachmentKind: identical(lastMessageAttachmentKind, _sentinel)
+          ? this.lastMessageAttachmentKind
+          : lastMessageAttachmentKind as String?,
       unreadCount: unreadCount ?? this.unreadCount,
       pinnedAt: identical(pinnedAt, _sentinel)
           ? this.pinnedAt

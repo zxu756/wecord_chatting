@@ -3591,7 +3591,8 @@ String _suggestedTitleFor(ChatMessage message) {
     ),
     MessageType.image => tr('Image'),
     MessageType.voice => tr('Voice message'),
-    MessageType.file => tr('File'),
+    MessageType.file =>
+      message.fileAttachment?.isVideo == true ? tr('Video') : tr('File'),
     MessageType.system => tr('Thread'),
     MessageType.poll => suggestedThreadTitle(message.body),
     MessageType.sticker => tr('Sticker'),

@@ -25,6 +25,11 @@ const zhAi = <String, String>{
       '由 AI 生成，在你发送之前不会发出任何内容。',
   'Replace': '替换',
   'Insert below': '插入下方',
+  // Translating messages.
+  'Translate': '翻译',
+  'Translating…': '正在翻译…',
+  'Translated to {language}': '已翻译为{language}',
+  'Show original': '显示原文',
   // Errors.
   "AI features aren't set up on this server yet.": '此服务器尚未设置 AI 功能。',
   "You've reached today's AI limit of {limit} requests. It resets tomorrow.":

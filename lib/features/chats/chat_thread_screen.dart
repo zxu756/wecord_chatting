@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/ai/ai_catch_up.dart';
 import 'package:wecord/features/ai/ai_composer_button.dart';
 import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
+import 'package:wecord/features/ai/ai_translation.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
@@ -4548,6 +4549,13 @@ class _MessageBubble extends StatelessWidget {
               enlargeEmojiOnly: true,
             ),
           ),
+        if (!isRecalled && message.type == MessageType.text)
+          AiTranslationView(
+            messageId: message.id,
+            text: message.body,
+            conversationId: message.conversationId,
+            color: c.ink,
+          ),
         if (image != null) ...[
           const SizedBox(height: 12),
           _ImageMessageContent(
@@ -4683,6 +4691,27 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _content(BuildContext context, Color textColor) {
     final isRecalled = _isRecalled;
+    final content = _messageContent(isRecalled, textColor);
+    if (isRecalled || message.type != MessageType.text) {
+      return content;
+    }
+    // A translation (message menu → Translate) sits under the text.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        content,
+        AiTranslationView(
+          messageId: message.id,
+          text: message.body,
+          conversationId: message.conversationId,
+          color: textColor,
+        ),
+      ],
+    );
+  }
+
+  Widget _messageContent(bool isRecalled, Color textColor) {
     return _MessageContent(
       message: message,
       messagesById: messagesById,
@@ -5140,6 +5169,41 @@ class _MessageBubble extends StatelessWidget {
         null;
   }
 
+  /// Whether the menu offers Translate: a text message, and AI available.
+  bool _canTranslate(BuildContext context) {
+    return !_isRecalled &&
+        message.type == MessageType.text &&
+        message.body.trim().isNotEmpty &&
+        !_isPending &&
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(aiAvailableProvider(circleId));
+  }
+
+  /// Translate to the app's language, or hide the translation again.
+  MessageAction _translateAction(BuildContext context) {
+    final translations = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(aiTranslationsProvider.notifier);
+    final shown = translations.isShown(message.id);
+    return MessageAction(
+      key: const ValueKey('message-translate'),
+      icon: Icons.translate_rounded,
+      label: shown ? tr('Show original') : tr('Translate'),
+      onSelected: () => shown
+          ? translations.hide(message.id)
+          : unawaited(
+              translations.translate(
+                message.id,
+                message.body,
+                conversationId: message.conversationId,
+              ),
+            ),
+    );
+  }
+
   /// What can be done with this message, in menu order.
   List<MessageAction> _actions(BuildContext context) {
     final imageAttachment = _isRecalled ? null : message.imageAttachment;
@@ -5170,6 +5234,7 @@ class _MessageBubble extends StatelessWidget {
           label: tr('Forward'),
           onSelected: () => onForward(message),
         ),
+      if (_canTranslate(context)) _translateAction(context),
       if (canCompose && isCurrentUser && message.type == MessageType.text)
         MessageAction(
           icon: Icons.edit_outlined,

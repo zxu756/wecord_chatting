@@ -285,6 +285,16 @@ final moreA11yScreens = <A11yScreen>[
     await tester.tap(find.byKey(const ValueKey('ai-rewrite-fix')));
     await settle(tester);
   }),
+  A11yScreen('ai-translation', (tester, world) async {
+    world.extraOverrides = _aiOverrides();
+    await _openThread(tester, world);
+    await tester.longPress(
+      find.textContaining('Also this', findRichText: true).first,
+    );
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('message-translate')));
+    await settle(tester);
+  }),
   A11yScreen('ai-catch-up', (tester, world) async {
     world.extraOverrides = _aiOverrides();
     await _openThread(tester, world);

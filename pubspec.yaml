@@ -39,9 +39,14 @@ dependencies:
   http: ^1.6.0
   crypto: ^3.0.7
   sqflite: ^2.4.4+2
-  connectivity_plus: ^7.3.2
+  connectivity_plus: ^7.3.1
   clock: ^1.1.3
   flutter_svg: ^2.3.0
+  # Encodes the JPEG of a photo scaled down for sending (was already here
+  # through other packages).
+  image: ^4.5.4
+  # Drop files onto the chat window (macOS and the web).
+  desktop_drop: ^0.8.4
 
 dev_dependencies:
   flutter_test:

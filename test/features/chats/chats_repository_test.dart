@@ -124,6 +124,138 @@ void main() {
       );
     });
 
+    group('sendQueuedMediaMessage', () {
+      const attachment = {
+        'kind': 'image',
+        'bucket': 'chat-images',
+        'path': 'conversation-1/c-photo.jpg',
+      };
+
+      SupabaseChatsRepository repository(
+        FakeChatsDataSource dataSource, {
+        List<String>? notified,
+      }) {
+        return SupabaseChatsRepository.withDataSource(
+          dataSource,
+          currentUserId: () => 'user-1',
+          onMessageSent: (id) async => notified?.add(id),
+        );
+      }
+
+      test('stores the message with its client id and album id', () async {
+        final dataSource = FakeChatsDataSource();
+        final notified = <String>[];
+
+        final id = await repository(dataSource, notified: notified)
+            .sendQueuedMediaMessage(
+              conversationId: 'conversation-1',
+              clientId: 'client-1',
+              type: MessageType.image,
+              attachment: attachment,
+              body: 'Look',
+              attachmentGroupId: 'album-1',
+            );
+
+        expect(id, 'inserted-1');
+        final row = dataSource.insertedMessages.single;
+        expect(row['conversation_id'], 'conversation-1');
+        expect(row['sender_id'], 'user-1');
+        expect(row['type'], 'image');
+        expect(row['body'], 'Look');
+        expect(row['client_id'], 'client-1');
+        expect(row['attachment_group_id'], 'album-1');
+        expect(row['attachment'], attachment);
+        expect(notified, ['inserted-1']);
+      });
+
+      test('only the first message of an album sends a notification', () async {
+        final dataSource = FakeChatsDataSource();
+        final notified = <String>[];
+
+        await repository(dataSource, notified: notified).sendQueuedMediaMessage(
+          conversationId: 'conversation-1',
+          clientId: 'client-2',
+          type: MessageType.file,
+          attachment: attachment,
+          attachmentGroupId: 'album-1',
+          notify: false,
+        );
+
+        expect(dataSource.insertedMessages, hasLength(1));
+        expect(notified, isEmpty);
+      });
+
+      test('a server without albums or client ids still takes it', () async {
+        final dataSource = FakeChatsDataSource()
+          ..insertErrors.addAll([
+            const PostgrestException(
+              message: "Could not find the 'attachment_group_id' column",
+              code: 'PGRST204',
+            ),
+            const PostgrestException(
+              message: "Could not find the 'client_id' column",
+              code: 'PGRST204',
+            ),
+          ]);
+
+        final id = await repository(dataSource).sendQueuedMediaMessage(
+          conversationId: 'conversation-1',
+          clientId: 'client-1',
+          type: MessageType.image,
+          attachment: attachment,
+          attachmentGroupId: 'album-1',
+        );
+
+        expect(id, 'inserted-1');
+        final row = dataSource.insertedMessages.single;
+        expect(row.containsKey('attachment_group_id'), isFalse);
+        expect(row.containsKey('client_id'), isFalse);
+      });
+
+      test('a message stored by an earlier try is not stored again', () async {
+        final dataSource = FakeChatsDataSource()
+          ..insertErrors.add(
+            const PostgrestException(
+              message:
+                  'duplicate key value violates unique constraint '
+                  '"messages_sender_client_id_key"',
+              code: '23505',
+            ),
+          );
+
+        final id = await repository(dataSource).sendQueuedMediaMessage(
+          conversationId: 'conversation-1',
+          clientId: 'client-1',
+          type: MessageType.image,
+          attachment: attachment,
+        );
+
+        expect(id, isNull);
+        expect(dataSource.insertedMessages, isEmpty);
+      });
+
+      test('slowmode and the server stopping it are told apart', () async {
+        final dataSource = FakeChatsDataSource()
+          ..insertErrors.add(
+            const PostgrestException(
+              message: 'Slowmode is enabled. Try again in 9 seconds.',
+              code: 'P0001',
+              details: 'slowmode_remaining_seconds=9',
+            ),
+          );
+
+        await expectLater(
+          repository(dataSource).sendQueuedMediaMessage(
+            conversationId: 'conversation-1',
+            clientId: 'client-1',
+            type: MessageType.image,
+            attachment: attachment,
+          ),
+          throwsA(isA<SlowmodeException>()),
+        );
+      });
+    });
+
     test('messageFromRow reads embedded aliases', () {
       final repository = SupabaseChatsRepository.withDataSource(
         FakeChatsDataSource(),
@@ -2317,6 +2449,9 @@ class FakeChatsDataSource implements ChatsDataSource {
   final rpcResults = <String, Object?>{};
   final rpcErrors = <String, Object>{};
   Object? insertError;
+
+  /// Thrown by the next inserts, one each, before [insertError].
+  final insertErrors = <Object>[];
   var insertReturnsNull = false;
   String? latestMessageResult;
   String signedUrlResult = 'https://signed.example.test/default.jpg';
@@ -2382,6 +2517,9 @@ class FakeChatsDataSource implements ChatsDataSource {
 
   @override
   Future<String?> insertMessage(Map<String, dynamic> values) async {
+    if (insertErrors.isNotEmpty) {
+      throw insertErrors.removeAt(0);
+    }
     if (insertError case final error?) {
       throw error;
     }

@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/media_send/media_outbox.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
+import 'package:wecord/features/chats/media_send/outbox_media.dart';
+import 'package:wecord/features/chats/media_send/pending_media_store.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -31,8 +36,53 @@ final conversationOutboxProvider = Provider.autoDispose
       ];
     });
 
+/// One entry of the outbox by client id, null once it is stored or dropped.
+final outboxEntryProvider = Provider.autoDispose.family<OutboxEntry?, String>((
+  ref,
+  clientId,
+) {
+  return ref.watch(
+    outboxProvider.select((entries) {
+      for (final entry in entries) {
+        if (entry.clientId == clientId) {
+          return entry;
+        }
+      }
+      return null;
+    }),
+  );
+});
+
+/// An attachment to queue: [data] is read once, into the pending media
+/// store.
+class MediaToQueue {
+  const MediaToQueue({
+    required this.kind,
+    required this.fileName,
+    required this.mimeType,
+    required this.data,
+    this.width,
+    this.height,
+    this.blurhash,
+    this.preview,
+  });
+
+  final OutboxMediaKind kind;
+  final String fileName;
+  final String mimeType;
+  final Stream<List<int>> Function() data;
+  final int? width;
+  final int? height;
+  final String? blurhash;
+
+  /// A small picture for the bubble while it uploads.
+  final Uint8List? preview;
+}
+
 class OutboxNotifier extends Notifier<List<OutboxEntry>> {
   OutboxEngine? _engine;
+  MediaSendPipeline? _media;
+  PendingMediaStore? _store;
 
   @override
   List<OutboxEntry> build() {
@@ -46,25 +96,58 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
       return const [];
     }
     final sender = repository as OutboxMessageSender;
+    final store = ref.watch(pendingMediaStoreProvider);
+    _store = store;
+    final media = repository is MediaMessageSender
+        ? MediaSendPipeline(
+            store: store,
+            uploader: ref.watch(chatMediaUploaderProvider),
+            sender: repository as MediaMessageSender,
+            progress: ref.watch(uploadProgressTrackerProvider),
+          )
+        : null;
+    _media = media;
+    var knownMedia = <String>{};
     late final OutboxEngine engine;
     engine = OutboxEngine(
-      send: (entry) => sender.sendQueuedTextMessage(
-        conversationId: entry.conversationId,
-        clientId: entry.clientId,
-        body: entry.body,
-        replyToMessageId: entry.replyToMessageId,
-        replyPreview: entry.replyPreview,
-        mentions: entry.mentions,
-      ),
+      send: (entry) {
+        if (entry.media != null) {
+          if (media == null) {
+            throw StateError('This server cannot take attachments');
+          }
+          return media.send(entry);
+        }
+        return sender.sendQueuedTextMessage(
+          conversationId: entry.conversationId,
+          clientId: entry.clientId,
+          body: entry.body,
+          replyToMessageId: entry.replyToMessageId,
+          replyPreview: entry.replyPreview,
+          mentions: entry.mentions,
+        );
+      },
       onChanged: (entries) {
         if (!identical(_engine, engine)) {
           return;
         }
         state = entries;
+        // Files of attachments that left the outbox (sent, cancelled,
+        // discarded) are not needed any more.
+        final mediaIds = {
+          for (final entry in entries)
+            if (entry.media != null) entry.clientId,
+        };
+        for (final gone in knownMedia.difference(mediaIds)) {
+          unawaited(media?.release(gone));
+        }
+        knownMedia = mediaIds;
         unawaited(
           cache
               .writeOutbox(userId, [
-                for (final entry in entries) entry.toJson(),
+                for (final entry in entries)
+                  // Without files kept on disk, an attachment cannot
+                  // outlive the app.
+                  if (entry.media == null || store.persistent) entry.toJson(),
               ])
               .catchError((Object _) {}),
         );
@@ -99,11 +182,36 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
   ) async {
     try {
       final saved = await cache.readOutbox(userId);
-      if (!identical(_engine, engine) || saved.isEmpty) {
+      final store = _store;
+      final kept = <OutboxEntry>[];
+      for (final json in saved) {
+        final entry = _tryEntry(json);
+        if (entry == null) {
+          continue;
+        }
+        // An attachment whose file is gone cannot be sent.
+        if (entry.media != null &&
+            (store == null || await store.length(entry.clientId) == null)) {
+          continue;
+        }
+        kept.add(entry);
+      }
+      if (!identical(_engine, engine)) {
         return;
       }
-      engine.restore([for (final json in saved) ?_tryEntry(json)]);
-      unawaited(engine.drain());
+      if (kept.isNotEmpty) {
+        engine.restore(kept);
+        unawaited(engine.drain());
+      }
+      // Files nothing in the outbox points at (a crash between steps).
+      if (store != null) {
+        final wanted = {for (final entry in kept) entry.clientId};
+        for (final id in await store.clientIds()) {
+          if (!wanted.contains(id) && engine.entry(id) == null) {
+            await store.delete(id);
+          }
+        }
+      }
     } catch (_) {
       // Nothing kept.
     }
@@ -145,6 +253,117 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
         mentions: mentions,
       ),
     );
+  }
+
+  /// Queues pictures, videos and files to send, in order. They share an
+  /// album when there is more than one; [caption] goes with the first. The
+  /// files are copied into the pending media store first, so the sender can
+  /// close the app. Call [startSending] afterwards.
+  Future<List<OutboxEntry>> enqueueMedia({
+    required String conversationId,
+    required List<MediaToQueue> items,
+    String caption = '',
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+  }) async {
+    final engine = _engine;
+    final store = _store;
+    if (engine == null || store == null || items.isEmpty) {
+      return const [];
+    }
+    final groupId = items.length > 1 ? newClientId() : null;
+    final createdAt = DateTime.now().toUtc();
+    final entries = <OutboxEntry>[];
+    try {
+      for (final (index, item) in items.indexed) {
+        final clientId = newClientId();
+        final size = await store.put(clientId, item.data());
+        final preview = item.preview;
+        if (preview != null) {
+          await store.putPreview(clientId, preview);
+        }
+        entries.add(
+          OutboxEntry(
+            clientId: clientId,
+            conversationId: conversationId,
+            body: index == 0 ? caption : '',
+            // Kept in order even when the clock does not move.
+            createdAt: createdAt.add(Duration(microseconds: index)),
+            replyToMessageId: index == 0 ? replyToMessageId : null,
+            replyPreview: index == 0 ? replyPreview : null,
+            media: OutboxMedia(
+              kind: item.kind,
+              fileName: item.fileName,
+              mimeType: item.mimeType,
+              size: size,
+              width: item.width,
+              height: item.height,
+              blurhash: item.blurhash,
+              groupId: groupId,
+              groupIndex: index,
+              hasPreview: preview != null,
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      for (final entry in entries) {
+        await store.delete(entry.clientId);
+      }
+      rethrow;
+    }
+    for (final entry in entries) {
+      engine.enqueue(entry);
+    }
+    return entries;
+  }
+
+  /// Starts sending what is waiting, oldest first.
+  Future<void> startSending() => _engine?.drain() ?? Future.value();
+
+  /// The reader stopped an attachment: its upload is aborted and it leaves
+  /// the chat.
+  void cancelMedia(String clientId) {
+    _media?.cancel(clientId);
+    _engine?.discard(clientId);
+  }
+
+  /// Tries every failed attachment of [entry]'s album again (or just
+  /// [entry] when it is not in one).
+  Future<void> retryMedia(OutboxEntry entry) async {
+    final engine = _engine;
+    if (engine == null) {
+      return;
+    }
+    final groupId = entry.media?.groupId;
+    final failed = [
+      for (final other in engine.entries)
+        if (other.state == OutboxState.failed &&
+            (other.clientId == entry.clientId ||
+                (groupId != null && other.media?.groupId == groupId)))
+          other,
+    ];
+    for (final other in failed) {
+      engine.reset(other.clientId);
+    }
+    await engine.drain();
+  }
+
+  /// Drops [entry] and, for an album, the rest of its failed attachments.
+  void discardMedia(OutboxEntry entry) {
+    final engine = _engine;
+    if (engine == null) {
+      return;
+    }
+    final groupId = entry.media?.groupId;
+    for (final other in engine.entries.toList()) {
+      if (other.clientId == entry.clientId ||
+          (groupId != null &&
+              other.media?.groupId == groupId &&
+              other.state == OutboxState.failed)) {
+        cancelMedia(other.clientId);
+      }
+    }
   }
 
   Future<OutboxAttempt> sendNow(String clientId) {

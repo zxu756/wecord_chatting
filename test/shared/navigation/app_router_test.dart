@@ -18,6 +18,27 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 
 void main() {
+  test('auth updates for the same user do not refresh the router', () {
+    final notifier = AuthRouterNotifier(
+      const AsyncData(AuthUser(id: 'user-1', email: 'ada@example.com')),
+    );
+    var refreshes = 0;
+    notifier.addListener(() => refreshes++);
+
+    // A token refresh or a re-read user reports the same account again.
+    notifier.authState = const AsyncData(
+      AuthUser(id: 'user-1', email: 'ada@example.com'),
+    );
+    expect(refreshes, 0);
+
+    notifier.authState = const AsyncData(null);
+    expect(refreshes, 1);
+    notifier.authState = const AsyncData(AuthUser(id: 'user-2'));
+    expect(refreshes, 2);
+    notifier.authState = const AsyncLoading();
+    expect(refreshes, 3);
+  });
+
   testWidgets('opens loading before auth resolves to signed out', (
     tester,
   ) async {

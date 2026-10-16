@@ -25,12 +25,18 @@ enum SettingsWindowSection {
   language,
 }
 
+/// The page the settings window last showed, so a window that is opened
+/// again (or rebuilt under it) comes back on the same page.
+final settingsWindowSectionProvider = StateProvider<SettingsWindowSection>(
+  (ref) => SettingsWindowSection.appearance,
+);
+
 /// The desktop settings window as a route over the whole app: a centered
 /// rounded window on a blurred, dimmed app (plain dimming when glass
 /// effects are off or motion is reduced).
 Route<void> settingsWindowRoute(
   BuildContext context, {
-  SettingsWindowSection initial = SettingsWindowSection.appearance,
+  SettingsWindowSection? initial,
 }) {
   final reduceMotion = WeCordMotion.reduceMotion(context);
   final spring = WeCordMotion.smooth;
@@ -89,19 +95,18 @@ Route<void> settingsWindowRoute(
 /// Settings on desktop: a 248px nav of categories (account header on
 /// top, sign out at the bottom) beside the chosen page.
 class SettingsWindow extends ConsumerStatefulWidget {
-  const SettingsWindow({
-    this.initial = SettingsWindowSection.appearance,
-    super.key,
-  });
+  const SettingsWindow({this.initial, super.key});
 
-  final SettingsWindowSection initial;
+  /// The page to open on; the last page shown when null.
+  final SettingsWindowSection? initial;
 
   @override
   ConsumerState<SettingsWindow> createState() => _SettingsWindowState();
 }
 
 class _SettingsWindowState extends ConsumerState<SettingsWindow> {
-  late var _section = widget.initial;
+  late SettingsWindowSection _section =
+      widget.initial ?? ref.read(settingsWindowSectionProvider);
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   void _close() => Navigator.of(context).maybePop();
@@ -136,8 +141,13 @@ class _SettingsWindowState extends ConsumerState<SettingsWindow> {
                     children: [
                       _SettingsNav(
                         selected: _section,
-                        onSelect: (section) =>
-                            setState(() => _section = section),
+                        onSelect: (section) {
+                          setState(() => _section = section);
+                          ref
+                                  .read(settingsWindowSectionProvider.notifier)
+                                  .state =
+                              section;
+                        },
                       ),
                       Expanded(
                         child: SettingsWindowScope(

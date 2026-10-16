@@ -295,8 +295,18 @@ class AuthRouterNotifier extends ChangeNotifier {
   AsyncValue<AuthUser?> get authState => _authState;
 
   set authState(AsyncValue<AuthUser?> value) {
+    final previous = _authState;
     _authState = value;
-    notifyListeners();
+    // Auth also reports refreshed tokens and re-read users (two-step
+    // checks do that); only a different signed-in state should re-run the
+    // redirects, since a refresh rebuilds pages and drops windows over them.
+    final sameState =
+        previous.isLoading == value.isLoading &&
+        previous.hasError == value.hasError &&
+        previous.valueOrNull?.id == value.valueOrNull?.id;
+    if (!sameState) {
+      notifyListeners();
+    }
   }
 
   var _twoFactorPending = false;

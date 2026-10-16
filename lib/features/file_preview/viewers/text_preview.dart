@@ -15,16 +15,13 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart' show formatFileSize;
 import 'package:wecord/shared/ui/ui.dart';
 
-/// Monospace for code, tables of numbers and plain text.
-const _monoFamily = 'Menlo';
+/// Monospace for code and plain text: the bundled JetBrains Mono, with
+/// the platform's Chinese font for characters it lacks.
+const _monoFamily = 'JetBrains Mono';
 const _monoFallback = [
-  'SF Mono',
-  'Monaco',
-  'Consolas',
-  'Roboto Mono',
-  'Noto Sans Mono',
-  'monospace',
   'PingFang SC',
+  'Hiragino Sans GB',
+  'Microsoft YaHei',
   'Noto Sans SC',
 ];
 
@@ -34,6 +31,11 @@ TextStyle monoStyle(Color color, {double size = 13}) => TextStyle(
   fontSize: size,
   height: 1.55,
   color: color,
+  // Code shows the characters typed, not ligatures (≠ for !=).
+  fontFeatures: const [
+    FontFeature.disable('calt'),
+    FontFeature.disable('liga'),
+  ],
 );
 
 /// Text files: Markdown rendered, code highlighted (with line numbers),
@@ -144,6 +146,7 @@ class _TextPreviewState extends ConsumerState<TextPreview> {
     };
     return Column(
       key: ValueKey('text-preview-${file.kind.name}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (bytes.truncated)
           _TruncatedBanner(

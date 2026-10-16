@@ -104,7 +104,11 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
 
     final details = Row(
       children: [
-        FileTypeTile(file: file, size: 40),
+        FileTypeTile(
+          file: file,
+          size: 40,
+          neutral: (fill: buttonFill, foreground: foreground),
+        ),
         const SizedBox(width: 10),
         Flexible(
           fit: FlexFit.tight,

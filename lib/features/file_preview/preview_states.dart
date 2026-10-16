@@ -6,14 +6,27 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// A file's typed squircle: its icon and extension on the type's tone.
 class FileTypeTile extends StatelessWidget {
-  const FileTypeTile({required this.file, this.size = 44, super.key});
+  const FileTypeTile({
+    required this.file,
+    this.size = 44,
+    this.neutral,
+    super.key,
+  });
 
   final PreviewFile file;
   final double size;
 
+  /// Fill and icon color for types without a tone of their own, where the
+  /// usual raised fill would vanish (inside a raised or ink bubble).
+  final ({Color fill, Color foreground})? neutral;
+
   @override
   Widget build(BuildContext context) {
-    final tone = previewToneFor(file, context.tokens.colors);
+    final c = context.tokens.colors;
+    var tone = previewToneFor(file, c);
+    if (neutral != null && tone.fill == c.raised) {
+      tone = neutral!;
+    }
     final showLabel = size >= 56;
     return Container(
       width: size,

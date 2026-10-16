@@ -57,3 +57,9 @@ flutter:
     - family: Plus Jakarta Sans
       fonts:
         - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Variable.ttf
+    # JetBrains Mono (SIL OFL 1.1, see assets/fonts/jetbrains_mono/OFL.txt),
+    # JetBrainsMono[wght].ttf from google/fonts: code and plain text in the
+    # file viewer, the same on every platform.
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/jetbrains_mono/JetBrainsMono-Variable.ttf

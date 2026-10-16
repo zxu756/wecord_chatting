@@ -196,11 +196,15 @@ class _PdfPreviewState extends State<PdfPreview> {
           setState(() => _page = page);
         }
       },
-      loadingBannerBuilder: (context, received, total) => PreviewProgressView(
-        file: widget.file,
-        received: received,
-        total: total,
-      ),
+      // Local files open without a download to count.
+      loadingBannerBuilder: (context, received, total) =>
+          _source is PdfFileSource || received == 0
+          ? const PreviewSpinner()
+          : PreviewProgressView(
+              file: widget.file,
+              received: received,
+              total: total,
+            ),
       errorBannerBuilder: (context, error, stackTrace, ref) => ColoredBox(
         color: c.paper,
         child: PreviewErrorView(

@@ -131,13 +131,17 @@ class FakeThumbnailService implements ThumbnailService {
 }
 
 class FakeFileActions implements FileActions {
+  FakeFileActions({this.web = false});
+
+  /// Acts like the browser: Download only.
+  final bool web;
   final saved = <String>[];
 
   @override
-  bool get canOpenIn => true;
+  bool get canOpenIn => !web;
 
   @override
-  bool get canShare => true;
+  bool get canShare => !web;
 
   @override
   Future<bool> openIn(

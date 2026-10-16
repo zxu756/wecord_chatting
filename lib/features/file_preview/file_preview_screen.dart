@@ -494,6 +494,7 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
       );
     } else {
       content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SafeArea(
             bottom: false,

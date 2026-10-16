@@ -149,7 +149,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: GlobalMessageSearchScreen.path,
-            builder: (context, state) => const GlobalMessageSearchScreen(),
+            builder: (context, state) => GlobalMessageSearchScreen(
+              launch: GlobalMessageSearchScreen.launchFrom(
+                state.uri.queryParameters,
+              ),
+            ),
           ),
           GoRoute(
             path: DiscoveryScreen.path,

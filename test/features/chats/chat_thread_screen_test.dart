@@ -20,6 +20,7 @@ import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -1698,7 +1699,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(FilePreviewScreen), findsOneWidget);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('file-preview-title'))).data,
+        tester
+            .widget<Text>(find.byKey(const ValueKey('file-preview-title')))
+            .data,
         'notes.pdf',
       );
     });
@@ -2160,6 +2163,60 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(highlightColor()!.a, 0);
+  });
+
+  testWidgets('a message search result opens scrolled to its message', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        for (var index = 0; index < 40; index++)
+          _message(
+            id: 'message-$index',
+            senderId: index.isEven ? 'user-2' : 'user-1',
+            body: 'History $index',
+            createdAt: DateTime.utc(
+              2026,
+              5,
+              18,
+              4,
+            ).add(Duration(minutes: index)),
+          ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    expect(find.text('History 3'), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatThreadScreen)),
+    );
+    // A jump for another conversation is left alone.
+    container.read(pendingMessageJumpProvider.notifier).state =
+        const MessageJump(conversationId: 'other', messageId: 'message-3');
+    await tester.pump();
+    expect(container.read(pendingMessageJumpProvider), isNotNull);
+
+    container
+        .read(pendingMessageJumpProvider.notifier)
+        .state = const MessageJump(
+      conversationId: 'conversation-1',
+      messageId: 'message-3',
+    );
+    for (var frame = 0; frame < 40; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(container.read(pendingMessageJumpProvider), isNull);
+    final target = find.text('History 3');
+    expect(target, findsOneWidget);
+    final targetY = tester.getCenter(target).dy;
+    expect(targetY, greaterThan(0));
+    expect(targetY, lessThan(tester.getSize(find.byType(Scaffold)).height));
+    final highlight = tester.widget<AnimatedContainer>(
+      find.ancestor(of: target, matching: find.byType(AnimatedContainer)).first,
+    );
+    expect((highlight.decoration as BoxDecoration?)?.color?.a, greaterThan(0));
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('tapping a pin notice scrolls to the pinned message', (

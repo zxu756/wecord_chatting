@@ -301,9 +301,14 @@ void main() {
     expect(forwardBody, contains("'source_attachment_bucket'"));
     expect(forwardBody, contains("'source_attachment_path'"));
 
+    // Search now reads message_search_entries (202610160044), limited to
+    // the conversations the caller can read.
     final searchBody = functionBody(sql, 'search_messages');
     expect(searchBody, contains('websearch_to_tsquery'));
-    expect(searchBody, contains('public.is_current_user_conversation_member'));
+    expect(
+      searchBody,
+      contains('public.current_user_readable_conversation_ids()'),
+    );
   });
 
   test('daily chat polish scopes voice storage to conversation members', () {
@@ -977,7 +982,12 @@ void main() {
       contains('not public.is_current_user_blocked_in_conversation'),
     );
     expect(forwardBody, contains("type <> 'system'"));
-    expect(searchBody, contains("m.type <> 'system'"));
+    // System notices never reach the search entries.
+    expect(searchBody, contains('public.message_search_entries'));
+    expect(
+      functionBody(sql, 'sync_message_search_entry'),
+      contains("new.type = 'system'"),
+    );
   });
 
   test('pin RPCs check membership, role and the pin limit', () {
@@ -2060,7 +2070,6 @@ void main() {
       'list_pinned_messages',
       'list_threads',
       'list_conversation_media',
-      'search_messages',
     ]) {
       expect(
         functionBody(sql, name),
@@ -2068,6 +2077,11 @@ void main() {
         reason: name,
       );
     }
+    // Search asks for the readable set once rather than per row.
+    expect(
+      functionBody(sql, 'search_messages'),
+      contains('current_user_readable_conversation_ids'),
+    );
     expect(
       policyBody(allMigrationSql(), 'messages_select_member'),
       contains(
@@ -2853,9 +2867,10 @@ void main() {
       contains('is_current_user_conversation_member(m.conversation_id)'),
     );
     expect(functionBody(sql, 'forward_message'), contains("type <> 'poll'"));
+    // Polls are found by their options too.
     expect(
-      functionBody(sql, 'search_messages'),
-      contains('public.message_search_text(m.type, m.body, m.attachment)'),
+      functionBody(sql, 'message_search_document'),
+      contains("message_attachment->'options'"),
     );
     for (final name in [
       'create_poll',

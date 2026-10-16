@@ -258,12 +258,16 @@ class ChatHeaderSearchField extends StatelessWidget {
     required this.hint,
     required this.onChanged,
     this.resultLabel,
+    this.onOpenFullSearch,
     super.key,
   });
 
   final TextEditingController controller;
   final String hint;
   final ValueChanged<String> onChanged;
+
+  /// Opens message search (filters, other scopes); Enter does too.
+  final VoidCallback? onOpenFullSearch;
 
   /// "3 results" while searching.
   final String? resultLabel;
@@ -288,6 +292,9 @@ class ChatHeaderSearchField extends StatelessWidget {
             child: TextField(
               controller: controller,
               onChanged: onChanged,
+              onSubmitted: onOpenFullSearch == null
+                  ? null
+                  : (_) => onOpenFullSearch!(),
               style: TextStyle(fontSize: 13, color: c.ink),
               cursorHeight: 16,
               decoration: InputDecoration(
@@ -312,6 +319,24 @@ class ChatHeaderSearchField extends StatelessWidget {
               ),
             ),
           ],
+          if (onOpenFullSearch case final open?)
+            WeCordPressable(
+              key: const ValueKey('chat-header-search-open-full'),
+              onPressed: open,
+              tooltip: tr('Search with filters'),
+              semanticLabel: tr('Search with filters'),
+              shape: const CircleBorder(),
+              builder: (context, states) => Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.manage_search_rounded,
+                  size: 18,
+                  color: states.contains(WidgetState.hovered)
+                      ? c.ink
+                      : c.subtle,
+                ),
+              ),
+            ),
         ],
       ),
     );

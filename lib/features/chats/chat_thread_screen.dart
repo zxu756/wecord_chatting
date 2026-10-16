@@ -17,9 +17,11 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/composer_shortcuts.dart';
+import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
+import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
@@ -49,6 +51,7 @@ import 'package:wecord/features/circles/circle_bot_repository.dart';
 import 'package:wecord/features/circles/circle_bot_widgets.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
+import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
@@ -190,12 +193,16 @@ class _SearchBar extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     required this.onClose,
+    this.onOpenFullSearch,
     this.resultLabel,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onClose;
+
+  /// Opens message search (filters, other scopes) for this conversation.
+  final VoidCallback? onOpenFullSearch;
   final String? resultLabel;
 
   @override
@@ -220,6 +227,12 @@ class _SearchBar extends StatelessWidget {
               controller: controller,
               autofocus: true,
               onChanged: onChanged,
+              textInputAction: onOpenFullSearch == null
+                  ? null
+                  : TextInputAction.search,
+              onSubmitted: onOpenFullSearch == null
+                  ? null
+                  : (_) => onOpenFullSearch!(),
               style: TextStyle(fontSize: 15, color: c.ink),
               decoration: InputDecoration(
                 isCollapsed: true,
@@ -243,6 +256,16 @@ class _SearchBar extends StatelessWidget {
                   color: c.muted,
                 ),
               ),
+            ),
+          if (onOpenFullSearch case final open?)
+            WeCordIconButton(
+              key: const ValueKey('chat-search-open-full'),
+              tooltip: tr('Search with filters'),
+              icon: Icons.manage_search_rounded,
+              size: 32,
+              iconSize: 19,
+              variant: WeCordButtonVariant.ghost,
+              onPressed: open,
             ),
           WeCordIconButton(
             tooltip: tr('Close search'),
@@ -444,6 +467,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   _ThreadLayout? _layout;
   String? _highlightedMessageId;
   Timer? _highlightTimer;
+  var _isJumpScheduled = false;
 
   /// When the server last refused a message for slowmode, the time it said
   /// the next one is allowed.
@@ -640,8 +664,37 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
+  /// Scrolls to a message search opened this conversation at, once the
+  /// messages are there.
+  void _schedulePendingJump() {
+    if (_isJumpScheduled) {
+      return;
+    }
+    final jump = ref.read(pendingMessageJumpProvider);
+    if (jump == null || jump.conversationId != widget.conversationId) {
+      return;
+    }
+    _isJumpScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isJumpScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final messageId = takePendingMessageJump(ref, widget.conversationId);
+      if (messageId != null) {
+        unawaited(_scrollToMessage(messageId));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen(pendingMessageJumpProvider, (_, jump) {
+      if (jump != null &&
+          ref.read(chatThreadProvider(widget.conversationId)).hasValue) {
+        _schedulePendingJump();
+      }
+    });
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
     final pendingEntries = ref.watch(
       conversationOutboxProvider(widget.conversationId),
@@ -1071,6 +1124,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onChanged: (value) {
                     setState(() => _messageSearchQuery = value);
                   },
+                  onOpenFullSearch: _openFullSearch,
                 )
               : null,
         );
@@ -1094,6 +1148,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 setState(() => _messageSearchQuery = value);
               },
               onClose: _toggleMessageSearch,
+              onOpenFullSearch: _openFullSearch,
             ),
         ];
         final topInset = desktop
@@ -1144,6 +1199,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             }
             _reconcileActiveMessageState(messagesById);
             _afterThreadData(data);
+            _schedulePendingJump();
             final display = layout.display;
             if (display.isEmpty) {
               return Padding(
@@ -3445,6 +3501,28 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ref
           .read(chatThreadProvider(widget.conversationId).notifier)
           .refresh(messageId: messageId),
+    );
+  }
+
+  /// Message search for this conversation (and its circle, and
+  /// everywhere), starting with what is in the search field.
+  void _openFullSearch() {
+    final summary = ref
+        .read(chatConversationSummaryProvider(widget.conversationId))
+        .valueOrNull;
+    var title = (widget.title ?? summary?.title)?.trim();
+    if (title != null && title.startsWith('# ')) {
+      title = title.substring(2);
+    }
+    openPage(
+      context,
+      GlobalMessageSearchScreen.location(
+        conversationId: widget.conversationId,
+        conversationTitle: title == null || title.isEmpty ? null : title,
+        conversationType: widget.conversationType ?? summary?.type,
+        circleId: summary?.circleId ?? _circleId,
+        query: _searchController.text,
+      ),
     );
   }
 

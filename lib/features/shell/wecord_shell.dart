@@ -7,6 +7,7 @@ import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/ui/macos_title_bar.dart';
 
 /// Where the current page sits in the app's navigation.
 class ShellPlacement {
@@ -69,28 +70,37 @@ class WeCordShell extends StatelessWidget {
 
     if (isWideLayout(MediaQuery.sizeOf(context).width)) {
       final homeSection = placement.homeSection;
-      return Scaffold(
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CircleRail(
-              homeSelected: placement.homeSelected,
-              selectedCircleId: placement.selectedCircleId,
-              showVoiceIndicator:
-                  homeSection == null && !placement.pageHasSidebar,
+      final frame = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CircleRail(
+            homeSelected: placement.homeSelected,
+            selectedCircleId: placement.selectedCircleId,
+            showVoiceIndicator:
+                homeSection == null && !placement.pageHasSidebar,
+            onOpenVoice: onOpenVoice,
+          ),
+          if (homeSection != null) ...[
+            HomeSidebar(
+              section: homeSection,
+              selectedConversationId: placement.selectedConversationId,
               onOpenVoice: onOpenVoice,
             ),
-            if (homeSection != null) ...[
-              HomeSidebar(
-                section: homeSection,
-                selectedConversationId: placement.selectedConversationId,
-                onOpenVoice: onOpenVoice,
-              ),
-              const VerticalDivider(width: 1),
-            ],
-            Expanded(child: shellChild),
+            const VerticalDivider(width: 1),
           ],
-        ),
+          Expanded(child: shellChild),
+        ],
+      );
+      return Scaffold(
+        // In the macOS app the rail keeps the traffic lights clear itself;
+        // pages beside it start at the top of the window.
+        body: drawsUnderMacosTitleBar
+            ? MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: frame,
+              )
+            : frame,
       );
     }
 

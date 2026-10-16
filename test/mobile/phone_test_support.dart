@@ -50,6 +50,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 
@@ -1751,6 +1752,7 @@ class PhoneWorld {
       themeModeStoreProvider.overrideWithValue(
         InMemoryThemeModeStore(_darkScreens ? ThemeMode.dark : ThemeMode.light),
       ),
+      glassEffectsStoreProvider.overrideWithValue(InMemoryGlassEffectsStore()),
     ];
   }
 

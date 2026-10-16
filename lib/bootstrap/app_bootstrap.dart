@@ -7,8 +7,10 @@ import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
+import 'package:wecord/shared/ui/macos_title_bar.dart';
 
 Future<void> runWeCordApp() async {
   final config = AppConfig.fromMap(const {
@@ -31,6 +33,7 @@ class WeCordApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final glassEffects = ref.watch(glassEffectsProvider);
     final chinese = resolvesToChinese(ref.watch(appLanguageProvider));
     // Set before anything below builds, so every tr() sees it.
     AppStrings.isChinese = chinese;
@@ -56,8 +59,13 @@ class WeCordApp extends ConsumerWidget {
       // icons readable in both themes.
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: WeCordTheme.overlayStyleFor(Theme.of(context).brightness),
-        child: PresenceActivityListener(
-          child: child ?? const SizedBox.shrink(),
+        child: WeCordAppearance(
+          glassEffects: glassEffects,
+          child: MacosTitleBarFrame(
+            child: PresenceActivityListener(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
       ),
     );

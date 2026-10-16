@@ -12,6 +12,7 @@ import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/ui/macos_title_bar.dart';
 
 final circleSummariesProvider = FutureProvider.autoDispose<List<CircleSummary>>(
   (ref) {
@@ -55,7 +56,7 @@ class CircleRail extends ConsumerWidget {
     this.onOpenVoice,
     this.color,
     this.itemColor,
-    this.padding = const EdgeInsets.symmetric(vertical: 12),
+    this.padding,
     super.key,
   });
 
@@ -68,8 +69,9 @@ class CircleRail extends ConsumerWidget {
   /// surfaceContainerLowest by default.
   final Color? itemColor;
 
-  /// Space around the items, e.g. for the status bar on phones.
-  final EdgeInsetsGeometry padding;
+  /// Space around the items, e.g. for the status bar on phones. By default
+  /// 12 above and below, plus room for the traffic lights in the macOS app.
+  final EdgeInsetsGeometry? padding;
 
   final String? selectedCircleId;
 
@@ -97,7 +99,9 @@ class CircleRail extends ConsumerWidget {
       width: width,
       color: background,
       child: ListView(
-        padding: padding,
+        padding:
+            padding ??
+            EdgeInsets.only(top: 12 + macosTitleBarInset, bottom: 12),
         children: [
           CircleRailItem(
             key: const ValueKey('circle-rail-home'),

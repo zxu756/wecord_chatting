@@ -7,7 +7,10 @@ enum ProfileRelationshipStatus {
   incomingRequest,
   outgoingRequest,
   blocked,
-  blockedByThem;
+  blockedByThem,
+
+  /// A bot account: it can't be befriended.
+  bot;
 
   static ProfileRelationshipStatus fromJson(String? value) {
     return switch (value) {
@@ -17,6 +20,7 @@ enum ProfileRelationshipStatus {
       'outgoing_request' => ProfileRelationshipStatus.outgoingRequest,
       'blocked' => ProfileRelationshipStatus.blocked,
       'blocked_by_them' => ProfileRelationshipStatus.blockedByThem,
+      'bot' => ProfileRelationshipStatus.bot,
       _ => ProfileRelationshipStatus.none,
     };
   }

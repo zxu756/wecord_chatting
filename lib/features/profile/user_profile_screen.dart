@@ -671,6 +671,7 @@ class _ProfileActions extends StatelessWidget {
         : null;
     final pending =
         summary.relationshipStatus == ProfileRelationshipStatus.outgoingRequest;
+    final bot = summary.relationshipStatus == ProfileRelationshipStatus.bot;
     return Row(
       children: [
         if (primary != null)
@@ -678,10 +679,17 @@ class _ProfileActions extends StatelessWidget {
         else
           Expanded(
             child: _ActionButton(
-              icon: pending
+              key: bot ? const ValueKey('profile-bot') : null,
+              icon: bot
+                  ? Icons.smart_toy_outlined
+                  : pending
                   ? Icons.schedule_rounded
                   : Icons.do_not_disturb_on_outlined,
-              label: pending ? tr('Request sent') : tr('Blocked'),
+              label: bot
+                  ? tr('Bot account')
+                  : pending
+                  ? tr('Request sent')
+                  : tr('Blocked'),
               onPressed: null,
             ),
           ),

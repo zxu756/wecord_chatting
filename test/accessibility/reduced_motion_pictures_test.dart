@@ -3,6 +3,7 @@
 // are covered in chat_thread_screen_test.dart.)
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -200,6 +201,22 @@ void main() {
     testWidgets('plays a GIF as usual without reduced motion', (tester) async {
       await openViewer(tester, 'party.gif');
       expect(find.byTooltip('Play animation'), findsNothing);
+    });
+
+    testWidgets('is one named control for a screen reader', (tester) async {
+      final handle = tester.ensureSemantics();
+      await openViewer(tester, 'party.png');
+      final page = find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'party.png' &&
+            widget.properties.hint != null,
+      );
+      expect(page, findsOneWidget);
+      final node = tester.getSemantics(page);
+      expect(node.hint, 'Tap to show or hide the controls');
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      handle.dispose();
     });
 
     testWidgets('a PNG is shown as usual under reduced motion', (tester) async {

@@ -11,6 +11,7 @@ import 'package:wecord/features/file_preview/preview_platform_io.dart'
     if (dart.library.js_interop) 'package:wecord/features/file_preview/preview_platform_web.dart'
     as platform;
 import 'package:wecord/features/file_preview/preview_states.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// One image, zoomable: pinch or scroll to zoom, drag to pan when zoomed,
@@ -197,7 +198,8 @@ class _ImagePreviewState extends ConsumerState<ImagePreview>
           svg,
           key: ValueKey('svg-preview-${file.key}'),
           fit: BoxFit.contain,
-          semanticsLabel: file.name,
+          // The page names the picture (see _zoomable).
+          excludeFromSemantics: true,
           placeholderBuilder: (context) => const PreviewSpinner(),
           errorBuilder: (context, error, stackTrace) => PreviewErrorView(
             file: file,
@@ -222,7 +224,7 @@ class _ImagePreviewState extends ConsumerState<ImagePreview>
         animated: isAnimatedImage(url: file.name, mimeType: file.mimeType),
         fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
-        semanticLabel: file.name,
+        excludeFromSemantics: true,
         frameBuilder: (context, child, frame, sync) {
           if (frame == null && !sync) {
             return const PreviewSpinner();
@@ -243,19 +245,29 @@ class _ImagePreviewState extends ConsumerState<ImagePreview>
 
   /// [child] filling the page, with pinch, scroll and double-tap zoom.
   Widget _zoomable(PreviewFile file, Widget child) {
-    return GestureDetector(
-      key: ValueKey('image-preview-${file.key}'),
-      behavior: HitTestBehavior.opaque,
+    // The page is one control for a screen reader: the picture's name, and
+    // a tap that shows or hides the viewer's controls.
+    return Semantics(
+      container: true,
+      label: file.name,
+      image: true,
+      hint: tr('Tap to show or hide the controls'),
       onTap: widget.onTap,
-      onDoubleTapDown: (details) => _doubleTapAt = details.localPosition,
-      onDoubleTap: _onDoubleTap,
-      child: InteractiveViewer(
-        transformationController: _transform,
-        minScale: 1,
-        maxScale: 6,
-        panEnabled: _zoomed,
-        clipBehavior: Clip.none,
-        child: SizedBox.expand(child: child),
+      child: GestureDetector(
+        key: ValueKey('image-preview-${file.key}'),
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: widget.onTap,
+        onDoubleTapDown: (details) => _doubleTapAt = details.localPosition,
+        onDoubleTap: _onDoubleTap,
+        child: InteractiveViewer(
+          transformationController: _transform,
+          minScale: 1,
+          maxScale: 6,
+          panEnabled: _zoomed,
+          clipBehavior: Clip.none,
+          child: SizedBox.expand(child: child),
+        ),
       ),
     );
   }

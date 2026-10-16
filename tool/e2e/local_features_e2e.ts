@@ -1181,28 +1181,52 @@ async function checkSoundboard(): Promise<string> {
   voiceChannelId = detail.channels.find((ch) => ch.kind === "voice")?.id ?? "";
   assert(voiceChannelId, "no voice channel");
 
-  const path = `${circleId}/${crypto.randomUUID()}.wav`;
-  const { error: uploadError } = await a.client.storage.from("circle-sounds")
-    .upload(path, tinyWav(), { contentType: "audio/wav", upsert: false });
-  assert(!uploadError, `upload: ${uploadError?.message}`);
-  created.storage.push({ bucket: "circle-sounds", path });
-
-  // A member without manage_emojis can't upload.
-  const { error: memberUpload } = await b.client.storage.from("circle-sounds")
+  // Clips go through the sound-upload function, which measures them;
+  // clients can't write to the bucket themselves (202610160039).
+  const upload = async (user: User, name: string, wav: Uint8Array) => {
+    const form = new FormData();
+    form.set("circle_id", circleId);
+    form.set("name", name);
+    form.set(
+      "file",
+      new Blob([new Uint8Array(wav)], { type: "audio/wav" }),
+      "clip.wav",
+    );
+    const response = await fetch(`${functionsUrl}/sound-upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${user.accessToken}`, apikey: anonKey },
+      body: form,
+    });
+    // deno-lint-ignore no-explicit-any
+    return { status: response.status, body: await response.json() as any };
+  };
+  const { error: directUpload } = await a.client.storage.from("circle-sounds")
     .upload(`${circleId}/${crypto.randomUUID()}.wav`, tinyWav(), {
       contentType: "audio/wav",
     });
-  assert(memberUpload, "member without manage_emojis could upload a sound");
+  assert(directUpload, "a client could upload into circle-sounds directly");
 
-  const sound = await rpc<{ id: string }>(a.client, "create_circle_sound", {
-    target_circle_id: circleId,
-    sound_name: "e2e beep",
-    sound_emoji: null,
-    storage_path: path,
-    mime_type: "audio/wav",
-    duration_ms: 100,
-  });
+  // A member without manage_emojis can't upload.
+  const memberUpload = await upload(b, "e2e nope", tinyWav());
+  assert(memberUpload.status === 403, `member upload: ${memberUpload.status}`);
+
+  // Six seconds of audio, whatever the client would claim: refused.
+  const longWav = new Uint8Array(44 + 6 * 8000);
+  longWav.set(tinyWav().subarray(0, 44));
+  const longView = new DataView(longWav.buffer);
+  longView.setUint32(4, 36 + 6 * 8000, true);
+  longView.setUint32(40, 6 * 8000, true);
+  const tooLong = await upload(a, "e2e long", longWav);
+  assert(
+    tooLong.status === 400 && tooLong.body?.error === "too_long",
+    `6 s clip: ${tooLong.status} ${JSON.stringify(tooLong.body)}`,
+  );
+
+  const uploaded = await upload(a, "e2e beep", tinyWav());
+  assert(uploaded.status === 200, `upload: ${JSON.stringify(uploaded.body)}`);
+  const sound = uploaded.body as { id: string; storage_path: string };
   assert(sound?.id, "no sound row");
+  created.storage.push({ bucket: "circle-sounds", path: sound.storage_path });
 
   // Not connected: refused.
   const notConnected = await rpcError(b.client, "play_soundboard_sound", {
@@ -1234,7 +1258,8 @@ async function checkSoundboard(): Promise<string> {
   const third = await play();
   assert(!third.error, `play after cooldown: ${describe(third.error)}`);
   await rpc(b.client, "leave_voice_state", {});
-  return `wav uploaded + sound created, unconnected 42501, play OK, ` +
+  return `wav uploaded through sound-upload (direct and 6 s refused), ` +
+    `unconnected 42501, play OK, ` +
     `immediate replay refused (${second.error!.details}), OK after 2.1 s`;
 }
 

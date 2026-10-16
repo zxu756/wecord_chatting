@@ -459,6 +459,14 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/bots/index.ts"
 
+[functions.sound-upload]
+enabled = true
+# Signed-in members with manage_emojis add soundboard clips; the function
+# measures each clip, stores it with the service role and registers it as
+# the caller.
+verify_jwt = true
+entrypoint = "./functions/sound-upload/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

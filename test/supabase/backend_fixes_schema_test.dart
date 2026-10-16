@@ -135,4 +135,31 @@ void main() {
     );
     expect(body, isNot(contains("mention->'user_ids'")));
   });
+
+  test('soundboard clips only come from the sound-upload function', () {
+    final sql = migration('202610160039');
+    expect(
+      sql,
+      contains(
+        'drop policy if exists circle_sounds_storage_insert_manager on storage.objects;',
+      ),
+    );
+    expect(sql, isNot(contains('create policy')));
+    final body = functionBody(sql, 'create_circle_sound');
+    expect(
+      body,
+      contains(
+        'if stored_object.owner is not null or stored_object.owner_id is not null then',
+      ),
+    );
+    expect(body, contains('duration_ms not between 1 and 5000'));
+    expect(
+      File('supabase/functions/sound-upload/index.ts').existsSync(),
+      isTrue,
+    );
+    expect(
+      File('supabase/config.toml').readAsStringSync(),
+      contains('[functions.sound-upload]'),
+    );
+  });
 }

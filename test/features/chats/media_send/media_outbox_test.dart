@@ -9,9 +9,11 @@ import 'package:http/http.dart' as http;
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/media_outbox.dart';
+import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/media_send/outbox_media.dart';
 import 'package:wecord/features/chats/media_send/pending_media_store.dart';
+import 'package:wecord/features/chats/media_send/send_failure.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -585,6 +587,146 @@ void main() {
         expect(await cache.readOutbox('user-1'), isEmpty);
       },
     );
+
+    test('a failed album keeps its reason after a restart', () async {
+      final first = container();
+      first.read(outboxProvider);
+      await pumpEventQueue();
+      providerUploader.failures.addAll([
+        const UploadException(413, 'too big'),
+        const UploadException(413, 'too big'),
+      ]);
+      final outbox = first.read(outboxProvider.notifier);
+      await outbox.enqueueMedia(
+        conversationId: 'conversation-1',
+        items: [item('a.jpg'), item('b.jpg')],
+      );
+      await outbox.startSending();
+      await pumpEventQueue();
+      expect(
+        first.read(outboxProvider).map((e) => e.state),
+        everyElement(OutboxState.failed),
+      );
+      first.dispose();
+
+      final restarted = container();
+      restarted.read(outboxProvider);
+      await pumpEventQueue(times: 40);
+
+      final entries = restarted.read(outboxProvider);
+      expect(entries, hasLength(2));
+      expect(entries.map((e) => e.state), everyElement(OutboxState.failed));
+      expect(entries.map((e) => e.error), everyElement(isA<UploadException>()));
+      expect(
+        sendFailureReason(entries.first.error),
+        'Files can be up to 50 MB.',
+      );
+      expect(isRetryableFailure(entries.first.error), isFalse);
+      // Nothing was sent again on its own.
+      expect(providerSender.calls, isEmpty);
+    });
+
+    test(
+      'Edit and resend gives back the originals, posters and quality',
+      () async {
+        final c = container();
+        c.read(outboxProvider);
+        await pumpEventQueue();
+        final outbox = c.read(outboxProvider.notifier);
+        providerUploader.failures.addAll([
+          const UploadException(413, 'too big'),
+          const UploadException(413, 'too big'),
+        ]);
+        final chosen = testJpeg(40, 30);
+        final poster = testJpeg(16, 9);
+        final entries = await outbox.enqueueMedia(
+          conversationId: 'conversation-1',
+          caption: 'Trip',
+          items: [
+            MediaToQueue(
+              kind: OutboxMediaKind.image,
+              fileName: 'IMG_0001-scaled.jpg',
+              mimeType: 'image/jpeg',
+              // What was prepared for upload is not what was chosen.
+              data: () => Stream.value(Uint8List.fromList([1, 2, 3])),
+              width: 40,
+              height: 30,
+              original: () => Stream.value(chosen),
+              originalFileName: 'IMG_0001.jpg',
+              originalMimeType: 'image/jpeg',
+              originalQuality: true,
+            ),
+            MediaToQueue(
+              kind: OutboxMediaKind.video,
+              fileName: 'clip.mp4',
+              mimeType: 'video/mp4',
+              data: () => Stream.value(Uint8List.fromList([4, 5, 6])),
+              preview: poster,
+              originalQuality: true,
+            ),
+          ],
+        );
+        await pumpEventQueue();
+        // Kept while the album waits in the outbox.
+        expect(await providerStore.hasOriginal(entries.first.clientId), isTrue);
+
+        await outbox.startSending();
+        await pumpEventQueue();
+        expect(
+          c.read(outboxProvider).map((e) => e.state),
+          everyElement(OutboxState.failed),
+        );
+        expect(await providerStore.hasOriginal(entries.first.clientId), isTrue);
+
+        // The open chat keeps its tray listened to.
+        c.listen(mediaTrayProvider('conversation-1'), (previous, next) {});
+        await outbox.editAndResendMedia(entries.first);
+        await pumpEventQueue(times: 40);
+
+        final tray = c.read(mediaTrayProvider('conversation-1'));
+        expect(tray.items.map((item) => item.name), [
+          'IMG_0001.jpg',
+          'clip.mp4',
+        ]);
+        expect(await tray.items.first.file.length(), chosen.length);
+        expect(tray.items.last.thumbnail, poster);
+        expect(tray.original, isTrue);
+        expect(tray.caption, 'Trip');
+        // Out of the chat, and the kept files were let go.
+        expect(c.read(outboxProvider), isEmpty);
+        expect(
+          await providerStore.hasOriginal(entries.first.clientId),
+          isFalse,
+        );
+        expect(await providerStore.clientIds(), isEmpty);
+      },
+    );
+
+    test('the originals go when the album is sent', () async {
+      final c = container();
+      c.read(outboxProvider);
+      await pumpEventQueue();
+      final outbox = c.read(outboxProvider.notifier);
+      final entries = await outbox.enqueueMedia(
+        conversationId: 'conversation-1',
+        items: [
+          MediaToQueue(
+            kind: OutboxMediaKind.image,
+            fileName: 'a.jpg',
+            mimeType: 'image/jpeg',
+            data: () => Stream.value(Uint8List.fromList([1])),
+            original: () => Stream.value(Uint8List.fromList([2, 2])),
+            originalFileName: 'a.heic',
+            originalMimeType: 'image/heic',
+          ),
+        ],
+      );
+      expect(await providerStore.hasOriginal(entries.single.clientId), isTrue);
+      await outbox.startSending();
+      await pumpEventQueue();
+      expect(c.read(outboxProvider), isEmpty);
+      expect(await providerStore.hasOriginal(entries.single.clientId), isFalse);
+    });
 
     test('cancelling one attachment of an album drops only that one', () async {
       final c = container(online: false);

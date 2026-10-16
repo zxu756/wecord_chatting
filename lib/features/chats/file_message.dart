@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:wecord/features/file_preview/file_actions.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/file_preview_scope.dart';
@@ -177,7 +178,10 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
     );
 
     final visual = switch (kind) {
-      PreviewKind.video || PreviewKind.pdf || PreviewKind.image => true,
+      PreviewKind.video ||
+      PreviewKind.pdf ||
+      PreviewKind.image ||
+      PreviewKind.svg => true,
       _ => false,
     };
     final body = Column(
@@ -295,7 +299,7 @@ class _FileThumbnailState extends ConsumerState<FileThumbnail> {
     final dark = WeCordPalette.dark;
     final aspect = switch (kind) {
       PreviewKind.video => 16 / 9,
-      PreviewKind.pdf => 4 / 3,
+      PreviewKind.pdf || PreviewKind.svg => 4 / 3,
       _ =>
         file.width != null && file.height != null && file.height! > 0
             ? (file.width! / file.height!).clamp(0.75, 1.9)
@@ -349,6 +353,24 @@ class _FileThumbnailState extends ConsumerState<FileThumbnail> {
               loading: snapshot.connectionState != ConnectionState.done,
             );
           }
+          if (kind == PreviewKind.svg) {
+            // Drawings are made for light paper: transparent ones with dark
+            // strokes stay readable in the dark theme.
+            return ColoredBox(
+              color: WeCordPalette.light.panel,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: SvgPicture.memory(
+                  bytes,
+                  key: ValueKey('file-svg-thumbnail-${file.key}'),
+                  fit: BoxFit.contain,
+                  excludeFromSemantics: true,
+                  placeholderBuilder: (context) => placeholder(loading: true),
+                  errorBuilder: (context, error, stackTrace) => placeholder(),
+                ),
+              ),
+            );
+          }
           return ColoredBox(
             color: kind == PreviewKind.pdf ? WeCordPalette.light.panel : fill,
             child: Image.memory(
@@ -371,7 +393,7 @@ class _FileThumbnailState extends ConsumerState<FileThumbnail> {
           fit: StackFit.expand,
           children: [
             picture,
-            if (kind == PreviewKind.pdf)
+            if (kind == PreviewKind.pdf || kind == PreviewKind.svg)
               DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(WeCordRadii.md),

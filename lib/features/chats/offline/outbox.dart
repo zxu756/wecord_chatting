@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/media_send/outbox_media.dart';
+import 'package:wecord/features/chats/offline/outbox_failure.dart';
 import 'package:wecord/shared/models/message.dart';
 
 enum OutboxState {
@@ -36,6 +37,7 @@ class OutboxEntry {
     this.state = OutboxState.sending,
     this.nextAttemptAt,
     this.error,
+    this.failedAt,
   });
 
   factory OutboxEntry.fromJson(Map<String, dynamic> json) {
@@ -64,6 +66,11 @@ class OutboxEntry {
       state: json['state'] == 'failed'
           ? OutboxState.failed
           : OutboxState.sending,
+      error: outboxFailureFromJson(json['failure']),
+      failedAt: switch (json['failed_at']) {
+        final String at => DateTime.tryParse(at),
+        _ => null,
+      },
     );
   }
 
@@ -85,8 +92,12 @@ class OutboxEntry {
   /// When the next try is due, while [state] is sending and a try failed.
   final DateTime? nextAttemptAt;
 
-  /// Why the last try failed.
+  /// Why the last try failed. Refusals the reader should read again are
+  /// kept with the entry across restarts (see [outboxFailureToJson]).
   final Object? error;
+
+  /// When the last try failed: a slowmode wait counts down from here.
+  final DateTime? failedAt;
 
   /// The id the message shows under until the server stores it.
   String get pendingMessageId => pendingMessageIdFor(clientId);
@@ -100,6 +111,7 @@ class OutboxEntry {
     OutboxState? state,
     Object? nextAttemptAt = _keep,
     Object? error = _keep,
+    Object? failedAt = _keep,
   }) {
     return OutboxEntry(
       clientId: clientId,
@@ -116,6 +128,9 @@ class OutboxEntry {
           ? this.nextAttemptAt
           : nextAttemptAt as DateTime?,
       error: identical(error, _keep) ? this.error : error,
+      failedAt: identical(failedAt, _keep)
+          ? this.failedAt
+          : failedAt as DateTime?,
     );
   }
 
@@ -131,6 +146,11 @@ class OutboxEntry {
       if (media != null) 'media': media!.toJson(),
       'attempts': attempts,
       'state': state == OutboxState.failed ? 'failed' : 'sending',
+      if (state == OutboxState.failed &&
+          outboxFailureToJson(error) != null) ...{
+        'failure': outboxFailureToJson(error),
+        'failed_at': failedAt?.toUtc().toIso8601String(),
+      },
     };
   }
 
@@ -339,6 +359,7 @@ class OutboxEngine {
         attempts: 0,
         nextAttemptAt: null,
         error: null,
+        failedAt: null,
       ),
     );
   }
@@ -418,6 +439,7 @@ class OutboxEngine {
             state: OutboxState.failed,
             nextAttemptAt: null,
             error: error,
+            failedAt: _clock(),
           ),
         );
         return OutboxRefused(error);
@@ -429,6 +451,7 @@ class OutboxEngine {
           state: gaveUp ? OutboxState.failed : OutboxState.sending,
           nextAttemptAt: gaveUp ? null : _clock().add(backoffFor(attempts)),
           error: error,
+          failedAt: _clock(),
         ),
       );
       return OutboxWillRetry(error, gaveUp: gaveUp);

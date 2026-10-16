@@ -207,6 +207,80 @@ void main() {
       expect(log, ['retry']);
     });
 
+    testWidgets('the slowmode wait counts down live and ends with Retry', (
+      tester,
+    ) async {
+      final failedAt = DateTime.utc(2026, 10, 17, 9);
+      var now = failedAt;
+      final log = <String>[];
+      final entry = _failed(
+        const SlowmodeException(3),
+        media: false,
+      ).copyWith(failedAt: failedAt);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: WeCordTheme.light(),
+          home: Scaffold(
+            body: PendingMessageFrame(
+              entry: entry,
+              reason: 'stale',
+              now: () => now,
+              onRetry: () => log.add('retry'),
+              onDiscard: () => log.add('discard'),
+              child: const SizedBox(width: 100, height: 40),
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.text('Slowmode is enabled. Try again in 3 seconds.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsNothing);
+      expect(find.text('Discard'), findsOneWidget);
+
+      now = failedAt.add(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.text('Slowmode is enabled. Try again in 1 seconds.'),
+        findsOneWidget,
+      );
+
+      now = failedAt.add(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.text('Slowmode is over. You can send it now.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
+      await tester.tap(find.text('Retry'));
+      expect(log, ['retry']);
+
+      // The ticker stops with the wait.
+      expect(tester.hasRunningAnimations, isFalse);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('a slowmode wait already over shows Retry at once', (
+      tester,
+    ) async {
+      final failedAt = DateTime.utc(2020, 1, 1);
+      await pump(
+        tester,
+        _failed(
+          const SlowmodeException(5),
+          media: false,
+        ).copyWith(failedAt: failedAt),
+        reason: 'Slowmode is enabled. Try again in 5 seconds.',
+      );
+      // The real clock is long past the wait.
+      expect(
+        find.text('Slowmode is over. You can send it now.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
     testWidgets('a text message keeps Retry whatever the reason', (
       tester,
     ) async {

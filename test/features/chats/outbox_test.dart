@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -278,6 +280,72 @@ void main() {
     outbox.restore([restored, entry]);
     expect(outbox.entries, hasLength(1), reason: 'restored once');
     outbox.dispose();
+  });
+
+  test('the reason a send failed survives a restart as JSON', () {
+    final failedAt = DateTime.utc(2026, 10, 17, 9, 30);
+    OutboxEntry failed(Object error) => OutboxEntry(
+      clientId: 'a',
+      conversationId: 'conversation-1',
+      body: 'Hi',
+      createdAt: DateTime.utc(2026, 10, 17, 9),
+      state: OutboxState.failed,
+      error: error,
+      failedAt: failedAt,
+    );
+    Object? roundTrip(Object error) {
+      final json = jsonDecode(jsonEncode(failed(error).toJson()));
+      return OutboxEntry.fromJson(json as Map<String, dynamic>).error;
+    }
+
+    final slowmode = roundTrip(const SlowmodeException(30));
+    expect(slowmode, isA<SlowmodeException>());
+    expect((slowmode as SlowmodeException).remainingSeconds, 30);
+    expect(
+      OutboxEntry.fromJson(
+        jsonDecode(jsonEncode(failed(const SlowmodeException(30)).toJson()))
+            as Map<String, dynamic>,
+      ).failedAt,
+      failedAt,
+    );
+    expect(
+      (roundTrip(const AutoModBlockedException('No links'))
+              as AutoModBlockedException)
+          .reason,
+      'No links',
+    );
+    expect(
+      roundTrip(const AutoModBlockedException()),
+      isA<AutoModBlockedException>(),
+    );
+    expect(
+      roundTrip(const CircleRulesNotAcceptedException()),
+      isA<CircleRulesNotAcceptedException>(),
+    );
+    expect(
+      roundTrip(const ChatFileTooLargeException()),
+      isA<ChatFileTooLargeException>(),
+    );
+    expect(
+      (roundTrip(const UploadException(413, 'big')) as UploadException)
+          .statusCode,
+      413,
+    );
+    expect(
+      (roundTrip(PostgrestException(message: 'no', code: '42501'))
+              as PostgrestException)
+          .code,
+      '42501',
+    );
+    // A network error is not worth keeping: sending again is the way on.
+    expect(roundTrip(http.ClientException('offline')), isNull);
+    // Waiting entries keep nothing.
+    expect(
+      failed(
+        const SlowmodeException(3),
+      ).copyWith(state: OutboxState.sending).toJson(),
+      isNot(contains('failure')),
+    );
   });
 
   test('pending messages show as the current user\'s', () {

@@ -5,6 +5,7 @@ import '../file_preview/file_preview_fakes.dart';
 import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -42,6 +43,7 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
+import 'emoji_fixtures.dart';
 import 'media_send/media_fakes.dart';
 
 void main() {
@@ -1455,11 +1457,24 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Failed — tap to retry'), findsNothing);
-      expect(find.text('Retry'), findsOneWidget);
       expect(find.text('Edit and resend'), findsNothing);
       expect(find.text('Discard'), findsOneWidget);
       expect(find.byTooltip('Retry upload'), findsOneWidget);
       expect(repository.mediaSender.calls, isEmpty);
+
+      // The wait counts down, and Retry shows when it is over.
+      expect(find.text('Retry'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(
+        find.text('Slowmode is enabled. Try again in 5 seconds.'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 6));
+      expect(
+        find.text('Slowmode is over. You can send it now.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
 
       await tester.tap(find.text('Retry'));
       await _settleMedia(tester);
@@ -1578,6 +1593,71 @@ void main() {
       expect(find.byType(MediaTile), findsNothing);
       expect(find.text('Discard'), findsNothing);
     });
+
+    for (final reduced in [true, false]) {
+      testWidgets(
+        'a GIF in an album ${reduced ? 'holds still behind a play button under reduced motion' : 'just plays without it'}',
+        (tester) async {
+          if (reduced) {
+            tester.platformDispatcher.accessibilityFeaturesTestValue =
+                const FakeAccessibilityFeatures(disableAnimations: true);
+            addTearDown(
+              tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+            );
+          }
+          Map<String, dynamic> gif(String name) => ImageAttachment(
+            bucket: 'chat-images',
+            path: 'conversation-1/$name.gif',
+            mimeType: 'image/gif',
+            size: 1000,
+            width: 400,
+            height: 400,
+          ).toJson();
+          final repository = FakeChatsRepository()
+            ..messages = [
+              for (var i = 1; i <= 2; i++)
+                _message(
+                  id: 'message-$i',
+                  senderId: 'user-2',
+                  body: '',
+                  createdAt: DateTime.utc(2026, 10, 17, 9, 0, i),
+                  type: MessageType.image,
+                  attachment: gif('g$i'),
+                  attachmentGroupId: 'album-1',
+                ),
+            ];
+          await tester.pumpWidget(
+            _app(
+              repository,
+              voiceMessageRecorder: FakeVoiceMessageRecorder(),
+              overrides: [
+                chatImageProviderFactoryProvider.overrideWithValue(
+                  (url) => MemoryImage(partyParrotPng),
+                ),
+              ],
+            ),
+          );
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 100)),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(find.byType(MediaTile), findsNWidgets(2));
+          expect(
+            find.byTooltip('Play animation'),
+            reduced ? findsNWidgets(2) : findsNothing,
+          );
+          if (reduced) {
+            // Playing one does not open the viewer.
+            await tester.tap(find.byTooltip('Play animation').first);
+            await tester.pump();
+            expect(find.byTooltip('Play animation'), findsOneWidget);
+            expect(find.byType(FilePreviewScreen), findsNothing);
+          }
+        },
+      );
+    }
 
     testWidgets('pictures sent together show as one grid and open the viewer', (
       tester,
@@ -3894,9 +3974,11 @@ Widget _app(
   DateTime? timedOutUntil,
   int? slowmodeSeconds,
   String? topic,
+  List<Override> overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
+      ...overrides,
       chatsRepositoryProvider.overrideWithValue(repository),
       onlineUserIdsProvider.overrideWith(
         (ref) => onlineUserIds ?? const Stream<Set<String>>.empty(),

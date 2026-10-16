@@ -24,6 +24,16 @@ abstract interface class PendingMediaStore {
   /// Keeps a small picture of the file (JPEG or PNG), for the bubble.
   Future<void> putPreview(String clientId, Uint8List bytes);
 
+  /// Keeps the file as the sender chose it, beside the one that is sent
+  /// (a picture is scaled before upload), so that it can be put back in the
+  /// tray. Goes with [delete].
+  Future<void> putOriginal(String clientId, Stream<List<int>> data);
+
+  /// The chosen file's bytes, in chunks; empty-handed if none was kept.
+  Stream<List<int>> openReadOriginal(String clientId);
+
+  Future<bool> hasOriginal(String clientId);
+
   /// The file's bytes, in chunks.
   Stream<List<int>> openRead(String clientId);
 
@@ -51,6 +61,7 @@ class MemoryPendingMediaStore implements PendingMediaStore {
 
   final _files = <String, Uint8List>{};
   final _previews = <String, Uint8List>{};
+  final _originals = <String, Uint8List>{};
 
   /// Chunk size when a file is read back, so progress moves in steps.
   static const chunkSize = 64 * 1024;
@@ -70,6 +81,28 @@ class MemoryPendingMediaStore implements PendingMediaStore {
   Future<void> putPreview(String clientId, Uint8List bytes) async {
     _previews[clientId] = bytes;
   }
+
+  @override
+  Future<void> putOriginal(String clientId, Stream<List<int>> data) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in data) {
+      builder.add(chunk);
+    }
+    _originals[clientId] = builder.takeBytes();
+  }
+
+  @override
+  Stream<List<int>> openReadOriginal(String clientId) async* {
+    final bytes = _originals[clientId];
+    if (bytes == null) {
+      throw StateError('No original kept for $clientId');
+    }
+    yield bytes;
+  }
+
+  @override
+  Future<bool> hasOriginal(String clientId) async =>
+      _originals.containsKey(clientId);
 
   @override
   Stream<List<int>> openRead(String clientId) async* {
@@ -95,6 +128,7 @@ class MemoryPendingMediaStore implements PendingMediaStore {
   Future<void> delete(String clientId) async {
     _files.remove(clientId);
     _previews.remove(clientId);
+    _originals.remove(clientId);
   }
 
   @override

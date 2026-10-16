@@ -405,8 +405,12 @@ class _MediaTileState extends ConsumerState<MediaTile> {
             return layered(null);
           }
           return layered(
-            Image(
+            // A GIF holds its first frame under reduced motion, with a play
+            // button.
+            MotionSafeImage(
               image: ref.read(chatImageProviderFactoryProvider)(url),
+              animated: isAnimatedImage(url: url, mimeType: image.mimeType),
+              playButton: !widget.compact,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               frameBuilder: (context, child, frame, synchronous) =>

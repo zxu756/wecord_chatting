@@ -5,6 +5,7 @@ import 'package:wecord/features/push/push_controller.dart';
 import 'package:wecord/features/push/push_gateway.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/push/push_settings_tile.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 const _subscription = PushSubscriptionInfo(
@@ -52,6 +53,7 @@ class FakePushGateway implements PushGateway {
 class FakePushRepository implements PushRepository {
   bool configured = true;
   final registered = <String>[];
+  final languages = <String>[];
   final unregistered = <String>[];
   final notified = <String>[];
   final calls = <String>[];
@@ -68,8 +70,10 @@ class FakePushRepository implements PushRepository {
   Future<void> register(
     PushSubscriptionInfo subscription, {
     String? userAgent,
+    String language = 'en',
   }) async {
     registered.add(subscription.endpoint);
+    languages.add(language);
   }
 
   @override
@@ -91,13 +95,19 @@ void main() {
     repository = FakePushRepository();
   });
 
-  Future<WidgetRef> pumpTile(WidgetTester tester) async {
+  Future<WidgetRef> pumpTile(
+    WidgetTester tester, {
+    AppLanguage language = AppLanguage.english,
+  }) async {
     late WidgetRef capturedRef;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           pushGatewayProvider.overrideWithValue(gateway),
           pushRepositoryProvider.overrideWithValue(repository),
+          appLanguageStoreProvider.overrideWithValue(
+            InMemoryAppLanguageStore(language),
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -187,5 +197,38 @@ void main() {
     await stopPushForSignOut(ref);
     expect(repository.unregistered, [_subscription.endpoint]);
     expect(gateway.unsubscribes, 0);
+  });
+
+  testWidgets('the browser is saved with the app language', (tester) async {
+    gateway.current = _subscription;
+    await pumpTile(tester, language: AppLanguage.chinese);
+    expect(repository.languages, ['zh']);
+  });
+
+  testWidgets('turning push on saves the app language too', (tester) async {
+    await pumpTile(tester, language: AppLanguage.chinese);
+    await tester.tap(find.byKey(const ValueKey('push-notifications')));
+    await tester.pumpAndSettle();
+    expect(repository.languages, isNotEmpty);
+    expect(repository.languages, everyElement('zh'));
+  });
+
+  testWidgets('changing the language saves the browser again', (tester) async {
+    gateway.current = _subscription;
+    final ref = await pumpTile(tester);
+    expect(repository.languages, ['en']);
+
+    await ref.read(appLanguageProvider.notifier).set(AppLanguage.chinese);
+    await tester.pumpAndSettle();
+    expect(repository.languages, ['en', 'zh']);
+
+    await ref.read(appLanguageProvider.notifier).set(AppLanguage.english);
+    await tester.pumpAndSettle();
+    expect(repository.languages, ['en', 'zh', 'en']);
+  });
+
+  test('the language code follows the setting', () {
+    expect(pushLanguageCode(AppLanguage.chinese), 'zh');
+    expect(pushLanguageCode(AppLanguage.english), 'en');
   });
 }

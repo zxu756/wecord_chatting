@@ -15,7 +15,14 @@ abstract interface class PushRepository {
   /// The server's VAPID public key. Throws [PushNotConfiguredException].
   Future<String> vapidPublicKey();
 
-  Future<void> register(PushSubscriptionInfo subscription, {String? userAgent});
+  /// Saves this browser's subscription for the signed-in user. [language]
+  /// ('en' or 'zh') is the app's language, which the server writes this
+  /// browser's notifications in.
+  Future<void> register(
+    PushSubscriptionInfo subscription, {
+    String? userAgent,
+    String language = 'en',
+  });
 
   Future<void> unregister(String endpoint);
 
@@ -66,6 +73,7 @@ class SupabasePushRepository implements PushRepository {
   Future<void> register(
     PushSubscriptionInfo subscription, {
     String? userAgent,
+    String language = 'en',
   }) async {
     await _client.rpc<void>(
       'register_push_subscription',
@@ -74,6 +82,7 @@ class SupabasePushRepository implements PushRepository {
         'target_p256dh': subscription.p256dh,
         'target_auth': subscription.auth,
         'target_user_agent': userAgent,
+        'target_language': language,
       },
     );
   }
@@ -113,6 +122,7 @@ class NoPushRepository implements PushRepository {
   Future<void> register(
     PushSubscriptionInfo subscription, {
     String? userAgent,
+    String language = 'en',
   }) async {}
 
   @override

@@ -283,7 +283,9 @@ the WeCord components in new and restyled screens.
   `⌘K`/`Ctrl K` hint in the sidebar search.
 - **Reduced motion**: springs collapse to zero duration; glass goes solid;
   animated pictures (GIFs) hold their first frame under a play button
-  (`MotionSafeImage`); videos do not start by themselves.
+  (`MotionSafeImage`) in message pictures, album tiles, the full-screen
+  viewer and avatars (avatars under 72 px just stay still: the button would
+  cover them); videos do not start by themselves.
 - **High contrast**: the platform's "Increase contrast" selects
   `WeCordTheme.light/dark(highContrast: true)` (`MaterialApp.highContrastTheme`):
   `WeCordPalette.lightHighContrast` / `darkHighContrast` (ink black/white,
@@ -338,4 +340,7 @@ the WeCord components in new and restyled screens.
 - **Text size**: layouts are checked at 1.6× and 2.0× with
   `tool/screenshots/a11y_screenshots_test.dart` (also dark and high
   contrast, into `build/a11y/`). Large page titles shrink to fit their row;
-  buttons, chips and cards grow.
+  buttons, chips and cards grow. Desktop sidebars are checked at 2.0x too
+  (the `desktop-*-2x-text` screens, and `test/accessibility/large_text_test.dart`
+  fails when text in a sidebar row is taller than the row): rows use
+  `minHeight`, never a fixed `height`.

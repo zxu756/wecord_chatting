@@ -21,6 +21,18 @@ bool isAnimatedImage({String? url, String? mimeType}) {
   return path.endsWith('.gif') || path.endsWith('.apng');
 }
 
+/// Whether [provider] loads an image that can animate (see
+/// [isAnimatedImage]): a network or file image named like one, even inside
+/// a [ResizeImage]. Pictures from memory carry no name and count as still.
+bool imageProviderAnimates(ImageProvider provider) {
+  return switch (provider) {
+    ResizeImage(:final imageProvider) => imageProviderAnimates(imageProvider),
+    NetworkImage(:final url) => isAnimatedImage(url: url),
+    FileImage(:final file) => isAnimatedImage(url: file.path),
+    _ => false,
+  };
+}
+
 /// An image that does not move when the platform asks for reduced motion:
 /// an animated one (GIF) shows its first frame under a play button, and
 /// plays only when the person taps it. Without reduced motion it is a plain
@@ -38,6 +50,8 @@ class MotionSafeImage extends StatefulWidget {
     this.semanticLabel,
     this.excludeFromSemantics = false,
     this.gaplessPlayback = false,
+    this.filterQuality = FilterQuality.medium,
+    this.frameBuilder,
     this.loadingBuilder,
     this.errorBuilder,
     this.playButton = true,
@@ -54,6 +68,8 @@ class MotionSafeImage extends StatefulWidget {
     this.semanticLabel,
     this.excludeFromSemantics = false,
     this.gaplessPlayback = false,
+    this.filterQuality = FilterQuality.medium,
+    this.frameBuilder,
     this.loadingBuilder,
     this.errorBuilder,
     this.playButton = true,
@@ -73,6 +89,11 @@ class MotionSafeImage extends StatefulWidget {
   final String? semanticLabel;
   final bool excludeFromSemantics;
   final bool gaplessPlayback;
+  final FilterQuality filterQuality;
+
+  /// Wraps the picture while it plays (fading it in, say); a held picture is
+  /// drawn as soon as it has its first frame.
+  final ImageFrameBuilder? frameBuilder;
   final ImageLoadingBuilder? loadingBuilder;
   final ImageErrorWidgetBuilder? errorBuilder;
 
@@ -108,6 +129,8 @@ class _MotionSafeImageState extends State<MotionSafeImage> {
         semanticLabel: widget.semanticLabel,
         excludeFromSemantics: widget.excludeFromSemantics,
         gaplessPlayback: widget.gaplessPlayback,
+        filterQuality: widget.filterQuality,
+        frameBuilder: widget.frameBuilder,
         loadingBuilder: widget.loadingBuilder,
         errorBuilder: widget.errorBuilder,
       );
@@ -117,6 +140,7 @@ class _MotionSafeImageState extends State<MotionSafeImage> {
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
+      filterQuality: widget.filterQuality,
       semanticLabel: widget.semanticLabel,
       excludeFromSemantics: widget.excludeFromSemantics,
       errorBuilder: widget.errorBuilder,
@@ -167,6 +191,7 @@ class _FirstFrame extends StatefulWidget {
     this.width,
     this.height,
     this.fit,
+    this.filterQuality = FilterQuality.medium,
     this.semanticLabel,
     this.excludeFromSemantics = false,
     this.errorBuilder,
@@ -176,6 +201,7 @@ class _FirstFrame extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit? fit;
+  final FilterQuality filterQuality;
   final String? semanticLabel;
   final bool excludeFromSemantics;
   final ImageErrorWidgetBuilder? errorBuilder;
@@ -271,6 +297,7 @@ class _FirstFrameState extends State<_FirstFrame> {
             width: widget.width,
             height: widget.height,
             fit: widget.fit,
+            filterQuality: widget.filterQuality,
           );
     if (widget.excludeFromSemantics || widget.semanticLabel == null) {
       return picture;

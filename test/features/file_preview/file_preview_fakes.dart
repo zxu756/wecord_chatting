@@ -216,6 +216,7 @@ List<Override> filePreviewOverrides({
   FakeFileFetcher? fetcher,
   FakeNativeFileBridge? bridge,
   FakeFileActions? actions,
+  ThumbnailService? thumbnails,
   bool convertsOnServer = false,
 }) {
   return [
@@ -226,7 +227,9 @@ List<Override> filePreviewOverrides({
     nativeFileBridgeProvider.overrideWithValue(
       bridge ?? FakeNativeFileBridge(isSupported: false),
     ),
-    thumbnailServiceProvider.overrideWithValue(FakeThumbnailService()),
+    thumbnailServiceProvider.overrideWithValue(
+      thumbnails ?? FakeThumbnailService(),
+    ),
     fileActionsProvider.overrideWithValue(actions ?? FakeFileActions()),
     pdfViewerBuilderProvider.overrideWithValue(fakePdfViewerBuilder),
     officeConvertsOnServerProvider.overrideWithValue(convertsOnServer),

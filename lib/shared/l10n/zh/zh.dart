@@ -22,6 +22,7 @@ import 'package:wecord/shared/l10n/zh/zh_media_send.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
+import 'package:wecord/shared/l10n/zh/zh_leftovers2.dart';
 import 'package:wecord/shared/l10n/zh/zh_offline.dart';
 import 'package:wecord/shared/l10n/zh/zh_phone_home.dart';
 import 'package:wecord/shared/l10n/zh/zh_polish.dart';
@@ -71,6 +72,7 @@ const zhAreas = <Map<String, String>>[
   zhAlbums,
   zhA11y,
   zhNoise,
+  zhLeftovers2,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

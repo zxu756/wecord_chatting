@@ -102,7 +102,7 @@ class MediaTrayController extends Notifier<MediaTrayState> {
   /// Adds files (picked, dropped or pasted), looking at each one first.
   /// Files beyond the 10 an album holds are counted in
   /// [MediaTrayState.leftOut].
-  Future<void> add(List<XFile> files) async {
+  Future<void> add(List<XFile> files, {Map<XFile, Uint8List>? posters}) async {
     if (files.isEmpty) {
       return;
     }
@@ -115,7 +115,11 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     if (accepted == 0) {
       return;
     }
-    final poster = ref.read(videoPosterReaderProvider);
+    final reader = ref.read(videoPosterReaderProvider);
+    // Files put back by "Edit and resend" bring the poster they had.
+    final VideoPosterReader poster = posters == null || posters.isEmpty
+        ? reader
+        : (file) async => posters[file] ?? await reader(file);
     final batch = await buildDrafts(files, room: accepted, videoPoster: poster);
     if (_disposed) {
       return;
@@ -126,13 +130,26 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     );
   }
 
-  /// Puts files back after a send failed ("Edit and resend"), with their
-  /// caption unless the reader has already typed one.
-  Future<void> restore(List<XFile> files, {String caption = ''}) async {
+  /// Puts files back after a send failed ("Edit and resend"): with their
+  /// caption unless the reader has already typed one, the poster frames of
+  /// videos, and the "Original quality" choice they were sent with.
+  Future<void> restore(
+    List<XFile> files, {
+    String caption = '',
+    Map<XFile, Uint8List>? posters,
+    bool original = false,
+  }) async {
+    var next = state;
     if (caption.isNotEmpty && state.caption.isEmpty) {
-      state = state.copyWith(caption: caption);
+      next = next.copyWith(caption: caption);
     }
-    await add(files);
+    // The choice they were sent with, unless other files already wait in
+    // the tray with theirs.
+    next = next.copyWith(
+      original: state.isEmpty ? original : original || state.original,
+    );
+    state = next;
+    await add(files, posters: posters);
   }
 
   void remove(String id) {

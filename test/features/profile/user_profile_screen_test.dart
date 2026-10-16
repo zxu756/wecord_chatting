@@ -142,6 +142,23 @@ void main() {
     expect(find.text('Add Friend'), findsOneWidget);
     expect(find.text('Message'), findsNothing);
   });
+
+  testWidgets('a bot profile offers no friend request', (tester) async {
+    await tester.pumpWidget(
+      buildProfileHarness(
+        summary: _summary(
+          displayName: 'Helper',
+          username: 'bot_helper',
+          relationshipStatus: ProfileRelationshipStatus.bot,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Add Friend'), findsNothing);
+    expect(find.byKey(const ValueKey('profile-bot')), findsOneWidget);
+    expect(find.text('Bot account'), findsOneWidget);
+  });
 }
 
 Widget buildProfileHarness({required ProfileSummary summary}) {
@@ -219,6 +236,7 @@ Map<String, dynamic> summaryJson(ProfileSummary summary) {
       ProfileRelationshipStatus.outgoingRequest => 'outgoing_request',
       ProfileRelationshipStatus.blocked => 'blocked',
       ProfileRelationshipStatus.blockedByThem => 'blocked_by_them',
+      ProfileRelationshipStatus.bot => 'bot',
     },
     'incoming_request_id': summary.incomingRequestId,
     'outgoing_request_id': summary.outgoingRequestId,

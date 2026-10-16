@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/voice/audio_clip.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -50,8 +51,10 @@ abstract interface class SoundboardRepository {
   Future<List<CircleSound>> listSounds(String circleId);
 
   /// Checks [bytes] (MP3, Ogg or WAV of at most [maxCircleSoundBytes] and
-  /// [maxCircleSoundDuration]), uploads it and adds it to the circle.
-  /// Throws [SoundboardException] with a readable message when it can't.
+  /// [maxCircleSoundDuration]) and sends it to the `sound-upload` Edge
+  /// Function, which measures it again, stores it and adds it to the
+  /// circle. Throws [SoundboardException] with a readable message when it
+  /// can't.
   Future<CircleSound> addSound({
     required String circleId,
     required String name,
@@ -80,10 +83,15 @@ abstract interface class SoundboardRepository {
 abstract interface class SoundboardDataSource {
   Future<Object?> rpc(String functionName, Map<String, dynamic> params);
 
-  Future<void> uploadBinary({
-    required String path,
+  /// Sends a clip to the `sound-upload` Edge Function, which checks its
+  /// length itself, stores it and registers it; returns the new sound.
+  /// Throws [FunctionException] when it refuses.
+  Future<Object?> uploadSound({
+    required String circleId,
+    required String name,
+    required String? emoji,
     required Uint8List bytes,
-    required String mimeType,
+    required String fileName,
   });
 
   Future<void> remove(String path);
@@ -142,27 +150,25 @@ class SupabaseSoundboardRepository implements SoundboardRepository {
     if (clip.duration > maxCircleSoundDuration) {
       throw SoundboardException(tr('Sounds can be at most 5 seconds long.'));
     }
-    final path = '$circleId/${_newId()}.${clip.extension}';
-    await _dataSource.uploadBinary(
-      path: path,
-      bytes: bytes,
-      mimeType: clip.mimeType,
-    );
+    final trimmedEmoji = emoji?.trim();
+    final Object? row;
     try {
-      final row = await _dataSource.rpc('create_circle_sound', {
-        'target_circle_id': circleId,
-        'sound_name': trimmedName,
-        'sound_emoji': emoji?.trim().isEmpty ?? true ? null : emoji!.trim(),
-        'storage_path': path,
-        'mime_type': clip.mimeType,
-        'duration_ms': max(1, clip.duration.inMilliseconds),
-      });
-      return CircleSound.fromJson(Map<String, dynamic>.from(row! as Map));
-    } catch (error) {
-      // The clip is useless without its row.
-      unawaited(_dataSource.remove(path).catchError((Object _) {}));
-      throw _readable(error);
+      row = await _dataSource.uploadSound(
+        circleId: circleId,
+        name: trimmedName,
+        emoji: trimmedEmoji == null || trimmedEmoji.isEmpty
+            ? null
+            : trimmedEmoji,
+        bytes: bytes,
+        fileName: '${_newId()}.${clip.extension}',
+      );
+    } on FunctionException catch (error) {
+      throw _refusal(error);
     }
+    if (row is! Map) {
+      throw SoundboardException(tr('Could not add the sound. Try again.'));
+    }
+    return CircleSound.fromJson(Map<String, dynamic>.from(row));
   }
 
   @override
@@ -220,19 +226,31 @@ class SupabaseSoundboardRepository implements SoundboardRepository {
     return _dataSource.soundChanges(circleId);
   }
 
-  Object _readable(Object error) {
-    if (error is! PostgrestException) {
-      return error;
-    }
-    return switch (error.code) {
-      '23505' => SoundboardException(tr('That name is already taken.')),
-      '54000' => SoundboardException(
+  /// What the `sound-upload` function's refusal means for the user.
+  Object _refusal(FunctionException error) {
+    final details = error.details;
+    final code = details is Map ? details['error'] : null;
+    return switch (code) {
+      'too_long' => SoundboardException(
+        tr('Sounds can be at most 5 seconds long.'),
+      ),
+      'too_large' => SoundboardException(tr('Sounds can be at most 512 KB.')),
+      'unsupported_format' => SoundboardException(
+        tr('Choose an MP3, Ogg (Opus or Vorbis) or PCM WAV file.'),
+      ),
+      'malformed' => SoundboardException(
+        tr("This sound file can't be read. Try another one."),
+      ),
+      'name_taken' => SoundboardException(tr('That name is already taken.')),
+      'no_room' => SoundboardException(
         tr('This circle already has {count} sounds.', {
           'count': maxCircleSounds,
         }),
       ),
-      '22023' => SoundboardException(error.message),
-      _ => error,
+      'forbidden' => SoundboardException(
+        tr("You can't add sounds to this circle."),
+      ),
+      _ => SoundboardException(tr('Could not add the sound. Try again.')),
     };
   }
 }
@@ -248,18 +266,23 @@ class SupabaseSoundboardDataSource implements SoundboardDataSource {
   }
 
   @override
-  Future<void> uploadBinary({
-    required String path,
+  Future<Object?> uploadSound({
+    required String circleId,
+    required String name,
+    required String? emoji,
     required Uint8List bytes,
-    required String mimeType,
+    required String fileName,
   }) async {
-    await _client.storage
-        .from(circleSoundBucket)
-        .uploadBinary(
-          path,
-          bytes,
-          fileOptions: FileOptions(contentType: mimeType, upsert: false),
-        );
+    final response = await _client.functions.invoke(
+      'sound-upload',
+      body: <String, String>{
+        'circle_id': circleId,
+        'name': name,
+        'emoji': ?emoji,
+      },
+      files: [http.MultipartFile.fromBytes('file', bytes, filename: fileName)],
+    );
+    return response.data;
   }
 
   @override

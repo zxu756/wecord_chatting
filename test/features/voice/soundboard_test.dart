@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show FunctionException, PostgrestException;
 import 'package:wecord/features/voice/soundboard_player.dart';
 import 'package:wecord/features/voice/soundboard_repository.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
@@ -22,9 +23,9 @@ import 'voice_fakes.dart';
 /// The soundboard: uploads, plays, playback for everyone and its volume.
 void main() {
   group('soundboard repository', () {
-    test('checks, uploads and registers a clip', () async {
+    test('checks a clip and sends it to the sound-upload function', () async {
       final source = _FakeSoundboardDataSource()
-        ..results['create_circle_sound'] = _soundJson('sound-1', 'Airhorn');
+        ..uploadResult = _soundJson('sound-1', 'Airhorn');
       final repository = SupabaseSoundboardRepository(
         source,
         newId: () => '11111111-2222-4333-8444-555555555555',
@@ -38,16 +39,11 @@ void main() {
       );
 
       expect(sound.name, 'Airhorn');
+      // The function stores and registers it; the app writes neither.
       expect(source.uploads, [
-        'circle-1/11111111-2222-4333-8444-555555555555.mp3 audio/mpeg',
+        'circle-1 Airhorn 📯 11111111-2222-4333-8444-555555555555.mp3',
       ]);
-      final create = source.calls.single;
-      expect(create[0], 'create_circle_sound');
-      final params = create[1] as Map<String, dynamic>;
-      expect(params['sound_name'], 'Airhorn');
-      expect(params['sound_emoji'], '📯');
-      expect(params['mime_type'], 'audio/mpeg');
-      expect(params['duration_ms'], 1567);
+      expect(source.calls, isEmpty);
     });
 
     test('refuses other files, long clips and bad names', () async {
@@ -86,50 +82,42 @@ void main() {
       expect(source.uploads, isEmpty);
     });
 
-    test('a refused registration removes the upload and says why', () async {
-      final source = _FakeSoundboardDataSource()
-        ..errors['create_circle_sound'] = const PostgrestException(
-          message: 'That name is already taken',
-          code: '23505',
+    test("the server's refusals read as messages", () async {
+      final source = _FakeSoundboardDataSource();
+      final repository = SupabaseSoundboardRepository(source);
+      Future<void> expectMessage(String code, String message) async {
+        source.uploadError = FunctionException(
+          status: 400,
+          details: {'error': code},
         );
-      final repository = SupabaseSoundboardRepository(
-        source,
-        newId: () => 'id-1',
-      );
-      await expectLater(
-        repository.addSound(
-          circleId: 'circle-1',
-          name: 'Ding',
-          bytes: wavBytes(),
-        ),
-        throwsA(
-          isA<SoundboardException>().having(
-            (error) => error.message,
-            'message',
-            'That name is already taken.',
+        await expectLater(
+          repository.addSound(
+            circleId: 'circle-1',
+            name: 'Ding',
+            bytes: wavBytes(),
           ),
-        ),
-      );
-      await pumpEventQueue();
-      expect(source.removed, ['circle-1/id-1.wav']);
+          throwsA(
+            isA<SoundboardException>().having(
+              (error) => error.message,
+              'message',
+              message,
+            ),
+          ),
+        );
+      }
 
-      source.errors['create_circle_sound'] = const PostgrestException(
-        message: 'This circle has no room for more sounds',
-        code: '54000',
+      // The app measured under 5 s; the server did not.
+      await expectMessage('too_long', 'Sounds can be at most 5 seconds long.');
+      await expectMessage('name_taken', 'That name is already taken.');
+      await expectMessage('no_room', 'This circle already has 24 sounds.');
+      await expectMessage(
+        'unsupported_format',
+        'Choose an MP3, Ogg (Opus or Vorbis) or PCM WAV file.',
       );
-      await expectLater(
-        repository.addSound(
-          circleId: 'circle-1',
-          name: 'Ding',
-          bytes: wavBytes(),
-        ),
-        throwsA(
-          isA<SoundboardException>().having(
-            (error) => error.message,
-            'message',
-            'This circle already has 24 sounds.',
-          ),
-        ),
+      await expectMessage('forbidden', "You can't add sounds to this circle.");
+      await expectMessage(
+        'upload_failed',
+        'Could not add the sound. Try again.',
       );
     });
 
@@ -579,6 +567,8 @@ class _FakeSoundboardDataSource implements SoundboardDataSource {
   final calls = <List<Object?>>[];
   final uploads = <String>[];
   final removed = <String>[];
+  Object? uploadResult;
+  Object? uploadError;
   final inserts = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
@@ -592,12 +582,18 @@ class _FakeSoundboardDataSource implements SoundboardDataSource {
   }
 
   @override
-  Future<void> uploadBinary({
-    required String path,
+  Future<Object?> uploadSound({
+    required String circleId,
+    required String name,
+    required String? emoji,
     required Uint8List bytes,
-    required String mimeType,
+    required String fileName,
   }) async {
-    uploads.add('$path $mimeType');
+    if (uploadError case final error?) {
+      throw error;
+    }
+    uploads.add('$circleId $name ${emoji ?? '-'} $fileName');
+    return uploadResult;
   }
 
   @override

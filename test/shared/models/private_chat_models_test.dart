@@ -167,6 +167,20 @@ void main() {
     expect(summary.canSendFriendRequest, isFalse);
   });
 
+  test('ProfileSummary reads bots as not befriendable', () {
+    final summary = ProfileSummary.fromJson({
+      'id': 'bot-1',
+      'username': 'bot_1',
+      'display_name': 'Helper',
+      'bio': '',
+      'relationship_status': 'bot',
+    });
+
+    expect(summary.relationshipStatus, ProfileRelationshipStatus.bot);
+    expect(summary.canSendFriendRequest, isFalse);
+    expect(summary.canStartChat, isFalse);
+  });
+
   test('FriendRequest parses Supabase rows and copies values', () {
     final request = FriendRequest.fromJson({
       'id': 'request-1',

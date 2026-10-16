@@ -217,6 +217,18 @@ void main() {
     expect(find.byKey(const ValueKey('channel-integrations')), findsNothing);
   });
 
+  testWidgets('announcement channels take webhooks too', (tester) async {
+    final world = _World(kind: CircleChannelKind.announcement);
+    await tester.pumpWidget(world.app());
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('webhook-create-button')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Integrations'), findsOneWidget);
+  });
+
   test('only webhook managers may open channel settings for it', () {
     final detail = _detail(
       role: 'member',

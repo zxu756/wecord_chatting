@@ -109,10 +109,11 @@ void main() {
   test('the repository calls the bot functions', () async {
     final rpc = RecordingRpc({
       'list_circle_bots': (_) => [_botJson()],
-      'bots': (_) => {..._botJson(), 'token': 'secret'},
+      'bots': (params) => params['action'] == 'delete'
+          ? {'deleted': true, 'login_deleted': true}
+          : {..._botJson(), 'token': 'secret'},
       'regenerate_bot_token': (_) => {..._botJson(), 'token': 'secret-2'},
       'revoke_bot_token': (_) => _botJson(hasToken: false),
-      'delete_circle_bot': (_) => null,
       'list_circle_bot_commands': (_) => [
         {
           'bot_id': 'bot-1',
@@ -151,6 +152,14 @@ void main() {
     expect(regenerated.token, 'secret-2');
     expect(commands.single.botName, 'Helper');
     expect(invocation.botName, 'Helper');
+    // Deleting goes through the bots function, which also deletes the
+    // bot's login.
+    expect(rpc.calls[4].$1, 'bots');
+    expect(rpc.calls[4].$2, {'action': 'delete', 'bot_id': 'bot-1'});
+    expect(
+      rpc.calls.map((call) => call.$1),
+      isNot(contains('delete_circle_bot')),
+    );
     expect(rpc.calls[1].$1, 'bots');
     expect(rpc.calls[1].$2, {
       'circle_id': 'circle-1',
@@ -203,9 +212,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('bot-create-submit')));
     await tester.pumpAndSettle();
 
-    final create = rpc.calls.firstWhere(
-      (call) => call.$1 == 'bots',
-    );
+    final create = rpc.calls.firstWhere((call) => call.$1 == 'bots');
     expect(create.$2['role_id'], 'role-1');
     expect(find.text('Bot created'), findsOneWidget);
     expect(find.text('the-secret-token'), findsOneWidget);

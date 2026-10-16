@@ -453,10 +453,19 @@ entrypoint = "./functions/bot-api/index.ts"
 
 [functions.bots]
 enabled = true
-# Signed-in members create bots; the function makes the bot's login with
-# the service role, then create_circle_bot checks the caller's permissions.
+# Signed-in members create and delete bots; the function makes or deletes
+# the bot's login with the service role, while create_circle_bot and
+# delete_circle_bot check the caller's permissions.
 verify_jwt = true
 entrypoint = "./functions/bots/index.ts"
+
+[functions.sound-upload]
+enabled = true
+# Signed-in members with manage_emojis add soundboard clips; the function
+# measures each clip, stores it with the service role and registers it as
+# the caller.
+verify_jwt = true
+entrypoint = "./functions/sound-upload/index.ts"
 
 [analytics]
 enabled = true

@@ -381,8 +381,9 @@ class MessageMention {
     this.userIds = const [],
   });
 
-  /// `@here`: [userIds] are the members online when it is sent (only sent
-  /// to the server, which does not store them).
+  /// `@here`: [userIds] are the members this app sees online when it is
+  /// sent. Only older servers use them; newer ones work out who is online
+  /// from presence heartbeats (202610160038) and ignore the list.
   const MessageMention.here({
     required this.start,
     required this.end,

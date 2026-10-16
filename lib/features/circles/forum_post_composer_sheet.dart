@@ -131,9 +131,11 @@ class _ForumPostComposerSheetState
       }
     } catch (error) {
       if (mounted) {
-        final refused = error is PostgrestException
-            ? SendRefusedException.fromPostgrest(error)
-            : null;
+        final refused = switch (error) {
+          SendRefusedException() => error,
+          PostgrestException() => SendRefusedException.fromPostgrest(error),
+          _ => null,
+        };
         setState(() {
           _saving = false;
           _errorText =

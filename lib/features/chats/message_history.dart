@@ -136,3 +136,25 @@ abstract interface class OutboxMessageSender {
     List<MessageMention> mentions,
   });
 }
+
+/// Stores the message of an attachment the outbox has uploaded. [clientId]
+/// makes it safe to repeat, as for [OutboxMessageSender].
+abstract interface class MediaMessageSender {
+  /// Returns the stored message's id, or null when the message was stored
+  /// by an earlier try (or AutoMod dropped it quietly).
+  ///
+  /// [attachment] is the attachment JSON; [type] is image or file. The
+  /// messages of one album share [attachmentGroupId]; only the first of
+  /// them ([notify]) sends a push notification.
+  Future<String?> sendQueuedMediaMessage({
+    required String conversationId,
+    required String clientId,
+    required MessageType type,
+    required Map<String, dynamic> attachment,
+    String body = '',
+    String? attachmentGroupId,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    bool notify = true,
+  });
+}

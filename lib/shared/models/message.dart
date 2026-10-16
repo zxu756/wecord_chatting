@@ -74,6 +74,8 @@ class ChatMessage {
     this.publishedAt,
     this.interaction,
     this.clientId,
+    this.attachmentGroupId,
+    this.album,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -118,6 +120,7 @@ class ChatMessage {
       publishedAt: _parseOptionalTimestamp(json['published_at']),
       interaction: MessageInteraction.maybeFromJson(json['interaction']),
       clientId: json['client_id'] as String?,
+      attachmentGroupId: json['attachment_group_id'] as String?,
     );
   }
 
@@ -186,6 +189,15 @@ class ChatMessage {
   /// The id the sender's app gave the message when it was written, so a
   /// send retried from the outbox is stored once.
   final String? clientId;
+
+  /// Shared by the messages of one album (pictures, videos and files sent
+  /// together); null for messages sent on their own.
+  final String? attachmentGroupId;
+
+  /// For the first message of an album, every message of it in order
+  /// (itself included). Set by the chat when it lays the list out; never
+  /// stored.
+  final List<ChatMessage>? album;
 
   /// Posted through a webhook: shown under the webhook's name, not as a
   /// message of [senderId] (the webhook's creator).
@@ -308,6 +320,7 @@ class ChatMessage {
     Object? webhookName = _sentinel,
     Object? webhookAvatarUrl = _sentinel,
     Object? publishedAt = _sentinel,
+    Object? album = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -369,6 +382,10 @@ class ChatMessage {
       crosspost: crosspost,
       interaction: interaction,
       clientId: clientId,
+      attachmentGroupId: attachmentGroupId,
+      album: identical(album, _sentinel)
+          ? this.album
+          : album as List<ChatMessage>?,
       publishedAt: identical(publishedAt, _sentinel)
           ? this.publishedAt
           : publishedAt as DateTime?,
@@ -561,6 +578,7 @@ class ImageAttachment {
     required this.size,
     this.width,
     this.height,
+    this.blurhash,
   });
 
   factory ImageAttachment.fromJson(Map<String, dynamic> json) {
@@ -572,8 +590,9 @@ class ImageAttachment {
       path: json['path'] as String,
       mimeType: json['mime_type'] as String,
       size: json['size'] as int,
-      width: json['width'] as int?,
-      height: json['height'] as int?,
+      width: (json['width'] as num?)?.toInt(),
+      height: (json['height'] as num?)?.toInt(),
+      blurhash: json['blurhash'] as String?,
     );
   }
 
@@ -584,6 +603,9 @@ class ImageAttachment {
   final int? width;
   final int? height;
 
+  /// A BlurHash of the picture, drawn while it loads (see blurhash.dart).
+  final String? blurhash;
+
   Map<String, dynamic> toJson() {
     return {
       'kind': 'image',
@@ -593,6 +615,7 @@ class ImageAttachment {
       'size': size,
       'width': width,
       'height': height,
+      if (blurhash != null) 'blurhash': blurhash,
     };
   }
 }
@@ -645,6 +668,9 @@ class FileAttachment {
     required this.name,
     required this.mimeType,
     required this.size,
+    this.width,
+    this.height,
+    this.blurhash,
   });
 
   static FileAttachment? maybeFromJson(Map<String, dynamic>? json) {
@@ -665,6 +691,9 @@ class FileAttachment {
           : path.split('/').last,
       mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
       size: (json['size'] as num?)?.toInt() ?? 0,
+      width: (json['width'] as num?)?.toInt(),
+      height: (json['height'] as num?)?.toInt(),
+      blurhash: json['blurhash'] as String?,
     );
   }
 
@@ -675,6 +704,12 @@ class FileAttachment {
   final String name;
   final String mimeType;
   final int size;
+
+  /// For videos sent from this app: the size of the poster frame (the
+  /// video's proportions) and a BlurHash of it.
+  final int? width;
+  final int? height;
+  final String? blurhash;
 
   /// Plays inline instead of showing as a download.
   bool get isVideo => mimeType.startsWith('video/');
@@ -687,6 +722,9 @@ class FileAttachment {
       'name': name,
       'mime_type': mimeType,
       'size': size,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
+      if (blurhash != null) 'blurhash': blurhash,
     };
   }
 }

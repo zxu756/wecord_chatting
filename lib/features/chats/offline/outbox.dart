@@ -5,6 +5,8 @@ import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
+import 'package:wecord/features/chats/media_send/outbox_media.dart';
 import 'package:wecord/shared/models/message.dart';
 
 enum OutboxState {
@@ -16,8 +18,9 @@ enum OutboxState {
   failed,
 }
 
-/// A text message the current user wrote that the server has not stored
-/// yet.
+/// A message the current user wrote (text), or an attachment they sent
+/// ([media]: one picture, video or file, perhaps of an album), that the
+/// server has not stored yet.
 @immutable
 class OutboxEntry {
   const OutboxEntry({
@@ -28,6 +31,7 @@ class OutboxEntry {
     this.replyToMessageId,
     this.replyPreview,
     this.mentions = const [],
+    this.media,
     this.attempts = 0,
     this.state = OutboxState.sending,
     this.nextAttemptAt,
@@ -37,6 +41,7 @@ class OutboxEntry {
   factory OutboxEntry.fromJson(Map<String, dynamic> json) {
     final reply = json['reply_preview'];
     final mentions = json['mentions'];
+    final media = json['media'];
     return OutboxEntry(
       clientId: json['client_id'] as String,
       conversationId: json['conversation_id'] as String,
@@ -52,6 +57,9 @@ class OutboxEntry {
             if (mention is Map)
               MessageMention.fromJson(Map<String, dynamic>.from(mention)),
       ],
+      media: media is Map
+          ? OutboxMedia.fromJson(Map<String, dynamic>.from(media))
+          : null,
       attempts: (json['attempts'] as num?)?.toInt() ?? 0,
       state: json['state'] == 'failed'
           ? OutboxState.failed
@@ -67,6 +75,9 @@ class OutboxEntry {
   final ReplyPreview? replyPreview;
   final List<MessageMention> mentions;
 
+  /// The attachment to upload and send ([body] is then its caption).
+  final OutboxMedia? media;
+
   /// Sends tried so far.
   final int attempts;
   final OutboxState state;
@@ -79,6 +90,10 @@ class OutboxEntry {
 
   /// The id the message shows under until the server stores it.
   String get pendingMessageId => pendingMessageIdFor(clientId);
+
+  /// The path its attachment shows under until it is uploaded; no such
+  /// object exists, the bubble draws the kept file instead.
+  String get pendingAttachmentPath => 'pending/$clientId';
 
   OutboxEntry copyWith({
     int? attempts,
@@ -94,6 +109,7 @@ class OutboxEntry {
       replyToMessageId: replyToMessageId,
       replyPreview: replyPreview,
       mentions: mentions,
+      media: media,
       attempts: attempts ?? this.attempts,
       state: state ?? this.state,
       nextAttemptAt: identical(nextAttemptAt, _keep)
@@ -112,6 +128,7 @@ class OutboxEntry {
       'reply_to_message_id': replyToMessageId,
       'reply_preview': replyPreview?.toJson(),
       'mentions': [for (final mention in mentions) mention.toJson()],
+      if (media != null) 'media': media!.toJson(),
       'attempts': attempts,
       'state': state == OutboxState.failed ? 'failed' : 'sending',
     };
@@ -123,8 +140,10 @@ class OutboxEntry {
       id: pendingMessageId,
       conversationId: conversationId,
       senderId: senderId,
-      type: MessageType.text,
+      type: media?.messageType ?? MessageType.text,
       body: body,
+      attachment: media?.attachmentJson(pendingAttachmentPath),
+      attachmentGroupId: media?.groupId,
       createdAt: createdAt,
       replyToMessageId: replyToMessageId,
       replyPreview: replyPreview,
@@ -182,6 +201,8 @@ bool isSendRefusal(Object error) {
   if (error is SlowmodeException ||
       error is SendRefusedException ||
       error is ChatFileTooLargeException ||
+      error is UploadCancelledException ||
+      (error is UploadException && error.isRefusal) ||
       error is StateError ||
       error is ArgumentError) {
     return true;
@@ -305,6 +326,13 @@ class OutboxEngine {
 
   /// The reader tapped a failed message: try it again from scratch.
   Future<OutboxAttempt> retry(String clientId) {
+    reset(clientId);
+    return sendNow(clientId);
+  }
+
+  /// Puts a failed message back in the queue as new, without sending it
+  /// yet (the next [drain] does).
+  void reset(String clientId) {
     _replace(
       clientId,
       (entry) => entry.copyWith(
@@ -314,7 +342,6 @@ class OutboxEngine {
         error: null,
       ),
     );
-    return sendNow(clientId);
   }
 
   /// Drops a message the reader no longer wants sent.

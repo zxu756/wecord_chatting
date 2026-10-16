@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:file_selector/file_selector.dart' show XFile;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -20,10 +22,8 @@ import 'package:wecord/features/chats/composer_shortcuts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/file_message.dart';
-import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/chats/gif_search.dart';
-import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/mention_picker.dart';
@@ -35,6 +35,14 @@ import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/offline/connectivity_banner.dart';
+import 'package:wecord/features/chats/media_send/album_fold.dart';
+import 'package:wecord/features/chats/media_send/album_grid.dart';
+import 'package:wecord/features/chats/media_send/chat_drop_zone.dart';
+import 'package:wecord/features/chats/media_send/clipboard_files.dart';
+import 'package:wecord/features/chats/media_send/media_picker.dart';
+import 'package:wecord/features/chats/media_send/media_prepare.dart';
+import 'package:wecord/features/chats/media_send/media_tray.dart';
+import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/chats/offline/outbox_provider.dart';
 import 'package:wecord/features/chats/pending_message.dart';
@@ -402,7 +410,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   late final StateController<String?> _activeConversationController;
   var _isSending = false;
   var _isPickingImage = false;
-  var _isSendingImage = false;
+  StreamSubscription<List<XFile>>? _pasteSubscription;
   var _isRecordingVoice = false;
   var _isSendingVoice = false;
   var _isTypingShared = false;
@@ -496,6 +504,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
     _scheduleActiveConversationUpdate(widget.conversationId);
     unawaited(_restoreDraft());
+    // Browsers hand pasted pictures and files over as events; macOS asks the
+    // pasteboard when the text field is pasted into (see _pasteFilesAction).
+    final clipboard = ref.read(clipboardFilesProvider);
+    if (kIsWeb && clipboard.isSupported) {
+      _pasteSubscription = clipboard.pasted.listen(_handlePastedFiles);
+    }
   }
 
   /// Puts the conversation's saved draft (text, picked mentions and reply)
@@ -586,6 +600,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   @override
   void dispose() {
+    unawaited(_pasteSubscription?.cancel());
     _typingTimer?.cancel();
     _highlightTimer?.cancel();
     if (_isTypingShared) {
@@ -1254,7 +1269,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
             Widget buildMessageItem(int index) {
               final message = display[index];
-              final pendingEntry = layout.pendingById[message.id];
+              final pendingEntry = layout.pendingEntryFor(message);
               final Widget bubble;
               if (message.type == MessageType.system) {
                 bubble = _SystemMessageLine(
@@ -1313,8 +1328,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       followUpIds.contains(newerMessage.id),
                   showReadReceipt:
                       pendingEntry == null &&
-                      latestOutgoingReadState.latestOutgoingMessageId ==
-                          message.id &&
+                      _endsWith(
+                        message,
+                        latestOutgoingReadState.latestOutgoingMessageId,
+                      ) &&
                       latestOutgoingReadState.isRead,
                   mentionsMe: _mentionsUser(message, currentUserId),
                   desktop: desktop,
@@ -1362,7 +1379,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   : PendingMessageFrame(
                       entry: pendingEntry,
                       alignEnd: !cards,
-                      onRetry: () => _retryPending(pendingEntry.clientId),
+                      onRetry: () => _retryPending(pendingEntry),
                       onDiscard: () => _discardPending(pendingEntry),
                       child: bubble,
                     );
@@ -1406,7 +1423,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
             Widget messageAt(int index) {
               final message = display[index];
-              final pendingEntry = layout.pendingById[message.id];
+              final pendingEntry = layout.pendingEntryFor(message);
               // Everything the item shows that may change. While it stays
               // the same, the item built last time is used again, so a
               // build of the screen (typing, the composer, a new message)
@@ -1429,7 +1446,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 pendingEntry,
                 followUpIds.contains(message.id),
                 newer != null && followUpIds.contains(newer.id),
-                latestOutgoingReadState.latestOutgoingMessageId == message.id &&
+                _endsWith(
+                      message,
+                      latestOutgoingReadState.latestOutgoingMessageId,
+                    ) &&
                     latestOutgoingReadState.isRead,
                 (sender?.name, sender?.avatarUrl, sender?.roleColor),
                 (desktop, cards, showSenders, canSend, canStartThreads, touch),
@@ -1561,54 +1581,67 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             else
               _SlowmodeGate(
                 until: _slowmodeUntil,
-                builder: (context, slowmodeRemaining) => _Composer(
-                  desktop: desktop,
-                  bottomGap: composerBottomGap,
-                  hint: composerHint(conversationType, title),
-                  slowmodeSeconds: slowmodeSeconds,
-                  slowmodeRemainingSeconds: slowmodeRemaining,
-                  controller: _composerController,
-                  isSending: _isSending,
-                  isPickingImage: _isPickingImage,
-                  isSendingImage: _isSendingImage,
-                  errorText: _sendError,
-                  mentionCandidates: _mentionCandidates(groupDetail),
-                  onSelectMention: _insertMention,
-                  specialMentionCandidates: _specialMentionCandidates(),
-                  onSelectSpecialMention: _insertSpecialMention,
-                  emojiCandidates: _emojiCandidates(),
-                  onSelectEmoji: _insertCustomEmoji,
-                  slashCommands: _slashCandidates(),
-                  botSlashCommands: _botSlashCandidates(),
-                  highlightedSlashIndex: _slashIndex,
-                  onSelectSlashCommand: _selectSlashCommand,
-                  onSelectBotSlashCommand: _selectBotSlashCommand,
-                  onComposerKey: _handleComposerKey,
-                  replyPreviewText: _replyingTo == null
-                      ? null
-                      : _replyPreviewBody(_replyingTo!, localized: true),
-                  isEditing: _editingMessage != null,
-                  onChanged: _handleComposerChanged,
-                  onSend: _sendMessage,
-                  onPickImage: _pickAndSendImage,
-                  onPickFile: _pickAndSendFile,
-                  onCreatePoll: _openPollComposer,
-                  onPickSticker: _pickAndSendSticker,
-                  onPickGif: _pickAndSendGif,
-                  onInsertEmoji: _pickAndInsertEmoji,
-                  gifAvailable: ref.watch(gifSearchAvailableProvider) != false,
-                  isRecordingVoice: _isRecordingVoice,
-                  isSendingVoice: _isSendingVoice,
-                  onStartVoiceRecording: _startVoiceRecording,
-                  onCancelVoiceRecording: _cancelVoiceRecording,
-                  onSendVoiceRecording: _sendVoiceRecording,
-                  onCancelReply: _cancelReply,
-                  onCancelEdit: _cancelEdit,
-                  // What is left above the keyboard, so a short phone keeps
-                  // some of the conversation in view while typing.
-                  availableHeight:
-                      constraints.maxHeight -
-                      MediaQuery.viewInsetsOf(context).bottom,
+                builder: (context, slowmodeRemaining) => Actions(
+                  actions: {
+                    if (!kIsWeb && ref.read(clipboardFilesProvider).isSupported)
+                      PasteTextIntent: _pasteFilesAction,
+                  },
+                  child: _Composer(
+                    desktop: desktop,
+                    bottomGap: composerBottomGap,
+                    hint: composerHint(conversationType, title),
+                    slowmodeSeconds: slowmodeSeconds,
+                    slowmodeRemainingSeconds: slowmodeRemaining,
+                    controller: _composerController,
+                    isSending: _isSending,
+                    isPickingImage: _isPickingImage,
+                    errorText: _sendError,
+                    mentionCandidates: _mentionCandidates(groupDetail),
+                    onSelectMention: _insertMention,
+                    specialMentionCandidates: _specialMentionCandidates(),
+                    onSelectSpecialMention: _insertSpecialMention,
+                    emojiCandidates: _emojiCandidates(),
+                    onSelectEmoji: _insertCustomEmoji,
+                    slashCommands: _slashCandidates(),
+                    botSlashCommands: _botSlashCandidates(),
+                    highlightedSlashIndex: _slashIndex,
+                    onSelectSlashCommand: _selectSlashCommand,
+                    onSelectBotSlashCommand: _selectBotSlashCommand,
+                    onComposerKey: _handleComposerKey,
+                    replyPreviewText: _replyingTo == null
+                        ? null
+                        : _replyPreviewBody(_replyingTo!, localized: true),
+                    isEditing: _editingMessage != null,
+                    onChanged: _handleComposerChanged,
+                    onSend: _sendMessage,
+                    onPickImage: _pickPhotosAndVideos,
+                    onPickFile: _pickFilesForTray,
+                    attachmentTray: MediaTray(
+                      conversationId: widget.conversationId,
+                      desktop: desktop,
+                      sendEnabled: slowmodeRemaining <= 0,
+                      onSend: _sendTray,
+                      onAddMore: _showAddMoreMenu,
+                    ),
+                    onCreatePoll: _openPollComposer,
+                    onPickSticker: _pickAndSendSticker,
+                    onPickGif: _pickAndSendGif,
+                    onInsertEmoji: _pickAndInsertEmoji,
+                    gifAvailable:
+                        ref.watch(gifSearchAvailableProvider) != false,
+                    isRecordingVoice: _isRecordingVoice,
+                    isSendingVoice: _isSendingVoice,
+                    onStartVoiceRecording: _startVoiceRecording,
+                    onCancelVoiceRecording: _cancelVoiceRecording,
+                    onSendVoiceRecording: _sendVoiceRecording,
+                    onCancelReply: _cancelReply,
+                    onCancelEdit: _cancelEdit,
+                    // What is left above the keyboard, so a short phone keeps
+                    // some of the conversation in view while typing.
+                    availableHeight:
+                        constraints.maxHeight -
+                        MediaQuery.viewInsetsOf(context).bottom,
+                  ),
                 ),
               ),
           ],
@@ -1626,6 +1659,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             removeTop: true,
             child: composerArea,
           ),
+        );
+
+        // Files dropped anywhere on the chat go to the tray (macOS and the
+        // web), unless the reader cannot send here or something sits over
+        // the chat.
+        Widget dropZone(Widget child) => ChatDropZone(
+          enabled: canSend && ModalRoute.of(context)?.isCurrent != false,
+          onFiles: (files) => unawaited(_addToTray(files)),
+          child: child,
         );
 
         if (desktop) {
@@ -1652,11 +1694,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           return Scaffold(
             backgroundColor: c.panel,
             body: profileUserId == null
-                ? chatColumn
+                ? dropZone(chatColumn)
                 : ResizableSidePanelRow(
                     panel: ResizablePanel.profile,
                     placement: profilePlacement,
-                    content: chatColumn,
+                    content: dropZone(chatColumn),
                     side: ChatProfilePanel(
                       userId: profileUserId,
                       name: title,
@@ -1666,46 +1708,48 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   ),
           );
         }
-        return Scaffold(
-          backgroundColor: c.panel,
-          body: AnnotatedRegion<SystemUiOverlayStyle>(
-            value: tokens.isDark
-                ? SystemUiOverlayStyle.light
-                : SystemUiOverlayStyle.dark,
-            child: Stack(
-              children: [
-                Positioned.fill(child: messagesArea),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  child: MeasureSize(
-                    onChange: (size) {
-                      if (mounted && size.height != _topInset) {
-                        setState(() => _topInset = size.height);
-                      }
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        header,
-                        for (final banner in banners)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                            child: banner,
-                          ),
-                      ],
+        return dropZone(
+          Scaffold(
+            backgroundColor: c.panel,
+            body: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: tokens.isDark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: messagesArea),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    child: MeasureSize(
+                      onChange: (size) {
+                        if (mounted && size.height != _topInset) {
+                          setState(() => _topInset = size.height);
+                        }
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          header,
+                          for (final banner in banners)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                              child: banner,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: floatingComposer,
-                ),
-              ],
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: floatingComposer,
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -1918,8 +1962,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
-  Future<void> _retryPending(String clientId) async {
-    await ref.read(outboxProvider.notifier).retry(clientId);
+  /// Whether [id] is [message] or, for an album, its last message.
+  static bool _endsWith(ChatMessage message, String? id) {
+    if (id == null) {
+      return false;
+    }
+    return message.id == id || message.album?.last.id == id;
+  }
+
+  Future<void> _retryPending(OutboxEntry entry) async {
+    final outbox = ref.read(outboxProvider.notifier);
+    if (entry.media != null) {
+      await outbox.retryMedia(entry);
+    } else {
+      await outbox.retry(entry.clientId);
+    }
   }
 
   /// Long-pressing a failed message offers to delete it.
@@ -1944,7 +2001,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
     );
     if (discard == true && mounted) {
-      ref.read(outboxProvider.notifier).discard(entry.clientId);
+      final outbox = ref.read(outboxProvider.notifier);
+      if (entry.media != null) {
+        outbox.discardMedia(entry);
+      } else {
+        outbox.discard(entry.clientId);
+      }
     }
   }
 
@@ -2450,57 +2512,78 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
-  Future<void> _pickAndSendImage() async {
-    if (_isPickingImage || _isSendingImage || _isSending || _isSlowedDown) {
+  MediaTrayController get _tray =>
+      ref.read(mediaTrayProvider(widget.conversationId).notifier);
+
+  /// Whether files can be added to the tray now: the composer is there and
+  /// not busy with an edit or a slowmode wait.
+  bool get _canAttach =>
+      mounted &&
+      _editingMessage == null &&
+      !_isRecordingVoice &&
+      !_isSlowedDown;
+
+  /// Puts files (picked, dropped or pasted) in the tray above the
+  /// composer.
+  Future<void> _addToTray(List<XFile> files) async {
+    if (files.isEmpty || !_canAttach) {
       return;
     }
+    setState(() => _sendError = null);
+    await _tray.add(files);
+  }
 
+  void _handlePastedFiles(List<XFile> files) {
+    // Only the chat in front takes a paste, and not while a dialog or the
+    // file viewer is open.
+    if (ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    unawaited(_addToTray(files));
+  }
+
+  /// Cmd+V in the composer: pictures and files on the pasteboard go to the
+  /// tray; anything else pastes as text.
+  late final _pasteFilesAction = _PasteFilesAction(
+    read: () => ref.read(clipboardFilesProvider).read(),
+    onFiles: (files) => unawaited(_addToTray(files)),
+    canAttach: () => _canAttach,
+  );
+
+  Future<void> _pickPhotosAndVideos() async {
+    if (_isPickingImage || _isSending || !_canAttach) {
+      return;
+    }
     setState(() {
       _isPickingImage = true;
       _sendError = null;
     });
-
     try {
-      final image = await ref.read(imagePickerServiceProvider).pickImage();
-      if (image == null) {
+      final room = ref.read(mediaTrayProvider(widget.conversationId)).room;
+      if (room <= 0) {
         return;
       }
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isPickingImage = false;
-        _isSendingImage = true;
-      });
-      await ref
-          .read(chatsRepositoryProvider)
-          .sendImageMessage(
-            conversationId: widget.conversationId,
-            image: image,
-          );
-      _refreshThread();
-    } on SlowmodeException catch (error) {
-      _waitOutSlowmode(error);
-    } on SendRefusedException catch (error) {
-      _showSendRefusal(error);
+      final files = await ref
+          .read(chatMediaPickerProvider)
+          .pickPhotosAndVideos(limit: room);
+      await _addToTray(files);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _sendError = _imageSendErrorText(error);
+          _sendError = tr('Could not open your photos. Try again. {error}', {
+            'error': error,
+          });
         });
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isPickingImage = false;
-          _isSendingImage = false;
-        });
+        setState(() => _isPickingImage = false);
       }
     }
   }
 
-  Future<void> _pickAndSendFile() async {
-    if (_isPickingImage || _isSendingImage || _isSending || _isSlowedDown) {
+  Future<void> _pickFilesForTray() async {
+    if (_isPickingImage || _isSending || !_canAttach) {
       return;
     }
     setState(() {
@@ -2508,38 +2591,108 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _sendError = null;
     });
     try {
-      final file = await ref.read(chatFilePickerServiceProvider).pickFile();
-      if (file == null || !mounted) {
-        return;
-      }
-      setState(() {
-        _isPickingImage = false;
-        _isSendingImage = true;
-      });
-      await ref
-          .read(chatsRepositoryProvider)
-          .sendFileMessage(
-            conversationId: widget.conversationId,
-            fileName: file.name,
-            mimeType: file.mimeType,
-            bytes: file.bytes,
-          );
-      _refreshThread();
-    } on SlowmodeException catch (error) {
-      _waitOutSlowmode(error);
-    } on SendRefusedException catch (error) {
-      _showSendRefusal(error);
+      final files = await ref.read(chatMediaPickerProvider).pickFiles();
+      await _addToTray(files);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _sendError = _fileSendErrorText(error);
+          _sendError = tr('Could not open the files. Try again. {error}', {
+            'error': error,
+          });
         });
       }
     } finally {
       if (mounted) {
+        setState(() => _isPickingImage = false);
+      }
+    }
+  }
+
+  /// The tray's "add more": the same two choices as the attach menu.
+  void _showAddMoreMenu(BuildContext anchorContext) {
+    showGlassMenu(
+      anchorContext,
+      anchor: globalRectOf(anchorContext),
+      width: 232,
+      entries: [
+        GlassMenuEntry(
+          icon: Icons.image_outlined,
+          label: tr('Photos and videos'),
+          onSelected: () => unawaited(_pickPhotosAndVideos()),
+        ),
+        GlassMenuEntry(
+          icon: Icons.attach_file_rounded,
+          label: tr('Files'),
+          onSelected: () => unawaited(_pickFilesForTray()),
+        ),
+      ],
+    );
+  }
+
+  /// Sends what the tray holds: photos are scaled and cleaned, everything
+  /// is copied to the pending media store, and the attachments appear in
+  /// the chat at once as one album, uploading with progress rings. They go
+  /// out through the outbox, so they are tried again after a failure and
+  /// survive closing the app (where files are kept on disk).
+  Future<void> _sendTray() async {
+    final tray = ref.read(mediaTrayProvider(widget.conversationId));
+    if (!tray.canSend || _isSlowedDown || _editingMessage != null) {
+      return;
+    }
+    final outbox = ref.read(outboxProvider.notifier);
+    if (!outbox.isAvailable) {
+      setState(() {
+        _sendError = tr('Could not send message. Try again.');
+      });
+      return;
+    }
+    final controller = _tray;
+    controller.setPreparing((0, tray.items.length));
+    setState(() => _sendError = null);
+    try {
+      final items = await prepareDrafts(
+        tray.items,
+        original: tray.original,
+        onProgress: (done, total) => controller.setPreparing((done, total)),
+      );
+      if (!mounted) {
+        return;
+      }
+      final replyingTo = _replyingTo;
+      final entries = await outbox.enqueueMedia(
+        conversationId: widget.conversationId,
+        items: items,
+        caption: tray.caption.trim(),
+        replyToMessageId: replyingTo?.id,
+        replyPreview: replyingTo == null
+            ? null
+            : _replyPreviewForMessage(replyingTo),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (entries.isEmpty) {
+        controller.setPreparing(null);
+        setState(() => _sendError = tr('Could not send message. Try again.'));
+        return;
+      }
+      controller.clear();
+      setState(() {
+        _replyingTo = null;
+        _pendingDraftReplyId = null;
+      });
+      _saveDraft();
+      if (!_isAtBottom || _threadData?.hasNewer == true) {
+        _jumpToLatest();
+      }
+      unawaited(outbox.startSending());
+    } catch (error) {
+      controller.setPreparing(null);
+      if (mounted) {
         setState(() {
-          _isPickingImage = false;
-          _isSendingImage = false;
+          _sendError = tr('Could not prepare the files. Try again. {error}', {
+            'error': error,
+          });
         });
       }
     }
@@ -3229,9 +3382,14 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
     }
     try {
-      await ref
-          .read(chatsRepositoryProvider)
-          .recallMessage(messageId: message.id);
+      // An album goes as a whole.
+      for (final item in message.album ?? [message]) {
+        if (!isPendingMessageId(item.id)) {
+          await ref
+              .read(chatsRepositoryProvider)
+              .recallMessage(messageId: item.id);
+        }
+      }
       _refreshThread(messageId: message.id);
     } catch (_) {
       if (mounted) {
@@ -4063,6 +4221,12 @@ class _MessageBubble extends StatelessWidget {
 
   bool get _isRecalled => message.recalledAt != null;
 
+  /// Still being sent (or part of an album that is): there is no stored
+  /// message to reply to, react to or delete yet.
+  bool get _isPending =>
+      isPendingMessageId(message.id) ||
+      (message.album?.any((item) => isPendingMessageId(item.id)) ?? false);
+
   /// The link whose preview card shows under this message, if any.
   String? get _previewUrl {
     if (message.recalledAt != null ||
@@ -4299,7 +4463,8 @@ class _MessageBubble extends StatelessWidget {
         message.isPublished) {
       return false;
     }
-    return message.imageAttachment != null ||
+    return message.album != null ||
+        MessageMediaGroup.isTile(message) ||
         (message.type == MessageType.text && gifUrlIn(message.body) != null);
   }
 
@@ -4308,7 +4473,6 @@ class _MessageBubble extends StatelessWidget {
     return _MessageContent(
       message: message,
       messagesById: messagesById,
-      imageAttachment: isRecalled ? null : message.imageAttachment,
       voiceAttachment: isRecalled ? null : message.voiceAttachment,
       textColor: textColor,
       isRecalled: isRecalled,
@@ -4361,7 +4525,7 @@ class _MessageBubble extends StatelessWidget {
         ? const <MessageReaction>[]
         : message.reactions;
     final previewUrl = _previewUrl;
-    final canShowActions = !_isRecalled;
+    final canShowActions = !_isRecalled && !_isPending;
     final avatarSize = desktop ? 32.0 : 30.0;
     final showAvatar = sender != null && !outgoing;
     final indent = showAvatar ? avatarSize + 8 : 0.0;
@@ -4539,7 +4703,7 @@ class _MessageBubble extends StatelessWidget {
         ? const <MessageReaction>[]
         : message.reactions;
     final previewUrl = _previewUrl;
-    final canShowActions = !_isRecalled;
+    final canShowActions = !_isRecalled && !_isPending;
     final density = context.density;
     final avatarSize = density.avatar(desktop ? 40 : 36);
     final side = desktop ? 24.0 : 14.0;
@@ -5021,7 +5185,6 @@ class _MessageContent extends StatelessWidget {
   const _MessageContent({
     required this.message,
     required this.messagesById,
-    required this.imageAttachment,
     required this.voiceAttachment,
     required this.textColor,
     required this.isRecalled,
@@ -5033,7 +5196,6 @@ class _MessageContent extends StatelessWidget {
 
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
-  final ImageAttachment? imageAttachment;
   final VoiceAttachment? voiceAttachment;
   final Color textColor;
   final bool isRecalled;
@@ -5084,11 +5246,11 @@ class _MessageContent extends StatelessWidget {
       ],
     ];
 
-    final attachment = imageAttachment;
-    if (attachment != null) {
+    if (message.album != null || MessageMediaGroup.isTile(message)) {
       content.add(
-        _ImageMessageContent(
-          attachment: attachment,
+        MessageMediaGroup(
+          messages: message.album ?? [message],
+          textColor: textColor,
           desktop: desktop,
           framed: cards,
         ),
@@ -5517,7 +5679,6 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.isSending,
     required this.isPickingImage,
-    required this.isSendingImage,
     required this.errorText,
     required this.mentionCandidates,
     required this.onSelectMention,
@@ -5550,7 +5711,11 @@ class _Composer extends StatelessWidget {
     required this.onCancelReply,
     required this.onCancelEdit,
     required this.availableHeight,
+    this.attachmentTray,
   });
+
+  /// The tray of files waiting to be sent, above the composer pill.
+  final Widget? attachmentTray;
 
   /// Desktop sizes: a 22 radius pill, a send button that is always there.
   final bool desktop;
@@ -5561,7 +5726,6 @@ class _Composer extends StatelessWidget {
   final TextEditingController controller;
   final bool isSending;
   final bool isPickingImage;
-  final bool isSendingImage;
   final String? errorText;
   final List<GroupMember> mentionCandidates;
   final ValueChanged<GroupMember> onSelectMention;
@@ -5619,7 +5783,7 @@ class _Composer extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     final c = tokens.colors;
-    final isBusy = isSending || isSendingImage || isSendingVoice;
+    final isBusy = isSending || isSendingVoice;
     // Edits are not new messages, so slowmode leaves them alone.
     final isSlowed = slowmodeRemainingSeconds > 0 && !isEditing;
     final compact = isCompactWidth(MediaQuery.sizeOf(context).width);
@@ -5632,73 +5796,53 @@ class _Composer extends StatelessWidget {
         specialMentionCandidates.isNotEmpty ||
         mentionCandidates.isNotEmpty;
 
-    final attach = isSendingImage
-        ? Tooltip(
-            message: tr('Sending image'),
-            child: Container(
-              width: buttonSize,
-              height: buttonSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: c.raised,
-                shape: BoxShape.circle,
-              ),
-              child: SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: c.muted,
-                ),
-              ),
-            ),
-          )
-        : Builder(
-            builder: (buttonContext) => WeCordIconButton(
-              key: const ValueKey('composer-attach-button'),
-              tooltip: tr('Attach'),
-              icon: Icons.add_rounded,
-              size: buttonSize,
-              iconSize: 24,
-              onPressed: canAttach
-                  ? () => showGlassMenu(
-                      buttonContext,
-                      anchor: globalRectOf(buttonContext),
-                      width: 232,
-                      entries: [
-                        GlassMenuEntry(
-                          icon: Icons.image_outlined,
-                          label: tr('Send image'),
-                          onSelected: () => unawaited(onPickImage()),
-                        ),
-                        GlassMenuEntry(
-                          icon: Icons.attach_file_rounded,
-                          label: tr('Send file or video'),
-                          onSelected: () => unawaited(onPickFile()),
-                        ),
-                        GlassMenuEntry(
-                          icon: Icons.poll_outlined,
-                          label: tr('Create poll'),
-                          onSelected: () => unawaited(onCreatePoll()),
-                        ),
-                        GlassMenuEntry(
-                          icon: Icons.sticky_note_2_outlined,
-                          label: tr('Send sticker'),
-                          onSelected: () => unawaited(onPickSticker()),
-                        ),
-                        // Wider screens have a GIF button of their own.
-                        if (compact)
-                          GlassMenuEntry(
-                            icon: Icons.gif_box_outlined,
-                            label: tr('Send GIF'),
-                            onSelected: gifAvailable
-                                ? () => unawaited(onPickGif())
-                                : null,
-                          ),
-                      ],
-                    )
-                  : null,
-            ),
-          );
+    final attach = Builder(
+      builder: (buttonContext) => WeCordIconButton(
+        key: const ValueKey('composer-attach-button'),
+        tooltip: tr('Attach'),
+        icon: Icons.add_rounded,
+        size: buttonSize,
+        iconSize: 24,
+        onPressed: canAttach
+            ? () => showGlassMenu(
+                buttonContext,
+                anchor: globalRectOf(buttonContext),
+                width: 232,
+                entries: [
+                  GlassMenuEntry(
+                    icon: Icons.image_outlined,
+                    label: tr('Photos and videos'),
+                    onSelected: () => unawaited(onPickImage()),
+                  ),
+                  GlassMenuEntry(
+                    icon: Icons.attach_file_rounded,
+                    label: tr('Files'),
+                    onSelected: () => unawaited(onPickFile()),
+                  ),
+                  GlassMenuEntry(
+                    icon: Icons.poll_outlined,
+                    label: tr('Create poll'),
+                    onSelected: () => unawaited(onCreatePoll()),
+                  ),
+                  GlassMenuEntry(
+                    icon: Icons.sticky_note_2_outlined,
+                    label: tr('Send sticker'),
+                    onSelected: () => unawaited(onPickSticker()),
+                  ),
+                  // Wider screens have a GIF button of their own.
+                  if (compact)
+                    GlassMenuEntry(
+                      icon: Icons.gif_box_outlined,
+                      label: tr('Send GIF'),
+                      onSelected: gifAvailable
+                          ? () => unawaited(onPickGif())
+                          : null,
+                    ),
+                ],
+              )
+            : null,
+      ),
+    );
 
     final field = isRecordingVoice
         ? Row(
@@ -6011,6 +6155,10 @@ class _Composer extends StatelessWidget {
               ],
               if (slowmodeSeconds > 0) ...[
                 _SlowmodeBanner(remainingSeconds: slowmodeRemainingSeconds),
+                const SizedBox(height: 6),
+              ],
+              if (attachmentTray != null) ...[
+                attachmentTray!,
                 const SizedBox(height: 6),
               ],
               pill,
@@ -6402,32 +6550,6 @@ String _replyPreviewBody(ChatMessage message, {bool localized = false}) {
   };
 }
 
-String _fileSendErrorText(Object error) {
-  if (error is ChatFileTooLargeException) {
-    return '$error';
-  }
-  if (error is TimeoutException) {
-    return tr(
-      'Could not upload the file. The request timed out. Check your '
-      'network and try again.',
-    );
-  }
-  return tr('Could not send the file. Try again. {error}', {'error': error});
-}
-
-String _imageSendErrorText(Object error) {
-  if (error is ImagePickerException) {
-    return error.message;
-  }
-  if (error is TimeoutException) {
-    return tr(
-      'Could not upload image. The request timed out. Try a smaller image '
-      'or check your network.',
-    );
-  }
-  return tr('Could not send image. Try again. {error}', {'error': error});
-}
-
 _LatestOutgoingReadState _latestOutgoingReadState({
   required List<ChatMessage> messages,
   required List<ConversationReadMarker> readMarkers,
@@ -6524,6 +6646,35 @@ class _LatestOutgoingReadState {
 
 /// The loaded messages laid out for the list (see
 /// `_ChatThreadScreenState._layoutFor`).
+/// Pastes pictures and files from the macOS pasteboard into the tray. When
+/// the pasteboard holds none (plain text), the text field's own paste runs.
+class _PasteFilesAction extends ContextAction<PasteTextIntent> {
+  _PasteFilesAction({
+    required this.read,
+    required this.onFiles,
+    required this.canAttach,
+  });
+
+  final Future<List<XFile>> Function() read;
+  final void Function(List<XFile> files) onFiles;
+  final bool Function() canAttach;
+
+  @override
+  Object? invoke(PasteTextIntent intent, [BuildContext? context]) {
+    unawaited(_paste(intent));
+    return null;
+  }
+
+  Future<void> _paste(PasteTextIntent intent) async {
+    final files = canAttach() ? await read() : const <XFile>[];
+    if (files.isNotEmpty) {
+      onFiles(files);
+      return;
+    }
+    callingAction?.invoke(intent);
+  }
+}
+
 class _ThreadLayout {
   _ThreadLayout._({
     required this.messages,
@@ -6581,12 +6732,23 @@ class _ThreadLayout {
         pendingMessages.add(entry.toPendingMessage(currentUserId));
       }
     }
-    final display = pendingMessages.isEmpty
+    final unfolded = pendingMessages.isEmpty
         ? visible
         : [...visible, ...pendingMessages];
+    // Pictures sent together show as one album bubble. (Not while
+    // searching: a result is a single message.)
+    final folded = searching
+        ? FoldedAlbums(messages: unfolded, headOf: const {})
+        : foldAlbums(unfolded);
+    final display = folded.messages;
     final displayIndex = {
       for (final (index, message) in display.indexed) message.id: index,
     };
+    // The rest of an album is found where its first message is.
+    for (final MapEntry(key: siblingId, value: headId)
+        in folded.headOf.entries) {
+      displayIndex[siblingId] = displayIndex[headId]!;
+    }
     // Grouping compares neighbours, which search results are not.
     final followUpIds = !searching
         ? _followUpMessageIds(display, newMessageDividerId: dividerId)
@@ -6665,6 +6827,29 @@ class _ThreadLayout {
 
   /// Outbox entries by the id their message shows under.
   final Map<String, OutboxEntry> pendingById;
+
+  /// The outbox entry that [message]'s bubble shows the status of: its own,
+  /// or for an album the first of its attachments that failed, else the
+  /// first still sending.
+  OutboxEntry? pendingEntryFor(ChatMessage message) {
+    final album = message.album;
+    if (album == null) {
+      return pendingById[message.id];
+    }
+    OutboxEntry? sending;
+    for (final item in album) {
+      final entry = pendingById[item.id];
+      if (entry == null) {
+        continue;
+      }
+      if (entry.state == OutboxState.failed) {
+        return entry;
+      }
+      sending ??= entry;
+    }
+    return sending;
+  }
+
   final Set<String> followUpIds;
   final Set<String> dayStartIds;
   final String? openingPostId;

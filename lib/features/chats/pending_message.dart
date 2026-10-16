@@ -71,9 +71,14 @@ class PendingMessageFrame extends StatelessWidget {
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        IgnorePointer(
-          child: Opacity(opacity: failed ? 0.55 : 0.7, child: child),
-        ),
+        // Attachments show their own progress, cancel and retry buttons, so
+        // they stay at full strength and tappable.
+        if (entry.media != null)
+          child
+        else
+          IgnorePointer(
+            child: Opacity(opacity: failed ? 0.55 : 0.7, child: child),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
           child: status,

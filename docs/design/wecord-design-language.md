@@ -203,6 +203,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `showWeCordSheet` / `WeCordSheet` | Bottom sheets: 28 corners, grabber, optional title; `detents` (e.g. `[0.5, 0.92]`) make it a snapping draggable sheet. |
 | `WeCordMotion` / `WeCordSpring` / `SpringCurve` / `WeCordHaptics` | Motion and haptics above. |
 | `MacosTitleBarFrame` / `MacosWindowDragArea` / `macosTitleBarInset` | The macOS window under a transparent title bar (below). |
+| `MediaTray` / `MessageMediaGroup` / `MediaTile` (`lib/features/chats/media_send/`) | Sending pictures, videos and files: the glass tray above the composer (72–84 thumbnails, remove badges, caption, "Original quality" switch, accent send pill), and the album grid in a bubble (justified rows, 2 px gaps, 16 outer / 4 inner corners, BlurHash under every tile, progress ring with a cancel button while uploading, a red retry button once failed). `ChatDropOverlay` is the dashed accent frame and glass card shown while files are dragged over the chat. |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,

@@ -354,7 +354,8 @@ class SupabaseChatsRepository
         ChatsRepository,
         MessageHistorySource,
         ConversationRowsSource,
-        OutboxMessageSender {
+        OutboxMessageSender,
+        MediaMessageSender {
   SupabaseChatsRepository(
     SupabaseClient client, {
     Future<void> Function(String messageId)? onMessageSent,
@@ -490,6 +491,57 @@ class SupabaseChatsRepository
   }
 
   @override
+  Future<String?> sendQueuedMediaMessage({
+    required String conversationId,
+    required String clientId,
+    required MessageType type,
+    required Map<String, dynamic> attachment,
+    String body = '',
+    String? attachmentGroupId,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    bool notify = true,
+  }) async {
+    final userId = _requireCurrentUserId();
+    // Older servers lack the album column (202610170001) or client ids
+    // (202610160047); they get the message without them.
+    var withGroup = attachmentGroupId != null;
+    var withClientId = true;
+    while (true) {
+      final values = {
+        'conversation_id': conversationId,
+        'sender_id': userId,
+        'type': type.toJson(),
+        'body': body,
+        'attachment': attachment,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
+        if (withGroup) 'attachment_group_id': attachmentGroupId,
+        if (withClientId) 'client_id': clientId,
+      };
+      try {
+        return await _send(
+          conversationId,
+          () => _dataSource.insertMessage(values),
+          notify: notify,
+        );
+      } on PostgrestException catch (error) {
+        if (error.code == '23505' && withClientId) {
+          // Stored by an earlier try whose answer got lost.
+          return null;
+        }
+        if (error.code == 'PGRST204' && withGroup) {
+          withGroup = false;
+        } else if (error.code == 'PGRST204' && withClientId) {
+          withClientId = false;
+        } else {
+          rethrow;
+        }
+      }
+    }
+  }
+
+  @override
   Future<ConversationSummary?> getConversationSummary(
     String conversationId,
   ) async {
@@ -586,8 +638,9 @@ class SupabaseChatsRepository
   /// Returns the stored message's id.
   Future<String?> _send(
     String conversationId,
-    Future<Object?> Function() send,
-  ) async {
+    Future<Object?> Function() send, {
+    bool notify = true,
+  }) async {
     final Object? messageId;
     try {
       messageId = await send();
@@ -603,7 +656,9 @@ class SupabaseChatsRepository
       rethrow;
     }
     if (messageId is String) {
-      unawaited(_onMessageSent?.call(messageId));
+      if (notify) {
+        unawaited(_onMessageSent?.call(messageId));
+      }
       return messageId;
     }
     // AutoMod refuses some sends quietly, so that its alerts and timeouts

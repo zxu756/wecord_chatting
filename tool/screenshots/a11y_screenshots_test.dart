@@ -62,6 +62,10 @@ void main() {
       if (only != null && !only.contains(screen.name)) {
         continue;
       }
+      // A screen made for one text size is shot at that size only.
+      if (screen.viewport.textScale > 1 && screen.viewport.textScale != scale) {
+        continue;
+      }
       testWidgets('${screen.name} $suffix', (tester) async {
         if (screen.desktop) {
           debugDefaultTargetPlatformOverride = TargetPlatform.macOS;

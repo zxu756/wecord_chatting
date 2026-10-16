@@ -39,6 +39,15 @@ const desktopViewport = PhoneViewport(
   devicePixelRatio: 1,
 );
 
+/// The desktop window with the text at the largest size people set (2.0x):
+/// sidebar rows must grow with it instead of clipping.
+const desktopLargeTextViewport = PhoneViewport(
+  name: '1280x800 at 2.0x text',
+  size: Size(1280, 800),
+  devicePixelRatio: 1,
+  textScale: 2,
+);
+
 Future<void> _openThread(
   WidgetTester tester,
   PhoneWorld world, {
@@ -174,6 +183,35 @@ final a11yScreens = <A11yScreen>[
   ),
 ];
 
+/// The desktop sidebars at 2.0x text, which the screenshot tool and the
+/// guideline guard visit whatever text size they are run at.
+final desktopLargeTextScreens = <A11yScreen>[
+  A11yScreen(
+    'desktop-home-2x-text',
+    (tester, world) async {
+      await world.open(tester, '/home');
+    },
+    viewport: desktopLargeTextViewport,
+    desktop: true,
+  ),
+  A11yScreen(
+    'desktop-circle-2x-text',
+    (tester, world) async {
+      await world.open(tester, '/circles/circle-1');
+    },
+    viewport: desktopLargeTextViewport,
+    desktop: true,
+  ),
+  A11yScreen(
+    'desktop-direct-thread-2x-text',
+    (tester, world) async {
+      await world.open(tester, '/chats/dm-1');
+    },
+    viewport: desktopLargeTextViewport,
+    desktop: true,
+  ),
+];
+
 // Screens that need a little more set up.
 
 Future<Object?> _discoveryRpc(String name, Map<String, dynamic> params) async {
@@ -272,4 +310,8 @@ final moreA11yScreens = <A11yScreen>[
 ];
 
 /// Every screen the guard and the screenshot tool visit.
-final allA11yScreens = <A11yScreen>[...a11yScreens, ...moreA11yScreens];
+final allA11yScreens = <A11yScreen>[
+  ...a11yScreens,
+  ...moreA11yScreens,
+  ...desktopLargeTextScreens,
+];

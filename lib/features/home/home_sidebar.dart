@@ -259,8 +259,8 @@ class _SidebarSearchField extends StatelessWidget {
         final hovered = states.contains(WidgetState.hovered);
         return AnimatedContainer(
           duration: WeCordMotion.quick,
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: tokens.isDark ? c.raised : c.panel,
             borderRadius: BorderRadius.circular(12),
@@ -353,8 +353,9 @@ class SidebarNavRow extends StatelessWidget {
         builder: (context, states) => AnimatedContainer(
           duration: WeCordMotion.quick,
           curve: WeCordMotion.standard,
-          height: context.density.rowHeight(40),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          // A minimum, so large text grows the row instead of clipping.
+          constraints: BoxConstraints(minHeight: context.density.rowHeight(40)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: sidebarRowDecoration(
             tokens,
             selected: selected,

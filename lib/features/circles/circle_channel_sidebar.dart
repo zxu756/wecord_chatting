@@ -1888,8 +1888,14 @@ class CircleChannelRow extends StatelessWidget {
             return AnimatedContainer(
               duration: WeCordMotion.quick,
               curve: WeCordMotion.standard,
-              height: height,
-              padding: EdgeInsets.only(left: wide ? 10 : 12, right: 8),
+              // A minimum, so large text grows the row instead of clipping.
+              constraints: BoxConstraints(minHeight: height),
+              padding: EdgeInsets.only(
+                left: wide ? 10 : 12,
+                right: 8,
+                top: 4,
+                bottom: 4,
+              ),
               decoration: BoxDecoration(
                 color: fill,
                 borderRadius: radius,

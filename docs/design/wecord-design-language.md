@@ -338,4 +338,7 @@ the WeCord components in new and restyled screens.
 - **Text size**: layouts are checked at 1.6× and 2.0× with
   `tool/screenshots/a11y_screenshots_test.dart` (also dark and high
   contrast, into `build/a11y/`). Large page titles shrink to fit their row;
-  buttons, chips and cards grow.
+  buttons, chips and cards grow. Desktop sidebars are checked at 2.0x too
+  (the `desktop-*-2x-text` screens, and `test/accessibility/large_text_test.dart`
+  fails when text in a sidebar row is taller than the row): rows use
+  `minHeight`, never a fixed `height`.

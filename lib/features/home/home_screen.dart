@@ -18,6 +18,8 @@ class HomeScreen extends StatelessWidget {
       return const ContactsScreen();
     }
     return Scaffold(
+      // The frame makes room for the keyboard itself.
+      resizeToAvoidBottomInset: false,
       body: PhoneHomeFrame(
         homeSelected: true,
         panelBuilder: (context, bottomInset) =>

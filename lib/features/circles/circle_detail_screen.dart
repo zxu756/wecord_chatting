@@ -120,6 +120,8 @@ class CircleMobileHome extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final circleId = detail.circle.id;
     return Scaffold(
+      // The frame makes room for the keyboard itself.
+      resizeToAvoidBottomInset: false,
       body: PhoneHomeFrame(
         selectedCircleId: circleId,
         panelBuilder: (context, bottomInset) => CircleChannelSidebar(

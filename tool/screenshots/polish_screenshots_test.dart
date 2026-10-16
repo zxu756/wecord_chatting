@@ -274,5 +274,12 @@ void main() {
     await world.open(tester, '/circles/circle-1');
   });
 
+  // 6. A circle on the phone with the keyboard up: no user panel over
+  // the channel rows.
+  screen('circle-keyboard', (tester, world, desktop) async {
+    await world.open(tester, '/circles/circle-1');
+    await showKeyboard(tester, notchedPhone);
+  }, desktop: false);
+
   // MARKER: more screens
 }

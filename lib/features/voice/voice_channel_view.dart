@@ -1,19 +1,22 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
+import 'package:wecord/features/voice/voice_ui.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// From this width the voice view shows its chat beside the call; below
 /// it the chat opens full screen.
@@ -22,11 +25,12 @@ const voiceChatPanelBreakpoint = 760.0;
 /// How wide the chat beside the call is.
 const voiceChatPanelWidth = 360.0;
 
-/// A voice channel: while the current user is connected to it, everyone in
-/// the call (video when they publish it, the shared screen larger) and the
-/// call controls; otherwise who is there and a Join button. The chat button
-/// opens the channel's own text chat, beside the call on wide screens.
-/// A stage shows its speakers above its audience instead ([StageView]).
+/// A voice channel, as a dark room: while the current user is connected to
+/// it, everyone in the call (video when they publish it, the shared screen
+/// larger) above a floating glass control bar; otherwise who is there and
+/// a Join button. The chat button opens the channel's own text chat,
+/// beside the call on wide screens. A stage shows its speakers above its
+/// audience instead ([StageView]).
 class VoiceChannelView extends ConsumerStatefulWidget {
   const VoiceChannelView({
     required this.circleId,
@@ -107,10 +111,13 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
     final session = ref.watch(voiceSessionProvider);
     final channelId = widget.channelId;
     final here = session != null && session.channelId == channelId;
+    final connected = here && session.isConnected;
     final members = voiceMembersIn(
       watchVoiceStates(ref, widget.circleId),
       channelId,
     );
+    final stageLive =
+        widget.isStage && watchStage(ref, widget.circleId, channelId) != null;
     final chatBuilder = widget.chatBuilder;
     final unread = chatBuilder == null
         ? 0
@@ -124,7 +131,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
               0;
 
     final Widget body;
-    if (widget.isStage && here && session.isConnected) {
+    if (widget.isStage && connected) {
       body = StageView(
         session: session,
         circleId: widget.circleId,
@@ -147,7 +154,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
           channelName: widget.channelName,
         ),
       );
-    } else if (here && session.isConnected) {
+    } else if (connected) {
       body = VoiceCallGrid(
         session: session,
         moderation: widget.moderation,
@@ -163,19 +170,10 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
         },
       );
     } else if (here) {
-      body = Center(
-        key: const ValueKey('voice-connecting'),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 12),
-            Text(tr('Connecting…')),
-          ],
-        ),
-      );
+      body = const _Connecting();
     } else {
       body = _NotConnected(
+        channelName: widget.channelName,
         members: members,
         canConnect: widget.canConnect,
         onJoin: () => joinVoiceChannel(
@@ -189,193 +187,430 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
       );
     }
 
-    final call = Column(
-      children: [
-        Expanded(child: body),
-        if (here && session.isConnected)
-          SizedBox(
-            width: double.infinity,
-            child: widget.isStage
-                ? StageControls(
-                    session: session,
-                    circleId: widget.circleId,
-                    channelId: channelId,
-                    moderator: widget.stageModerator,
-                    soundboard: (
-                      circleId: widget.circleId,
-                      canManage: widget.canManageSounds,
-                    ),
-                  )
-                : VoiceCallControls(
-                    session: session,
-                    soundboard: (
-                      circleId: widget.circleId,
-                      canManage: widget.canManageSounds,
-                    ),
-                  ),
-          ),
-      ],
-    );
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= voiceChatPanelBreakpoint;
         final showPanel = wide && _chatOpen && chatBuilder != null;
-        final chatButton = chatBuilder == null
+        final chatTooltip = showPanel ? tr('Hide chat') : tr('Show chat');
+        final chatIcon = showPanel
+            ? Icons.chat_bubble_rounded
+            : Icons.chat_bubble_outline_rounded;
+        final chatBadge = unread > 0 && !showPanel ? unread : null;
+        const chatBadgeKey = ValueKey('voice-chat-unread-badge');
+        // While connected the chat sits in the control bar.
+        final chatControl = chatBuilder == null || !connected
             ? null
-            : IconButton(
+            : VoiceControl(
                 key: const ValueKey('voice-chat-button'),
-                tooltip: showPanel ? tr('Hide chat') : tr('Show chat'),
-                isSelected: showPanel,
+                icon: chatIcon,
+                tooltip: chatTooltip,
+                on: showPanel,
+                badgeCount: chatBadge,
+                badgeKey: chatBadgeKey,
                 onPressed: () => _toggleChat(wide),
-                icon: Badge(
-                  key: unread > 0
-                      ? const ValueKey('voice-chat-unread-badge')
-                      : null,
-                  isLabelVisible: unread > 0 && !showPanel,
-                  label: Text(unread > 99 ? '99+' : '$unread'),
-                  child: Icon(
-                    showPanel ? Icons.chat_bubble : Icons.chat_bubble_outline,
-                  ),
-                ),
               );
+
+        final Widget? controls = !connected
+            ? null
+            : widget.isStage
+            ? StageControls(
+                session: session,
+                circleId: widget.circleId,
+                channelId: channelId,
+                moderator: widget.stageModerator,
+                soundboard: (
+                  circleId: widget.circleId,
+                  canManage: widget.canManageSounds,
+                ),
+                chat: chatControl,
+              )
+            : VoiceCallControls(
+                session: session,
+                soundboard: (
+                  circleId: widget.circleId,
+                  canManage: widget.canManageSounds,
+                ),
+                chat: chatControl,
+              );
+
+        final room = VoiceRoomTheme(
+          child: Builder(
+            builder: (context) {
+              final c = context.tokens.colors;
+              final count = members.length;
+              final String status;
+              final Color statusColor;
+              if (widget.isStage) {
+                status = stageLive
+                    ? tr('Stage live · {count}', {'count': count})
+                    : tr('Stage');
+                statusColor = stageLive ? c.successText : c.muted;
+              } else if (connected) {
+                status = tr('Voice connected');
+                statusColor = c.successText;
+              } else {
+                status = tr('Voice channel');
+                statusColor = c.muted;
+              }
+              return VoiceRoom(
+                header: _RoomHeader(
+                  title: widget.channelName,
+                  status: status,
+                  statusColor: statusColor,
+                  isStage: widget.isStage,
+                  onBack: widget.onBack,
+                  actions: [
+                    if (chatBuilder != null && !connected)
+                      VoiceHeaderButton(
+                        key: const ValueKey('voice-chat-button'),
+                        icon: chatIcon,
+                        tooltip: chatTooltip,
+                        selected: showPanel,
+                        badgeCount: chatBadge,
+                        badgeKey: chatBadgeKey,
+                        onPressed: () => _toggleChat(wide),
+                      ),
+                    for (final action in widget.actions)
+                      VoiceHeaderButton(
+                        icon: action.isSelected == true
+                            ? action.selectedIcon ?? action.icon
+                            : action.icon,
+                        tooltip: action.tooltip,
+                        selected: action.isSelected == true,
+                        onPressed: action.onPressed,
+                      ),
+                  ],
+                ),
+                controls: controls,
+                child: body,
+              );
+            },
+          ),
+        );
+
         return Scaffold(
           key: ValueKey('voice-channel-view-$channelId'),
-          appBar: AppBar(
-            automaticallyImplyLeading: widget.onBack == null,
-            leading: widget.onBack == null
-                ? null
-                : IconButton(
-                    tooltip: tr('Back'),
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: widget.onBack,
-                  ),
-            title: Row(
-              children: [
-                Icon(
-                  widget.isStage ? Icons.podcasts : Icons.volume_up_outlined,
-                  size: 20,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    widget.channelName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              ?chatButton,
-              for (final action in widget.actions) action.toIconButton(),
-            ],
-          ),
+          backgroundColor: WeCordTokens.dark.colors.paper,
           body: showPanel
               ? Row(
                   children: [
-                    Expanded(child: call),
-                    const VerticalDivider(width: 1),
-                    SizedBox(
-                      key: ValueKey('voice-chat-panel-$channelId'),
-                      width: voiceChatPanelWidth,
-                      child: chatBuilder(context),
+                    Expanded(child: room),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: context.tokens.colors.lineSoft,
+                          ),
+                        ),
+                      ),
+                      child: SizedBox(
+                        key: ValueKey('voice-chat-panel-$channelId'),
+                        width: voiceChatPanelWidth,
+                        child: chatBuilder(context),
+                      ),
                     ),
                   ],
                 )
-              : call,
+              : room,
         );
       },
     );
   }
 }
 
+/// A dark voice room: the soft glows, a [header] under the status bar,
+/// [child] filling the rest, and the floating [controls] at the bottom
+/// (the child gets the room they take as bottom padding).
+class VoiceRoom extends StatelessWidget {
+  const VoiceRoom({
+    required this.header,
+    required this.child,
+    this.controls,
+    super.key,
+  });
+
+  final Widget header;
+  final Widget child;
+  final Widget? controls;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final bottomGap = math.max(media.padding.bottom - 6, 14.0);
+    final controls = this.controls;
+    return VoiceRoomBackground(
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              top: media.padding.top,
+              left: media.padding.left,
+              right: media.padding.right,
+            ),
+            child: header,
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: MediaQuery(
+                    data: media.copyWith(
+                      padding: media.padding.copyWith(
+                        top: 0,
+                        bottom: controls == null
+                            ? media.padding.bottom
+                            : bottomGap + VoiceControlBar.reservedHeight,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                ),
+                if (controls != null)
+                  Positioned(
+                    left: 14 + media.padding.left,
+                    right: 14 + media.padding.right,
+                    bottom: bottomGap,
+                    child: controls,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomHeader extends StatelessWidget {
+  const _RoomHeader({
+    required this.title,
+    required this.status,
+    required this.statusColor,
+    required this.isStage,
+    required this.actions,
+    this.onBack,
+  });
+
+  final String title;
+  final String status;
+  final Color statusColor;
+  final bool isStage;
+  final List<Widget> actions;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final touch = usesTouchInput(context);
+    final canPop = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
+    final back = onBack ?? (canPop ? () => Navigator.maybePop(context) : null);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(touch ? 12 : 16, 10, touch ? 12 : 14, 6),
+      child: Row(
+        children: [
+          if (back != null) ...[
+            VoiceHeaderButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: tr('Back'),
+              onPressed: back,
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                VoiceStatusLine(
+                  text: status,
+                  color: statusColor,
+                  dotColor: statusColor == c.muted ? c.faint : c.success,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      isStage
+                          ? Icons.podcasts_rounded
+                          : Icons.volume_up_rounded,
+                      size: touch ? 19 : 18,
+                      color: c.muted,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: touch ? 19 : 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: c.ink,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          for (final action in actions) ...[const SizedBox(width: 6), action],
+        ],
+      ),
+    );
+  }
+}
+
+class _Connecting extends StatelessWidget {
+  const _Connecting();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Center(
+      key: const ValueKey('voice-connecting'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 3, color: c.ink),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            tr('Connecting…'),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: c.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NotConnected extends StatelessWidget {
   const _NotConnected({
+    required this.channelName,
     required this.members,
     required this.canConnect,
     required this.onJoin,
   });
 
+  final String channelName;
   final List<VoiceMemberState> members;
   final bool canConnect;
   final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     return Center(
       key: const ValueKey('voice-not-connected'),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.volume_up_outlined,
-              size: 48,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              members.isEmpty
-                  ? tr('No one is here yet.')
-                  : members.length == 1
-                  ? tr('1 person is here')
-                  : tr('{count} people are here', {'count': members.length}),
-              style: theme.textTheme.titleMedium,
-            ),
-            if (members.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  for (final member in members)
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FallbackAvatar(
-                          title: member.name,
-                          avatarUrl: member.avatarUrl,
-                          radius: 20,
-                        ),
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          width: 72,
-                          child: Text(
-                            member.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          24 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ThingAvatar(
+                size: 84,
+                radius: 28,
+                icon: Icons.volume_up_rounded,
+                color: c.ink.withValues(alpha: 0.08),
+                foregroundColor: c.ink,
               ),
-            ],
-            const SizedBox(height: 20),
-            if (canConnect)
-              FilledButton.icon(
-                key: const ValueKey('voice-join-button'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: voiceConnectedColor,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: onJoin,
-                icon: const Icon(Icons.call),
-                label: Text(tr('Join voice')),
-              )
-            else
+              const SizedBox(height: 18),
               Text(
-                tr("You don't have permission to join this voice channel."),
+                members.isEmpty
+                    ? tr('No one is here yet.')
+                    : members.length == 1
+                    ? tr('1 person is here')
+                    : tr('{count} people are here', {'count': members.length}),
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: c.ink,
+                ),
               ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                members.isEmpty
+                    ? tr('Join and others will see you in {channel}.', {
+                        'channel': channelName,
+                      })
+                    : tr('Hop in and say hi.'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: c.muted, height: 1.4),
+              ),
+              if (members.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 12,
+                  children: [
+                    for (final member in members)
+                      SizedBox(
+                        width: 68,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            VoiceAvatar(
+                              name: member.name,
+                              avatarUrl: member.avatarUrl,
+                              size: 52,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              member.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: c.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 26),
+              if (canConnect)
+                WeCordButton(
+                  key: const ValueKey('voice-join-button'),
+                  label: tr('Join voice'),
+                  icon: Icons.call_rounded,
+                  variant: WeCordButtonVariant.accent,
+                  size: WeCordButtonSize.large,
+                  onPressed: () {
+                    WeCordHaptics.medium();
+                    onJoin();
+                  },
+                )
+              else
+                Text(
+                  tr("You don't have permission to join this voice channel."),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: c.muted),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -393,14 +628,15 @@ typedef VoiceCallPerson = ({
   bool serverDeaf,
 });
 
-/// Everyone in the call: shared screens first and wide, then a tile per
-/// person (their camera, or their avatar), outlined while they speak.
-/// Right-click or long-press opens a person's menu.
+/// Everyone in the call: shared screens first and across the width, then
+/// a rounded tile per person (their camera, or their avatar), ringed while
+/// they speak. Right-click or long-press opens a person's menu.
 class VoiceCallGrid extends StatelessWidget {
   const VoiceCallGrid({
     required this.session,
     required this.people,
     this.moderation,
+    this.shrinkWrap = false,
     super.key,
   });
 
@@ -412,6 +648,10 @@ class VoiceCallGrid extends StatelessWidget {
   /// What the current user may do to people from their menu.
   final VoiceModeration? moderation;
 
+  /// Sizes to its tiles instead of filling (and centering in) the height
+  /// it gets, for the call strip above a chat.
+  final bool shrinkWrap;
+
   @override
   Widget build(BuildContext context) {
     final participants = session.participants;
@@ -419,85 +659,131 @@ class VoiceCallGrid extends StatelessWidget {
       for (final participant in participants)
         if (participant.screenView != null) participant,
     ];
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 8.0;
-        const padding = 12.0;
+        const spacing = 10.0;
+        final padding = constraints.maxWidth < 600 ? 14.0 : 20.0;
         final width = constraints.maxWidth - padding * 2;
-        final columns = width < 420
+        final aspect = width < 420 && !shrinkWrap ? 1.0 : 16 / 10;
+        final count = math.max(participants.length, 1);
+        final maxColumns = width < 420
             ? 2
             : width < 760
             ? 3
             : 4;
-        final tileWidth = (width - spacing * (columns - 1)) / columns;
-        return SingleChildScrollView(
-          key: const ValueKey('voice-call-grid'),
-          padding: const EdgeInsets.all(padding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final participant in screens) ...[
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: _Tile(
-                    key: ValueKey('voice-screen-tile-${participant.userId}'),
-                    label: tr("{name}'s screen", {
-                      'name':
-                          people[participant.userId]?.name ?? participant.name,
-                    }),
-                    speaking: false,
-                    child: ColoredBox(
-                      color: Colors.black,
-                      child: participant.screenView!(context),
-                    ),
-                  ),
+        var tileWidth =
+            (width - spacing * (math.min(maxColumns, count) - 1)) /
+            math.min(maxColumns, count);
+        final height = constraints.maxHeight - bottomInset - 8 - padding;
+        if (!shrinkWrap && constraints.hasBoundedHeight && screens.isEmpty) {
+          // Pick the column count that gives the biggest tiles while
+          // everyone fits on screen; scroll only when tiles would get
+          // too small.
+          var best = 0.0;
+          for (var columns = 1; columns <= count; columns++) {
+            final rows = (count / columns).ceil();
+            final byWidth = (width - spacing * (columns - 1)) / columns;
+            final byHeight = (height - spacing * (rows - 1)) / rows * aspect;
+            best = math.max(best, math.min(byWidth, byHeight));
+          }
+          if (best >= 140) {
+            tileWidth = math.min(best, 560);
+          }
+        } else if (!shrinkWrap && constraints.hasBoundedHeight) {
+          tileWidth = math.min(tileWidth, math.max(140, height * 0.5 * aspect));
+        }
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final participant in screens) ...[
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: _Tile(
+                  key: ValueKey('voice-screen-tile-${participant.userId}'),
+                  label: tr("{name}'s screen", {
+                    'name':
+                        people[participant.userId]?.name ?? participant.name,
+                  }),
+                  labelIcon: Icons.screen_share_rounded,
+                  speaking: false,
+                  dark: true,
+                  child: participant.screenView!(context),
                 ),
-                const SizedBox(height: spacing),
-              ],
-              Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (final participant in participants)
-                    SizedBox(
-                      width: tileWidth,
-                      height: tileWidth * 10 / 16,
-                      child: VoiceParticipantMenuRegion(
-                        person: VoiceMenuPerson(
-                          userId: participant.userId,
-                          name:
-                              people[participant.userId]?.name ??
-                              participant.name,
-                          isLocal: participant.isLocal,
-                          channelId: session.channelId,
-                          serverMute:
-                              people[participant.userId]?.serverMute ?? false,
-                          serverDeaf:
-                              people[participant.userId]?.serverDeaf ?? false,
-                        ),
-                        moderation: moderation,
-                        child: _ParticipantTile(
-                          participant: participant,
-                          name:
-                              people[participant.userId]?.name ??
-                              participant.name,
-                          avatarUrl: people[participant.userId]?.avatarUrl,
-                          deafened:
-                              (participant.isLocal && session.selfDeaf) ||
-                              (people[participant.userId]?.selfDeaf ?? false),
-                          serverDeafened:
-                              (participant.isLocal && session.serverDeaf) ||
-                              (people[participant.userId]?.serverDeaf ?? false),
-                          serverMuted:
-                              (participant.isLocal && session.serverMute) ||
-                              (people[participant.userId]?.serverMute ?? false),
-                        ),
+              ),
+              const SizedBox(height: spacing),
+            ],
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final participant in participants)
+                  SizedBox(
+                    width: tileWidth,
+                    height: tileWidth / aspect,
+                    child: VoiceParticipantMenuRegion(
+                      person: VoiceMenuPerson(
+                        userId: participant.userId,
+                        name:
+                            people[participant.userId]?.name ??
+                            participant.name,
+                        isLocal: participant.isLocal,
+                        channelId: session.channelId,
+                        serverMute:
+                            people[participant.userId]?.serverMute ?? false,
+                        serverDeaf:
+                            people[participant.userId]?.serverDeaf ?? false,
+                      ),
+                      moderation: moderation,
+                      child: _ParticipantTile(
+                        participant: participant,
+                        name:
+                            people[participant.userId]?.name ??
+                            participant.name,
+                        avatarUrl: people[participant.userId]?.avatarUrl,
+                        deafened:
+                            (participant.isLocal && session.selfDeaf) ||
+                            (people[participant.userId]?.selfDeaf ?? false),
+                        serverDeafened:
+                            (participant.isLocal && session.serverDeaf) ||
+                            (people[participant.userId]?.serverDeaf ?? false),
+                        serverMuted:
+                            (participant.isLocal && session.serverMute) ||
+                            (people[participant.userId]?.serverMute ?? false),
                       ),
                     ),
-                ],
+                  ),
+              ],
+            ),
+          ],
+        );
+        final scrollPadding = EdgeInsets.fromLTRB(
+          padding,
+          shrinkWrap ? padding : 8,
+          padding,
+          padding + bottomInset,
+        );
+        if (shrinkWrap || !constraints.hasBoundedHeight) {
+          return SingleChildScrollView(
+            key: const ValueKey('voice-call-grid'),
+            padding: scrollPadding,
+            child: content,
+          );
+        }
+        return SingleChildScrollView(
+          key: const ValueKey('voice-call-grid'),
+          padding: scrollPadding,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: math.max(
+                0,
+                constraints.maxHeight - scrollPadding.vertical,
               ),
-            ],
+            ),
+            child: Center(child: content),
           ),
         );
       },
@@ -524,34 +810,36 @@ class _ParticipantTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.tokens.colors;
     final camera = participant.cameraView;
+    final silenced = serverDeafened || serverMuted;
     return _Tile(
       key: ValueKey('voice-tile-${participant.userId}'),
       label: participant.isLocal ? tr('{name} (you)', {'name': name}) : name,
       speaking: participant.isSpeaking,
-      trailingKey: serverDeafened || serverMuted
+      dark: camera != null,
+      labelIconKey: silenced
           ? const ValueKey('voice-tile-server-silenced')
           : null,
-      trailingColor: serverDeafened || serverMuted
-          ? Theme.of(context).colorScheme.errorContainer
-          : null,
-      trailing: deafened || serverDeafened
-          ? Icons.headset_off
+      labelIconColor: silenced ? c.dangerText : null,
+      labelIcon: deafened || serverDeafened
+          ? Icons.headset_off_rounded
           : serverMuted || !participant.microphoneEnabled
-          ? Icons.mic_off
+          ? Icons.mic_off_rounded
           : null,
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
           : Align(
-              alignment: const Alignment(0, -0.3),
+              alignment: const Alignment(0, -0.15),
               child: LayoutBuilder(
-                builder: (context, constraints) => FallbackAvatar(
-                  title: name,
+                builder: (context, constraints) => VoiceAvatar(
+                  name: name,
                   avatarUrl: avatarUrl,
-                  radius: (constraints.biggest.shortestSide * 0.22).clamp(
-                    14.0,
-                    44.0,
+                  speaking: participant.isSpeaking,
+                  size: (constraints.biggest.shortestSide * 0.4).clamp(
+                    28.0,
+                    104.0,
                   ),
                 ),
               ),
@@ -565,32 +853,50 @@ class _Tile extends StatelessWidget {
     required this.label,
     required this.speaking,
     required this.child,
-    this.trailing,
-    this.trailingColor,
-    this.trailingKey,
+    this.dark = false,
+    this.labelIcon,
+    this.labelIconColor,
+    this.labelIconKey,
     super.key,
   });
 
   final String label;
   final bool speaking;
   final Widget child;
-  final IconData? trailing;
-  final Color? trailingColor;
-  final Key? trailingKey;
+
+  /// Video under it: a darker fill behind it.
+  final bool dark;
+  final IconData? labelIcon;
+  final Color? labelIconColor;
+  final Key? labelIconKey;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: speaking ? voiceConnectedColor : Colors.transparent,
-          width: 3,
+    final c = context.tokens.colors;
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(WeCordRadii.xl + 2),
+    );
+    return AnimatedContainer(
+      duration: WeCordMotion.durationOf(context, WeCordMotion.quick),
+      clipBehavior: Clip.antiAlias,
+      decoration: ShapeDecoration(
+        shape: shape,
+        color: dark
+            ? c.paper
+            : speaking
+            ? c.success.withValues(alpha: 0.16)
+            : c.ink.withValues(alpha: 0.07),
+      ),
+      foregroundDecoration: ShapeDecoration(
+        shape: shape.copyWith(
+          side: BorderSide(
+            color: speaking
+                ? c.successText.withValues(alpha: 0.75)
+                : c.ink.withValues(alpha: 0.05),
+            width: speaking ? 2 : 1,
+          ),
         ),
       ),
-      clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -598,49 +904,44 @@ class _Tile extends StatelessWidget {
           if (speaking)
             const SizedBox.shrink(key: ValueKey('voice-tile-speaking')),
           Positioned(
-            left: 6,
-            bottom: 6,
-            right: 6,
-            child: Row(
-              children: [
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (trailing != null) ...[
-                          Icon(
-                            trailing,
-                            key: trailingKey,
-                            size: 12,
-                            color: trailingColor ?? Colors.white,
-                          ),
-                          const SizedBox(width: 3),
-                        ],
-                        Flexible(
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            left: 8,
+            bottom: 8,
+            right: 8,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+                decoration: BoxDecoration(
+                  color: c.paper.withValues(alpha: 0.66),
+                  borderRadius: BorderRadius.circular(WeCordRadii.pill),
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (labelIcon != null) ...[
+                      Icon(
+                        labelIcon,
+                        key: labelIconKey,
+                        size: 13,
+                        color: labelIconColor ?? c.ink,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: c.ink,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -650,15 +951,24 @@ class _Tile extends StatelessWidget {
 }
 
 /// Microphone, deafen, camera, screen share (where the platform can), the
-/// soundboard (in circle voice channels) and disconnect; with push to talk
-/// on a phone (or without a key set), a button to hold while talking.
+/// soundboard (in circle voice channels), the chat and disconnect, in the
+/// floating glass bar; with push to talk on a phone (or without a key
+/// set), a button to hold while talking above it.
 class VoiceCallControls extends ConsumerStatefulWidget {
-  const VoiceCallControls({required this.session, this.soundboard, super.key});
+  const VoiceCallControls({
+    required this.session,
+    this.soundboard,
+    this.chat,
+    super.key,
+  });
 
   final VoiceSession session;
 
   /// The circle's soundboard; none in direct and group calls.
   final SoundboardAccess? soundboard;
+
+  /// The chat button, when the call has a chat to open.
+  final VoiceControl? chat;
 
   @override
   ConsumerState<VoiceCallControls> createState() => _VoiceCallControlsState();
@@ -700,30 +1010,7 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
   Widget build(BuildContext context) {
     final session = widget.session;
     final controller = ref.read(voiceSessionProvider.notifier);
-    final colorScheme = Theme.of(context).colorScheme;
     final canShareScreen = ref.watch(voiceScreenShareSupportedProvider);
-
-    Widget toggle({
-      required String tooltip,
-      required IconData icon,
-      required bool on,
-      required VoidCallback? onPressed,
-      Key? key,
-    }) {
-      return IconButton.filledTonal(
-        key: key,
-        tooltip: tooltip,
-        isSelected: on,
-        style: IconButton.styleFrom(
-          minimumSize: const Size.square(48),
-          backgroundColor: on ? colorScheme.inverseSurface : null,
-          foregroundColor: on ? colorScheme.onInverseSurface : null,
-        ),
-        onPressed: _busy ? null : onPressed,
-        icon: Icon(icon),
-      );
-    }
-
     final hasKey = ref.watch(
       voiceSettingsProvider.select(
         (settings) => settings.pushToTalkKeyId != null,
@@ -731,106 +1018,92 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     );
     final holdToTalk =
         session.pushToTalk && (usesTouchInput(context) || !hasKey);
+    final muted = session.selfMute || session.serverMute;
+    final deafened = session.selfDeaf || session.serverDeaf;
 
-    return Material(
+    VoidCallback? guard(VoidCallback? action) => _busy ? null : action;
+
+    return KeyedSubtree(
       key: const ValueKey('voice-call-controls'),
-      color: colorScheme.surfaceContainerLow,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              if (holdToTalk)
-                VoiceHoldToTalkButton(session: session, enabled: !_busy),
-              toggle(
-                key: const ValueKey('voice-control-mic'),
-                tooltip: voiceMuteTooltip(session),
-                icon: session.selfMute || session.serverMute
-                    ? Icons.mic_off
-                    : Icons.mic_none,
-                on: session.selfMute || session.serverMute,
-                onPressed: session.serverMute
-                    ? null
-                    : () => _run(
-                        controller.toggleMute,
-                        tr('Could not change the microphone.'),
-                      ),
-              ),
-              toggle(
-                key: const ValueKey('voice-control-deafen'),
-                tooltip: voiceDeafenTooltip(session),
-                icon: session.selfDeaf || session.serverDeaf
-                    ? Icons.headset_off
-                    : Icons.headset_outlined,
-                on: session.selfDeaf || session.serverDeaf,
-                onPressed: session.serverDeaf
-                    ? null
-                    : () => _run(
-                        controller.toggleDeafen,
-                        tr('Could not deafen.'),
-                      ),
-              ),
-              toggle(
-                key: const ValueKey('voice-control-camera'),
-                tooltip: session.video
-                    ? tr('Turn off camera')
-                    : tr('Turn on camera'),
-                icon: session.video
-                    ? Icons.videocam_outlined
-                    : Icons.videocam_off_outlined,
-                on: session.video,
-                onPressed: () => _run(
-                  controller.toggleCamera,
-                  tr('Could not use the camera. Check the camera permission.'),
-                ),
-              ),
-              if (canShareScreen)
-                toggle(
-                  key: const ValueKey('voice-control-screen'),
-                  tooltip: session.screen
-                      ? tr('Stop sharing')
-                      : tr('Share screen'),
-                  icon: session.screen
-                      ? Icons.stop_screen_share_outlined
-                      : Icons.screen_share_outlined,
-                  on: session.screen,
-                  onPressed: () => _run(
-                    _toggleScreenShare,
-                    tr('Could not share the screen.'),
-                  ),
-                ),
-              if (widget.soundboard case final soundboard?
-                  when session.channelId != null)
-                toggle(
-                  key: const ValueKey('voice-control-soundboard'),
-                  tooltip: tr('Soundboard'),
-                  icon: Icons.music_note_outlined,
-                  on: false,
-                  onPressed: () => showSoundboard(
-                    context,
-                    access: soundboard,
-                    channelId: session.channelId!,
-                  ),
-                ),
-              IconButton.filled(
-                key: const ValueKey('voice-control-leave'),
-                tooltip: tr('Disconnect'),
-                style: IconButton.styleFrom(
-                  minimumSize: const Size.square(48),
-                  backgroundColor: colorScheme.error,
-                  foregroundColor: colorScheme.onError,
-                ),
-                onPressed: controller.leave,
-                icon: const Icon(Icons.call_end),
-              ),
-            ],
+      child: VoiceControlBar(
+        above: holdToTalk
+            ? VoiceHoldToTalkButton(session: session, enabled: !_busy)
+            : null,
+        controls: [
+          VoiceControl(
+            key: const ValueKey('voice-control-mic'),
+            tooltip: voiceMuteTooltip(session),
+            icon: muted ? Icons.mic_off_rounded : Icons.mic_none_rounded,
+            on: muted,
+            onPressed: guard(
+              session.serverMute
+                  ? null
+                  : () => _run(
+                      controller.toggleMute,
+                      tr('Could not change the microphone.'),
+                    ),
+            ),
           ),
-        ),
+          VoiceControl(
+            key: const ValueKey('voice-control-deafen'),
+            tooltip: voiceDeafenTooltip(session),
+            icon: deafened ? Icons.headset_off_rounded : Icons.headset_outlined,
+            on: deafened,
+            onPressed: guard(
+              session.serverDeaf
+                  ? null
+                  : () =>
+                        _run(controller.toggleDeafen, tr('Could not deafen.')),
+            ),
+          ),
+          VoiceControl(
+            key: const ValueKey('voice-control-camera'),
+            tooltip: session.video
+                ? tr('Turn off camera')
+                : tr('Turn on camera'),
+            icon: session.video
+                ? Icons.videocam_rounded
+                : Icons.videocam_off_outlined,
+            on: session.video,
+            onPressed: guard(
+              () => _run(
+                controller.toggleCamera,
+                tr('Could not use the camera. Check the camera permission.'),
+              ),
+            ),
+          ),
+          if (canShareScreen)
+            VoiceControl(
+              key: const ValueKey('voice-control-screen'),
+              tooltip: session.screen ? tr('Stop sharing') : tr('Share screen'),
+              icon: session.screen
+                  ? Icons.stop_screen_share_outlined
+                  : Icons.screen_share_outlined,
+              on: session.screen,
+              onPressed: guard(
+                () =>
+                    _run(_toggleScreenShare, tr('Could not share the screen.')),
+              ),
+            ),
+          if (widget.soundboard case final soundboard?
+              when session.channelId != null)
+            VoiceControl(
+              key: const ValueKey('voice-control-soundboard'),
+              tooltip: tr('Soundboard'),
+              icon: Icons.music_note_rounded,
+              onPressed: guard(
+                () => showSoundboard(
+                  context,
+                  access: soundboard,
+                  channelId: session.channelId!,
+                ),
+              ),
+            ),
+          ?widget.chat,
+        ],
+        leaveLabel: tr('Leave'),
+        leaveTooltip: tr('Disconnect'),
+        onLeave: controller.leave,
       ),
     );
   }
@@ -849,7 +1122,7 @@ class VoiceHoldToTalkButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final c = context.tokens.colors;
     final controller = ref.read(voiceSessionProvider.notifier);
     final talking = session.transmitting;
     final usable =
@@ -858,46 +1131,55 @@ class VoiceHoldToTalkButton extends ConsumerWidget {
         !session.selfDeaf &&
         !session.serverMute &&
         !session.serverDeaf;
+    final foreground = talking ? c.onInk : c.ink;
     return Semantics(
       button: true,
       label: tr('Hold to talk'),
       child: Listener(
         key: const ValueKey('voice-hold-to-talk'),
-        onPointerDown: usable ? (_) => controller.setTransmitting(true) : null,
+        onPointerDown: usable
+            ? (_) {
+                WeCordHaptics.medium();
+                controller.setTransmitting(true);
+              }
+            : null,
         onPointerUp: (_) => controller.setTransmitting(false),
         onPointerCancel: (_) => controller.setTransmitting(false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          constraints: const BoxConstraints(minHeight: 48, minWidth: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: BoxDecoration(
-            color: talking
-                ? voiceConnectedColor
-                : colorScheme.secondaryContainer.withValues(
-                    alpha: usable ? 1 : 0.5,
-                  ),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                talking ? Icons.mic : Icons.mic_none,
-                color: talking
-                    ? Colors.white
-                    : colorScheme.onSecondaryContainer,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                talking ? tr('Talking…') : tr('Hold to talk'),
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: talking
-                      ? Colors.white
-                      : colorScheme.onSecondaryContainer,
+        child: AnimatedScale(
+          scale: talking && !WeCordMotion.reduceMotion(context) ? 1.04 : 1,
+          duration: WeCordMotion.snappy.duration,
+          curve: WeCordMotion.snappy.curve,
+          child: AnimatedOpacity(
+            opacity: usable ? 1 : 0.5,
+            duration: WeCordMotion.quick,
+            child: WeCordGlass(
+              borderRadius: BorderRadius.circular(WeCordRadii.pill),
+              child: AnimatedContainer(
+                duration: WeCordMotion.quick,
+                constraints: const BoxConstraints(minHeight: 52, minWidth: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                color: talking ? c.success : c.success.withValues(alpha: 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      talking ? Icons.mic_rounded : Icons.mic_none_rounded,
+                      color: foreground,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      talking ? tr('Talking…') : tr('Hold to talk'),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: foreground,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

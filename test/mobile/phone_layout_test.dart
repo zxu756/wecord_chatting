@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/voice/voice_ui.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -1893,7 +1894,7 @@ void main() {
         tester,
         find.descendant(
           of: find.byKey(const ValueKey('voice-call-controls')),
-          matching: find.byType(IconButton),
+          matching: find.byType(VoiceControlButton),
         ),
       );
       // The call view has its own controls; the panel waits for home.
@@ -1923,7 +1924,7 @@ void main() {
       );
       expectTouchTargets(
         tester,
-        find.descendant(of: panel, matching: find.byType(IconButton)),
+        find.descendant(of: panel, matching: find.byType(VoiceRoundButton)),
       );
       await world.close(tester);
     });

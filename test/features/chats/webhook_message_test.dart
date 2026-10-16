@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
@@ -88,10 +89,12 @@ void main() {
     expect(find.text('CI'), findsOneWidget, reason: 'grouped messages');
     expect(find.byKey(const ValueKey('message-bot-tag')), findsOneWidget);
     expect(find.text('BOT'), findsOneWidget);
-    // Webhook messages sit on the incoming side, unlike the creator's own.
+    // Webhook messages carry the webhook's avatar, not the creator's.
     expect(
-      tester.getCenter(find.text('Tests passed')).dx,
-      lessThan(tester.getCenter(find.text('My own note')).dx),
+      find.byWidgetPredicate(
+        (widget) => widget is ChatAvatar && widget.name == 'CI',
+      ),
+      findsOneWidget,
     );
 
     await tester.longPress(find.text('Tests passed'));

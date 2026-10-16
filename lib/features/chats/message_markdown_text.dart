@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 typedef LinkLauncher = Future<void> Function(BuildContext context, Uri uri);
 
@@ -186,7 +187,9 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
     MarkdownInline node,
     _SpanState state,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = context.tokens.colors;
+    // On an outgoing (ink) bubble links keep the bubble's text color.
+    final onInk = widget.color == palette.onInk;
     switch (node) {
       case MarkdownText(:final text):
         return TextSpan(text: text);
@@ -216,15 +219,15 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
         final roleColor = mention.color;
         final color = mention.isRole && roleColor != null
             ? Color(0xFF000000 | roleColor)
-            : colorScheme.primary;
+            : palette.accentText;
         return TextSpan(
           text: text,
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.w700,
-            backgroundColor: mention.isHere || mention.isRole
+            backgroundColor: mention.isRole
                 ? color.withValues(alpha: 0.14)
-                : null,
+                : palette.accentSoft,
           ),
         );
       case MarkdownInlineCode(:final code):
@@ -244,8 +247,11 @@ class _MessageMarkdownTextState extends ConsumerState<MessageMarkdownText> {
           recognizer: recognizer,
           mouseCursor: SystemMouseCursors.click,
           style: TextStyle(
-            color: colorScheme.primary,
+            color: onInk ? widget.color : palette.accentText,
             decoration: state.decorationWith(TextDecoration.underline),
+            decorationColor: onInk
+                ? widget.color.withValues(alpha: 0.6)
+                : palette.accentText.withValues(alpha: 0.5),
           ),
         );
       case MarkdownStyled(style: MarkdownStyle.spoiler, :final children):

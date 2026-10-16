@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens a sent file in the browser or the app that handles it; tests
 /// override it.
@@ -46,11 +47,16 @@ class FileMessageContent extends ConsumerStatefulWidget {
   const FileMessageContent({
     required this.attachment,
     required this.textColor,
+    this.card = false,
     super.key,
   });
 
   final FileAttachment attachment;
   final Color textColor;
+
+  /// On its own rounded card (circle channels, the media page) rather
+  /// than inside a bubble.
+  final bool card;
 
   @override
   ConsumerState<FileMessageContent> createState() => _FileMessageContentState();
@@ -99,14 +105,27 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
   @override
   Widget build(BuildContext context) {
     final attachment = widget.attachment;
-    final theme = Theme.of(context);
-    final muted = widget.textColor.withValues(alpha: 0.75);
+    final c = context.tokens.colors;
+    final foreground = widget.card ? c.ink : widget.textColor;
+    final muted = foreground.withValues(alpha: 0.65);
+    final tileFill = widget.card ? c.raised : foreground.withValues(alpha: 0.1);
     final details = Row(
       children: [
-        Icon(
-          fileIconFor(attachment.mimeType),
-          color: widget.textColor,
-          size: 32,
+        Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: ShapeDecoration(
+            color: tileFill,
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+            ),
+          ),
+          child: Icon(
+            fileIconFor(attachment.mimeType),
+            color: foreground,
+            size: 21,
+          ),
         ),
         const SizedBox(width: 10),
         Flexible(
@@ -118,65 +137,105 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
                 attachment.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: widget.textColor,
-                  fontWeight: FontWeight.w600,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.3,
+                  color: foreground,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 1),
               Text(
                 formatFileSize(attachment.size),
-                style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                style: TextStyle(fontSize: 12, height: 1.3, color: muted),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         if (_opening)
-          const SizedBox.square(
+          SizedBox.square(
             dimension: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator(strokeWidth: 2, color: muted),
           )
         else
-          Icon(
-            attachment.isVideo ? Icons.play_circle_outline : Icons.download,
-            color: widget.textColor,
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: tileFill, shape: BoxShape.circle),
+            child: Icon(
+              attachment.isVideo
+                  ? Icons.play_arrow_rounded
+                  : Icons.download_rounded,
+              size: 18,
+              color: foreground,
+            ),
           ),
       ],
     );
 
-    return InkWell(
-      key: ValueKey('file-message-${attachment.path}'),
-      borderRadius: BorderRadius.circular(6),
-      onTap: _open,
-      child: attachment.isVideo
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.play_circle_fill,
-                        size: 48,
-                        color: Colors.white70,
+    final body = attachment.isVideo
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF17171A),
+                    borderRadius: BorderRadius.circular(WeCordRadii.md),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        size: 30,
+                        color: Color(0xFF17171A),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                details,
-              ],
-            )
-          : Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: details,
-            ),
+              ),
+              const SizedBox(height: 8),
+              details,
+            ],
+          )
+        : Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: details,
+          );
+
+    return WeCordPressable(
+      key: ValueKey('file-message-${attachment.path}'),
+      onPressed: _open,
+      pressedScale: 0.98,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
+      ),
+      builder: (context, states) {
+        if (!widget.card) {
+          return body;
+        }
+        final hovered = states.contains(WidgetState.hovered);
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: hovered ? c.raised : c.well,
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            border: Border.all(color: c.lineSoft),
+          ),
+          child: body,
+        );
+      },
     );
   }
 }

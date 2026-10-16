@@ -496,7 +496,7 @@ void main() {
       'On my way',
     );
     await tester.tap(
-      find.descendant(of: panel, matching: find.byIcon(Icons.send)),
+      find.descendant(of: panel, matching: find.byTooltip('Send')),
     );
     await settle(tester);
     expect(world.chats.sentMessages.last.conversationId, 'conv-lounge');

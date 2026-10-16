@@ -33,7 +33,7 @@ const zhChatThread = <String, String>{
   '1 new message': '1 条新消息',
   '{count} new messages': '{count} 条新消息',
   'typing...': '正在输入…',
-  'NEW': '新',
+  'NEW': '新消息',
   'Someone': '某人',
   'Unknown member': '未知成员',
   'edited': '已编辑',

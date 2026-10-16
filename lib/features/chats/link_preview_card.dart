@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/shared/models/link_preview.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// Previews stay cached for the session, so scrolling never refetches them.
 /// Failures resolve to null and render nothing.
@@ -35,84 +36,96 @@ class MessageLinkPreviewCard extends ConsumerWidget {
     if (preview == null || !preview.hasContent) {
       return const SizedBox.shrink();
     }
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final siteName = preview.siteName ?? Uri.tryParse(preview.url)?.host;
     final imageUrl = preview.imageUrl;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomGap),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: Material(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: WeCordPressable(
           key: const ValueKey('link-preview-card'),
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => _open(context, ref),
-            child: Container(
+          onPressed: () => _open(context, ref),
+          pressedScale: 0.98,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          ),
+          builder: (context, states) {
+            final hovered = states.contains(WidgetState.hovered);
+            return AnimatedContainer(
+              duration: WeCordMotion.quick,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: colorScheme.primary, width: 4),
-                ),
+                color: hovered ? c.raised : c.well,
+                borderRadius: BorderRadius.circular(WeCordRadii.lg),
+                border: Border.all(color: c.lineSoft),
               ),
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (siteName != null && siteName.isNotEmpty)
-                    Text(
-                      siteName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                  if (imageUrl != null)
+                    Image.network(
+                      imageUrl,
+                      height: 150,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const SizedBox.shrink();
+                      },
                     ),
-                  if (preview.title case final title?) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (siteName != null && siteName.isNotEmpty)
+                          Text(
+                            siteName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: c.subtle,
+                            ),
+                          ),
+                        if (preview.title case final title?) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.35,
+                              color: c.accentText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                        if (preview.description case final description?) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            description,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                              color: c.muted,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                  if (preview.description case final description?) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                  if (imageUrl != null) ...[
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(
-                        imageUrl,
-                        height: 140,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const SizedBox.shrink();
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

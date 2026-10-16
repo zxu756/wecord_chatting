@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -246,6 +247,7 @@ class CustomEmojiCandidateList extends StatelessWidget {
     required this.candidates,
     required this.onSelect,
     required this.maxHeight,
+    this.framed = true,
     super.key,
   });
 
@@ -253,13 +255,16 @@ class CustomEmojiCandidateList extends StatelessWidget {
   final ValueChanged<CircleEmoji> onSelect;
   final double maxHeight;
 
+  /// Draws its own rounded fill; off inside the composer's glass popover.
+  final bool framed;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
       key: const ValueKey('custom-emoji-candidates'),
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
+      type: framed ? MaterialType.canvas : MaterialType.transparency,
+      color: framed ? context.tokens.colors.raised : null,
+      borderRadius: framed ? BorderRadius.circular(WeCordRadii.lg) : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: ListView(

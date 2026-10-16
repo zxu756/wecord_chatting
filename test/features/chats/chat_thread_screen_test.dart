@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
+import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/file_picker_service.dart';
@@ -14,7 +15,6 @@ import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
-import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
@@ -32,6 +32,7 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 void main() {
   testWidgets('renders existing messages in chronological bubbles', (
@@ -57,7 +58,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Ada Lovelace'), findsOneWidget);
-    expect(find.text('AL'), findsOneWidget);
+    expect(_avatarsOf('Ada Lovelace'), findsOneWidget);
     expect(find.text('Older message'), findsOneWidget);
     expect(find.text('Newer message'), findsOneWidget);
     expect(
@@ -364,8 +365,8 @@ void main() {
       // Grace starts two groups, Alan one; follow-ups carry no name.
       expect(find.text('Grace Hopper'), findsNWidgets(2));
       expect(find.text('Alan Turing'), findsOneWidget);
-      expect(find.text('GH'), findsNWidgets(2));
-      expect(find.text('AT'), findsOneWidget);
+      expect(_avatarsOf('Grace Hopper'), findsNWidgets(2));
+      expect(_avatarsOf('Alan Turing'), findsOneWidget);
 
       // Grouped messages sit closer together than separate groups.
       double gapBetween(String upper, String lower) {
@@ -594,19 +595,19 @@ void main() {
       await tester.pump();
 
       expect(find.text('Grace Hopper'), findsNothing);
-      // One avatar per group, beside its first message.
-      expect(find.text('GH'), findsOneWidget);
+      // One avatar per run of bubbles, beside its last message.
+      expect(_avatarsOf('Grace Hopper'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('message-avatar-message-1')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('message-avatar-message-2')),
-        findsNothing,
+        findsOneWidget,
       );
     });
 
-    testWidgets('own messages show the current user avatar on the right', (
+    testWidgets('own messages sit on the right without an avatar', (
       tester,
     ) async {
       final repository = FakeChatsRepository()
@@ -625,11 +626,13 @@ void main() {
       );
       await tester.pump();
 
-      final avatar = find.byKey(const ValueKey('message-avatar-message-1'));
-      expect(avatar, findsOneWidget);
       expect(
-        tester.getTopLeft(avatar).dx,
-        greaterThan(tester.getTopRight(find.text('Mine')).dx),
+        find.byKey(const ValueKey('message-avatar-message-1')),
+        findsNothing,
+      );
+      expect(
+        tester.getTopRight(find.text('Mine')).dx,
+        greaterThan(tester.getSize(find.byType(Scaffold)).width - 60),
       );
     });
 
@@ -1080,7 +1083,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField), 'Hello');
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
     expect(repository.typingUpdates, [
@@ -1362,11 +1365,11 @@ void main() {
     expect(find.byTooltip('Attach'), findsOneWidget);
     expect(
       tester
-          .widget<PopupMenuButton<Object?>>(
+          .widget<WeCordIconButton>(
             find.byKey(const ValueKey('composer-attach-button')),
           )
-          .enabled,
-      isTrue,
+          .onPressed,
+      isNotNull,
     );
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
@@ -1877,9 +1880,14 @@ void main() {
   });
 
   group('slowmode', () {
-    IconButton sendButton(WidgetTester tester) {
-      return tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.send),
+    // The composer's trailing button: Send, or the microphone while the
+    // field is empty.
+    WeCordIconButton sendButton(WidgetTester tester) {
+      final send = find.byKey(const ValueKey('composer-send-button'));
+      return tester.widget<WeCordIconButton>(
+        send.evaluate().isNotEmpty
+            ? send
+            : find.byKey(const ValueKey('composer-mic-button')),
       );
     }
 
@@ -1944,11 +1952,11 @@ void main() {
       expect(sendButton(tester).onPressed, isNull);
       expect(
         tester
-            .widget<PopupMenuButton<Object?>>(
+            .widget<WeCordIconButton>(
               find.byKey(const ValueKey('composer-attach-button')),
             )
-            .enabled,
-        isFalse,
+            .onPressed,
+        isNull,
       );
 
       await tester.enterText(find.byType(TextField), 'Too soon');
@@ -2016,6 +2024,8 @@ void main() {
       await tester.pump();
 
       await tester.enterText(find.byType(TextField), 'Sent elsewhere');
+
+      await tester.pump();
       await tester.tap(find.byTooltip('Send'));
       await tester.pump();
 
@@ -2144,12 +2154,12 @@ void main() {
       return (container.decoration as BoxDecoration?)?.color;
     }
 
-    expect(highlightColor(), isNot(Colors.transparent));
+    expect(highlightColor()!.a, greaterThan(0));
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(highlightColor(), Colors.transparent);
+    expect(highlightColor()!.a, 0);
   });
 
   testWidgets('tapping a pin notice scrolls to the pinned message', (
@@ -2331,20 +2341,24 @@ void main() {
     expect(find.text('2'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
 
-    final colorScheme = Theme.of(
-      tester.element(find.text('React to me')),
-    ).colorScheme;
-    Material chipMaterial(String emoji) {
-      return tester.widget<Material>(
-        find.descendant(
-          of: find.byKey(ValueKey('reaction-chip-$emoji')),
-          matching: find.byType(Material),
-        ),
-      );
+    final colors = tester.element(find.text('React to me')).tokens.colors;
+    BoxDecoration chip(String emoji) {
+      return tester
+              .widget<AnimatedContainer>(
+                find.descendant(
+                  of: find.byKey(ValueKey('reaction-chip-$emoji')),
+                  matching: find.byKey(const ValueKey('reaction-body')),
+                ),
+              )
+              .decoration!
+          as BoxDecoration;
     }
 
-    expect(chipMaterial('👍').color, colorScheme.primaryContainer);
-    expect(chipMaterial('🎉').color, colorScheme.surfaceContainerHighest);
+    // Mine is outlined in the accent; the others sit on the raised fill.
+    expect(chip('👍').border, isNotNull);
+    expect((chip('👍').border! as Border).top.color, colors.accent);
+    expect(chip('🎉').color, colors.raised);
+    expect(chip('🎉').border, isNull);
   });
 
   testWidgets('tapping a reaction chip toggles it and refreshes the thread', (
@@ -2543,7 +2557,9 @@ void main() {
     expect(find.text('Replying to Original'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'A reply');
-    await tester.tap(find.byIcon(Icons.send));
+
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
     expect(repository.sentReplyToMessageId, 'message-1');
@@ -3032,7 +3048,10 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), '   ');
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+    // Phones keep the microphone until there is something to send.
+    expect(find.byTooltip('Send'), findsNothing);
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
 
     expect(repository.sentMessages, isEmpty);
@@ -3047,7 +3066,9 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), '  Hello Ada  ');
-    await tester.tap(find.byIcon(Icons.send));
+
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
     expect(repository.sentMessages, [
@@ -3066,7 +3087,9 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'Hello Ada');
-    await tester.tap(find.byIcon(Icons.send));
+
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
     expect(find.text('Could not send message. Try again.'), findsOneWidget);
@@ -3275,11 +3298,11 @@ void main() {
     );
     expect(screen.avatarUrl, 'profile-avatars/user-2/ada.png');
     final avatarFinder = find.descendant(
-      of: find.byType(AppBar),
-      matching: find.byType(FallbackAvatar),
+      of: find.byKey(const ValueKey('chat-thread-header')),
+      matching: find.byType(ChatAvatar),
     );
     expect(
-      tester.widget<FallbackAvatar>(avatarFinder).avatarUrl,
+      tester.widget<ChatAvatar>(avatarFinder).avatarUrl,
       'profile-avatars/user-2/ada.png',
     );
     // The signed URL is what the avatar loads; images cannot load in tests,
@@ -4389,3 +4412,8 @@ class FakeChatFilePicker implements ChatFilePickerService {
     return file;
   }
 }
+
+/// The chat avatars drawn for [name].
+Finder _avatarsOf(String name) => find.byWidgetPredicate(
+  (widget) => widget is ChatAvatar && widget.name == name,
+);

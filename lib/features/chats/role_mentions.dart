@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 /// A circle role the current user may mention somewhere.
 class MentionRole {
@@ -204,6 +205,7 @@ class SpecialMentionCandidateList extends StatelessWidget {
     required this.candidates,
     required this.onSelect,
     required this.maxHeight,
+    this.framed = true,
     super.key,
   });
 
@@ -211,12 +213,15 @@ class SpecialMentionCandidateList extends StatelessWidget {
   final ValueChanged<SpecialMention> onSelect;
   final double maxHeight;
 
+  /// Draws its own rounded fill; off inside the composer's glass popover.
+  final bool framed;
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(8),
+      type: framed ? MaterialType.canvas : MaterialType.transparency,
+      color: framed ? context.tokens.colors.raised : null,
+      borderRadius: framed ? BorderRadius.circular(WeCordRadii.lg) : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: ListView(
@@ -230,16 +235,15 @@ class SpecialMentionCandidateList extends StatelessWidget {
                       : 'mention-candidate-role-${candidate.roleId}',
                 ),
                 dense: true,
-                leading: CircleAvatar(
-                  backgroundColor: colorScheme.surfaceContainerLow,
-                  child: Icon(
-                    candidate.isHere
-                        ? Icons.campaign_outlined
-                        : Icons.alternate_email,
-                    color: candidate.color == null
-                        ? colorScheme.onSurfaceVariant
-                        : mentionRoleColor(candidate.color!),
-                  ),
+                leading: ThingAvatar(
+                  size: 32,
+                  color: context.tokens.colors.accentSoft,
+                  foregroundColor: candidate.color == null
+                      ? context.tokens.colors.accentText
+                      : mentionRoleColor(candidate.color!),
+                  icon: candidate.isHere
+                      ? Icons.campaign_outlined
+                      : Icons.alternate_email,
                 ),
                 title: Text(
                   candidate.token,

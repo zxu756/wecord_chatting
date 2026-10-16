@@ -17,6 +17,7 @@ import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_phone_home.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
+import 'package:wecord/shared/l10n/zh/zh_redesign_chat.dart';
 import 'package:wecord/shared/l10n/zh/zh_stage.dart';
 import 'package:wecord/shared/l10n/zh/zh_safety.dart';
 import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
@@ -41,6 +42,7 @@ const zhAreas = <Map<String, String>>[
   zhCirclesExtra,
   zhDesign,
   zhRedesignShell,
+  zhRedesignChat,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

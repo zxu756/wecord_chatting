@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -157,7 +158,9 @@ class _PollMessageContentState extends State<PollMessageContent> {
         const SizedBox(height: 4),
         Text(
           poll.question,
-          style: theme.textTheme.titleSmall?.copyWith(
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.35,
             color: widget.textColor,
             fontWeight: FontWeight.w700,
           ),
@@ -187,9 +190,10 @@ class _PollMessageContentState extends State<PollMessageContent> {
                   : null,
             ),
           ),
+        const SizedBox(height: 2),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 4,
+          spacing: 12,
           children: [
             Text(
               [
@@ -202,24 +206,18 @@ class _PollMessageContentState extends State<PollMessageContent> {
               style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
             if (actions != null && voters > 0)
-              TextButton(
+              _PollTextAction(
                 key: ValueKey('poll-view-votes-${message.id}'),
-                style: TextButton.styleFrom(
-                  foregroundColor: widget.textColor,
-                  visualDensity: VisualDensity.compact,
-                ),
+                label: tr('View votes'),
+                color: widget.textColor,
                 onPressed: () => actions.onShowVoters(message),
-                child: Text(tr('View votes')),
               ),
             if (actions != null && !closed && actions.canEnd(message))
-              TextButton(
+              _PollTextAction(
                 key: ValueKey('poll-end-${message.id}'),
-                style: TextButton.styleFrom(
-                  foregroundColor: widget.textColor,
-                  visualDensity: VisualDensity.compact,
-                ),
+                label: tr('End poll'),
+                color: widget.textColor,
                 onPressed: () => unawaited(actions.onEnd(message)),
-                child: Text(tr('End poll')),
               ),
           ],
         ),
@@ -250,8 +248,7 @@ class _PollOptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final c = context.tokens.colors;
     final percent = (share * 100).round();
     final icon = switch ((multi, selected)) {
       (true, true) => Icons.check_box,
@@ -269,19 +266,20 @@ class _PollOptionRow extends StatelessWidget {
               'count': count,
             }),
       excludeSemantics: true,
-      child: Material(
-        color: textColor.withValues(alpha: 0.06),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(
-            color: selected
-                ? colorScheme.primary
-                : textColor.withValues(alpha: 0.18),
+      child: WeCordPressable(
+        onPressed: onTap,
+        pressedScale: 0.98,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        builder: (context, states) => Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: textColor.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? c.accent : textColor.withValues(alpha: 0),
+              width: 1.5,
+            ),
           ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
           child: Stack(
             children: [
               Positioned.fill(
@@ -290,9 +288,7 @@ class _PollOptionRow extends StatelessWidget {
                   widthFactor: share,
                   child: ColoredBox(
                     key: ValueKey('poll-bar-${option.id}'),
-                    color: colorScheme.primary.withValues(
-                      alpha: selected ? 0.28 : 0.14,
-                    ),
+                    color: c.accent.withValues(alpha: selected ? 0.3 : 0.16),
                   ),
                 ),
               ),
@@ -301,7 +297,7 @@ class _PollOptionRow extends StatelessWidget {
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
+                    horizontal: 12,
                     vertical: 8,
                   ),
                   child: Row(
@@ -309,22 +305,28 @@ class _PollOptionRow extends StatelessWidget {
                       Icon(
                         icon,
                         size: 18,
-                        color: selected ? colorScheme.primary : textColor,
+                        color: selected ? c.accent : textColor,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           option.text,
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.35,
                             color: textColor,
-                            fontWeight: selected ? FontWeight.w700 : null,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         '$percent%',
-                        style: theme.textTheme.labelMedium?.copyWith(
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
                           color: textColor,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
@@ -334,6 +336,45 @@ class _PollOptionRow extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small text action under a poll (View votes, End poll).
+class _PollTextAction extends StatelessWidget {
+  const _PollTextAction({
+    required this.label,
+    required this.color,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return WeCordPressable(
+      onPressed: onPressed,
+      builder: (context, states) => ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 32),
+        child: Center(
+          widthFactor: 1,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+              decoration: states.contains(WidgetState.hovered)
+                  ? TextDecoration.underline
+                  : null,
+              decorationColor: color,
+            ),
           ),
         ),
       ),

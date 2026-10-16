@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import '../file_preview/file_preview_fakes.dart';
 
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -11,11 +12,16 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
-import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/chats/media_send/album_grid.dart';
+import 'package:wecord/features/chats/media_send/blurhash.dart';
+import 'package:wecord/features/chats/media_send/media_picker.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
+import 'package:wecord/features/chats/media_send/pending_media_store.dart';
+import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
@@ -35,6 +41,8 @@ import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
 import 'package:wecord/shared/ui/ui.dart';
+
+import 'media_send/media_fakes.dart';
 
 void main() {
   testWidgets('renders existing messages in chronological bubbles', (
@@ -1201,27 +1209,348 @@ void main() {
     }
   });
 
-  testWidgets('picks and sends an image from the composer', (tester) async {
-    final repository = FakeChatsRepository();
-    final picker = FakeImagePickerService()
-      ..nextImage = ChatImageUpload(
-        bytes: Uint8List.fromList([1, 2, 3]),
-        fileName: 'Photo.PNG',
-        mimeType: 'image/png',
+  group('attachments', () {
+    testWidgets('the attach menu offers photos and videos, and files', (
+      tester,
+    ) async {
+      final picker = FakeChatMediaPicker();
+      await tester.pumpWidget(_app(FakeChatsRepository(), mediaPicker: picker));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Attach'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Photos and videos'), findsOneWidget);
+      expect(find.text('Files'), findsOneWidget);
+      await tester.tap(find.text('Photos and videos'));
+      await tester.pump();
+      expect(picker.photoCalls, 1);
+      expect(picker.lastLimit, 10);
+      // Nothing was chosen: no tray.
+      expect(find.byKey(const ValueKey('media-tray')), findsNothing);
+    });
+
+    testWidgets('picked photos wait in a tray, then go out as one album', (
+      tester,
+    ) async {
+      final repository = OutboxChatsRepository();
+      final uploader = FakeChatMediaUploader();
+      final picker = FakeChatMediaPicker()
+        ..photos = [testPhoto('a.jpg'), testPhoto('b.jpg'), testPhoto('c.jpg')];
+      await tester.pumpWidget(
+        _app(repository, mediaPicker: picker, uploader: uploader),
+      );
+      await tester.pump();
+
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+
+      expect(find.byKey(const ValueKey('media-tray')), findsOneWidget);
+      expect(find.text('3 photos'), findsOneWidget);
+      expect(find.text('Original quality'), findsOneWidget);
+      expect(find.textContaining('Resized to 2560 px'), findsOneWidget);
+
+      // Take one out again.
+      final remove = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'media-tray-remove-',
+            ),
+      );
+      expect(remove, findsNWidgets(3));
+      await tester.tap(remove.first);
+      await tester.pump();
+      expect(find.text('2 photos'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('media-tray-caption')),
+        'Trip',
+      );
+      await tester.pump();
+      expect(find.text('Send 2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('media-tray-send')));
+      await _settleMedia(tester);
+
+      expect(find.byKey(const ValueKey('media-tray')), findsNothing);
+      expect(uploader.uploads, hasLength(2));
+      expect(uploader.uploads.every((u) => u.bucket == 'chat-images'), isTrue);
+      final calls = repository.mediaSender.calls;
+      expect(calls, hasLength(2));
+      expect(calls.map((call) => call['body']), ['Trip', '']);
+      expect(calls.map((call) => call['group']).toSet(), hasLength(1));
+      expect(calls.first['group'], isNotNull);
+      expect(calls.map((call) => call['notify']), [true, false]);
+      final attachment = calls.first['attachment']! as Map<String, dynamic>;
+      expect(attachment['width'], 40);
+      expect(attachment['height'], 30);
+      expect(BlurHash.isValid(attachment['blurhash'] as String?), isTrue);
+    });
+
+    testWidgets('files that are too big are marked and block sending', (
+      tester,
+    ) async {
+      final picker = FakeChatMediaPicker()
+        ..files = [
+          XFile.fromData(
+            Uint8List.fromList([1, 2, 3]),
+            name: 'Movie.mov',
+            path: 'Movie.mov',
+            mimeType: 'video/quicktime',
+            length: 60 * 1024 * 1024,
+          ),
+          XFile.fromData(
+            Uint8List.fromList([1, 2, 3]),
+            name: 'notes.txt',
+            path: 'notes.txt',
+            mimeType: 'text/plain',
+            length: 3,
+          ),
+        ];
+      await tester.pumpWidget(
+        _app(
+          OutboxChatsRepository(),
+          mediaPicker: picker,
+          uploader: FakeChatMediaUploader(),
+        ),
+      );
+      await tester.pump();
+
+      await _openAttach(tester, 'Files');
+      await _settleMedia(tester);
+
+      expect(find.text('2 items'), findsOneWidget);
+      expect(find.text('Too big'), findsOneWidget);
+      expect(find.byKey(const ValueKey('media-tray-too-big')), findsOneWidget);
+      // Files only: nothing to scale.
+      expect(find.text('Original quality'), findsNothing);
+      expect(
+        tester
+            .widget<WeCordButton>(find.byKey(const ValueKey('media-tray-send')))
+            .onPressed,
+        isNull,
       );
 
-    await tester.pumpWidget(_app(repository, imagePickerService: picker));
-    await tester.pump();
+      // Without the big one it can go.
+      final big = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'media-tray-remove-',
+            ),
+      );
+      await tester.tap(big.first);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('media-tray-too-big')), findsNothing);
+      expect(
+        tester
+            .widget<WeCordButton>(find.byKey(const ValueKey('media-tray-send')))
+            .onPressed,
+        isNotNull,
+      );
+    });
 
-    await tester.tap(find.byTooltip('Attach'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Send image'));
-    await tester.pump();
+    testWidgets('the Original quality switch says what will be sent', (
+      tester,
+    ) async {
+      final picker = FakeChatMediaPicker()..photos = [testPhoto('a.jpg')];
+      await tester.pumpWidget(
+        _app(
+          OutboxChatsRepository(),
+          mediaPicker: picker,
+          uploader: FakeChatMediaUploader(),
+        ),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
 
-    expect(picker.pickCalls, 1);
-    expect(repository.sentImages, [
-      SentImage(conversationId: 'conversation-1', image: picker.nextImage!),
-    ]);
+      expect(find.text('1 photo'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('media-tray-original')));
+      await tester.pump();
+      expect(find.text('Full size · location removed'), findsOneWidget);
+    });
+
+    testWidgets('closing the tray drops everything in it', (tester) async {
+      final picker = FakeChatMediaPicker()..photos = [testPhoto('a.jpg')];
+      final uploader = FakeChatMediaUploader();
+      await tester.pumpWidget(
+        _app(OutboxChatsRepository(), mediaPicker: picker, uploader: uploader),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+
+      await tester.tap(find.byKey(const ValueKey('media-tray-close')));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('media-tray')), findsNothing);
+      expect(uploader.uploads, isEmpty);
+    });
+
+    testWidgets('a failed picker shows why', (tester) async {
+      final picker = FakeChatMediaPicker()..error = Exception('no access');
+      await tester.pumpWidget(_app(FakeChatsRepository(), mediaPicker: picker));
+      await tester.pump();
+
+      await _openAttach(tester, 'Photos and videos');
+      await tester.pump();
+
+      expect(find.textContaining('no access'), findsOneWidget);
+    });
+
+    testWidgets('an album being sent shows rings and can be cancelled', (
+      tester,
+    ) async {
+      final repository = OutboxChatsRepository();
+      final uploader = FakeChatMediaUploader()..hold = Completer<void>();
+      final picker = FakeChatMediaPicker()
+        ..photos = [testPhoto('a.jpg'), testPhoto('b.jpg')];
+      await tester.pumpWidget(
+        _app(repository, mediaPicker: picker, uploader: uploader),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+      await tester.tap(find.byKey(const ValueKey('media-tray-send')));
+      await _settleMedia(tester);
+
+      // Two tiles in one bubble, both still going up.
+      expect(find.byType(MediaTile), findsNWidgets(2));
+      expect(find.byTooltip('Cancel upload'), findsNWidgets(2));
+      expect(find.text('Sending…'), findsOneWidget);
+      expect(uploader.uploads, hasLength(1), reason: 'one file at a time');
+
+      await tester.tap(find.byTooltip('Cancel upload').first);
+      await _settleMedia(tester);
+
+      // The cancelled one left; the other went on and is still uploading.
+      expect(find.byType(MediaTile), findsOneWidget);
+      expect(uploader.uploads, hasLength(2));
+      uploader.hold!.complete();
+      await _settleMedia(tester);
+      expect(repository.mediaSender.calls, hasLength(1));
+      expect(find.byType(MediaTile), findsNothing);
+    });
+
+    testWidgets('a failed upload says so and sends again when tapped', (
+      tester,
+    ) async {
+      final repository = OutboxChatsRepository();
+      final uploader = FakeChatMediaUploader()
+        ..failures.add(const UploadException(413, 'Payload too large'));
+      final picker = FakeChatMediaPicker()..photos = [testPhoto('a.jpg')];
+      await tester.pumpWidget(
+        _app(repository, mediaPicker: picker, uploader: uploader),
+      );
+      await tester.pump();
+      await _openAttach(tester, 'Photos and videos');
+      await _settleMedia(tester);
+      await tester.tap(find.byKey(const ValueKey('media-tray-send')));
+      await _settleMedia(tester);
+
+      expect(find.text('Failed — tap to retry'), findsOneWidget);
+      expect(find.byTooltip('Retry upload'), findsOneWidget);
+      expect(repository.mediaSender.calls, isEmpty);
+
+      await tester.tap(find.text('Failed — tap to retry'));
+      await _settleMedia(tester);
+
+      expect(uploader.uploads, hasLength(2));
+      expect(repository.mediaSender.calls, hasLength(1));
+      expect(find.text('Failed — tap to retry'), findsNothing);
+    });
+
+    testWidgets('pictures sent together show as one grid and open the viewer', (
+      tester,
+    ) async {
+      const hash = 'LEHV6nWB2yk8pyo0adR*.7kCMdnj';
+      Map<String, dynamic> photo(String name) => ImageAttachment(
+        bucket: 'chat-images',
+        path: 'conversation-1/$name.jpg',
+        mimeType: 'image/jpeg',
+        size: 1000,
+        width: 800,
+        height: 600,
+        blurhash: hash,
+      ).toJson();
+      final repository = FakeChatsRepository()
+        ..messages = [
+          for (var i = 1; i <= 4; i++)
+            _message(
+              id: 'message-$i',
+              senderId: 'user-2',
+              body: i == 1 ? 'Trip to the lake' : '',
+              createdAt: DateTime.utc(2026, 10, 17, 9, 0, i),
+              type: MessageType.image,
+              attachment: photo('p$i'),
+              attachmentGroupId: 'album-1',
+            ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+      await tester.pump();
+
+      // One bubble, one grid of four, one caption.
+      expect(
+        find.byKey(const ValueKey('album-grid-message-1')),
+        findsOneWidget,
+      );
+      expect(find.byType(MediaTile), findsNWidgets(4));
+      expect(find.text('Trip to the lake'), findsOneWidget);
+      // The BlurHash is there from the first frame.
+      expect(find.byType(BlurHashView), findsNWidgets(4));
+
+      // Tiles sit side by side in rows of two.
+      final first = tester.getRect(
+        find.byKey(const ValueKey('album-tile-message-1')),
+      );
+      final second = tester.getRect(
+        find.byKey(const ValueKey('album-tile-message-2')),
+      );
+      final third = tester.getRect(
+        find.byKey(const ValueKey('album-tile-message-3')),
+      );
+      expect(second.left, greaterThan(first.right - 1));
+      expect(second.top, first.top);
+      expect(third.top, greaterThan(first.bottom - 1));
+
+      await tester.tap(find.byKey(const ValueKey('album-tile-message-2')));
+      await tester.pumpAndSettle();
+      expect(find.byType(FilePreviewScreen), findsOneWidget);
+    });
+
+    testWidgets('a picture keeps its proportions before it has loaded', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository()
+        ..messages = [
+          _message(
+            id: 'message-1',
+            senderId: 'user-2',
+            body: '',
+            createdAt: DateTime.utc(2026, 10, 17, 9),
+            type: MessageType.image,
+            attachment: const ImageAttachment(
+              bucket: 'chat-images',
+              path: 'conversation-1/wide.jpg',
+              mimeType: 'image/jpeg',
+              size: 1000,
+              width: 1600,
+              height: 800,
+            ).toJson(),
+          ),
+        ];
+
+      await tester.pumpWidget(_app(repository));
+      await tester.pump();
+
+      final size = tester.getSize(
+        find.byKey(const ValueKey('album-tile-message-1')),
+      );
+      expect(size.width / size.height, closeTo(2, 0.01));
+    });
   });
 
   testWidgets('composer can record and send a voice message', (tester) async {
@@ -1347,84 +1676,6 @@ void main() {
 
     expect(find.byTooltip('Play voice message'), findsOneWidget);
     expect(find.text('0:04'), findsOneWidget);
-  });
-
-  testWidgets('does not show upload progress while the image picker is open', (
-    tester,
-  ) async {
-    final repository = FakeChatsRepository();
-    final picker = FakeImagePickerService()
-      ..pickCompleter = Completer<ChatImageUpload?>();
-
-    await tester.pumpWidget(_app(repository, imagePickerService: picker));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Attach'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Send image'));
-    await tester.pump();
-
-    expect(find.byTooltip('Attach'), findsOneWidget);
-    expect(
-      tester
-          .widget<WeCordIconButton>(
-            find.byKey(const ValueKey('composer-attach-button')),
-          )
-          .onPressed,
-      isNotNull,
-    );
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-
-    picker.pickCompleter!.complete(null);
-    await tester.pump();
-  });
-
-  testWidgets('failed local image read shows a local file error', (
-    tester,
-  ) async {
-    final repository = FakeChatsRepository();
-    final picker = FakeImagePickerService()
-      ..pickError = const ImagePickerException(
-        'Could not read the selected image from this Mac. Try moving it to a local folder and choosing it again.',
-      );
-
-    await tester.pumpWidget(_app(repository, imagePickerService: picker));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Attach'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Send image'));
-    await tester.pump();
-
-    expect(repository.sentImages, isEmpty);
-    expect(
-      find.textContaining('Could not read the selected image'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('failed image send clears progress and shows the root error', (
-    tester,
-  ) async {
-    final repository = FakeChatsRepository()
-      ..sendError = Exception('storage denied');
-    final picker = FakeImagePickerService()
-      ..nextImage = ChatImageUpload(
-        bytes: Uint8List.fromList([1, 2, 3]),
-        fileName: 'Photo.PNG',
-        mimeType: 'image/png',
-      );
-
-    await tester.pumpWidget(_app(repository, imagePickerService: picker));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Attach'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Send image'));
-    await tester.pump();
-
-    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
-    expect(find.textContaining('storage denied'), findsOneWidget);
   });
 
   testWidgets('renders system notices as a centered line without actions', (
@@ -1624,49 +1875,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Remove embed'), findsNothing);
       expect(find.text('Edit'), findsNothing);
-    });
-
-    testWidgets('sends a picked file from the attach menu', (tester) async {
-      final repository = FakeChatsRepository();
-      final picker = FakeChatFilePicker(
-        PickedChatFile(
-          name: 'Trip Plan.pdf',
-          mimeType: 'application/pdf',
-          bytes: Uint8List.fromList([1, 2, 3]),
-        ),
-      );
-      await tester.pumpWidget(_app(repository, filePicker: picker));
-      await tester.pump();
-
-      await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Send file or video'));
-      await tester.pumpAndSettle();
-
-      expect(repository.sentFiles, [
-        (
-          conversationId: 'conversation-1',
-          fileName: 'Trip Plan.pdf',
-          mimeType: 'application/pdf',
-          size: 3,
-        ),
-      ]);
-    });
-
-    testWidgets('a file over 50 MB is explained, not sent', (tester) async {
-      final repository = FakeChatsRepository();
-      final picker = FakeChatFilePicker(null)
-        ..error = const ChatFileTooLargeException();
-      await tester.pumpWidget(_app(repository, filePicker: picker));
-      await tester.pump();
-
-      await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Send file or video'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Files can be up to 50 MB.'), findsOneWidget);
-      expect(repository.sentFiles, isEmpty);
     });
 
     testWidgets('file messages show their name and size and open on tap', (
@@ -3556,7 +3764,8 @@ void main() {
 
 Widget _app(
   FakeChatsRepository repository, {
-  ImagePickerService? imagePickerService,
+  ChatMediaPicker? mediaPicker,
+  FakeChatMediaUploader? uploader,
   VoiceMessageRecorder? voiceMessageRecorder,
   String? title = 'Ada Lovelace',
   ConversationType? conversationType,
@@ -3565,7 +3774,6 @@ Widget _app(
   ValueChanged<ThreadTarget>? onOpenThread,
   bool? canSendMessages,
   DateTime? timedOutUntil,
-  ChatFilePickerService? filePicker,
   int? slowmodeSeconds,
   String? topic,
 }) {
@@ -3578,13 +3786,19 @@ Widget _app(
       if (linkLauncher != null)
         linkLauncherProvider.overrideWithValue(linkLauncher),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
-      if (filePicker != null)
-        chatFilePickerServiceProvider.overrideWithValue(filePicker),
       ...filePreviewOverrides(),
-      if (imagePickerService != null)
-        imagePickerServiceProvider.overrideWithValue(imagePickerService),
-      if (voiceMessageRecorder != null)
-        voiceMessageRecorderProvider.overrideWithValue(voiceMessageRecorder),
+      if (mediaPicker != null)
+        chatMediaPickerProvider.overrideWithValue(mediaPicker),
+      if (uploader != null) ...[
+        chatMediaUploaderProvider.overrideWithValue(uploader),
+        pendingMediaStoreProvider.overrideWithValue(MemoryPendingMediaStore()),
+      ],
+      // Tests that let real time pass would otherwise reach for the
+      // microphone plugin.
+      if (voiceMessageRecorder != null || mediaPicker != null)
+        voiceMessageRecorderProvider.overrideWithValue(
+          voiceMessageRecorder ?? FakeVoiceMessageRecorder(),
+        ),
       authRepositoryProvider.overrideWithValue(
         FakeAuthRepository()
           ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
@@ -3665,9 +3879,11 @@ ChatMessage _message({
   bool isPinned = false,
   bool suppressEmbeds = false,
   Profile? sender,
+  String? attachmentGroupId,
 }) {
   return ChatMessage(
     id: id,
+    attachmentGroupId: attachmentGroupId,
     conversationId: 'conversation-1',
     senderId: senderId,
     type: type,
@@ -3683,6 +3899,69 @@ ChatMessage _message({
     suppressEmbeds: suppressEmbeds,
     sender: sender,
   );
+}
+
+/// A repository that takes part in the outbox, so attachments are queued,
+/// uploaded and stored through [mediaSender].
+class OutboxChatsRepository extends FakeChatsRepository
+    implements OutboxMessageSender, MediaMessageSender {
+  final mediaSender = FakeMediaMessageSender();
+
+  @override
+  Future<String?> sendQueuedTextMessage({
+    required String conversationId,
+    required String clientId,
+    required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const [],
+  }) async {
+    sentMessages.add(SentMessage(conversationId: conversationId, body: body));
+    return 'text-${sentMessages.length}';
+  }
+
+  @override
+  Future<String?> sendQueuedMediaMessage({
+    required String conversationId,
+    required String clientId,
+    required MessageType type,
+    required Map<String, dynamic> attachment,
+    String body = '',
+    String? attachmentGroupId,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    bool notify = true,
+  }) {
+    return mediaSender.sendQueuedMediaMessage(
+      conversationId: conversationId,
+      clientId: clientId,
+      type: type,
+      attachment: attachment,
+      body: body,
+      attachmentGroupId: attachmentGroupId,
+      replyToMessageId: replyToMessageId,
+      replyPreview: replyPreview,
+      notify: notify,
+    );
+  }
+}
+
+/// Lets the engine's real work (decoding pictures, files) run between
+/// frames.
+Future<void> _settleMedia(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
+    await tester.pump();
+  }
+}
+
+Future<void> _openAttach(WidgetTester tester, String entry) async {
+  await tester.tap(find.byTooltip('Attach'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(entry));
+  await tester.pump();
 }
 
 class FakeChatsRepository implements ChatsRepository {
@@ -4452,21 +4731,6 @@ class FakeAuthRepository implements AuthRepository {
     String username,
     String displayName,
   ) async {}
-}
-
-class FakeChatFilePicker implements ChatFilePickerService {
-  FakeChatFilePicker(this.file);
-
-  final PickedChatFile? file;
-  Object? error;
-
-  @override
-  Future<PickedChatFile?> pickFile() async {
-    if (error case final error?) {
-      throw error;
-    }
-    return file;
-  }
 }
 
 /// The chat avatars drawn for [name].

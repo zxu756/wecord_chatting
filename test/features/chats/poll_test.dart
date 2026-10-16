@@ -10,6 +10,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/ui.dart';
 
 import 'chat_thread_screen_test.dart' as chat_fakes;
 
@@ -269,7 +270,17 @@ void main() {
       await tester.tap(find.text('View votes'));
       await tester.pumpAndSettle();
       expect(find.text('Votes'), findsOneWidget);
-      expect(find.text('Pizza (1)'), findsOneWidget);
+      final pizza = find.byKey(const ValueKey('poll-voters-option-o1'));
+      expect(
+        find.descendant(of: pizza, matching: find.text('Pizza')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: pizza, matching: find.text('1')),
+        findsOneWidget,
+      );
+      // The sheet is the WeCord one: a grabber over a panel.
+      expect(find.byType(WeCordSheet), findsOneWidget);
       expect(find.text('Grace Hopper'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('poll-voters-option-o2')));

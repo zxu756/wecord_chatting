@@ -224,11 +224,9 @@ Future<void> createGroupChat(BuildContext context, WidgetRef ref) async {
     );
     return;
   }
-  final result = await showModalBottomSheet<GroupCreationResult>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => GroupCreationSheet(friends: friends),
+  final result = await showWeCordSheet<GroupCreationResult>(
+    context,
+    builder: (context, _) => GroupCreationSheet(friends: friends),
   );
   if (result == null || !context.mounted) {
     return;

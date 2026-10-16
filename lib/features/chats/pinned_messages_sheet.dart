@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/sheet_rows.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -45,63 +47,40 @@ class PinnedMessagesSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pinned = ref.watch(pinnedMessagesProvider(conversationId));
-    final theme = Theme.of(context);
 
     return SafeArea(
+      top: false,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.7,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                tr('Pinned messages'),
-                style: theme.textTheme.titleMedium,
-              ),
-            ),
-            Flexible(
-              child: pinned.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (error, stackTrace) => Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    tr('Could not load pinned messages.'),
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ),
-                data: (items) {
-                  if (items.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(tr('No pinned messages yet')),
-                    );
-                  }
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return _PinnedMessageTile(
-                        item: item,
-                        canManagePins: canManagePins,
-                        onOpen: () {
-                          Navigator.of(context).pop(item.message.id);
-                        },
-                        onUnpin: () => unawaited(onUnpin(item.message.id)),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+        child: pinned.when(
+          loading: () => const SheetSpinner(),
+          error: (error, stackTrace) => SheetNote(
+            text: tr('Could not load pinned messages.'),
+            error: true,
+          ),
+          data: (items) {
+            if (items.isEmpty) {
+              return SheetNote(text: tr('No pinned messages yet'));
+            }
+            return ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _PinnedMessageTile(
+                  item: item,
+                  canManagePins: canManagePins,
+                  onOpen: () {
+                    Navigator.of(context).pop(item.message.id);
+                  },
+                  onUnpin: () => unawaited(onUnpin(item.message.id)),
+                );
+              },
+            );
+          },
         ),
       ),
     );
@@ -123,34 +102,24 @@ class _PinnedMessageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final pinnedByName = item.pinnedByName?.trim();
     // Webhook messages show the webhook, not its creator.
     final webhookName = item.message.webhookName;
     final authorName = webhookName ?? item.sender.displayLabel;
-    return ListTile(
-      leading: FallbackAvatar(
-        title: authorName,
+    return SheetListRow(
+      key: ValueKey('pinned-message-${item.message.id}'),
+      onTap: onOpen,
+      leading: ProfileAvatar(
+        name: authorName,
         avatarUrl: webhookName != null
             ? item.message.webhookAvatarUrl
             : item.sender.avatarUrl,
+        size: 40,
       ),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              authorName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (webhookName != null) ...[
-            const SizedBox(width: 6),
-            const MessageBotTag(),
-          ],
-        ],
-      ),
-      subtitle: Column(
+      title: authorName,
+      titleTrailing: webhookName != null ? const MessageBotTag() : null,
+      subtitleWidget: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -158,12 +127,20 @@ class _PinnedMessageTile extends StatelessWidget {
             pinnedMessagePreview(item.message),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14, height: 1.35, color: c.ink),
           ),
           if (pinnedByName != null && pinnedByName.isNotEmpty)
-            Text(
-              tr('Pinned by {name}', {'name': pinnedByName}),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                tr('Pinned by {name}', {'name': pinnedByName}),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: c.subtle,
+                ),
               ),
             ),
         ],
@@ -189,14 +166,16 @@ class _PinnedMessageTile extends StatelessWidget {
               ),
             ),
           if (canManagePins)
-            IconButton(
+            WeCordIconButton(
+              key: ValueKey('pinned-unpin-${item.message.id}'),
+              icon: Icons.close_rounded,
               tooltip: tr('Unpin'),
-              icon: const Icon(Icons.close),
+              variant: WeCordButtonVariant.ghost,
+              size: 36,
               onPressed: onUnpin,
             ),
         ],
       ),
-      onTap: onOpen,
     );
   }
 }

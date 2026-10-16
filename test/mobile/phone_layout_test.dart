@@ -92,6 +92,24 @@ void main() {
     await settle(tester);
   }
 
+  /// The open sheet is a WeCord sheet (grabber, 28 corners on the panel)
+  /// without Material list tiles, chips or ripples.
+  void expectWeCordSheet(WidgetTester tester) {
+    final sheet = find.byType(WeCordSheet);
+    expect(sheet, findsOneWidget);
+    for (final type in [ListTile, ChoiceChip, InkWell]) {
+      expect(
+        find.descendant(of: sheet, matching: find.byType(type)),
+        findsNothing,
+        reason: '$type in a WeCord sheet',
+      );
+    }
+    final bottomSheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+    expect(bottomSheet.showDragHandle, isNot(isTrue));
+    // showWeCordSheet draws the panel itself over a clear Material sheet.
+    expect(bottomSheet.backgroundColor, Colors.transparent);
+  }
+
   Future<void> longPressMessage(WidgetTester tester, String text) async {
     final message = find.textContaining(text, findRichText: true);
     await reveal(tester, message);
@@ -235,6 +253,7 @@ void main() {
       await tester.tap(find.byTooltip('Group details'));
       await settle(tester);
       expect(find.text('Leave group'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('long-press menu, emoji picker and reactors', (
@@ -252,6 +271,7 @@ void main() {
       await tester.tap(find.byTooltip('More reactions'));
       await settle(tester);
       expect(find.text('Add reaction'), findsOneWidget);
+      expectWeCordSheet(tester);
       await tester.tap(find.text('😀'));
       await settle(tester);
 
@@ -260,6 +280,7 @@ void main() {
       await tester.longPress(chip);
       await settle(tester);
       expect(find.text('Reacted with 😂'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('reaction chips are touch sized', (
@@ -287,6 +308,7 @@ void main() {
       await settle(tester);
       expect(find.text('Pinned messages'), findsWidgets);
       expect(find.text('Pinned by ${me.displayName}'), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('reply, edit and voice composer states', (
@@ -347,6 +369,7 @@ void main() {
       await tester.tap(find.text('Forward'));
       await settle(tester);
       expect(find.text('Forward to'), findsWidgets);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('create thread dialog with keyboard', (
@@ -461,6 +484,7 @@ void main() {
       await tester.tap(viewVotes);
       await settle(tester);
       expect(find.text('Votes'), findsOneWidget);
+      expectWeCordSheet(tester);
       expectFullyVisible(tester, find.text(grace.displayName));
       await tester.tap(find.byKey(const ValueKey('poll-voters-option-o2')));
       await settle(tester);
@@ -775,6 +799,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('phone-new-group')));
       await settle(tester);
       expect(find.byType(GroupCreationSheet), findsOneWidget);
+      expectWeCordSheet(tester);
     });
 
     phoneTestWidgets('the old Messages link opens home', (

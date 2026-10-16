@@ -625,14 +625,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showGroupDetails(String title) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
+    showWeCordSheet<void>(
+      context,
+      detents: GroupDetailSheet.detents,
+      initialDetent: GroupDetailSheet.initialDetent,
+      builder: (context, scrollController) {
         return GroupDetailSheet(
           conversationId: widget.conversationId,
           title: title,
+          scrollController: scrollController,
         );
       },
     );
@@ -2567,11 +2568,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showPollVoters(ChatMessage message) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => PollVotersSheet(message: message),
+    showWeCordSheet<void>(
+      context,
+      title: tr('Votes'),
+      builder: (context, _) => PollVotersSheet(message: message),
     );
   }
 
@@ -3334,11 +3334,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   Future<void> _showPinnedMessages(bool canManagePins) async {
     ref.invalidate(pinnedMessagesProvider(widget.conversationId));
-    final messageId = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
+    final messageId = await showWeCordSheet<String>(
+      context,
+      title: tr('Pinned messages'),
+      builder: (context, _) {
         return PinnedMessagesSheet(
           conversationId: widget.conversationId,
           canManagePins: canManagePins,
@@ -3440,13 +3439,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   void _showReactors(ChatMessage message, MessageReaction reaction) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
+    showWeCordSheet<void>(
+      context,
+      title: tr('Reacted with {emoji}', {
+        'emoji': reactionLabel(reaction, ref.read(usableEmojisByIdProvider)),
+      }),
+      builder: (context, _) {
         return MessageReactorsSheet(
           messageId: message.id,
           emoji: reaction.emoji,
-          label: reactionLabel(reaction, ref.read(usableEmojisByIdProvider)),
         );
       },
     );
@@ -3486,11 +3487,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (message.recalledAt != null) {
       return;
     }
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) => MessageForwardSheet(message: message),
+    showWeCordSheet<void>(
+      context,
+      title: tr('Forward to'),
+      builder: (context, _) => MessageForwardSheet(message: message),
     );
   }
 

@@ -24,15 +24,27 @@ final groupDetailProvider = FutureProvider.autoDispose
       return repository.getGroupDetail(conversationId);
     });
 
+/// A group's details, members and actions. Open it with
+/// `showWeCordSheet(detents: GroupDetailSheet.detents, …)` and pass the
+/// sheet's [scrollController]; without one it draws its own draggable
+/// sheet frame.
 class GroupDetailSheet extends ConsumerStatefulWidget {
   const GroupDetailSheet({
     required this.conversationId,
     required this.title,
+    this.scrollController,
     super.key,
   });
 
+  /// Where the sheet snaps: half, most of the screen and full.
+  static const detents = [0.5, 0.86, 0.95];
+  static const initialDetent = 0.86;
+
   final String conversationId;
   final String title;
+
+  /// The detent sheet's controller, which drives the content's list.
+  final ScrollController? scrollController;
 
   @override
   ConsumerState<GroupDetailSheet> createState() => _GroupDetailSheetState();
@@ -58,8 +70,20 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final detail = ref.watch(groupDetailProvider(widget.conversationId));
-
+    final controller = widget.scrollController;
+    if (controller != null) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          // The sheet reaches under the keyboard; its list stops above it
+          // so the focused field scrolls into view.
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: _buildContent(context, controller),
+        ),
+      );
+    }
     return SafeArea(
       top: false,
       child: Padding(
@@ -69,29 +93,31 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
         ),
         child: DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.86,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
+          initialChildSize: GroupDetailSheet.initialDetent,
+          minChildSize: GroupDetailSheet.detents.first,
+          maxChildSize: GroupDetailSheet.detents.last,
           builder: (context, scrollController) {
             return WeCordSheet(
               expand: true,
-              child: Expanded(
-                child: detail.when(
-                  loading: () => const _LoadingDetail(),
-                  error: (error, stackTrace) => _ErrorDetail(
-                    title: widget.title.trim().isEmpty
-                        ? widget.conversationId
-                        : widget.title.trim(),
-                    errorText: error.toString(),
-                  ),
-                  data: (detail) =>
-                      _buildDetail(context, detail, scrollController),
-                ),
-              ),
+              child: Expanded(child: _buildContent(context, scrollController)),
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, ScrollController controller) {
+    final detail = ref.watch(groupDetailProvider(widget.conversationId));
+    return detail.when(
+      loading: () => const _LoadingDetail(),
+      error: (error, stackTrace) => _ErrorDetail(
+        title: widget.title.trim().isEmpty
+            ? widget.conversationId
+            : widget.title.trim(),
+        errorText: error.toString(),
+      ),
+      data: (detail) => _buildDetail(context, detail, controller),
     );
   }
 

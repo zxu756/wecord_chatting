@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/chats/sheet_rows.dart';
+import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -382,7 +384,9 @@ class _PollTextAction extends StatelessWidget {
   }
 }
 
-/// Who voted for each option of a poll, one option at a time.
+/// Who voted for each answer of a poll, inside a WeCord sheet titled
+/// "Votes": the question, a chip per answer with its count, and the
+/// selected answer's voters.
 class PollVotersSheet extends ConsumerStatefulWidget {
   const PollVotersSheet({required this.message, super.key});
 
@@ -397,7 +401,7 @@ class _PollVotersSheetState extends ConsumerState<PollVotersSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.tokens.colors;
     final poll = widget.message.pollAttachment;
     final options = poll?.options ?? const <PollOption>[];
     final results = widget.message.pollResults ?? const PollResults();
@@ -409,38 +413,42 @@ class _PollVotersSheetState extends ConsumerState<PollVotersSheet> {
             ?.id ??
         options.firstOrNull?.id;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(tr('Votes'), style: theme.textTheme.titleLarge),
             if (poll != null)
-              Text(
-                poll.question,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  poll.question,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, height: 1.35, color: c.muted),
+                ),
               ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final option in options)
-                  ChoiceChip(
-                    key: ValueKey('poll-voters-option-${option.id}'),
-                    label: Text(
-                      '${option.text} (${results.countFor(option.id)})',
-                      overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final option in options)
+                    _VoterOptionChip(
+                      key: ValueKey('poll-voters-option-${option.id}'),
+                      label: option.text,
+                      count: results.countFor(option.id),
+                      selected: option.id == optionId,
+                      onPressed: () => setState(() => _optionId = option.id),
                     ),
-                    selected: option.id == optionId,
-                    onSelected: (_) => setState(() => _optionId = option.id),
-                  ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
             Flexible(
               child: optionId == null
                   ? const SizedBox.shrink()
@@ -459,6 +467,91 @@ class _PollVotersSheetState extends ConsumerState<PollVotersSheet> {
   }
 }
 
+/// An answer to pick in the votes sheet: its text (cut short when long)
+/// and how many voted for it; ink when selected.
+class _VoterOptionChip extends StatelessWidget {
+  const _VoterOptionChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final fill = selected ? c.ink : c.raised;
+    final foreground = selected ? c.onInk : c.ink;
+    return WeCordPressable(
+      selected: selected,
+      semanticLabel: '$label, $count',
+      excludeSemantics: true,
+      onPressed: () {
+        WeCordHaptics.selection();
+        onPressed();
+      },
+      shape: const StadiumBorder(),
+      builder: (context, states) {
+        final hovered = states.contains(WidgetState.hovered) && !selected;
+        return AnimatedContainer(
+          duration: WeCordMotion.quick,
+          curve: WeCordMotion.standard,
+          height: 36,
+          padding: const EdgeInsets.only(left: 14, right: 6),
+          decoration: ShapeDecoration(
+            color: hovered
+                ? Color.alphaBlend(c.ink.withValues(alpha: 0.05), fill)
+                : fill,
+            shape: const StadiumBorder(),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: foreground,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                constraints: const BoxConstraints(minWidth: 24),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                alignment: Alignment.center,
+                decoration: ShapeDecoration(
+                  color: selected ? c.onInk.withValues(alpha: 0.18) : c.panel,
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _PollVoterList extends ConsumerWidget {
   const _PollVoterList({required this.votersKey, super.key});
 
@@ -468,43 +561,31 @@ class _PollVoterList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final voters = ref.watch(pollVotersProvider(votersKey));
     return voters.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, stackTrace) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(tr('Could not load votes.')),
-      ),
+      loading: () => const SheetSpinner(),
+      error: (error, stackTrace) =>
+          SheetNote(text: tr('Could not load votes.'), error: true),
       data: (profiles) {
         if (profiles.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(tr('No votes for this answer yet.')),
-          );
+          return SheetNote(text: tr('No votes for this answer yet.'));
         }
         return ListView(
           shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
           children: [
             for (final profile in profiles)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(child: Text(_initials(profile))),
-                title: Text(
-                  profile.displayLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              SheetListRow(
+                key: ValueKey('poll-voter-${profile.id}'),
+                leading: ProfileAvatar(
+                  name: profile.displayLabel,
+                  avatarUrl: profile.avatarUrl,
+                  size: 40,
                 ),
-                subtitle: Text('@${profile.username}'),
+                title: profile.displayLabel,
+                subtitle: '@${profile.username}',
               ),
           ],
         );
       },
     );
   }
-}
-
-String _initials(Profile profile) {
-  final label = profile.displayLabel.trim();
-  return label.isEmpty ? '?' : label.characters.first.toUpperCase();
 }

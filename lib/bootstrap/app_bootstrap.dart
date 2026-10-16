@@ -26,7 +26,7 @@ Future<void> runWeCordApp() async {
 
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
-    anonKey: config.supabaseAnonKey,
+    publishableKey: config.supabaseAnonKey,
   );
 
   // The offline copy of chats (SQLite, or IndexedDB on the web) and the

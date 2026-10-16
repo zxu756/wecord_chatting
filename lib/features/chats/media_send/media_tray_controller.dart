@@ -84,12 +84,16 @@ final mediaTrayProvider = NotifierProvider.autoDispose
       MediaTrayController.new,
     );
 
-class MediaTrayController
-    extends AutoDisposeFamilyNotifier<MediaTrayState, String> {
+class MediaTrayController extends Notifier<MediaTrayState> {
+  MediaTrayController(this.conversationId);
+
+  /// The conversation this tray belongs to.
+  final String conversationId;
+
   var _disposed = false;
 
   @override
-  MediaTrayState build(String arg) {
+  MediaTrayState build() {
     _disposed = false;
     ref.onDispose(() => _disposed = true);
     return const MediaTrayState();

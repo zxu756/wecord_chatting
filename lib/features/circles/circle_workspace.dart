@@ -140,8 +140,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       }
     }
     final conversations =
-        ref.read(conversationsProvider).valueOrNull ??
-        const <ConversationSummary>[];
+        ref.read(conversationsProvider).value ?? const <ConversationSummary>[];
     for (final conversation in conversations) {
       if (conversation.id == conversationId && conversation.isThread) {
         for (final channel in widget.detail.channels) {
@@ -230,7 +229,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           )
         : null;
     final onlineUserIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
 
     final c = context.tokens.colors;
     final edge = BorderSide(color: c.lineSoft);
@@ -801,9 +800,9 @@ class CircleMemberList extends ConsumerWidget {
     offline.sort(_compareNames);
     final c = context.tokens.colors;
     final background = color ?? c.sidebar;
-    final presenceStatuses = ref.watch(presenceStatusesProvider).valueOrNull;
+    final presenceStatuses = ref.watch(presenceStatusesProvider).value;
     final circleAvatars =
-        ref.watch(circleMemberAvatarsProvider(detail.circle.id)).valueOrNull ??
+        ref.watch(circleMemberAvatarsProvider(detail.circle.id)).value ??
         const <String, String>{};
     final groups = [
       for (final role in detail.roles)

@@ -273,7 +273,7 @@ class _ProfileEditorState extends ConsumerState<ProfileEditor> {
             avatarUrl: _avatarUrl,
           );
       // Pronouns and banner are saved separately, and only when changed.
-      final saved = ref.read(currentProfileProvider).valueOrNull;
+      final saved = ref.read(currentProfileProvider).value;
       final pronouns = _pronounsController.text.trim();
       if (saved == null ||
           pronouns != (saved.pronouns ?? '') ||

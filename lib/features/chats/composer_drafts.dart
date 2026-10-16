@@ -207,9 +207,7 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
     String? userId;
     try {
       userId =
-          ref.watch(
-            authStateProvider.select((state) => state.valueOrNull?.id),
-          ) ??
+          ref.watch(authStateProvider.select((state) => state.value?.id)) ??
           ref.read(authRepositoryProvider).currentUser?.id;
     } on Object {
       // No sign-in available (Supabase not set up): drafts stay in memory.

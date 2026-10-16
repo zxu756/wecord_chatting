@@ -70,7 +70,7 @@ class _SetNewPasswordScreenState extends ConsumerState<SetNewPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final email = ref.watch(
-      authStateProvider.select((state) => state.valueOrNull?.email),
+      authStateProvider.select((state) => state.value?.email),
     );
 
     return AuthPage(
@@ -80,9 +80,8 @@ class _SetNewPasswordScreenState extends ConsumerState<SetNewPasswordScreen> {
           fontSize: 14,
           onPressed: _saving
               ? null
-              : () => ref
-                    .read(passwordRecoveryPendingProvider.notifier)
-                    .finish(),
+              : () =>
+                    ref.read(passwordRecoveryPendingProvider.notifier).finish(),
         ),
       ),
       children: [

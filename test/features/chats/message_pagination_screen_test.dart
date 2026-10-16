@@ -254,11 +254,12 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatThreadScreen)),
     );
-    container.read(pendingMessageJumpProvider.notifier).state =
-        const MessageJump(
-          conversationId: 'conversation-1',
-          messageId: 'message-0010',
-        );
+    container
+        .read(pendingMessageJumpProvider.notifier)
+        .state = const MessageJump(
+      conversationId: 'conversation-1',
+      messageId: 'message-0010',
+    );
     for (var frame = 0; frame < 20; frame++) {
       await tester.pump(const Duration(milliseconds: 50));
     }

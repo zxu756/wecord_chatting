@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/state/no_retry.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -422,6 +423,7 @@ Widget _app(
       : MaterialApp.router(routerConfig: router);
 
   return ProviderScope(
+    retry: noProviderRetry,
     overrides: [
       contactsRepositoryProvider.overrideWithValue(repository),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),

@@ -161,9 +161,9 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     );
     _engine = engine;
     ref.onDispose(engine.dispose);
-    engine.setOnline(ref.read(deviceConnectivityProvider).valueOrNull ?? true);
+    engine.setOnline(ref.read(deviceConnectivityProvider).value ?? true);
     ref.listen<bool>(
-      deviceConnectivityProvider.select((value) => value.valueOrNull ?? true),
+      deviceConnectivityProvider.select((value) => value.value ?? true),
       (previous, online) {
         engine.setOnline(online);
         if (online) {

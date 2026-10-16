@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:wecord/shared/state/no_retry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
@@ -365,6 +367,7 @@ ChatMessage phoneMessage(
   Profile sender,
   String body, {
   required int minutesAgo,
+  DateTime? createdAt,
   MessageType type = MessageType.text,
   Map<String, dynamic>? attachment,
   ReplyPreview? replyPreview,
@@ -385,7 +388,7 @@ ChatMessage phoneMessage(
     attachment: attachment,
     replyPreview: replyPreview,
     forwardPreview: forwardPreview,
-    createdAt: _now.subtract(Duration(minutes: minutesAgo)),
+    createdAt: createdAt ?? _now.subtract(Duration(minutes: minutesAgo)),
     editedAt: editedAt,
     reactions: reactions,
     isPinned: isPinned,
@@ -800,6 +803,12 @@ List<ChatMessage> emojiMessages() {
   const parrot = '<:party_parrot:${emoji_fakes.partyParrotId}>';
   const blob = '<:blob_wave:${emoji_fakes.blobWaveId}>';
   const cat = '<:cat_thumbs:${emoji_fakes.catThumbsId}>';
+  // Fixed to today's noon (local), not to the moment the test runs: a
+  // test run just after midnight would otherwise put a day separator
+  // between these messages and move everything the test looks for.
+  final today = DateTime.now();
+  final noon = DateTime(today.year, today.month, today.day, 12).toUtc();
+  DateTime at(int minutesAgo) => noon.subtract(Duration(minutes: minutesAgo));
   Map<String, dynamic> sticker(String id, String name) {
     return {
       'kind': 'sticker',
@@ -817,6 +826,7 @@ List<ChatMessage> emojiMessages() {
           'adventure $blob and tell <:gone_emoji:00000000-0000-4000-8000-0000000000ff> '
           'hello.',
       minutesAgo: 30,
+      createdAt: at(30),
       conversationId: 'conv-general',
       reactions: const [
         MessageReaction(
@@ -837,6 +847,7 @@ List<ChatMessage> emojiMessages() {
       grace,
       '$parrot$cat 🎉',
       minutesAgo: 25,
+      createdAt: at(25),
       conversationId: 'conv-general',
     ),
     phoneMessage(
@@ -844,6 +855,7 @@ List<ChatMessage> emojiMessages() {
       linus,
       'wave',
       minutesAgo: 20,
+      createdAt: at(20),
       conversationId: 'conv-general',
       type: MessageType.sticker,
       attachment: sticker(emoji_fakes.waveStickerId, 'wave'),
@@ -853,6 +865,7 @@ List<ChatMessage> emojiMessages() {
       bart,
       'secret_handshake',
       minutesAgo: 15,
+      createdAt: at(15),
       conversationId: 'conv-general',
       type: MessageType.sticker,
       attachment: sticker(
@@ -865,6 +878,7 @@ List<ChatMessage> emojiMessages() {
       me,
       'ship_it',
       minutesAgo: 5,
+      createdAt: at(5),
       conversationId: 'conv-general',
       type: MessageType.sticker,
       attachment: sticker(emoji_fakes.shipItStickerId, 'ship_it'),
@@ -1777,7 +1791,11 @@ class PhoneWorld {
     Object? extra,
   }) async {
     await tester.pumpWidget(
-      ProviderScope(overrides: overrides, child: const WeCordApp()),
+      ProviderScope(
+        retry: noProviderRetry,
+        overrides: overrides,
+        child: const WeCordApp(),
+      ),
     );
     await tester.pump();
     final container = ProviderScope.containerOf(
@@ -1808,6 +1826,7 @@ Future<void> pumpStandalone(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
+      retry: noProviderRetry,
       overrides: [...world.overrides, ...extraOverrides],
       child: MaterialApp(
         theme: _theme(),

@@ -753,15 +753,14 @@ void main() {
 
 class NotificationCoordinatorHarness {
   NotificationCoordinatorHarness({
-    String? activeConversationId,
+    this._activeConversationId,
     bool notificationsEnabled = true,
     bool previewsEnabled = true,
     String? currentUserId = 'current-user',
     CirclesRepository? circlesRepository,
     DateTime Function()? now,
     bool Function()? doNotDisturb,
-  }) : _activeConversationId = activeConversationId,
-       _authRepository = _FakeAuthRepository(currentUserId),
+  }) : _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
        _notificationService = _ThrowingFakeLocalNotificationService(),
        _pollTicks = StreamController<void>.broadcast(),

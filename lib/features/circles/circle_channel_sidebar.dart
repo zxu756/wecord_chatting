@@ -407,8 +407,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final detail = widget.detail;
     final canManage = detail.canManageChannels;
     final conversations =
-        ref.watch(conversationsProvider).valueOrNull ??
-        const <ConversationSummary>[];
+        ref.watch(conversationsProvider).value ?? const <ConversationSummary>[];
     final unreadCounts = <String, int>{
       for (final conversation in conversations)
         conversation.id: conversation.unreadCount,
@@ -435,7 +434,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         ? watchVoiceStates(ref, _circleId)
         : const <VoiceMemberState>[];
     final userLimits = hasVoice
-        ? ref.watch(voiceChannelUserLimitsProvider(_circleId)).valueOrNull ??
+        ? ref.watch(voiceChannelUserLimitsProvider(_circleId)).value ??
               const <String, int>{}
         : const <String, int>{};
     final voiceModeration = hasVoice ? VoiceModeration.forCircle(detail) : null;
@@ -464,7 +463,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         if (conversation.isMuted) conversation.id,
     };
     final onlineUserIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
     final onlineCount = detail.members
         .where((member) => onlineUserIds.contains(member.profile.id))
         .length;

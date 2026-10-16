@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -11,7 +12,7 @@ final stageRepositoryProvider = Provider<StageRepository>((ref) {
     return SupabaseStageRepository(
       SupabaseStageDataSource(ref.watch(supabaseClientProvider)),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedStageRepository();
   }
 });

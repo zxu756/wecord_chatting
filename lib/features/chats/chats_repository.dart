@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -26,7 +27,7 @@ final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
       ref.watch(supabaseClientProvider),
       onMessageSent: push.notifySent,
     );
-  } on AssertionError {
+  } on ProviderException {
     return const _UninitializedChatsRepository();
   }
 });
@@ -367,14 +368,11 @@ class SupabaseChatsRepository
 
   const SupabaseChatsRepository.withDataSource(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-    Future<void> Function(String messageId)? onMessageSent,
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout,
-       _onMessageSent = onMessageSent;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+    this._onMessageSent,
+  });
 
   /// Called with each message the current user sends (for push).
   final Future<void> Function(String messageId)? _onMessageSent;
@@ -514,7 +512,7 @@ class SupabaseChatsRepository
         'type': type.toJson(),
         'body': body,
         'attachment': attachment,
-        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        'reply_to_message_id': ?replyToMessageId,
         if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
         if (withGroup) 'attachment_group_id': attachmentGroupId,
         if (withClientId) 'client_id': clientId,
@@ -627,7 +625,7 @@ class SupabaseChatsRepository
       'sender_id': _requireCurrentUserId(),
       'type': MessageType.text.toJson(),
       'body': trimmedBody,
-      if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+      'reply_to_message_id': ?replyToMessageId,
       if (replyPreview != null) 'reply_preview': replyPreview.toJson(),
     };
     await _send(conversationId, () => _dataSource.insertMessage(values));

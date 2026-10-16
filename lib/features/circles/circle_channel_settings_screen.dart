@@ -251,7 +251,7 @@ class _CircleChannelSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(circleDetailProvider(widget.circleId));
-    final loaded = detail.valueOrNull;
+    final loaded = detail.value;
     CircleChannel? channel;
     for (final candidate in loaded?.channels ?? const <CircleChannel>[]) {
       if (candidate.id == widget.channelId) {
@@ -667,8 +667,8 @@ class _CircleChannelSettingsScreenState
             tone: SettingsTone.accent,
             title: tr('Add role or member'),
             showChevron: false,
-            onTap: !_saving && overwrites.valueOrNull != null
-                ? () => _addOverwrite(detail, channel, overwrites.valueOrNull!)
+            onTap: !_saving && overwrites.value != null
+                ? () => _addOverwrite(detail, channel, overwrites.value!)
                 : null,
           ),
         ],
@@ -1518,7 +1518,7 @@ class _ChannelOverwriteEditorSheetState
           child: wide
               ? Row(
                   children: [
-                    if (remove != null) remove,
+                    ?remove,
                     const Spacer(),
                     cancel,
                     const SizedBox(width: 8),

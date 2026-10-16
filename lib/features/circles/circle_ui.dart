@@ -160,7 +160,7 @@ class _CircleNetworkAvatarState extends ConsumerState<CircleNetworkAvatar> {
     final size = widget.size;
     final displayUrl = widget.url == null
         ? null
-        : ref.watch(avatarDisplayUrlProvider(widget.url)).valueOrNull;
+        : ref.watch(avatarDisplayUrlProvider(widget.url)).value;
     final url = displayUrl == _failedUrl ? null : displayUrl;
     final base = widget.thing
         ? ThingAvatar(label: widget.name, size: size)

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -10,7 +11,7 @@ import 'package:wecord/shared/models/profile.dart';
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   try {
     return SupabaseSettingsRepository(ref.watch(supabaseClientProvider));
-  } on AssertionError {
+  } on ProviderException {
     return const _UninitializedSettingsRepository();
   }
 });
@@ -106,12 +107,10 @@ class SupabaseSettingsRepository implements SettingsRepository {
 
   const SupabaseSettingsRepository.withDataSource(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   final SettingsDataSource _dataSource;
   final String? Function() _currentUserId;

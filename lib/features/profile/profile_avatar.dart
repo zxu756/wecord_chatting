@@ -39,7 +39,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
   Widget build(BuildContext context) {
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     final image = displayUrl == null || displayUrl == _failedUrl
         ? null
         : NetworkImage(displayUrl);
@@ -89,7 +89,7 @@ class _StoredThingAvatarState extends ConsumerState<StoredThingAvatar> {
   Widget build(BuildContext context) {
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     final image = displayUrl == null || displayUrl == _failedUrl
         ? null
         : NetworkImage(displayUrl);

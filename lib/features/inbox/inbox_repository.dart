@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -6,7 +7,7 @@ import 'package:wecord/shared/models/message.dart';
 final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
   try {
     return SupabaseInboxRepository(ref.watch(supabaseClientProvider));
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedInboxRepository();
   }
 });

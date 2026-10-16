@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:wecord/features/circles/circle_automod_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -51,7 +52,7 @@ final circleOnboardingRepositoryProvider = Provider<CircleOnboardingRepository>(
       return CircleOnboardingRepository(
         SupabaseRpcDataSource(ref.watch(supabaseClientProvider)),
       );
-    } on AssertionError {
+    } on ProviderException {
       return const CircleOnboardingRepository(UninitializedRpcDataSource());
     }
   },
@@ -135,7 +136,7 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
   Widget build(BuildContext context) {
     final onboarding = ref
         .watch(circleOnboardingProvider(widget.circleId))
-        .valueOrNull;
+        .value;
     final needsAcceptance = onboarding?.needsAcceptance ?? false;
     if (onboarding != null && needsAcceptance && !_shownRules) {
       _shownRules = true;

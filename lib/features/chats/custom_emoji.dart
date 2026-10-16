@@ -325,7 +325,7 @@ class StickerPicker extends ConsumerWidget {
     final theme = Theme.of(context);
     final usable = ref.watch(usableEmojisProvider);
     final stickers = [
-      for (final emoji in usable.valueOrNull ?? const <CircleEmoji>[])
+      for (final emoji in usable.value ?? const <CircleEmoji>[])
         if (emoji.isSticker) emoji,
     ];
     final groups = groupEmojisByCircle(stickers, circleId: circleId);

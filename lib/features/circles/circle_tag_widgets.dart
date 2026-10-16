@@ -70,8 +70,7 @@ class ProfileNameBadges extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final badges =
-        ref.watch(profileBadgesProvider(userId)).valueOrNull ??
-        ProfileBadges.none;
+        ref.watch(profileBadgesProvider(userId)).value ?? ProfileBadges.none;
     final tag = badges.tag;
     if (badges.isEmpty) {
       return const SizedBox.shrink();
@@ -251,7 +250,7 @@ class _CircleTagSectionState extends ConsumerState<CircleTagSection> {
                         ? null
                         : () => _save(),
                   ),
-                  if (current.valueOrNull != null)
+                  if (current.value != null)
                     WeCordButton(
                       key: const ValueKey('circle-tag-remove'),
                       label: tr('Turn off tag'),
@@ -278,8 +277,7 @@ class CircleTagSettingTile extends ConsumerWidget {
     final userId = ref.watch(authRepositoryProvider).currentUser?.id;
     final badges = userId == null
         ? ProfileBadges.none
-        : ref.watch(profileBadgesProvider(userId)).valueOrNull ??
-              ProfileBadges.none;
+        : ref.watch(profileBadgesProvider(userId)).value ?? ProfileBadges.none;
     final tag = badges.tag;
     return SettingsRow(
       key: const ValueKey('circle-tag-setting'),
@@ -336,7 +334,7 @@ class _CircleTagPickerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final circles = ref.watch(tagCirclesProvider);
-    final list = circles.valueOrNull ?? const <TagCircle>[];
+    final list = circles.value ?? const <TagCircle>[];
     final noneSelected = list.every((circle) => !circle.isSelected);
     Widget? check(bool selected) =>
         selected ? Icon(Icons.check_rounded, size: 20, color: c.accent) : null;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
@@ -30,7 +31,7 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
     notificationService: ref.watch(localNotificationServiceProvider),
     activeConversationId: () => ref.read(activeConversationIdProvider),
     doNotDisturb: () =>
-        ref.read(presenceSettingsProvider).valueOrNull?.status ==
+        ref.read(presenceSettingsProvider).value?.status ==
         PresenceStatus.doNotDisturb,
   );
   ref.onDispose(coordinator.dispose);
@@ -43,22 +44,16 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
 /// shown while the user is in Do Not Disturb.
 class NotificationCoordinator {
   NotificationCoordinator({
-    required AuthRepository authRepository,
-    required ChatsRepository chatsRepository,
-    CirclesRepository? circlesRepository,
-    required NotificationPreferencesRepository preferencesRepository,
-    required LocalNotificationService notificationService,
-    required String? Function() activeConversationId,
+    required this._authRepository,
+    required this._chatsRepository,
+    this._circlesRepository,
+    required this._preferencesRepository,
+    required this._notificationService,
+    required this._activeConversationId,
     bool Function()? doNotDisturb,
     DateTime Function()? now,
     Stream<void>? pollTicks,
-  }) : _authRepository = authRepository,
-       _chatsRepository = chatsRepository,
-       _circlesRepository = circlesRepository,
-       _preferencesRepository = preferencesRepository,
-       _notificationService = notificationService,
-       _activeConversationId = activeConversationId,
-       _doNotDisturb = doNotDisturb ?? _never,
+  }) : _doNotDisturb = doNotDisturb ?? _never,
        _now = now ?? DateTime.now,
        _pollTicks =
            pollTicks ?? Stream<void>.periodic(const Duration(seconds: 5));

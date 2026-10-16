@@ -179,8 +179,7 @@ class _AppKeyboardShortcutsState extends ConsumerState<AppKeyboardShortcuts> {
     final activeId =
         ref.read(activeConversationIdProvider) ?? uri.queryParameters['c'];
     final conversations =
-        ref.read(conversationsProvider).valueOrNull ??
-        const <ConversationSummary>[];
+        ref.read(conversationsProvider).value ?? const <ConversationSummary>[];
     final active = conversations
         .where((conversation) => conversation.id == activeId)
         .firstOrNull;

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -10,7 +11,7 @@ final messageSearchRepositoryProvider = Provider<MessageSearchRepository>((
     return SupabaseMessageSearchRepository(
       (name, params) => client.rpc<Object?>(name, params: params),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedMessageSearchRepository();
   }
 });

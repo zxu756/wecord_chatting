@@ -68,7 +68,7 @@ class _ChatAvatarState extends ConsumerState<ChatAvatar> {
     final size = widget.size;
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     final url = displayUrl == null || displayUrl == _failedUrl
         ? null
         : displayUrl;

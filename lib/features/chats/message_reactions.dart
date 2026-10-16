@@ -96,7 +96,7 @@ class EmojiReactionPicker extends ConsumerWidget {
     final custom = includeCustom
         ? [
             for (final emoji
-                in ref.watch(usableEmojisProvider).valueOrNull ??
+                in ref.watch(usableEmojisProvider).value ??
                     const <CircleEmoji>[])
               if (!emoji.isSticker) emoji,
           ]

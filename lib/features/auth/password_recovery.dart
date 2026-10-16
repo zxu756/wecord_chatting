@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/site_url.dart';
@@ -15,7 +16,7 @@ final passwordRecoveryRepositoryProvider = Provider<PasswordRecoveryRepository>(
       return SupabasePasswordRecoveryRepository(
         ref.watch(supabaseClientProvider),
       );
-    } on AssertionError {
+    } on ProviderException {
       return const UninitializedPasswordRecoveryRepository();
     }
   },
@@ -62,8 +63,8 @@ abstract interface class PasswordRecoveryRepository {
 class SupabasePasswordRecoveryRepository implements PasswordRecoveryRepository {
   const SupabasePasswordRecoveryRepository(
     this._client, {
-    String Function() redirectUrl = authRedirectUrl,
-  }) : _redirectUrl = redirectUrl;
+    this._redirectUrl = authRedirectUrl,
+  });
 
   final SupabaseClient _client;
   final String Function() _redirectUrl;

@@ -11,6 +11,7 @@ import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
+import 'package:wecord/shared/state/no_retry.dart';
 import 'package:wecord/shared/theme/density_controller.dart';
 import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
@@ -26,7 +27,7 @@ Future<void> runWeCordApp() async {
 
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
-    anonKey: config.supabaseAnonKey,
+    publishableKey: config.supabaseAnonKey,
   );
 
   // The offline copy of chats (SQLite, or IndexedDB on the web) and the
@@ -34,6 +35,7 @@ Future<void> runWeCordApp() async {
   final chatCache = await openPlatformChatCache();
   runApp(
     ProviderScope(
+      retry: noProviderRetry,
       overrides: [
         if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
         deviceConnectivityProvider.overrideWith(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -23,7 +24,7 @@ final circlesRepositoryProvider = Provider<CirclesRepository>((ref) {
     return SupabaseCirclesRepository(
       SupabaseCirclesDataSource(ref.watch(supabaseClientProvider)),
     );
-  } on AssertionError {
+  } on ProviderException {
     return const UninitializedCirclesRepository();
   }
 });
@@ -425,17 +426,15 @@ abstract interface class CirclesDataSource {
 class SupabaseCirclesRepository implements CirclesRepository {
   const SupabaseCirclesRepository(
     this._dataSource, {
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   const SupabaseCirclesRepository.withDataSource(
     this._dataSource, {
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   final CirclesDataSource _dataSource;
   final String Function()? _storagePathSeed;
@@ -483,7 +482,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     final channelId = await _dataSource.rpc('create_circle_channel', {
       'target_circle_id': circleId,
       'channel_name': name.trim(),
-      if (categoryId != null) 'target_category_id': categoryId,
+      'target_category_id': ?categoryId,
       if (kind != CircleChannelKind.text) 'target_kind': kind.value,
     });
     return channelId as String;

@@ -32,7 +32,7 @@ class MessageLinkPreviewCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final preview = ref.watch(linkPreviewProvider(url)).valueOrNull;
+    final preview = ref.watch(linkPreviewProvider(url)).value;
     if (preview == null || !preview.hasContent) {
       return const SizedBox.shrink();
     }

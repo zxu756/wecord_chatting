@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -102,7 +104,7 @@ class NoGifSearchRepository implements GifSearchRepository {
 final gifSearchRepositoryProvider = Provider<GifSearchRepository>((ref) {
   try {
     return SupabaseGifSearchRepository(ref.watch(supabaseClientProvider));
-  } on AssertionError {
+  } on ProviderException {
     return const NoGifSearchRepository();
   }
 });

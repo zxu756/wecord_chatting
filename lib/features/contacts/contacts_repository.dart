@@ -58,8 +58,8 @@ class SupabaseContactsRepository implements ContactsRepository {
 
   SupabaseContactsRepository.withDataSource(
     this._dataSource, {
-    required String? Function() currentUserId,
-  }) : _currentUserId = currentUserId;
+    required this._currentUserId,
+  });
 
   final ContactsDataSource _dataSource;
   final String? Function() _currentUserId;

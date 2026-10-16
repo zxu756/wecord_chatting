@@ -211,7 +211,7 @@ class _CircleEmojisScreenState extends ConsumerState<CircleEmojisScreen> {
     final canManage =
         ref
             .watch(circleDetailProvider(widget.circleId))
-            .valueOrNull
+            .value
             ?.canManageEmojis ??
         false;
     final kind = _kind;

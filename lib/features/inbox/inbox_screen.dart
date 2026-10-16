@@ -29,14 +29,9 @@ final inboxProvider = FutureProvider.autoDispose<List<InboxItem>>((ref) {
 /// Notifications badge.
 final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final unread =
-      ref
-          .watch(inboxProvider)
-          .valueOrNull
-          ?.where((item) => item.isUnread)
-          .length ??
+      ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
       0;
-  final requests =
-      ref.watch(incomingFriendRequestsProvider).valueOrNull?.length ?? 0;
+  final requests = ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
   return unread + requests;
 });
 
@@ -69,21 +64,21 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final c = context.tokens.colors;
     final inbox = ref.watch(inboxProvider);
     final requests =
-        ref.watch(incomingFriendRequestsProvider).valueOrNull ??
+        ref.watch(incomingFriendRequestsProvider).value ??
         const <IncomingFriendRequest>[];
     final conversations = {
       for (final conversation
-          in ref.watch(conversationsProvider).valueOrNull ??
+          in ref.watch(conversationsProvider).value ??
               const <ConversationSummary>[])
         conversation.id: conversation,
     };
     final circles = {
       for (final circle
-          in ref.watch(circleSummariesProvider).valueOrNull ??
+          in ref.watch(circleSummariesProvider).value ??
               const <CircleSummary>[])
         circle.id: circle,
     };
-    final items = inbox.valueOrNull ?? const <InboxItem>[];
+    final items = inbox.value ?? const <InboxItem>[];
     final unreadMentions = items
         .where((item) => item.isUnread && item.reason != InboxReason.reply)
         .length;

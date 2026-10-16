@@ -31,7 +31,7 @@ class PresenceStatusSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final current =
-        ref.watch(presenceSettingsProvider).valueOrNull?.status ??
+        ref.watch(presenceSettingsProvider).value?.status ??
         PresenceStatus.online;
     final onEditCustomStatus = this.onEditCustomStatus;
     return SafeArea(

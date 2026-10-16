@@ -498,7 +498,7 @@ class _DiscoverableCirclePreviewViewState
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final preview = ref.watch(discoverableCirclePreviewProvider(_circleId));
-    final loaded = preview.valueOrNull;
+    final loaded = preview.value;
     final circle = loaded?.circle ?? widget.circle;
     final description = circle.description?.trim() ?? '';
     final bottomInset = MediaQuery.paddingOf(context).bottom;

@@ -33,19 +33,19 @@ class PhoneMessagesPanel extends ConsumerWidget {
     final theme = Theme.of(context);
     final c = context.tokens.colors;
     final conversations = ref.watch(conversationsProvider);
-    final friends = ref.watch(friendsProvider).valueOrNull ?? const <Profile>[];
+    final friends = ref.watch(friendsProvider).value ?? const <Profile>[];
     final onlineIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
-    final statuses = ref.watch(presenceStatusesProvider).valueOrNull;
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
+    final statuses = ref.watch(presenceStatusesProvider).value;
     PresenceStatus? presence(String? userId) =>
         presenceOf(userId, onlineUserIds: onlineIds, statuses: statuses);
     final requestCount =
-        ref.watch(incomingFriendRequestsProvider).valueOrNull?.length ?? 0;
-    final currentUserId = ref.watch(authStateProvider).valueOrNull?.id;
+        ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
+    final currentUserId = ref.watch(authStateProvider).value?.id;
 
     final chats = [
       for (final conversation
-          in conversations.valueOrNull ?? const <ConversationSummary>[])
+          in conversations.value ?? const <ConversationSummary>[])
         if (conversation.isDirectMessage) conversation,
     ];
     final sortedFriends = [
@@ -222,7 +222,7 @@ Future<void> openDirectMessage(
 ) async {
   final existing = ref
       .read(conversationsProvider)
-      .valueOrNull
+      .value
       ?.where(
         (conversation) =>
             conversation.type == ConversationType.direct &&
@@ -648,8 +648,8 @@ class _FriendPickerSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
     final onlineIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
-    final statuses = ref.watch(presenceStatusesProvider).valueOrNull;
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
+    final statuses = ref.watch(presenceStatusesProvider).value;
     final sorted = [...friends]
       ..sort(
         (a, b) => a.displayLabel.toLowerCase().compareTo(

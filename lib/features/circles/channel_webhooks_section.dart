@@ -225,7 +225,7 @@ class _ChannelWebhooksSectionState
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final webhooks = ref.watch(channelWebhooksProvider(widget.channel.id));
-    final list = webhooks.valueOrNull;
+    final list = webhooks.value;
     return Column(
       key: const ValueKey('channel-integrations'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

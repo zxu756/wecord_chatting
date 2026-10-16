@@ -241,7 +241,7 @@ class PreviewUnavailableView extends StatelessWidget {
       key: const ValueKey('file-preview-unavailable'),
       leading: FileTypeTile(file: file, size: 88),
       title: title,
-      message: [file.name, if (message != null) message!].join('\n'),
+      message: [file.name, ?message].join('\n'),
       actions: [
         if (onDownload != null)
           WeCordButton(

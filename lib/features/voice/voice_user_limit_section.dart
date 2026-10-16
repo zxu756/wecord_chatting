@@ -65,7 +65,7 @@ class _VoiceUserLimitSectionState extends ConsumerState<VoiceUserLimitSection> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final limits = ref.watch(voiceChannelUserLimitsProvider(widget.circleId));
-    final saved = limits.valueOrNull?[widget.channelId] ?? 0;
+    final saved = limits.value?[widget.channelId] ?? 0;
     final value = _dragging ?? saved.toDouble();
     return Padding(
       key: const ValueKey('voice-user-limit-section'),

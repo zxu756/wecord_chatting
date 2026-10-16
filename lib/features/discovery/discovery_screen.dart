@@ -554,7 +554,7 @@ class _NewSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final circles = ref.watch(discoveryNewCirclesProvider(category));
-    final items = circles.valueOrNull ?? const <DiscoverableCircle>[];
+    final items = circles.value ?? const <DiscoverableCircle>[];
     if (circles.isLoading && items.isEmpty) {
       return const SizedBox(height: 12);
     }

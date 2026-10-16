@@ -195,7 +195,7 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final bots = ref.watch(circleBotsProvider(_circleId));
-    final list = bots.valueOrNull ?? const <CircleBot>[];
+    final list = bots.value ?? const <CircleBot>[];
     return Column(
       key: const ValueKey('circle-bots-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

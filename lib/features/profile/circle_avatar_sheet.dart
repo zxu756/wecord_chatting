@@ -104,7 +104,7 @@ class _CircleAvatarSheetState extends ConsumerState<CircleAvatarSheet> {
     final profile = widget.member.profile;
     final circleAvatar = ref
         .watch(circleMemberAvatarsProvider(widget.circleId))
-        .valueOrNull?[profile.id];
+        .value?[profile.id];
     return SafeArea(
       top: false,
       child: SingleChildScrollView(

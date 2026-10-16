@@ -55,7 +55,7 @@ class _PushSettingsTileState extends ConsumerState<PushSettingsTile> {
 
   @override
   Widget build(BuildContext context) {
-    final status = ref.watch(pushStatusProvider).valueOrNull;
+    final status = ref.watch(pushStatusProvider).value;
     if (status == null || status == PushStatus.unsupported) {
       return const SizedBox.shrink();
     }

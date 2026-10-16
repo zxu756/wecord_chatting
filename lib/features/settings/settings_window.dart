@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
@@ -189,7 +190,7 @@ class _SettingsNav extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
-    final profile = ref.watch(currentProfileProvider).valueOrNull;
+    final profile = ref.watch(currentProfileProvider).value;
     final name = profile?.displayLabel ?? '';
     Widget item(SettingsWindowSection section, IconData icon, String label) {
       return _NavItem(

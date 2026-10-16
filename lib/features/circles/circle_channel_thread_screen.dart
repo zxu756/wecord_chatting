@@ -67,7 +67,7 @@ class _CircleChannelThreadScreenState
       detents: const [0.6, 0.92],
       builder: (sheetContext, scrollController) => Consumer(
         builder: (context, ref, _) {
-          final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
+          final detail = ref.watch(circleDetailProvider(circleId)).value;
           if (detail == null) {
             return const SizedBox.shrink();
           }
@@ -78,8 +78,7 @@ class _CircleChannelThreadScreenState
             color: context.tokens.colors.panel,
             scrollController: scrollController,
             onlineUserIds:
-                ref.watch(onlineUserIdsProvider).valueOrNull ??
-                const <String>{},
+                ref.watch(onlineUserIdsProvider).value ?? const <String>{},
             onChangeNickname: (member) => changeCircleNickname(
               this.context,
               ref,
@@ -96,7 +95,7 @@ class _CircleChannelThreadScreenState
   @override
   Widget build(BuildContext context) {
     final circleId = widget.circleId;
-    final detail = ref.watch(circleDetailProvider(circleId)).valueOrNull;
+    final detail = ref.watch(circleDetailProvider(circleId)).value;
     CircleChannel? channel;
     if (widget.conversationType == ConversationType.channel) {
       for (final candidate in detail?.channels ?? const <CircleChannel>[]) {
@@ -111,7 +110,7 @@ class _CircleChannelThreadScreenState
     if (widget.conversationType == ConversationType.thread && detail != null) {
       final parentId = ref
           .watch(chatConversationSummaryProvider(widget.conversationId))
-          .valueOrNull
+          .value
           ?.parentConversationId;
       for (final candidate in detail.channels) {
         if (candidate.isForum && candidate.conversationId == parentId) {

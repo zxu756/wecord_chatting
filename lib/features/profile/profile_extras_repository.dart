@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -14,7 +15,7 @@ final profileExtrasRepositoryProvider = Provider<ProfileExtrasRepository>((
       SupabaseProfileExtrasDataSource(client),
       currentUserId: () => client.auth.currentUser?.id,
     );
-  } on AssertionError {
+  } on ProviderException {
     return ProfileExtrasRepository(
       const _UninitializedProfileExtrasDataSource(),
       currentUserId: () => null,
@@ -51,12 +52,10 @@ abstract interface class ProfileExtrasDataSource {
 class ProfileExtrasRepository {
   const ProfileExtrasRepository(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   static const bannerBucket = 'profile-banners';
   static const avatarBucket = 'profile-avatars';

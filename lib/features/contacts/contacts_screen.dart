@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
@@ -273,8 +274,8 @@ class _FriendsSection extends ConsumerWidget {
     final query = ref.watch(friendsSearchQueryProvider).trim().toLowerCase();
     final onlineOnly = ref.watch(_onlineOnlyProvider);
     final onlineIds =
-        ref.watch(onlineUserIdsProvider).valueOrNull ?? const <String>{};
-    final statuses = ref.watch(presenceStatusesProvider).valueOrNull;
+        ref.watch(onlineUserIdsProvider).value ?? const <String>{};
+    final statuses = ref.watch(presenceStatusesProvider).value;
     PresenceStatus? presence(String id) =>
         presenceOf(id, onlineUserIds: onlineIds, statuses: statuses);
 

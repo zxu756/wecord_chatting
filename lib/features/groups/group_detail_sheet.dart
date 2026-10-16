@@ -667,7 +667,7 @@ class _GroupAvatarState extends ConsumerState<_GroupAvatar> {
   Widget build(BuildContext context) {
     final displayUrl = ref
         .watch(avatarDisplayUrlProvider(widget.avatarUrl))
-        .valueOrNull;
+        .value;
     if (displayUrl == null || displayUrl == _failedUrl) {
       return ThingAvatar(label: widget.title, size: widget.size);
     }

@@ -108,7 +108,7 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final template = ref.watch(circleTemplateProvider(widget.circleId));
-    final value = template.valueOrNull;
+    final value = template.value;
     final List<Widget> rows;
     if (template.isLoading && value == null) {
       rows = [
@@ -142,7 +142,7 @@ class _CircleTemplateSectionState extends ConsumerState<CircleTemplateSection> {
           tone: SettingsTone.accent,
           title: value.name,
           subtitle: [
-            if (value.description case final description?) description,
+            ?value.description,
             tr('{channels} channels · {roles} roles · used {count} times', {
               'channels': value.channelCount,
               'roles': value.roleCount,

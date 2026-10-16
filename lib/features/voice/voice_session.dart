@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
@@ -53,7 +54,7 @@ final voiceSessionProvider =
           }
         },
       );
-      ref.listen(authStateProvider.select((state) => state.valueOrNull?.id), (
+      ref.listen(authStateProvider.select((state) => state.value?.id), (
         previous,
         next,
       ) {
@@ -258,17 +259,12 @@ class VoiceSession {
 /// mute / deafen / video / screen flags, and leaves it on disconnect.
 class VoiceSessionController extends StateNotifier<VoiceSession?> {
   VoiceSessionController({
-    required VoiceRepository repository,
-    required VoiceCallConnector connector,
-    void Function(VoiceSession session)? onMembersChanged,
-    Future<void> Function(String callId)? onCallJoined,
-    VoiceSettings settings = const VoiceSettings(),
-  }) : _repository = repository,
-       _settings = settings,
-       _onCallJoined = onCallJoined,
-       _connector = connector,
-       _onMembersChanged = onMembersChanged,
-       super(null);
+    required this._repository,
+    required this._connector,
+    this._onMembersChanged,
+    this._onCallJoined,
+    this._settings = const VoiceSettings(),
+  }) : super(null);
 
   final VoiceRepository _repository;
   final VoiceCallConnector _connector;

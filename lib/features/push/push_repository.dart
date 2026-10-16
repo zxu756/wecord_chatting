@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/push/push_gateway.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
@@ -29,7 +30,7 @@ abstract interface class PushRepository {
 final pushRepositoryProvider = Provider<PushRepository>((ref) {
   try {
     return SupabasePushRepository(ref.watch(supabaseClientProvider));
-  } on AssertionError {
+  } on ProviderException {
     return const NoPushRepository();
   }
 });

@@ -159,6 +159,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('circle-events-create')));
     await settle(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('event-save')));
     await tester.tap(find.byKey(const ValueKey('event-save')));
     await settle(tester);
     expect(find.text('Give the event a title.'), findsOneWidget);

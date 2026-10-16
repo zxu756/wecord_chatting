@@ -18,6 +18,7 @@ import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
 import '../presence/presence_repository_test.dart' as presence_fakes;
@@ -126,6 +127,30 @@ void main() {
 
     expect(picker().selected, {ThemeMode.dark});
     expect(await store.load(), ThemeMode.dark);
+  });
+
+  testWidgets('turns glass effects off and remembers it', (tester) async {
+    final store = InMemoryGlassEffectsStore();
+    await tester.pumpWidget(
+      _app(settingsRepository: FakeSettingsRepository(), glassStore: store),
+    );
+    await tester.pump();
+
+    final toggle = find.byKey(const ValueKey('glass-effects'));
+    await tester.scrollUntilVisible(
+      toggle,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(toggle);
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+    await tester.tap(toggle);
+    await tester.pump();
+
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(await store.load(), isFalse);
   });
 
   group('delete account', () {
@@ -607,6 +632,10 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(
+      find.widgetWithText(OutlinedButton, 'Send test notification'),
+    );
+    await tester.pump();
 
     await tester.tap(
       find.widgetWithText(OutlinedButton, 'Send test notification'),
@@ -644,6 +673,7 @@ Future<void> tapSave(WidgetTester tester) async {
 Widget _app({
   required FakeSettingsRepository settingsRepository,
   ThemeModeStore? themeModeStore,
+  GlassEffectsStore? glassStore,
   AccountDeletionService? accountDeletionService,
   FakeAuthRepository? authRepository,
   FakeImagePickerService? imagePickerService,
@@ -667,6 +697,9 @@ Widget _app({
       settingsRepositoryProvider.overrideWithValue(settingsRepository),
       themeModeStoreProvider.overrideWithValue(
         themeModeStore ?? InMemoryThemeModeStore(),
+      ),
+      glassEffectsStoreProvider.overrideWithValue(
+        glassStore ?? InMemoryGlassEffectsStore(),
       ),
       if (accountDeletionService != null)
         accountDeletionServiceProvider.overrideWithValue(

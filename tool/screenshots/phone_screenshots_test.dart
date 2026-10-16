@@ -23,6 +23,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/voice.dart';
+import 'package:wecord/shared/theme/wecord_theme.dart';
 
 import '../../test/features/voice/voice_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
@@ -864,6 +865,26 @@ Future<void> _loadFonts() async {
   }
   await roboto.load();
 
+  // The app's own font, and a Chinese font under the names the theme falls
+  // back to for characters it lacks.
+  final jakarta = FontLoader(WeCordTheme.fontFamily)
+    ..addFont(
+      _fontData('assets/fonts/plus_jakarta_sans/PlusJakartaSans-Variable.ttf'),
+    );
+  await jakarta.load();
+  final cjkFont = [
+    '/System/Library/Fonts/Hiragino Sans GB.ttc',
+    unicodeFont,
+  ].where((path) => File(path).existsSync()).firstOrNull;
+  const emojiFont = '/System/Library/Fonts/Apple Color Emoji.ttc';
+  for (final family in WeCordTheme.fontFamilyFallback) {
+    final file = family.contains('Emoji') ? emojiFont : cjkFont;
+    if (file != null && File(file).existsSync()) {
+      final fallback = FontLoader(family)..addFont(_fontData(file));
+      await fallback.load();
+    }
+  }
+
   final icons = FontLoader('MaterialIcons')
     ..addFont(_fontData('${fonts.path}/MaterialIcons-Regular.otf'));
   await icons.load();
@@ -875,7 +896,6 @@ Future<void> _loadFonts() async {
     await mono.load();
   }
 
-  const emojiFont = '/System/Library/Fonts/Apple Color Emoji.ttc';
   if (File(emojiFont).existsSync()) {
     final emoji = FontLoader('Apple Color Emoji')
       ..addFont(_fontData(emojiFont));

@@ -22,6 +22,7 @@ import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/theme/glass_effects_controller.dart';
 import 'package:wecord/shared/theme/theme_mode_controller.dart';
 
 final currentProfileProvider = FutureProvider.autoDispose<Profile>((ref) {
@@ -231,7 +232,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onSelectionChanged: (selection) =>
                     ref.read(themeModeProvider.notifier).set(selection.single),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                key: const ValueKey('glass-effects'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('Glass effects')),
+                subtitle: Text(
+                  tr(
+                    'Floating bars and menus are translucent. Turn off to save power.',
+                  ),
+                ),
+                value: ref.watch(glassEffectsProvider),
+                onChanged: (value) =>
+                    ref.read(glassEffectsProvider.notifier).set(value),
+              ),
+              const SizedBox(height: 8),
               Text(
                 tr('Language'),
                 style: Theme.of(context).textTheme.titleSmall,

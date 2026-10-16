@@ -40,3 +40,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Plus Jakarta Sans (SIL OFL 1.1, see assets/fonts/plus_jakarta_sans/OFL.txt),
+  # the variable font PlusJakartaSans[wght].ttf from google/fonts: one file covers weights 200–800, and
+  # Flutter maps fontWeight onto its wght axis. Chinese falls back to the
+  # platform's CJK font (see WeCordTheme.fontFamilyFallback).
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Variable.ttf

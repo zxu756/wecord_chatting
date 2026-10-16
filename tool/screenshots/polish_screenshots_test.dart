@@ -7,6 +7,7 @@
 //     --dart-define=PHONE_SCREENS_DIR=build/polish
 //
 // Add --dart-define=PHONE_SCREENS_DARK=true for the dark theme.
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -14,12 +15,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/file_preview/file_preview_screen.dart';
+import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/voice.dart';
 
+import '../../test/features/file_preview/file_preview_fakes.dart';
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -302,5 +307,37 @@ void main() {
     await openThread(tester, world);
   });
 
+  // 8. An SVG in the viewer, with Share (the browser's Web Share API) next
+  // to Download.
+  screen('svg-viewer-web-share', (tester, world, desktop) async {
+    const logo = PreviewFile(
+      bucket: 'chat-files',
+      path: 'dm-1/wecord-badge.svg',
+      name: 'wecord-badge.svg',
+      mimeType: 'image/svg+xml',
+      size: 812,
+      conversationId: 'dm-1',
+      senderName: 'Bartholomew',
+    );
+    world.filePreview = filePreviewOverrides(
+      fetcher: FakeFileFetcher(contents: {logo.path: _badgeSvg}),
+      actions: FakeFileActions(web: true, webShare: true),
+    );
+    await openThread(tester, world);
+    final context = tester.element(find.byType(ChatThreadScreen));
+    unawaited(openFilePreview(context, file: logo));
+    await settle(tester);
+  });
+
   // MARKER: more screens
 }
+
+const _badgeSvg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <rect x="20" y="20" width="200" height="200" rx="64" fill="#2F6BF6"/>
+  <circle cx="92" cy="104" r="34" fill="#FFFFFF"/>
+  <circle cx="152" cy="104" r="34" fill="#FFFFFF" fill-opacity="0.72"/>
+  <rect x="58" y="150" width="124" height="28" rx="14" fill="#17171A"/>
+  <circle cx="186" cy="58" r="14" fill="#30A46C"/>
+</svg>
+''';

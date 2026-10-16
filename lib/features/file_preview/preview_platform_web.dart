@@ -1,9 +1,10 @@
 // The viewer's browser side: no file cache of its own (the HTTP cache
 // keeps signed links' responses), downloads through an anchor, and video
-// posters drawn from a hidden <video> onto a canvas.
+// posters drawn from a hidden <video> onto a canvas, and the Web Share API.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -12,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import 'package:web/web.dart' as web;
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/file_preview/web_share.dart';
 
 FileFetcher createFileFetcher(http.Client client) => WebFileFetcher(client);
 
@@ -34,6 +36,49 @@ Future<void> triggerBrowserDownload(Uri url, String name) async {
   web.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
+}
+
+WebShare createWebShare() => const BrowserWebShare();
+
+/// `navigator.share`, with the file itself where `navigator.canShare`
+/// accepts it and the link otherwise.
+class BrowserWebShare implements WebShare {
+  const BrowserWebShare();
+
+  @override
+  bool get isAvailable => (web.window.navigator as JSObject).has('share');
+
+  @override
+  Future<void> share({
+    required String name,
+    required String mimeType,
+    required Uri url,
+    Uint8List? bytes,
+  }) async {
+    final navigator = web.window.navigator;
+    web.ShareData? data;
+    if (bytes != null && (navigator as JSObject).has('canShare')) {
+      final file = web.File(
+        <JSAny>[bytes.toJS].toJS,
+        name,
+        web.FilePropertyBag(type: mimeType),
+      );
+      final withFile = web.ShareData(files: <web.File>[file].toJS, title: name);
+      if (navigator.canShare(withFile)) {
+        data = withFile;
+      }
+    }
+    data ??= web.ShareData(title: name, url: url.toString());
+    try {
+      await navigator.share(data).toDart;
+    } catch (error) {
+      // Closing the share sheet rejects with an AbortError.
+      if ('$error'.contains('AbortError')) {
+        return;
+      }
+      rethrow;
+    }
+  }
 }
 
 Future<Uint8List?> readThumbnail(String key) async => null;

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/file_preview/web_share.dart';
 
 FileFetcher createFileFetcher(http.Client client) => IoFileFetcher(client);
 
@@ -29,6 +30,9 @@ Future<void> triggerBrowserDownload(Uri url, String name) async {
 
 /// Browsers only.
 Future<Uint8List?> captureWebVideoPoster(Uri url, int maxSize) async => null;
+
+/// Browsers only: the native share sheet covers sharing here.
+WebShare createWebShare() => const UnavailableWebShare();
 
 String _hash(String value) => sha1.convert(utf8.encode(value)).toString();
 

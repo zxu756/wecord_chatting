@@ -7,7 +7,7 @@ with a role; the bot then has exactly the permissions of a member with
 that role (channel overwrites, timeouts and slowmode included). The token
 is shown once; managers can reset it (the old one stops working), revoke
 it (the bot stops working until reset) or delete the bot (it leaves the
-circle; its messages stay).
+circle and its login is deleted; its messages stay).
 
 The API is the `bot-api` Edge Function:
 

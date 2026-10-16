@@ -151,9 +151,11 @@ class CircleBotRepository {
     await _rpc('revoke_bot_token', {'target_bot_id': botId});
   }
 
-  /// Removes the bot from the circle; its messages stay.
+  /// Removes the bot from the circle and deletes its login; its messages
+  /// stay. The `bots` Edge Function runs delete_circle_bot as the caller,
+  /// then deletes the login with the service role.
   Future<void> deleteBot(String botId) async {
-    await _rpc('delete_circle_bot', {'target_bot_id': botId});
+    await _function('bots', {'action': 'delete', 'bot_id': botId});
   }
 
   Future<List<BotSlashCommand>> listCommands(String circleId) async {

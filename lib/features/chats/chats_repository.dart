@@ -366,14 +366,11 @@ class SupabaseChatsRepository
 
   const SupabaseChatsRepository.withDataSource(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-    Future<void> Function(String messageId)? onMessageSent,
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout,
-       _onMessageSent = onMessageSent;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+    this._onMessageSent,
+  });
 
   /// Called with each message the current user sends (for push).
   final Future<void> Function(String messageId)? _onMessageSent;

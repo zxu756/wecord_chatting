@@ -22,9 +22,9 @@ abstract interface class LocalNotificationService {
 
 class FakeLocalNotificationService implements LocalNotificationService {
   FakeLocalNotificationService({
-    NotificationPermissionStatus status =
+    this._status =
         NotificationPermissionStatus.notRequested,
-  }) : _status = status;
+  });
 
   final shownNotifications = <ShownMessageNotification>[];
   final _tapController = StreamController<String>.broadcast();

@@ -24,16 +24,13 @@ class SystemImagePickerService implements ImagePickerService {
       );
 
   SystemImagePickerService.withPicker({
-    required PickImageFile pickImageFile,
+    required this._pickImageFile,
     ReadImageFile? readImageFile,
-    Duration fileReadTimeout = const Duration(seconds: 20),
-    Duration retryDelay = const Duration(milliseconds: 250),
+    this._fileReadTimeout = const Duration(seconds: 20),
+    this._retryDelay = const Duration(milliseconds: 250),
     int fileReadAttempts = 2,
   }) : assert(fileReadAttempts > 0),
-       _pickImageFile = pickImageFile,
        _readImageFile = readImageFile ?? _readImageFileDefault,
-       _fileReadTimeout = fileReadTimeout,
-       _retryDelay = retryDelay,
        _fileReadAttempts = fileReadAttempts;
 
   final PickImageFile _pickImageFile;

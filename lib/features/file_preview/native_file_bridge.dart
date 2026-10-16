@@ -39,8 +39,8 @@ bool get _isApple =>
 
 class MethodChannelFileBridge implements NativeFileBridge {
   const MethodChannelFileBridge({
-    MethodChannel channel = const MethodChannel('wecord/quicklook'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('wecord/quicklook'),
+  });
 
   final MethodChannel _channel;
 

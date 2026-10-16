@@ -211,7 +211,7 @@ bool isSendRefusal(Object error) {
 /// tries. Pure logic; [OutboxNotifier] wires it to the app.
 class OutboxEngine {
   OutboxEngine({
-    required Future<String?> Function(OutboxEntry entry) send,
+    required this._send,
     this.maxAttempts = 5,
     this.baseDelay = const Duration(seconds: 2),
     this.maxDelay = const Duration(minutes: 1),
@@ -219,8 +219,7 @@ class OutboxEngine {
     math.Random? random,
     this.onChanged,
     this.onSent,
-  }) : _send = send,
-       _clock = clock ?? (() => clockNow()),
+  }) : _clock = clock ?? (() => clockNow()),
        _random = random ?? math.Random();
 
   final Future<String?> Function(OutboxEntry entry) _send;

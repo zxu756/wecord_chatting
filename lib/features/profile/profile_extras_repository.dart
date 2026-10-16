@@ -51,12 +51,10 @@ abstract interface class ProfileExtrasDataSource {
 class ProfileExtrasRepository {
   const ProfileExtrasRepository(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   static const bannerBucket = 'profile-banners';
   static const avatarBucket = 'profile-avatars';

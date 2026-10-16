@@ -48,12 +48,10 @@ class JustAudioSoundboardPlayer implements SoundboardPlayer {
 /// connected to, at their soundboard volume, unless they are deafened.
 class SoundboardPlayback {
   SoundboardPlayback({
-    required SoundboardRepository repository,
-    required SoundboardPlayer player,
-    required double Function() volume,
-  }) : _repository = repository,
-       _player = player,
-       _volume = volume;
+    required this._repository,
+    required this._player,
+    required this._volume,
+  });
 
   final SoundboardRepository _repository;
   final SoundboardPlayer _player;

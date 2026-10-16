@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:wecord/features/notifications/notification_service_base.dart';
 
 class WebLocalNotificationService implements LocalNotificationService {
-  WebLocalNotificationService({required WebNotificationGateway gateway})
-    : _gateway = gateway;
+  WebLocalNotificationService({required this._gateway});
 
   final WebNotificationGateway _gateway;
   final _tapController = StreamController<String>.broadcast();

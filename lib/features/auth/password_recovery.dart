@@ -62,8 +62,8 @@ abstract interface class PasswordRecoveryRepository {
 class SupabasePasswordRecoveryRepository implements PasswordRecoveryRepository {
   const SupabasePasswordRecoveryRepository(
     this._client, {
-    String Function() redirectUrl = authRedirectUrl,
-  }) : _redirectUrl = redirectUrl;
+    this._redirectUrl = authRedirectUrl,
+  });
 
   final SupabaseClient _client;
   final String Function() _redirectUrl;

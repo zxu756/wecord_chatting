@@ -106,12 +106,10 @@ class SupabaseSettingsRepository implements SettingsRepository {
 
   const SupabaseSettingsRepository.withDataSource(
     this._dataSource, {
-    required String? Function() currentUserId,
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _currentUserId = currentUserId,
-       _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    required this._currentUserId,
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   final SettingsDataSource _dataSource;
   final String? Function() _currentUserId;

@@ -50,8 +50,8 @@ abstract interface class AuthRepository {
 class SupabaseAuthRepository implements AuthRepository {
   const SupabaseAuthRepository(
     this._client, {
-    String Function() redirectUrl = authRedirectUrl,
-  }) : _redirectUrl = redirectUrl;
+    this._redirectUrl = authRedirectUrl,
+  });
 
   final SupabaseClient _client;
 

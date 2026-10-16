@@ -425,17 +425,15 @@ abstract interface class CirclesDataSource {
 class SupabaseCirclesRepository implements CirclesRepository {
   const SupabaseCirclesRepository(
     this._dataSource, {
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   const SupabaseCirclesRepository.withDataSource(
     this._dataSource, {
-    String Function()? storagePathSeed,
-    Duration storageOperationTimeout = const Duration(seconds: 30),
-  }) : _storagePathSeed = storagePathSeed,
-       _storageOperationTimeout = storageOperationTimeout;
+    this._storagePathSeed,
+    this._storageOperationTimeout = const Duration(seconds: 30),
+  });
 
   final CirclesDataSource _dataSource;
   final String Function()? _storagePathSeed;

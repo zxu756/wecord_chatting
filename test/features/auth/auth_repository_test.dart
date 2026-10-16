@@ -164,8 +164,7 @@ Future<SupabaseClient> _clientWithSession({
 }
 
 class _RecordingHttpClient extends http.BaseClient {
-  _RecordingHttpClient({required List<http.Response> responses})
-    : _responses = responses;
+  _RecordingHttpClient({required this._responses});
 
   final List<http.Response> _responses;
   final requests = <http.BaseRequest>[];

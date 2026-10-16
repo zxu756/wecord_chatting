@@ -11,7 +11,7 @@ const zhRedesignShell = <String, String>{
 
   // Phone home.
   'Set your status': '设置状态',
-  'Add friend': '加好友',
+  'Add friend': '添加好友',
   'Add friend · {count} requests': '加好友 · {count} 个请求',
   'Draft': '草稿',
 };

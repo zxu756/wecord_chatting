@@ -17,6 +17,7 @@ import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/moments/moments_settings_screen.dart';
 import 'package:wecord/features/privacy/devices_screen.dart';
 import 'package:wecord/features/privacy/profile_visibility.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
@@ -859,6 +860,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
               : '$blockedCount',
           onTap: () => showBlockedUsersSheet(context, ref),
         ),
+        const MomentsSettingsRow(),
         SettingsRow(
           key: const ValueKey('data-export-tile'),
           icon: Icons.download_rounded,

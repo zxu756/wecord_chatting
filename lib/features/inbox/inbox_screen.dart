@@ -17,6 +17,9 @@ import 'package:wecord/features/later/later_cards.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/lists/list_models.dart';
+import 'package:wecord/features/moments/moment_notification_card.dart';
+import 'package:wecord/features/moments/moments_models.dart';
+import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -59,11 +62,12 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
           ?.where((reminder) => reminder.isUnread)
           .length ??
       0;
-  return unread + requests + reminders + tasks + events;
+  final moments = ref.watch(momentNotificationsUnreadProvider);
+  return unread + requests + reminders + tasks + events + moments;
 });
 
 /// Which notifications the inbox shows.
-enum InboxFilter { all, mentions, replies, reminders, tasks, friends }
+enum InboxFilter { all, mentions, replies, reminders, tasks, moments, friends }
 
 /// Mentions of and replies to the current user and reminders that came
 /// due, with pending friend requests on top. Chips narrow it to mentions,
@@ -85,6 +89,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(incomingFriendRequestsProvider)
       ..invalidate(remindersProvider)
       ..invalidate(chatEventRemindersProvider)
+      ..invalidate(momentNotificationsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -158,10 +163,17 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         items.where((item) => item.reason == InboxReason.reply).toList(),
       InboxFilter.reminders ||
       InboxFilter.tasks ||
+      InboxFilter.moments ||
       InboxFilter.friends => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
+    final momentNotifications =
+        _filter == InboxFilter.all || _filter == InboxFilter.moments
+        ? ref.watch(momentNotificationsProvider).value ??
+              const <MomentNotification>[]
+        : const <MomentNotification>[];
+    final unreadMoments = ref.watch(momentNotificationsUnreadProvider);
     Widget reminderCard(MessageReminder reminder, {required bool upcoming}) {
       final conversation = conversations[reminder.conversationId];
       return ReminderCard(
@@ -257,6 +269,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             if (showTasks)
               for (final notification in taskNotifications)
                 (notification.createdAt, notification),
+            for (final notification in momentNotifications)
+              (notification.createdAt, notification),
           ]..sort((a, b) => b.$1.compareTo(a.$1)))
             switch (entry.$2) {
               final InboxItem item => _InboxCard(
@@ -274,6 +288,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                   conversations[notification.conversationId],
                   circles,
                 ),
+              ),
+              final MomentNotification notification => MomentNotificationCard(
+                notification: notification,
               ),
               _ => const SizedBox.shrink(),
             },
@@ -370,6 +387,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         firedReminders.length,
                       ),
                       chip(InboxFilter.tasks, tr('Tasks'), unreadTasks),
+                      const SizedBox(width: 6),
+                      chip(InboxFilter.moments, tr('Moments'), unreadMoments),
                       const SizedBox(width: 6),
                       chip(InboxFilter.friends, tr('Friends'), requests.length),
                     ],
@@ -833,6 +852,8 @@ class _EmptyInbox extends StatelessWidget {
                   ? tr(
                       'Tasks assigned to you, and their due dates, show up here.',
                     )
+                  : filter == InboxFilter.moments
+                  ? tr('Likes and comments on your Moments show up here.')
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',
                     ),

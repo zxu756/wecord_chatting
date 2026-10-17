@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/friend_tags/friend_profile_extras.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
@@ -365,6 +366,11 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
                       ),
                       onMore: () => _showMore(summary),
                     ),
+                  ],
+                  if (summary.relationshipStatus ==
+                      ProfileRelationshipStatus.friend) ...[
+                    const SizedBox(height: 16),
+                    FriendProfileExtras(friend: profile),
                   ],
                   const SizedBox(height: 16),
                   if (profile.bio.isNotEmpty) ...[

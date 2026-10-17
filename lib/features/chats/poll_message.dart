@@ -27,6 +27,7 @@ class PollActions {
     required this.onEnd,
     required this.onShowVoters,
     required this.canEnd,
+    this.onAddOption,
   });
 
   /// Replaces the current user's votes on the poll.
@@ -37,7 +38,14 @@ class PollActions {
 
   /// Whether the current user may end the poll early.
   final bool Function(ChatMessage message) canEnd;
+
+  /// Adds an answer to a poll that lets members do so; null when this
+  /// screen cannot.
+  final Future<void> Function(ChatMessage message, String text)? onAddOption;
 }
+
+/// How a quiz answer reads after the right one is shown.
+enum QuizMark { none, correct, wrong }
 
 /// A poll inside its message bubble: the question, one row per option with
 /// its share of voters (tap to vote), the voter count, when it ends, and
@@ -115,6 +123,25 @@ class _PollMessageContentState extends State<PollMessageContent> {
     }
   }
 
+  Future<void> _addOption(PollActions actions) async {
+    final add = actions.onAddOption;
+    if (add == null) {
+      return;
+    }
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => const _AddOptionDialog(),
+    );
+    if (text == null || text.trim().isEmpty || !mounted) {
+      return;
+    }
+    try {
+      await add(widget.message, text.trim());
+    } catch (_) {
+      // The thread says why.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -132,7 +159,14 @@ class _PollMessageContentState extends State<PollMessageContent> {
         results.closed || message.recalledAt != null || poll.hasEndedAt(now);
     final mine = _pending ?? results.myVotes;
     final actions = widget.actions;
-    final canVote = actions != null && !closed && !_voting;
+    // A quiz answer cannot be changed.
+    final canVote =
+        actions != null &&
+        !closed &&
+        !_voting &&
+        !(poll.quiz && results.myVotes.isNotEmpty);
+    final correct = poll.quiz ? results.correct : null;
+    final showAnswer = correct != null;
     final mutedColor = widget.textColor.withValues(alpha: 0.72);
     final voters = results.totalVoters;
     final endsAt = poll.endsAt;
@@ -149,10 +183,14 @@ class _PollMessageContentState extends State<PollMessageContent> {
       children: [
         Row(
           children: [
-            Icon(Icons.poll_outlined, size: 16, color: mutedColor),
+            Icon(
+              poll.quiz ? Icons.quiz_outlined : Icons.poll_outlined,
+              size: 16,
+              color: mutedColor,
+            ),
             const SizedBox(width: 4),
             Text(
-              tr('Poll'),
+              poll.quiz ? tr('Quiz') : tr('Poll'),
               style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
           ],
@@ -170,6 +208,10 @@ class _PollMessageContentState extends State<PollMessageContent> {
         Text(
           closed
               ? tr('Final results')
+              : poll.quiz
+              ? (showAnswer
+                    ? tr('Answer recorded')
+                    : tr('Pick the right answer'))
               : poll.multi
               ? tr('Select one or more answers')
               : tr('Select one answer'),
@@ -186,11 +228,48 @@ class _PollMessageContentState extends State<PollMessageContent> {
               share: results.shareOf(option.id),
               count: results.countFor(option.id),
               selected: mine.contains(option.id),
+              mark: !showAnswer
+                  ? QuizMark.none
+                  : option.id == correct
+                  ? QuizMark.correct
+                  : mine.contains(option.id)
+                  ? QuizMark.wrong
+                  : QuizMark.none,
               textColor: widget.textColor,
               onTap: canVote
                   ? () => unawaited(_vote(poll, mine, option.id))
                   : null,
             ),
+          ),
+        if (showAnswer && (results.explanation ?? '').isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              key: ValueKey('poll-explanation-${message.id}'),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: widget.textColor.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                results.explanation!,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.35,
+                  color: widget.textColor,
+                ),
+              ),
+            ),
+          ),
+        if (poll.allowAdd &&
+            !closed &&
+            actions?.onAddOption != null &&
+            poll.options.length < PollAttachment.maxOptions)
+          _PollTextAction(
+            key: ValueKey('poll-add-option-${message.id}'),
+            label: tr('Add an answer'),
+            color: widget.textColor,
+            onPressed: () => unawaited(_addOption(actions!)),
           ),
         const SizedBox(height: 2),
         Wrap(
@@ -202,12 +281,13 @@ class _PollMessageContentState extends State<PollMessageContent> {
                 voters == 1
                     ? tr('1 vote')
                     : tr('{count} votes', {'count': voters}),
+                if (poll.anonymous) tr('Anonymous'),
                 ?status,
               ].join(' · '),
               key: ValueKey('poll-status-${message.id}'),
               style: theme.textTheme.labelSmall?.copyWith(color: mutedColor),
             ),
-            if (actions != null && voters > 0)
+            if (actions != null && voters > 0 && !poll.anonymous)
               _PollTextAction(
                 key: ValueKey('poll-view-votes-${message.id}'),
                 label: tr('View votes'),
@@ -237,9 +317,11 @@ class _PollOptionRow extends StatelessWidget {
     required this.selected,
     required this.textColor,
     required this.onTap,
+    this.mark = QuizMark.none,
     super.key,
   });
 
+  final QuizMark mark;
   final PollOption option;
   final bool multi;
   final double share;
@@ -252,21 +334,35 @@ class _PollOptionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final percent = (share * 100).round();
-    final icon = switch ((multi, selected)) {
-      (true, true) => Icons.check_box,
-      (true, false) => Icons.check_box_outline_blank,
-      (false, true) => Icons.check_circle,
-      (false, false) => Icons.radio_button_unchecked,
+    final icon = switch (mark) {
+      QuizMark.correct => Icons.check_circle,
+      QuizMark.wrong => Icons.cancel,
+      QuizMark.none => switch ((multi, selected)) {
+        (true, true) => Icons.check_box,
+        (true, false) => Icons.check_box_outline_blank,
+        (false, true) => Icons.check_circle,
+        (false, false) => Icons.radio_button_unchecked,
+      },
     };
+    final accent = switch (mark) {
+      QuizMark.correct => c.success,
+      QuizMark.wrong => c.danger,
+      QuizMark.none => c.accent,
+    };
+    final highlighted = selected || mark == QuizMark.correct;
     return Semantics(
       selected: selected,
       button: onTap != null,
-      label: count == 1
-          ? tr('{option}, 1 vote', {'option': option.text})
-          : tr('{option}, {count} votes', {
-              'option': option.text,
-              'count': count,
-            }),
+      label: [
+        count == 1
+            ? tr('{option}, 1 vote', {'option': option.text})
+            : tr('{option}, {count} votes', {
+                'option': option.text,
+                'count': count,
+              }),
+        if (mark == QuizMark.correct) tr('Right answer'),
+        if (mark == QuizMark.wrong) tr('Your answer, not right'),
+      ].join(', '),
       excludeSemantics: true,
       child: WeCordPressable(
         onPressed: onTap,
@@ -278,7 +374,7 @@ class _PollOptionRow extends StatelessWidget {
             color: textColor.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? c.accent : textColor.withValues(alpha: 0),
+              color: highlighted ? accent : textColor.withValues(alpha: 0),
               width: 1.5,
             ),
           ),
@@ -290,7 +386,7 @@ class _PollOptionRow extends StatelessWidget {
                   widthFactor: share,
                   child: ColoredBox(
                     key: ValueKey('poll-bar-${option.id}'),
-                    color: c.accent.withValues(alpha: selected ? 0.3 : 0.16),
+                    color: accent.withValues(alpha: highlighted ? 0.3 : 0.16),
                   ),
                 ),
               ),
@@ -307,7 +403,7 @@ class _PollOptionRow extends StatelessWidget {
                       Icon(
                         icon,
                         size: 18,
-                        color: selected ? c.accent : textColor,
+                        color: highlighted ? accent : textColor,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -586,6 +682,52 @@ class _PollVoterList extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Asks for the text of an answer to add to a poll.
+class _AddOptionDialog extends StatefulWidget {
+  const _AddOptionDialog();
+
+  @override
+  State<_AddOptionDialog> createState() => _AddOptionDialogState();
+}
+
+class _AddOptionDialogState extends State<_AddOptionDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: Text(tr('Add an answer')),
+      content: TextField(
+        key: const ValueKey('poll-new-option-field'),
+        controller: _controller,
+        autofocus: true,
+        maxLength: PollAttachment.maxOptionLength,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+        decoration: InputDecoration(labelText: tr('Answer')),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(tr('Cancel')),
+        ),
+        FilledButton(
+          key: const ValueKey('poll-new-option-add'),
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(tr('Add')),
+        ),
+      ],
     );
   }
 }

@@ -54,6 +54,7 @@ import 'package:wecord/features/chats/pending_message.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
+import 'package:wecord/features/chats/polls_repository.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/view_once.dart';
@@ -879,6 +880,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       onVote: _votePoll,
       onEnd: _endPoll,
       onShowVoters: _showPollVoters,
+      onAddOption: _addPollOption,
       canEnd: (message) =>
           canSend &&
           (canModeratePolls ||
@@ -1144,9 +1146,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                           ? _threadSubtitle(conversationSummary)
                           : [
                               peerPresence?.label ??
-                                  (peerIsOnline
-                                      ? tr('Online')
-                                      : tr('Offline')),
+                                  (peerIsOnline ? tr('Online') : tr('Offline')),
                               if (conversationType == ConversationType.direct)
                                 ?activeCustomStatus(
                                   conversationSummary?.directCustomStatus,
@@ -2994,6 +2994,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       _refreshThread(messageId: message.id);
     } catch (_) {
       _showSnackBar(tr('Could not record your vote. Try again.'));
+      rethrow;
+    }
+  }
+
+  Future<void> _addPollOption(ChatMessage message, String text) async {
+    try {
+      await ref.read(pollsRepositoryProvider).addOption(message.id, text);
+      _refreshThread(messageId: message.id);
+    } catch (_) {
+      _showSnackBar(tr('Could not add that answer. Try again.'));
       rethrow;
     }
   }

@@ -23,6 +23,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/disappearing_messages.dart';
 import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/view_once.dart';
+import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -254,6 +255,114 @@ void main() {
     final tile = find.byKey(const ValueKey('devices-tile'));
     await scrollIntoView(tester, tile);
     await tester.tap(tile);
+  });
+
+  // 4. Polls.
+  ChatMessage pollMessage(
+    String id,
+    Profile sender,
+    int minutes, {
+    required String question,
+    required List<String> options,
+    bool quiz = false,
+    bool anonymous = false,
+    bool allowAdd = false,
+    PollResults results = const PollResults(),
+    DateTime? endsAt,
+  }) {
+    return phoneMessage(
+      id,
+      sender,
+      question,
+      minutesAgo: minutes,
+      type: MessageType.poll,
+      attachment: {
+        'kind': 'poll',
+        'question': question,
+        'options': [
+          for (final (index, option) in options.indexed)
+            {'id': 'o${index + 1}', 'text': option},
+        ],
+        'multi': false,
+        'quiz': quiz,
+        'anonymous': anonymous,
+        'allow_add': allowAdd,
+        'ends_at': endsAt?.toIso8601String(),
+      },
+    ).copyWith(pollResults: results);
+  }
+
+  screen('polls-thread', (tester, world, desktop) async {
+    await openDirect(
+      tester,
+      world,
+      messages: [
+        pollMessage(
+          'p1',
+          bart,
+          40,
+          question: 'Capital of France?',
+          options: ['Rome', 'Paris', 'Oslo'],
+          quiz: true,
+          results: const PollResults(
+            counts: {'o1': 2, 'o2': 5, 'o3': 1},
+            totalVoters: 8,
+            myVotes: {'o1'},
+            correct: 'o2',
+            explanation: 'Paris has been the capital since 987.',
+          ),
+        ),
+        pollMessage(
+          'p2',
+          me,
+          20,
+          question: 'Where to this weekend?',
+          options: ['Park', 'Beach', 'Museum'],
+          anonymous: true,
+          allowAdd: true,
+          endsAt: DateTime.now().toUtc().add(const Duration(hours: 5)),
+          results: const PollResults(
+            counts: {'o1': 3, 'o2': 4},
+            totalVoters: 7,
+            myVotes: {'o2'},
+          ),
+        ),
+      ],
+    );
+  });
+
+  screen('polls-composer', (tester, world, desktop) async {
+    await openDirect(tester, world);
+    await tester.tap(find.byTooltip('Attach'));
+    await settle(tester);
+    await tester.tap(find.text('Create poll'));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('poll-question-field')),
+      'Capital of France?',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('poll-option-field-0')),
+      'Rome',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('poll-option-field-1')),
+      'Paris',
+    );
+    final more = find.byKey(const ValueKey('poll-more-options'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pump();
+    final quiz = find.byKey(const ValueKey('poll-quiz-switch'));
+    await tester.ensureVisible(quiz);
+    await tester.tap(quiz);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('poll-correct-1')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('poll-anonymous-switch')),
+    );
+    await tester.tap(find.byKey(const ValueKey('poll-anonymous-switch')));
   });
 
   // MARKER: more screens

@@ -5,6 +5,10 @@
 
 begin;
 
+-- These scripts change the same tables; one at a time keeps them from
+-- waiting on each other's locks when the tests run in parallel.
+select pg_advisory_xact_lock(7770001);
+
 \i supabase/migrations/202610170022_device_sessions.sql
 
 insert into auth.users (id, email, instance_id, aud, role)

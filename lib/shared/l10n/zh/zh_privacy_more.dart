@@ -80,4 +80,28 @@ const zhPrivacyMore = <String, String>{
   'No other devices are signed in.': '没有其他已登录的设备。',
   'Sign out of all other devices': '退出所有其他设备',
   'WeCord {version}': 'WeCord {version}',
+
+  // Polls: quizzes, anonymous votes, deadlines, added answers.
+  'Quiz': '测验',
+  'Answer recorded': '已记录你的答案',
+  'Pick the right answer': '选出正确答案',
+  'Right answer': '正确答案',
+  'Your answer, not right': '你的答案，不正确',
+  'Anonymous': '匿名',
+  'Add an answer': '添加选项',
+  'Answer': '选项',
+  'Add': '添加',
+  'Could not add that answer. Try again.': '无法添加该选项，请重试。',
+  'Mark the right answer.': '请标出正确答案。',
+  'Pick a closing time in the future.': '请选择一个未来的截止时间。',
+  'Mark answer {number} as right': '将选项 {number} 标为正确答案',
+  'One right answer, shown with an explanation after people vote':
+      '只有一个正确答案，大家投票后会连同解析一起显示',
+  'Explanation (optional)': '解析（可选）',
+  'Anonymous votes': '匿名投票',
+  'Everyone sees the totals, nobody sees who voted': '大家都能看到总数，但看不到谁投了票',
+  'Members can add answers': '成员可以添加选项',
+  'Pick a day and time…': '选择日期和时间…',
+  'Closes {time}': '{time}截止',
+  'Fewer options': '收起选项',
 };

@@ -174,7 +174,9 @@ class _ViewOnceMessageContentState
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: Text(_isVideo ? tr('Open this video once?') : tr('Open this photo once?')),
+        title: Text(
+          _isVideo ? tr('Open this video once?') : tr('Open this photo once?'),
+        ),
         content: Text(
           tr(
             'Once you close it, it is gone and you can\'t open it again. WeCord can\'t stop screenshots or screen recordings, so the sender is trusting you with it.',

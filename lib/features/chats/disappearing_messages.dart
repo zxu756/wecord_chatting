@@ -221,7 +221,8 @@ class _DisappearingPickerState extends ConsumerState<DisappearingPicker> {
         OptionPickerBody<int?>(
           enabled: widget.canChange && !_saving,
           selected: current,
-          note: '$note\n${tr('Anyone in the chat can still copy or screenshot a message before it goes.')}',
+          note:
+              '$note\n${tr('Anyone in the chat can still copy or screenshot a message before it goes.')}',
           onPick: (value) => unawaited(_choose(value)),
           options: [
             for (final seconds in disappearingChoices)

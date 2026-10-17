@@ -7,6 +7,10 @@
 
 begin;
 
+-- These scripts change the same tables; one at a time keeps them from
+-- waiting on each other's locks when the tests run in parallel.
+select pg_advisory_xact_lock(7770001);
+
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql
 \i supabase/migrations/202610170004_album_push.sql

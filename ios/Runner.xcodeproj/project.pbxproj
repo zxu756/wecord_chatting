@@ -21,6 +21,7 @@
 		AD5D4972B50478E4A08E1939 /* QuickLookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFF5A416FE3B82560710A34 /* QuickLookPlugin.swift */; };
 		E1A0F00000000000000000A2 /* VideoEffectsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000000A1 /* VideoEffectsPlugin.swift */; };
 		E1A0F00000000000000000A4 /* TranscribePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000000A3 /* TranscribePlugin.swift */; };
+		E1A0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000001C1 /* ImageTextPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 		8BFF5A416FE3B82560710A34 /* QuickLookPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLookPlugin.swift; sourceTree = "<group>"; };
 		E1A0F00000000000000000A1 /* VideoEffectsPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEffectsPlugin.swift; sourceTree = "<group>"; };
 		E1A0F00000000000000000A3 /* TranscribePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TranscribePlugin.swift; sourceTree = "<group>"; };
+		E1A0F00000000000000001C1 /* ImageTextPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageTextPlugin.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -176,6 +178,7 @@
 				8BFF5A416FE3B82560710A34 /* QuickLookPlugin.swift */,
 				E1A0F00000000000000000A1 /* VideoEffectsPlugin.swift */,
 				E1A0F00000000000000000A3 /* TranscribePlugin.swift */,
+				E1A0F00000000000000001C1 /* ImageTextPlugin.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -386,6 +389,7 @@
 				AD5D4972B50478E4A08E1939 /* QuickLookPlugin.swift in Sources */,
 				E1A0F00000000000000000A2 /* VideoEffectsPlugin.swift in Sources */,
 				E1A0F00000000000000000A4 /* TranscribePlugin.swift in Sources */,
+				E1A0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

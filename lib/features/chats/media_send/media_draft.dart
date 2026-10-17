@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/file_picker_service.dart';
 import 'package:wecord/features/chats/media_send/album_layout.dart';
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/photo_editor/editor_model.dart';
 
 /// What a chosen file turns into when sent.
 enum DraftKind {
@@ -36,6 +37,8 @@ class DraftAttachment {
     this.thumbnail,
     this.width,
     this.height,
+    this.source,
+    this.edits,
   });
 
   /// Tells drafts apart in the tray (a file may be added twice).
@@ -54,6 +57,49 @@ class DraftAttachment {
   /// The picture's size as shown (a video: of its poster frame).
   final int? width;
   final int? height;
+
+  /// The picture as it was chosen, kept while [file] holds its edited copy
+  /// (see the photo editor); null for a picture that was not edited.
+  final XFile? source;
+
+  /// What was done in the photo editor, to open it again where it was left.
+  final EditorDocument? edits;
+
+  bool get isEdited => source != null;
+
+  /// A still picture the photo editor can open (not an animated GIF).
+  bool get canEdit =>
+      kind == DraftKind.image &&
+      thumbnail != null &&
+      !overLimit &&
+      mimeType != 'image/gif';
+
+  DraftAttachment copyWith({
+    String? id,
+    XFile? file,
+    String? name,
+    String? mimeType,
+    int? size,
+    Uint8List? thumbnail,
+    int? width,
+    int? height,
+    XFile? source,
+    EditorDocument? edits,
+  }) {
+    return DraftAttachment(
+      id: id ?? this.id,
+      file: file ?? this.file,
+      name: name ?? this.name,
+      mimeType: mimeType ?? this.mimeType,
+      size: size ?? this.size,
+      kind: kind,
+      thumbnail: thumbnail ?? this.thumbnail,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      source: source ?? this.source,
+      edits: edits ?? this.edits,
+    );
+  }
 
   /// Bigger than a chat takes. Pictures may still shrink below it when
   /// they are sent, but one this big is not even read.

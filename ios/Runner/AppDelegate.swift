@@ -25,5 +25,8 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "TranscribePlugin") {
       TranscribePlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ImageTextPlugin") {
+      ImageTextPlugin.register(with: registrar)
+    }
   }
 }

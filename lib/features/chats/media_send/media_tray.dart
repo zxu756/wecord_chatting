@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/media_send/media_draft.dart';
@@ -5,6 +7,7 @@ import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/preview_states.dart';
+import 'package:wecord/features/photo_editor/photo_editor_launcher.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -194,6 +197,16 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
                       onRemove: state.isPreparing
                           ? null
                           : () => _controller.remove(item.id),
+                      onEdit: state.isPreparing || !item.canEdit
+                          ? null
+                          : () => unawaited(
+                              editTrayPhoto(
+                                context,
+                                _controller,
+                                item,
+                                original: state.original,
+                              ),
+                            ),
                     ),
                   ),
                 for (var i = 0; i < state.loading; i++)
@@ -328,11 +341,15 @@ class _TrayThumb extends StatelessWidget {
     required this.item,
     required this.size,
     required this.onRemove,
+    this.onEdit,
   });
 
   final DraftAttachment item;
   final double size;
   final VoidCallback? onRemove;
+
+  /// Opens the photo editor; null for what can't be edited.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -456,6 +473,38 @@ class _TrayThumb extends StatelessWidget {
               ),
             ),
           ),
+          if (item.canEdit)
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: WeCordPressable(
+                key: ValueKey('media-tray-edit-${item.id}'),
+                onPressed: onEdit,
+                tooltip: tr('Edit'),
+                semanticLabel: tr('Edit {name}', {'name': item.name}),
+                shape: const CircleBorder(),
+                pressedScale: 0.9,
+                builder: (context, states) => SizedBox.square(
+                  dimension: 30,
+                  child: Center(
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: item.isEdited ? c.accent : c.ink,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: c.panel, width: 1.5),
+                      ),
+                      child: Icon(
+                        Icons.edit_rounded,
+                        size: 13,
+                        color: item.isEdited ? c.onAccent : c.onInk,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             top: -6,
             right: -6,

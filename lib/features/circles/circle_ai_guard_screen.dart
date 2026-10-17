@@ -35,7 +35,7 @@ class CircleAiGuardScreen extends ConsumerWidget {
       body: guard.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => CircleEmptyState(
-          icon: Icons.shield_outlined,
+          icon: CircleIcons.aiGuard,
           title: tr('Could not load the AI guard.'),
           action: WeCordButton(
             label: tr('Try again'),
@@ -177,7 +177,7 @@ class _CircleAiGuardFormState extends ConsumerState<CircleAiGuardForm> {
           children: [
             SettingsRow.toggle(
               key: const ValueKey('ai-guard-switch'),
-              icon: Icons.shield_outlined,
+              icon: CircleIcons.aiGuard,
               tone: SettingsTone.accent,
               title: tr('AI guard for new members'),
               subtitle: guard.enabled
@@ -343,6 +343,7 @@ class _CircleAiGuardFormState extends ConsumerState<CircleAiGuardForm> {
                     ? null
                     : CountBadge(
                         count: waiting,
+                        tone: BadgeTone.mention,
                         semanticLabel: tr('{count} waiting', {
                           'count': waiting,
                         }),

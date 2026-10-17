@@ -101,6 +101,66 @@ void main() {
         expect(contrast(c.onDanger, c.danger), greaterThanOrEqualTo(4.5));
       });
 
+      test('badge and live tokens: text on the fill clears 4.5:1', () {
+        expect(
+          contrast(c.onBadgeMention, c.badgeMention),
+          greaterThanOrEqualTo(4.5),
+        );
+        expect(
+          contrast(c.onBadgeUnread, c.badgeUnread),
+          greaterThanOrEqualTo(4.5),
+        );
+        expect(contrast(c.onLive, c.live), greaterThanOrEqualTo(4.5));
+        expect(contrast(c.liveText, c.liveSoft), greaterThanOrEqualTo(4.5));
+        for (final MapEntry(key: surface, value: bg) in surfaces.entries) {
+          expect(
+            contrast(c.liveText, bg),
+            greaterThanOrEqualTo(4.5),
+            reason: 'liveText on $surface',
+          );
+        }
+      });
+
+      test('badge and live fills stand out 3:1 from what they sit on', () {
+        final grounds = {
+          ...surfaces,
+          'rail': c.rail,
+          'accentSoft': c.accentSoft,
+        };
+        for (final MapEntry(key: surface, value: bg) in grounds.entries) {
+          expect(
+            contrast(c.badgeMention, bg),
+            greaterThanOrEqualTo(3),
+            reason: 'badgeMention on $surface',
+          );
+          expect(
+            contrast(c.badgeUnread, bg),
+            greaterThanOrEqualTo(3),
+            reason: 'badgeUnread on $surface',
+          );
+        }
+        for (final MapEntry(key: surface, value: bg) in surfaces.entries) {
+          expect(
+            contrast(c.live, bg),
+            greaterThanOrEqualTo(3),
+            reason: 'live on $surface',
+          );
+        }
+      });
+
+      test('plain unread is not red: it is a neutral gray', () {
+        // Red is for mentions; the unread pill must not be a red or blue one.
+        final unread = c.badgeUnread;
+        expect(
+          (unread.r - unread.g).abs() < 0.08 &&
+              (unread.g - unread.b).abs() < 0.1,
+          isTrue,
+          reason: 'badgeUnread is gray',
+        );
+        expect(unread, isNot(c.badgeMention));
+        expect(unread, isNot(c.accent));
+      });
+
       test('icons, dots and the accent clear 3:1 on panels and fills', () {
         for (final MapEntry(key: surface, value: bg) in surfaces.entries) {
           expect(

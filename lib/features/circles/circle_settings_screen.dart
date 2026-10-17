@@ -145,7 +145,7 @@ class _ManageGroup extends ConsumerWidget {
       if (detail.canManageRoles)
         SettingsRow(
           key: const ValueKey('circle-settings-roles'),
-          icon: Icons.shield_outlined,
+          icon: CircleIcons.roles,
           tone: SettingsTone.accent,
           title: tr('Roles'),
           value: '${detail.roles.length}',
@@ -162,14 +162,14 @@ class _ManageGroup extends ConsumerWidget {
       if (detail.canManageCircle) ...[
         SettingsRow(
           key: const ValueKey('circle-settings-automod'),
-          icon: Icons.gpp_maybe_outlined,
+          icon: CircleIcons.autoMod,
           tone: SettingsTone.warning,
           title: tr('AutoMod'),
           onTap: () => openCircleAutoModScreen(context, detail),
         ),
         SettingsRow(
           key: const ValueKey('circle-settings-ai-guard'),
-          icon: Icons.shield_outlined,
+          icon: CircleIcons.aiGuard,
           tone: SettingsTone.accent,
           title: tr('AI guard'),
           subtitle: tr('Check new members\' first messages'),
@@ -204,6 +204,7 @@ class _ManageGroup extends ConsumerWidget {
               ? null
               : CountBadge(
                   count: waiting,
+                  tone: BadgeTone.mention,
                   semanticLabel: tr('{count} waiting', {'count': waiting}),
                 ),
           showChevron: true,

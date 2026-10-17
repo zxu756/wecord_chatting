@@ -335,7 +335,7 @@ class CircleEventDateTile extends StatelessWidget {
     final today = DateUtils.dateOnly((now ?? DateTime.now()).toLocal());
     final days = DateUtils.dateOnly(start).difference(today).inDays;
     final (fill, foreground) = switch (status) {
-      CircleEventStatus.ongoing => (c.dangerSoft, c.dangerText),
+      CircleEventStatus.ongoing => (c.liveSoft, c.liveText),
       CircleEventStatus.scheduled => (c.warningSoft, c.warningText),
       _ => (c.raised, c.muted),
     };
@@ -433,7 +433,7 @@ class CircleEventCard extends StatelessWidget {
             color: c.panel,
             borderRadius: radius,
             border: Border.all(
-              color: live ? c.danger.withValues(alpha: 0.5) : c.panel,
+              color: live ? c.live.withValues(alpha: 0.5) : c.panel,
               width: 1.5,
             ),
             boxShadow: hovered ? tokens.shadows.hairline : null,
@@ -461,7 +461,7 @@ class CircleEventCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
-                                color: live ? c.dangerText : c.muted,
+                                color: live ? c.liveText : c.muted,
                               ),
                             ),
                           ],
@@ -632,7 +632,7 @@ class CircleEventInterestButton extends StatelessWidget {
 Widget? circleEventStatusBadge(BuildContext context, CircleEventStatus status) {
   final c = context.tokens.colors;
   final (label, background, foreground) = switch (status) {
-    CircleEventStatus.ongoing => (tr('Live now'), c.danger, c.onDanger),
+    CircleEventStatus.ongoing => (tr('Live now'), c.live, c.onLive),
     CircleEventStatus.cancelled => (
       tr('Cancelled'),
       c.dangerSoft,

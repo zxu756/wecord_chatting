@@ -115,6 +115,7 @@ class CircleRail extends ConsumerWidget {
       bool selected = false,
       bool unread = false,
       int mentionCount = 0,
+      BadgeTone badgeTone = BadgeTone.mention,
       bool muted = false,
       bool showPill = true,
     }) => CircleRailItem(
@@ -124,6 +125,7 @@ class CircleRail extends ConsumerWidget {
       selected: selected,
       unread: unread,
       mentionCount: mentionCount,
+      badgeTone: badgeTone,
       muted: muted,
       size: itemSize,
       railWidth: railWidth,
@@ -148,7 +150,9 @@ class CircleRail extends ConsumerWidget {
             selected: homeSelected,
             // On phones the ink fill alone marks Messages as open.
             showPill: !phone,
+            // Unread direct messages are a plain count, not a mention.
             mentionCount: directUnread,
+            badgeTone: BadgeTone.unread,
             onTap: () => context.go(HomeScreen.path),
             avatar: ThingAvatar(
               size: itemSize,
@@ -229,6 +233,7 @@ class CircleRailItem extends StatelessWidget {
     this.selected = false,
     this.unread = false,
     this.mentionCount = 0,
+    this.badgeTone = BadgeTone.mention,
     this.muted = false,
     this.size = 44,
     this.railWidth = CircleRail.width,
@@ -248,6 +253,9 @@ class CircleRailItem extends StatelessWidget {
 
   /// Shown as a red count badge on the icon.
   final int mentionCount;
+
+  /// Red for mentions; gray for the plain unread count of Messages.
+  final BadgeTone badgeTone;
 
   /// Muted items are dimmed and never show the unread pill, but still show
   /// the mention badge.
@@ -297,6 +305,7 @@ class CircleRailItem extends StatelessWidget {
               key: const ValueKey('circle-mention-badge'),
               child: CountBadge(
                 count: mentionCount,
+                tone: badgeTone,
                 size: 18,
                 ringColor: badgeBorderColor ?? c.rail,
               ),

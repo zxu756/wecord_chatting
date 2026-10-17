@@ -214,10 +214,7 @@ class ChatNewMessagesDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 1,
-              color: c.danger.withValues(alpha: 0.35),
-            ),
+            child: Container(height: 1, color: c.accent.withValues(alpha: 0.4)),
           ),
           const SizedBox(width: 10),
           Semantics(
@@ -228,7 +225,7 @@ class ChatNewMessagesDivider extends StatelessWidget {
               child: Text(
                 tr('NEW'),
                 style: TextStyle(
-                  color: c.dangerText,
+                  color: c.accentText,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -450,8 +447,18 @@ class GlassMenuEntry {
     required this.label,
     required this.onSelected,
     this.destructive = false,
+    this.badge = 0,
     this.key,
-  });
+  }) : isHeader = false;
+
+  /// A small section title between groups of rows (not selectable).
+  const GlassMenuEntry.section(this.label)
+    : icon = Icons.circle,
+      onSelected = null,
+      destructive = false,
+      badge = 0,
+      isHeader = true,
+      key = null;
 
   final IconData icon;
   final String label;
@@ -459,6 +466,12 @@ class GlassMenuEntry {
   /// Called after the menu closes; null shows the row disabled.
   final VoidCallback? onSelected;
   final bool destructive;
+
+  /// A count shown at the end of the row (items waiting); nothing at 0.
+  final int badge;
+
+  /// A section title instead of a row.
+  final bool isHeader;
   final Key? key;
 }
 
@@ -487,18 +500,22 @@ Future<void> showGlassMenu(
         header: header,
         entries: [
           for (final entry in entries)
-            GlassMenuEntry(
-              key: entry.key,
-              icon: entry.icon,
-              label: entry.label,
-              destructive: entry.destructive,
-              onSelected: entry.onSelected == null
-                  ? null
-                  : () {
-                      Navigator.of(menuContext).pop();
-                      entry.onSelected!();
-                    },
-            ),
+            if (entry.isHeader)
+              entry
+            else
+              GlassMenuEntry(
+                key: entry.key,
+                icon: entry.icon,
+                label: entry.label,
+                destructive: entry.destructive,
+                badge: entry.badge,
+                onSelected: entry.onSelected == null
+                    ? null
+                    : () {
+                        Navigator.of(menuContext).pop();
+                        entry.onSelected!();
+                      },
+              ),
         ],
       ),
     ),
@@ -530,7 +547,10 @@ class GlassMenuPanel extends StatelessWidget {
                 const SizedBox(height: 4),
               ],
               for (final (index, entry) in entries.indexed)
-                GlassMenuRow(entry: entry, autofocus: index == 0),
+                GlassMenuRow(
+                  entry: entry,
+                  autofocus: index == entries.indexWhere((e) => !e.isHeader),
+                ),
             ],
           ),
         ),
@@ -557,13 +577,31 @@ class GlassMenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
+    if (entry.isHeader) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        child: Semantics(
+          header: true,
+          child: Text(
+            entry.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: c.subtle,
+            ),
+          ),
+        ),
+      );
+    }
     final foreground = entry.destructive ? c.dangerText : c.ink;
     final touch = usesTouchInput(context);
     return WeCordPressable(
       key: entry.key,
       autofocus: autofocus && entry.onSelected != null,
       onPressed: entry.onSelected,
-      semanticLabel: entry.label,
+      semanticLabel: entry.badge > 0
+          ? '${entry.label}, ${tr('{count} waiting', {'count': entry.badge})}'
+          : entry.label,
       excludeSemantics: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(WeCordRadii.md),
@@ -607,6 +645,17 @@ class GlassMenuRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (entry.badge > 0) ...[
+                  const SizedBox(width: 8),
+                  CountBadge(
+                    count: entry.badge,
+                    tone: BadgeTone.mention,
+                    size: 18,
+                    semanticLabel: tr('{count} waiting', {
+                      'count': entry.badge,
+                    }),
+                  ),
+                ],
               ],
             ),
           ),

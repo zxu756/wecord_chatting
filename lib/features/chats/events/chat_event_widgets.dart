@@ -98,7 +98,7 @@ class ChatEventStatusPill extends StatelessWidget {
     final c = context.tokens.colors;
     final status = event.statusAt(now);
     final (fill, ink) = switch (status) {
-      ChatEventStatus.live => (c.successSoft, c.successText),
+      ChatEventStatus.live => (c.liveSoft, c.liveText),
       ChatEventStatus.cancelled => (c.dangerSoft, c.dangerText),
       ChatEventStatus.over => (c.raised, c.muted),
       ChatEventStatus.upcoming => (c.accentSoft, c.accentText),

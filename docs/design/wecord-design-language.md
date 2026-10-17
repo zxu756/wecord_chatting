@@ -76,11 +76,28 @@ use raw hex in widgets.
 | `accentText` | `#1F5FE0` | `#9DB8FF` | Accent text on panels |
 | `success` (+Soft/Text) | `#2E9D67` | `#30A46C` | Online, connected, on |
 | `warning` (+Soft/Text) | `#CA8619` | `#E7A53B` | Idle, raised hand, events today |
-| `danger` (+Soft/Text) | `#E12F35` | `#E12F35` | Destructive, mention badges, do not disturb (white text on it clears 4.5:1) |
+| `danger` (+Soft/Text) | `#E12F35` | `#E12F35` | Destructive, errors, missed calls, do not disturb (white text on it clears 4.5:1) |
+| `badgeMention` / `onBadgeMention` | `#E12F35` / white | `#E12F35` / white | The one red badge: something needs you (see Badges below) |
+| `badgeUnread` / `onBadgeUnread` | `#6F6D76` / white | `#73717C` / white | Plain unread counts and dots: a calm gray |
+| `live` / `onLive`, `liveSoft`, `liveText` | `#1F7A47` / white, `#E3F3EA`, `#1F7846` | `#30A46C` / `#07140D`, `#1A2E23`, `#7EE0A8` | "Live now": events, stages, calls in progress (green, never red) |
 | `scrim` | ink 32% | black 50% | Behind sheets and dialogs |
 
 Presence: online `success`, idle `warning`, do not disturb `danger`,
 offline/invisible `faint`.
+
+**Badges: red means "this needs you".** Red (`badgeMention`) is only for
+@mentions (a circle's mention count on the rail, in the sidebar), the Review
+queue and its menu entries, friend requests, the notification inbox bell and
+its sidebar row, overdue tasks, errors and missed calls. Everything else is
+quiet: a plain unread count of a chat, of Messages on the rail or of a
+conversation row is a gray pill (`badgeUnread`) or a dot, muted chats are
+fainter still (`quiet`), channel rows keep their bold name and ink dot.
+"Live now" pills, event cards and the stage badge use `live` (green). The
+NEW divider in a chat is the accent (`accent` line, `accentText` label). A
+new badge must pick a tone on purpose: `CountBadge` defaults to gray.
+`token_contrast_test.dart` checks the text on each fill (4.5:1) and that the
+fills stand out 3:1 from every surface, in light, dark and both high-contrast
+sets.
 
 Avatar fills without a picture come from `WeCordAvatarColors.forSeed(name)`
 (eight warm/cool mid tones from the mockups) so a person or circle keeps one
@@ -193,7 +210,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WeCordSegmented<T>` | iOS-style segmented control with a sliding white thumb. |
 | `WeCordSwitch` | iOS-style switch (46×28; `compact` 42×26 on desktop). |
 | `SettingsGroup` / `SettingsRow` / `SettingsRow.toggle` / `SettingsIconTile` / `SettingsSectionHeader` | Grouped rounded setting cards: icon tile (tones neutral/accent/success/warning/danger), title, subtitle, value + chevron, trailing widget or switch. |
-| `CountBadge` / `CountBadge.dot` | Count pills (`alert` red, `unread` accent, `quiet`), 99+, optional cut-out ring. |
+| `CountBadge` / `CountBadge.dot` | Count pills (`BadgeTone.mention` red, `unread` gray, `quiet`), 99+, optional cut-out ring. Gray unless told it is a mention. |
 | `WeCordChip` | Filter/tab chips: ink when selected; `onPaper` for white chips on paper; `count`. |
 | `PersonAvatar` | Circle avatar with initial/photo and presence dot (or any `badge`). |
 | `ThingAvatar` (alias `SquircleAvatar`) | Squircle for circles, groups, apps, with icon or initial and a corner `badge`. |
@@ -230,6 +247,12 @@ the WeCord components in new and restyled screens.
   y≈58; the panel (`PanelSurface`, top-left radius 28) starts 46 below the
   top. Large title row: 26/800 title + 40px round buttons (search raised,
   compose accent).
+- **Saved on the phone home**: the quick row under the Messages title starts
+  with two 58 squircle tiles, *Add friend* (Friends, with the request badge)
+  and *Saved* (bookmark), before the friends; Notifications is the bell on the
+  floating user panel. That matches desktop, where Saved is the third row
+  under Friends and Notifications. Settings keeps its *Saved messages* row as
+  a second, familiar way in.
 - **Floating user panel**: glass pill, 64 tall, radius 32, 28 above the
   bottom, spanning from 10 px inside the rail's left to 10 px from the right
   edge; lists end above it.
@@ -252,7 +275,20 @@ the WeCord components in new and restyled screens.
   messages and a circle's channels share one width: 292, resizable
   220–420.
 - Content on `panel` with a 1px `lineSoft` left edge; header 58 with a
-  hairline bottom border, 36 icon buttons, a raised search field (200 wide).
+  hairline bottom border, 36 icon buttons, a raised search field (208 wide).
+- **Chat header rule.** The wide header shows at most three or four primary
+  actions and a **More** (`…`) button; the title gets everything else. Direct
+  chats: voice call, video call, side panel (profile), search field. Groups:
+  voice call, video call, group details, search field. Circle channels:
+  pinned messages, member list, search field. Threads: close. Everything else
+  (notes and lists, pinned messages in chats, media, events, disappearing
+  messages, wallpaper, summarize, channel settings, archive) is in More, a
+  glass menu (`showGlassMenu`) that lists each action with its icon and the
+  same label the button's tooltip had, so keyboard use and screen readers are
+  unchanged and no action is lost. More shows as selected while something it
+  opened (the notes panel) is open. An action opts into the bar with
+  `ChatThreadAction.primary`; phones ignore it and keep search, one primary
+  action and More, as before.
 - Optional right panel on `sidebar`: the circle member list (248,
   resizable 200–360) or a direct chat's profile (300, resizable 240–420).
   The header toggle opens and closes it.
@@ -269,6 +305,24 @@ the WeCord components in new and restyled screens.
   following the sidebar's width.
 - Settings opens as a centered window (radius 28, `dialog` shadow) over the
   blurred app: nav column 248 + content with 24/800 title.
+
+### Circle menu
+
+The circle menu (the `…` on the channel list's banner) is grouped under small
+`subtle` section headers, on phones as cards in the sheet and on wide screens
+in a glass menu (`showGlassMenu`, which supports `GlassMenuEntry.section`):
+
+1. **Everyday**: Invite friends, Notification settings, Emoji & stickers,
+   Change my nickname, Change circle avatar.
+2. **Manage**: Create channel, Create category, Circle settings, Onboarding.
+3. **Moderation & safety**: Roles, Bans, AutoMod, AI guard, Review (with its
+   count badge), Audit log.
+4. Leave circle / Transfer ownership, in a last card without a title.
+
+Only what the member may use is listed, and a section with nothing in it (no
+header either) disappears. Every row has an icon of its own: `CircleIcons`
+holds Roles (medal), AutoMod (filter) and AI guard (sparkle, the app's mark
+for AI), used in the menu, circle settings and the audit log.
 
 ## Platform notes
 

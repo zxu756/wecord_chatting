@@ -208,7 +208,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('ai-catch-up-card')), findsNothing);
 
-      await tester.tap(find.byTooltip('Summarize'));
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Summarize'));
       await tester.pump();
       expect(find.text('Summarizing…'), findsOneWidget);
       ai.gate!.complete();

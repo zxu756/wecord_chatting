@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -564,6 +565,19 @@ Future<bool> confirmCircleAction(
   return confirmed ?? false;
 }
 
+/// The icons of the circle's management pages, one per page so that no two
+/// look alike in the circle menu, circle settings and the audit log.
+abstract final class CircleIcons {
+  /// Roles and who holds them.
+  static const roles = Icons.military_tech_outlined;
+
+  /// AutoMod: rules that filter messages.
+  static const autoMod = Icons.filter_alt_outlined;
+
+  /// AI guard: the sparkle is the app's mark for AI (as in AI features).
+  static const aiGuard = Icons.auto_awesome_outlined;
+}
+
 /// One entry of [showCircleActionMenu].
 class CircleMenuItem<T> {
   const CircleMenuItem({
@@ -586,8 +600,9 @@ class CircleMenuItem<T> {
 }
 
 /// A menu of [items]: a sheet of grouped rows on phones; on wide screens a
-/// popup at [position] (global) when given, otherwise a centred panel.
-/// [groups] split [items] into cards at the given lengths.
+/// glass popup at [position] (global) when given, otherwise a centred panel.
+/// [groups] split [items] into cards at the given lengths, and
+/// [groupTitles] (one per group) put a small header over each.
 Future<T?> showCircleActionMenu<T>(
   BuildContext context, {
   required List<CircleMenuItem<T>> items,
@@ -595,64 +610,64 @@ Future<T?> showCircleActionMenu<T>(
   Widget? header,
   Offset? position,
   List<int>? groups,
-}) {
+  List<String?>? groupTitles,
+}) async {
   final wide = circleWideLayout(context);
   if (wide && position != null) {
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final c = context.tokens.colors;
-    return showMenu<T>(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        for (final item in items)
-          PopupMenuItem<T>(
-            value: item.value,
-            height: 40,
-            child: Row(
-              children: [
-                Icon(
-                  item.icon,
-                  size: 18,
-                  color: item.destructive ? c.dangerText : c.muted,
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    item.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: item.destructive ? c.dangerText : c.ink,
-                    ),
-                  ),
-                ),
-                if (item.badge > 0) ...[
-                  const SizedBox(width: 8),
-                  CountBadge(count: item.badge, size: 18),
-                ],
-              ],
+    T? picked;
+    var start = 0;
+    final entries = <GlassMenuEntry>[];
+    for (final (index, length) in (groups ?? [items.length]).indexed) {
+      final end = (start + length).clamp(0, items.length);
+      if (end > start) {
+        final groupTitle = groupTitles != null && index < groupTitles.length
+            ? groupTitles[index]
+            : null;
+        if (groupTitle != null) {
+          entries.add(GlassMenuEntry.section(groupTitle));
+        }
+        for (final item in items.sublist(start, end)) {
+          entries.add(
+            GlassMenuEntry(
+              icon: item.icon,
+              label: item.label,
+              destructive: item.destructive,
+              badge: item.badge,
+              onSelected: () => picked = item.value,
             ),
-          ),
-      ],
+          );
+        }
+      }
+      start = end;
+    }
+    await showGlassMenu(
+      context,
+      anchor: position & Size.zero,
+      entries: entries,
+      width: 264,
     );
+    return picked;
   }
 
   Widget menu(BuildContext menuContext) {
     final cards = <List<CircleMenuItem<T>>>[];
+    final titles = <String?>[];
     var start = 0;
-    for (final length in groups ?? [items.length]) {
+    for (final (index, length) in (groups ?? [items.length]).indexed) {
       final end = (start + length).clamp(0, items.length);
       if (end > start) {
         cards.add(items.sublist(start, end));
+        titles.add(
+          groupTitles != null && index < groupTitles.length
+              ? groupTitles[index]
+              : null,
+        );
       }
       start = end;
     }
     if (start < items.length) {
       cards.add(items.sublist(start));
+      titles.add(null);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -663,6 +678,7 @@ Future<T?> showCircleActionMenu<T>(
           if (index > 0 || header != null) const SizedBox(height: 12),
           SettingsGroup(
             color: context.tokens.colors.well,
+            header: titles[index],
             children: [
               for (final item in card)
                 SettingsRow(
@@ -674,6 +690,7 @@ Future<T?> showCircleActionMenu<T>(
                   trailing: item.badge > 0
                       ? CountBadge(
                           count: item.badge,
+                          tone: BadgeTone.mention,
                           semanticLabel: tr('{count} waiting', {
                             'count': item.badge,
                           }),

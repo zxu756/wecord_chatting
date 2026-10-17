@@ -7,8 +7,9 @@ import 'package:wecord/shared/ui/ui.dart';
 /// The chat thread's header. On phones it floats as glass over the
 /// messages with a 24 bottom radius (back, avatar, name and status, a
 /// couple of actions and More); on desktop it is a flat 58 bar with a
-/// hairline under it, every action as a 36 icon button and, when there is
-/// room, a search field.
+/// hairline under it, a few primary actions as 36 icon buttons (the rest in
+/// a More menu, so the title keeps the room) and, when there is room, a
+/// search field.
 class ChatThreadHeader extends StatelessWidget {
   const ChatThreadHeader({
     required this.desktop,
@@ -70,27 +71,19 @@ class ChatThreadHeader extends StatelessWidget {
       );
     }
 
-    if (!compact || actions.length <= 2) {
-      return [
-        for (final action in actions)
-          if (compact || !action.menuOnly) button(action),
-      ];
-    }
-    final search = actions.first;
-    final overflow = [
-      for (final action in actions)
-        if (!identical(action, search) && !identical(action, primaryAction))
-          action,
-    ];
-    return [
-      button(search),
-      button(primaryAction),
-      Builder(
+    Widget moreButton(List<ChatThreadAction> overflow) {
+      // Something open from the menu (the notes panel) shows on the button.
+      final active = overflow.any(
+        (action) => !action.menuOnly && action.isSelected == true,
+      );
+      return Builder(
         builder: (buttonContext) => WeCordIconButton(
+          key: const ValueKey('chat-header-more'),
           tooltip: tr('More'),
           icon: Icons.more_horiz_rounded,
+          selected: active,
           size: size,
-          iconSize: desktop ? 19 : 22,
+          iconSize: desktop ? 20 : 22,
           variant: WeCordButtonVariant.ghost,
           onPressed: () => showGlassMenu(
             buttonContext,
@@ -107,8 +100,36 @@ class ChatThreadHeader extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      );
+    }
+
+    // The wide bar keeps a few primary actions and the rest is in More, so
+    // the title gets the room.
+    if (desktop && !compact) {
+      final overflow = [
+        for (final action in actions)
+          if (!action.primary) action,
+      ];
+      return [
+        for (final action in actions)
+          if (action.primary) button(action),
+        if (overflow.isNotEmpty) moreButton(overflow),
+      ];
+    }
+
+    if (!compact || actions.length <= 2) {
+      return [
+        for (final action in actions)
+          if (compact || !action.menuOnly) button(action),
+      ];
+    }
+    final search = actions.first;
+    final overflow = [
+      for (final action in actions)
+        if (!identical(action, search) && !identical(action, primaryAction))
+          action,
     ];
+    return [button(search), button(primaryAction), moreButton(overflow)];
   }
 
   @override
@@ -319,7 +340,7 @@ class ChatHeaderSearchField extends StatelessWidget {
     final c = context.tokens.colors;
     return Container(
       key: const ValueKey('chat-header-search'),
-      width: 240,
+      width: 208,
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(

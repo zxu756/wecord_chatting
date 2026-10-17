@@ -389,8 +389,8 @@ class _NavItem extends StatelessWidget {
               : Color.lerp(c.muted, c.ink, 0.35)!;
           return AnimatedContainer(
             duration: WeCordMotion.quick,
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: selected
                   ? (tokens.isDark ? c.raised : c.panel)
@@ -407,7 +407,7 @@ class _NavItem extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,

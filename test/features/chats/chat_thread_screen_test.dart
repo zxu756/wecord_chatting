@@ -3790,6 +3790,45 @@ void main() {
     expect(find.byTooltip('Group details'), findsNothing);
   });
 
+  testWidgets('group headers show members and who is online, not Offline', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..groupDetail = GroupDetail(
+        conversationId: 'conversation-1',
+        title: 'Launch Crew',
+        members: [
+          for (final (id, name) in [
+            ('user-1', 'Me'),
+            ('friend-1', 'Grace'),
+            ('friend-2', 'Ada'),
+          ])
+            GroupMember(
+              profile: _profile(id: id, username: id, displayName: name),
+              role: 'member',
+            ),
+        ],
+      );
+    final online = StreamController<Set<String>>.broadcast();
+    addTearDown(online.close);
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        conversationType: ConversationType.group,
+        onlineUserIds: online.stream,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('3 members'), findsOneWidget);
+    expect(find.text('Offline'), findsNothing);
+
+    online.add({'user-1', 'friend-2', 'stranger'});
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('3 members · 2 online'), findsOneWidget);
+  });
+
   testWidgets('opens group details from the chat app bar', (tester) async {
     final repository = FakeChatsRepository()
       ..groupDetail = GroupDetail(

@@ -136,7 +136,7 @@ class WeCordSegmented<T> extends StatelessWidget {
       builder: (context, states) {
         final color = isSelected ? c.ink : c.muted;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -145,15 +145,22 @@ class WeCordSegmented<T> extends StatelessWidget {
                 Icon(segment.icon, size: 16, color: color),
                 const SizedBox(width: 6),
               ],
+              // A label that does not fit shrinks instead of being cut off
+              // ("Comfortab..."); screen readers still get the whole word.
               Flexible(
-                child: Text(
-                  segment.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    color: color,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    segment.label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      color: color,
+                    ),
                   ),
                 ),
               ),

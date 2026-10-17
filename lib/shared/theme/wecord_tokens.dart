@@ -141,6 +141,14 @@ class WeCordPalette {
     required this.onDanger,
     required this.dangerSoft,
     required this.dangerText,
+    required this.badgeMention,
+    required this.onBadgeMention,
+    required this.badgeUnread,
+    required this.onBadgeUnread,
+    required this.live,
+    required this.onLive,
+    required this.liveSoft,
+    required this.liveText,
     required this.scrim,
   });
 
@@ -175,6 +183,14 @@ class WeCordPalette {
     onDanger: Color(0xFFFFFFFF),
     dangerSoft: Color(0xFFFDECEC),
     dangerText: Color(0xFFD12B1F),
+    badgeMention: Color(0xFFE12F35),
+    onBadgeMention: Color(0xFFFFFFFF),
+    badgeUnread: Color(0xFF6F6D76),
+    onBadgeUnread: Color(0xFFFFFFFF),
+    live: Color(0xFF1F7A47),
+    onLive: Color(0xFFFFFFFF),
+    liveSoft: Color(0xFFE3F3EA),
+    liveText: Color(0xFF1F7846),
     scrim: Color(0x5217171A),
   );
 
@@ -209,6 +225,14 @@ class WeCordPalette {
     onDanger: Color(0xFFFFFFFF),
     dangerSoft: Color(0xFF3B1E20),
     dangerText: Color(0xFFFF8A80),
+    badgeMention: Color(0xFFE12F35),
+    onBadgeMention: Color(0xFFFFFFFF),
+    badgeUnread: Color(0xFF73717C),
+    onBadgeUnread: Color(0xFFFFFFFF),
+    live: Color(0xFF30A46C),
+    onLive: Color(0xFF07140D),
+    liveSoft: Color(0xFF1A2E23),
+    liveText: Color(0xFF7EE0A8),
     scrim: Color(0x80000000),
   );
 
@@ -245,6 +269,14 @@ class WeCordPalette {
     onDanger: Color(0xFFFFFFFF),
     dangerSoft: Color(0xFFFDECEC),
     dangerText: Color(0xFFA8130F),
+    badgeMention: Color(0xFFC4161C),
+    onBadgeMention: Color(0xFFFFFFFF),
+    badgeUnread: Color(0xFF4A4950),
+    onBadgeUnread: Color(0xFFFFFFFF),
+    live: Color(0xFF14602F),
+    onLive: Color(0xFFFFFFFF),
+    liveSoft: Color(0xFFE3F3EA),
+    liveText: Color(0xFF14602F),
     scrim: Color(0x8017171A),
   );
 
@@ -280,6 +312,14 @@ class WeCordPalette {
     onDanger: Color(0xFF000000),
     dangerSoft: Color(0xFF3B1E20),
     dangerText: Color(0xFFFFA39B),
+    badgeMention: Color(0xFFFF6B70),
+    onBadgeMention: Color(0xFF000000),
+    badgeUnread: Color(0xFF8A8893),
+    onBadgeUnread: Color(0xFF000000),
+    live: Color(0xFF4CC38A),
+    onLive: Color(0xFF000000),
+    liveSoft: Color(0xFF1A2E23),
+    liveText: Color(0xFF8FEBB8),
     scrim: Color(0xB3000000),
   );
 
@@ -358,6 +398,23 @@ class WeCordPalette {
   final Color dangerSoft;
   final Color dangerText;
 
+  /// Badges that mean "this needs you": @mentions, the Review queue, friend
+  /// requests, the notification inbox, missed calls. The only red badge.
+  final Color badgeMention;
+  final Color onBadgeMention;
+
+  /// Plain unread counts and dots (messages in a chat, a channel): a calm
+  /// gray, so red stays rare.
+  final Color badgeUnread;
+  final Color onBadgeUnread;
+
+  /// "Live now": an event or a call in progress. A fill with its text color,
+  /// a soft tint for cards and text on that tint (or on a panel).
+  final Color live;
+  final Color onLive;
+  final Color liveSoft;
+  final Color liveText;
+
   /// Dims the page behind sheets and dialogs.
   final Color scrim;
 
@@ -394,6 +451,14 @@ class WeCordPalette {
       onDanger: c(a.onDanger, b.onDanger),
       dangerSoft: c(a.dangerSoft, b.dangerSoft),
       dangerText: c(a.dangerText, b.dangerText),
+      badgeMention: c(a.badgeMention, b.badgeMention),
+      onBadgeMention: c(a.onBadgeMention, b.onBadgeMention),
+      badgeUnread: c(a.badgeUnread, b.badgeUnread),
+      onBadgeUnread: c(a.onBadgeUnread, b.onBadgeUnread),
+      live: c(a.live, b.live),
+      onLive: c(a.onLive, b.onLive),
+      liveSoft: c(a.liveSoft, b.liveSoft),
+      liveText: c(a.liveText, b.liveText),
       scrim: c(a.scrim, b.scrim),
     );
   }

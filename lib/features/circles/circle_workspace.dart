@@ -204,6 +204,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     final closeThread = ChatThreadAction(
       tooltip: tr('Close thread'),
       icon: Icons.close,
+      primary: true,
       onPressed: () => setState(() => _openThread = null),
     );
     final selectedChannel = _selectedChannel;
@@ -297,6 +298,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           isSelected: showMembers,
           icon: Icons.people_outline,
           selectedIcon: Icons.people,
+          primary: true,
           onPressed: () => _toggleMembers(open: !showMembers, fits: fits),
         );
         final thread = _openThread;
@@ -500,6 +502,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       timedOutUntil: widget.detail.currentUserTimedOutUntil,
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
       topic: channel.topic,
+      circleMemberIds: {
+        for (final member in widget.detail.members) member.profile.id,
+      },
       isAnnouncementChannel: channel.isAnnouncement,
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
@@ -970,7 +975,7 @@ class _MemberRow extends ConsumerWidget {
     final name = member.displayName;
     final roleIcon = switch (member.role) {
       'owner' => Icons.workspace_premium_outlined,
-      'admin' => Icons.shield_outlined,
+      'admin' => CircleIcons.roles,
       _ => null,
     };
     final presenceColor = switch (isOnline
@@ -1131,7 +1136,7 @@ class _MemberRow extends ConsumerWidget {
         if (onManageRoles != null)
           CircleMenuItem(
             value: _MemberAction.roles,
-            icon: Icons.shield_outlined,
+            icon: CircleIcons.roles,
             label: tr('Manage roles'),
           ),
         if (onTimeOut != null)

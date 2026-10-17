@@ -720,7 +720,9 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final currentMember = detail.currentMember;
     final canManageChannels = detail.canManageChannels;
     final reviewCount = _reviewCount(detail);
-    final items = <CircleMenuItem<_CircleMenuAction>>[
+    // What members use every day, what runs the circle, what keeps it safe;
+    // a section with nothing for this member does not show.
+    final everyday = <CircleMenuItem<_CircleMenuAction>>[
       if (detail.canCreateInvites)
         CircleMenuItem(
           value: _CircleMenuAction.invite,
@@ -728,6 +730,31 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           label: tr('Invite friends'),
           tone: SettingsTone.accent,
         ),
+      CircleMenuItem(
+        value: _CircleMenuAction.notificationSettings,
+        icon: Icons.notifications_outlined,
+        label: tr('Notification settings'),
+      ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.emojis,
+          icon: Icons.emoji_emotions_outlined,
+          label: tr('Emoji & stickers'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.changeNickname,
+          icon: Icons.badge_outlined,
+          label: tr('Change my nickname'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.changeCircleAvatar,
+          icon: Icons.face_retouching_natural_outlined,
+          label: tr('Change circle avatar'),
+        ),
+    ];
+    final manage = <CircleMenuItem<_CircleMenuAction>>[
       if (canManageChannels) ...[
         CircleMenuItem(
           value: _CircleMenuAction.createChannel,
@@ -746,6 +773,14 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           icon: Icons.tune,
           label: tr('Circle settings'),
         ),
+      if (detail.canManageCircle)
+        CircleMenuItem(
+          value: _CircleMenuAction.onboarding,
+          icon: Icons.rule,
+          label: tr('Onboarding'),
+        ),
+    ];
+    final safety = <CircleMenuItem<_CircleMenuAction>>[
       if (detail.canManageRoles)
         CircleMenuItem(
           value: _CircleMenuAction.roles,
@@ -778,41 +813,15 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           tone: SettingsTone.warning,
           badge: reviewCount,
         ),
-      if (detail.canManageCircle)
-        CircleMenuItem(
-          value: _CircleMenuAction.onboarding,
-          icon: Icons.rule,
-          label: tr('Onboarding'),
-        ),
       if (detail.canViewAuditLog)
         CircleMenuItem(
           value: _CircleMenuAction.auditLog,
           icon: Icons.history,
           label: tr('Audit log'),
         ),
-      if (currentMember != null)
-        CircleMenuItem(
-          value: _CircleMenuAction.emojis,
-          icon: Icons.emoji_emotions_outlined,
-          label: tr('Emoji & stickers'),
-        ),
-      CircleMenuItem(
-        value: _CircleMenuAction.notificationSettings,
-        icon: Icons.notifications_outlined,
-        label: tr('Notification settings'),
-      ),
-      if (currentMember != null)
-        CircleMenuItem(
-          value: _CircleMenuAction.changeNickname,
-          icon: Icons.badge_outlined,
-          label: tr('Change my nickname'),
-        ),
-      if (currentMember != null)
-        CircleMenuItem(
-          value: _CircleMenuAction.changeCircleAvatar,
-          icon: Icons.face_retouching_natural_outlined,
-          label: tr('Change circle avatar'),
-        ),
+    ];
+    // Leaving (or handing the circle on) stands apart, without a title.
+    final account = <CircleMenuItem<_CircleMenuAction>>[
       if (detail.isOwner)
         CircleMenuItem(
           value: _CircleMenuAction.transferOwnership,
@@ -827,18 +836,19 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           destructive: true,
         ),
     ];
-    final manageCount = items
-        .where((item) => _manageActions.contains(item.value))
-        .length;
-    final inviteCount = items
-        .where((item) => item.value == _CircleMenuAction.invite)
-        .length;
+    final sections = [
+      (tr('Everyday'), everyday),
+      (tr('Manage'), manage),
+      (tr('Moderation & safety'), safety),
+      (null, account),
+    ].where((section) => section.$2.isNotEmpty).toList();
     final action = await showCircleActionMenu<_CircleMenuAction>(
       context,
-      items: items,
+      items: [for (final section in sections) ...section.$2],
       position: position,
       header: _CircleMenuHeader(detail: detail),
-      groups: [inviteCount + manageCount, items.length],
+      groups: [for (final section in sections) section.$2.length],
+      groupTitles: [for (final section in sections) section.$1],
     );
     if (action == null || !mounted) {
       return;
@@ -1116,20 +1126,6 @@ enum _CircleMenuAction {
   transferOwnership,
   leave,
 }
-
-/// Menu entries that manage the circle, grouped together.
-const _manageActions = {
-  _CircleMenuAction.createChannel,
-  _CircleMenuAction.createCategory,
-  _CircleMenuAction.circleSettings,
-  _CircleMenuAction.roles,
-  _CircleMenuAction.bans,
-  _CircleMenuAction.autoMod,
-  _CircleMenuAction.aiGuard,
-  _CircleMenuAction.review,
-  _CircleMenuAction.onboarding,
-  _CircleMenuAction.auditLog,
-};
 
 enum _CategoryMenuAction { rename, delete }
 

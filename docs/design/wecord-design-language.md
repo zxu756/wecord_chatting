@@ -283,6 +283,24 @@ the WeCord components in new and restyled screens.
 - Settings opens as a centered window (radius 28, `dialog` shadow) over the
   blurred app: nav column 248 + content with 24/800 title.
 
+### Circle menu
+
+The circle menu (the `…` on the channel list's banner) is grouped under small
+`subtle` section headers, on phones as cards in the sheet and on wide screens
+in a glass menu (`showGlassMenu`, which supports `GlassMenuEntry.section`):
+
+1. **Everyday**: Invite friends, Notification settings, Emoji & stickers,
+   Change my nickname, Change circle avatar.
+2. **Manage**: Create channel, Create category, Circle settings, Onboarding.
+3. **Moderation & safety**: Roles, Bans, AutoMod, AI guard, Review (with its
+   count badge), Audit log.
+4. Leave circle / Transfer ownership, in a last card without a title.
+
+Only what the member may use is listed, and a section with nothing in it (no
+header either) disappears. Every row has an icon of its own: `CircleIcons`
+holds Roles (medal), AutoMod (filter) and AI guard (sparkle, the app's mark
+for AI), used in the menu, circle settings and the audit log.
+
 ## Platform notes
 
 - **macOS**: the window draws under a transparent, hidden title bar

@@ -8,4 +8,8 @@ const zhPolish = <String, String>{
 
   // Conversation previews.
   'Video': '视频',
+
+  // Circle menu sections ('Manage' is already translated).
+  'Everyday': '常用',
+  'Moderation & safety': '审核与安全',
 };

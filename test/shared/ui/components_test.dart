@@ -289,4 +289,57 @@ void main() {
     expect(find.byType(MacosWindowDragArea), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('segment labels shrink to fit instead of being cut off', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(330, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(330, 400),
+          textScaler: TextScaler.linear(1.3),
+        ),
+        child: _host(
+          SizedBox(
+            width: 300,
+            child: WeCordSegmented<int>(
+              expand: true,
+              selected: 1,
+              onChanged: (_) {},
+              segments: const [
+                WeCordSegment(value: 0, label: 'Comfortable'),
+                WeCordSegment(value: 1, label: 'Default'),
+                WeCordSegment(value: 2, label: 'Compact'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // No overflow errors, no ellipsis: the text is the whole word and
+    // scaled down into its segment.
+    expect(tester.takeException(), isNull);
+    final label = tester.widget<Text>(find.text('Comfortable'));
+    expect(label.overflow, isNot(TextOverflow.ellipsis));
+    expect(label.softWrap, isFalse);
+    final segment = tester.getRect(
+      find.ancestor(
+        of: find.text('Comfortable'),
+        matching: find.byType(WeCordPressable),
+      ),
+    );
+    expect(
+      segment.contains(tester.getRect(find.text('Comfortable')).topLeft),
+      isTrue,
+    );
+    expect(
+      segment.contains(tester.getRect(find.text('Comfortable')).bottomRight),
+      isTrue,
+    );
+    expect(find.bySemanticsLabel('Comfortable'), findsOneWidget);
+  });
 }

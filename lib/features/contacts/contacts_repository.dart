@@ -156,6 +156,12 @@ class SupabaseContactsDataSource implements ContactsDataSource {
 
   final SupabaseClient _client;
 
+  /// What a list of people needs. The bio, pronouns and banner can't be read
+  /// from the table (they follow "who can see my profile"; the profile
+  /// screen gets them from get_profile_summary), so `select *` would fail.
+  static const _profileColumns =
+      'id,username,display_name,avatar_url,created_at,updated_at';
+
   @override
   Future<List<Map<String, dynamic>>> searchProfiles(
     String query,
@@ -163,7 +169,7 @@ class SupabaseContactsDataSource implements ContactsDataSource {
   ) async {
     final rows = await _client
         .from('profiles')
-        .select()
+        .select(_profileColumns)
         .ilike('username', '%$query%')
         .neq('id', excludedUserId)
         // Deleted accounts and bots can't be found or befriended.
@@ -201,7 +207,7 @@ class SupabaseContactsDataSource implements ContactsDataSource {
 
     final rows = await _client
         .from('profiles')
-        .select()
+        .select(_profileColumns)
         .inFilter('id', ids)
         .order('username');
     return rows.cast<Map<String, dynamic>>();

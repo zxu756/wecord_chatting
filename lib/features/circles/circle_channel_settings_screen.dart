@@ -1057,7 +1057,7 @@ class ChannelOverwriteTarget {
       final color = role.color;
       return ThingAvatar(
         size: size,
-        icon: role.isDefault ? Icons.groups_outlined : Icons.shield_outlined,
+        icon: role.isDefault ? Icons.groups_outlined : CircleIcons.roles,
         color: color == null ? c.raised : circleRoleColor(color),
         foregroundColor: color == null ? c.ink : Colors.white,
       );

@@ -35,7 +35,7 @@ class CircleAutoModScreen extends ConsumerWidget {
       body: rules.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => CircleEmptyState(
-          icon: Icons.gpp_maybe_outlined,
+          icon: CircleIcons.autoMod,
           title: tr('Could not load AutoMod rules.'),
           action: WeCordButton(
             label: tr('Try again'),

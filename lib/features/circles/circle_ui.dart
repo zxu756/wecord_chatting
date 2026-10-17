@@ -564,6 +564,19 @@ Future<bool> confirmCircleAction(
   return confirmed ?? false;
 }
 
+/// The icons of the circle's management pages, one per page so that no two
+/// look alike in the circle menu, circle settings and the audit log.
+abstract final class CircleIcons {
+  /// Roles and who holds them.
+  static const roles = Icons.military_tech_outlined;
+
+  /// AutoMod: rules that filter messages.
+  static const autoMod = Icons.filter_alt_outlined;
+
+  /// AI guard: the sparkle is the app's mark for AI (as in AI features).
+  static const aiGuard = Icons.auto_awesome_outlined;
+}
+
 /// One entry of [showCircleActionMenu].
 class CircleMenuItem<T> {
   const CircleMenuItem({

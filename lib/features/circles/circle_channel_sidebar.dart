@@ -749,7 +749,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       if (detail.canManageRoles)
         CircleMenuItem(
           value: _CircleMenuAction.roles,
-          icon: Icons.shield_outlined,
+          icon: CircleIcons.roles,
           label: tr('Roles'),
         ),
       if (detail.canBanMembers)
@@ -761,13 +761,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
       if (detail.canManageCircle)
         CircleMenuItem(
           value: _CircleMenuAction.autoMod,
-          icon: Icons.gpp_maybe_outlined,
+          icon: CircleIcons.autoMod,
           label: tr('AutoMod'),
         ),
       if (detail.canManageCircle)
         CircleMenuItem(
           value: _CircleMenuAction.aiGuard,
-          icon: Icons.shield_outlined,
+          icon: CircleIcons.aiGuard,
           label: tr('AI guard'),
         ),
       if (detail.can(CirclePermission.manageMessages))

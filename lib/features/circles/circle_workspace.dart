@@ -973,7 +973,7 @@ class _MemberRow extends ConsumerWidget {
     final name = member.displayName;
     final roleIcon = switch (member.role) {
       'owner' => Icons.workspace_premium_outlined,
-      'admin' => Icons.shield_outlined,
+      'admin' => CircleIcons.roles,
       _ => null,
     };
     final presenceColor = switch (isOnline
@@ -1134,7 +1134,7 @@ class _MemberRow extends ConsumerWidget {
         if (onManageRoles != null)
           CircleMenuItem(
             value: _MemberAction.roles,
-            icon: Icons.shield_outlined,
+            icon: CircleIcons.roles,
             label: tr('Manage roles'),
           ),
         if (onTimeOut != null)

@@ -1,6 +1,9 @@
 #!/bin/sh
-# Turns on pushes for scheduled messages and reminders (the database sends
-# them on its own, see supabase/migrations/202610170010_scheduled_messages.sql).
+# Turns on the one-minute dispatcher: pushes for scheduled messages,
+# message reminders, chat event reminders and task due dates, and the
+# removal of expired disappearing messages' files (the database does the
+# rest on its own; see supabase/migrations/202610170010_scheduled_messages.sql
+# and 202610170070_dispatch_more.sql).
 # Run once from the project root after `supabase db push`:
 #
 #   sh tool/setup_later_dispatch.sh <project-ref>

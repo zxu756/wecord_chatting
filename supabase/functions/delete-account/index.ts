@@ -14,7 +14,12 @@ const corsHeaders = {
 };
 
 // Each user's files sit in a folder named after them.
-const userBuckets = ["profile-avatars", "profile-banners", "wallpapers"];
+const userBuckets = [
+  "profile-avatars",
+  "profile-banners",
+  "wallpapers",
+  "moments",
+];
 
 // Storage removes at most 1000 objects per request.
 const removeBatchSize = 1000;
@@ -96,14 +101,17 @@ Deno.serve(async (request) => {
   }
 
   // Best effort: the profile no longer points at these files.
+  // (Moments keep a picture and its thumbnail per photo: page until empty.)
   for (const bucket of userBuckets) {
-    const { data: files } = await admin.storage.from(bucket).list(
-      user.id,
-      { limit: 1000 },
-    );
-    const paths = (files ?? []).map((file) => `${user.id}/${file.name}`);
-    if (paths.length > 0) {
+    for (let page = 0; page < 20; page++) {
+      const { data: files } = await admin.storage.from(bucket).list(
+        user.id,
+        { limit: removeBatchSize },
+      );
+      const paths = (files ?? []).map((file) => `${user.id}/${file.name}`);
+      if (paths.length === 0) break;
       await admin.storage.from(bucket).remove(paths);
+      if (paths.length < removeBatchSize) break;
     }
   }
 

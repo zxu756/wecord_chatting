@@ -100,6 +100,15 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    // Live location shares end with the session: nothing keeps sending (or
+    // looks as if it does) once this person is signed out.
+    try {
+      await _client
+          .rpc<void>('stop_my_live_locations')
+          .timeout(const Duration(seconds: 3));
+    } on Object {
+      // Offline: the shares end at their time.
+    }
     await _client.auth.signOut();
   }
 

@@ -24,6 +24,10 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSLocationUsageDescription</key>
+	<string>WeCord uses your location to send it to a chat, and to share it live for as long as you choose. Sharing pauses when WeCord is closed.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>WeCord uses your location to send it to a chat, and to share it live for as long as you choose. Sharing pauses when WeCord is closed.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>WeCord uses the microphone to record voice messages, to talk in voice channels and to type what you say.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

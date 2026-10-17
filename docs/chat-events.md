@@ -42,40 +42,20 @@ select * from public.claim_chat_event_reminder_pushes();  -- Web Push work, each
   (`endpoint`, `p256dh`, `auth`, `title`, `body`, `conversation_id`),
   skipping chats the person muted.
 
-### What is scheduled by the migration
+### Who calls them
 
-If `pg_cron` is installed the migration schedules
-`chat-event-due-reminders` (`* * * * *`, only the first function, so the
-inbox works with nothing else) and a daily purge of reminders older than 14
-days. On a database without `pg_cron` (local development) it schedules
-nothing.
+The shared dispatcher does (migration `202610170070_dispatch_more`): the
+`wecord-later-dispatch` pg_cron job runs `run_later_dispatch()` every
+minute, which calls `chat_event_due_reminders()` and wakes the
+`scheduled-dispatch` Edge Function while reminders still need their push;
+the function claims them with `claim_chat_event_reminder_pushes()` and
+sends them. The same tick handles task due reminders and the files of
+expired disappearing messages. The separate `chat-event-due-reminders` job
+is dropped by that migration. Setting up the dispatcher once
+(`tool/setup_later_dispatch.sh`) is all event reminders need.
 
-### Push
-
-`supabase/functions/chat-event-reminders` (verify_jwt = false, shared secret)
-calls both functions and sends the pushes with `push/webpush.ts`. Invoke it
-every minute from the same scheduler as the SQL function:
-
-```sql
-select cron.schedule('chat-event-reminders', '* * * * *', $$
-  select net.http_post(
-    url := 'https://<project>.supabase.co/functions/v1/chat-event-reminders',
-    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'))
-  )
-$$);
-```
-
-### Merging with the shared dispatcher
-
-The scheduled-message / reminder dispatcher that runs from `pg_cron` only
-needs to add these two calls to its tick:
-
-1. `perform public.chat_event_due_reminders();`
-2. send the rows of `public.claim_chat_event_reminder_pushes()` the way it
-   sends other pushes (or POST to `chat-event-reminders`).
-
-Drop the job `chat-event-due-reminders` once the dispatcher calls it.
-Nothing else depends on the job names.
+`supabase/functions/chat-event-reminders` still works on its own (POST with
+the service role key) for a project that does not run the dispatcher.
 
 ## Deploying
 

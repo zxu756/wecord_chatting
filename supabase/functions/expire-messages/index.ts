@@ -9,20 +9,13 @@
 // alone is enough on a project without pg_cron, and removes the PDF
 // previews of messages that are gone.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const removeBatchSize = 200;
-const maxRounds = 10;
+import { CleanupError, cleanUpExpired } from "./cleanup.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-interface MediaRow {
-  bucket_id?: unknown;
-  object_path?: unknown;
 }
 
 Deno.serve(async (request) => {
@@ -44,58 +37,12 @@ Deno.serve(async (request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let purged = 0;
-  for (let round = 0; round < maxRounds; round++) {
-    const { data, error } = await admin.rpc("purge_expired_messages", {
-      batch_limit: 2000,
-    });
-    if (error) return json({ error: "purge_failed" }, 500);
-    purged += Number(data ?? 0);
-    if (Number(data ?? 0) < 2000) break;
-  }
-
-  let removed = 0;
-  for (let round = 0; round < maxRounds; round++) {
-    const { data, error } = await admin.rpc("claim_expired_media", {
-      max_rows: removeBatchSize,
-    });
-    if (error) return json({ error: "claim_failed", purged }, 500);
-    const rows = (data ?? []) as MediaRow[];
-    if (rows.length === 0) break;
-
-    const byBucket = new Map<string, string[]>();
-    for (const row of rows) {
-      if (typeof row.bucket_id !== "string") continue;
-      if (typeof row.object_path !== "string") continue;
-      const paths = byBucket.get(row.bucket_id) ?? [];
-      paths.push(row.object_path);
-      byBucket.set(row.bucket_id, paths);
+  try {
+    return json(await cleanUpExpired(admin));
+  } catch (error) {
+    if (error instanceof CleanupError) {
+      return json({ error: error.code, purged: error.purged }, 500);
     }
-    for (const [bucket, paths] of byBucket) {
-      const { error: removeError } = await admin.storage.from(bucket).remove(
-        paths,
-      );
-      // Keep the rows for the next run when Storage refused.
-      if (removeError) continue;
-      await admin.rpc("finish_expired_media", {
-        buckets: paths.map(() => bucket),
-        paths,
-      });
-      removed += paths.length;
-    }
-    if (rows.length < removeBatchSize) break;
+    throw error;
   }
-
-  // Office previews of messages that are gone (best effort).
-  const { data: stale } = await admin.rpc("stale_file_previews", {
-    max_rows: 50,
-  });
-  const previews = ((stale ?? []) as { object_name?: unknown }[])
-    .map((row) => row.object_name)
-    .filter((name): name is string => typeof name === "string");
-  if (previews.length > 0) {
-    await admin.storage.from("file-previews").remove(previews);
-  }
-
-  return json({ purged, removed, previews: previews.length });
 });

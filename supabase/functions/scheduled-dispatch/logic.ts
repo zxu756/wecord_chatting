@@ -14,6 +14,64 @@ export interface PushTarget {
   tag?: string;
 }
 
+/// A row of claim_chat_event_reminder_pushes.
+export interface EventReminderRow {
+  reminder_id: string;
+  subscription_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  conversation_id: string;
+  event_id: string;
+  title: string;
+  body: string;
+}
+
+/// A row of due_list_item_reminders.
+export interface TaskReminderRow {
+  notification_id: string;
+  user_id: string;
+  subscription_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  conversation_id: string;
+  circle_id: string | null;
+  title: string;
+  body: string;
+}
+
+/// An event reminder as a push: "📅 {event}" / "Starts in 15 minutes". One
+/// tag per event, so the 15 minute reminder replaces the 1 hour one.
+export function eventTarget(row: EventReminderRow): PushTarget {
+  return {
+    subscription_id: row.subscription_id,
+    endpoint: row.endpoint,
+    p256dh: row.p256dh,
+    auth: row.auth,
+    conversation_id: row.conversation_id,
+    circle_id: null,
+    title: `📅 ${row.title}`,
+    body: row.body,
+    tag: `event-${row.event_id}`,
+  };
+}
+
+/// A task reminder as a push: "Task due soon" / "{task}".
+export function taskTarget(row: TaskReminderRow): PushTarget {
+  return {
+    subscription_id: row.subscription_id,
+    endpoint: row.endpoint,
+    p256dh: row.p256dh,
+    auth: row.auth,
+    conversation_id: row.conversation_id,
+    circle_id: row.circle_id,
+    title: row.title,
+    body: row.body,
+    tag: `task-${row.notification_id}`,
+  };
+}
+
 /// Where tapping the notification opens the app (hash routes on the web),
 /// the same as the push function.
 export function targetPath(target: PushTarget): string {

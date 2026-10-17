@@ -1,5 +1,7 @@
 // Pushes for things the database does on its own: scheduled messages that
-// were sent and reminders that came due.
+// were sent, reminders that came due, chat events about to start and tasks
+// that came due. The same tick removes the files of expired disappearing
+// messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
 // is due and, when pushes are waiting, wakes this function through pg_net:
@@ -15,7 +17,16 @@
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
-import { isAuthorized, type PushTarget, targetPath } from "./logic.ts";
+import { cleanUpExpired } from "../expire-messages/cleanup.ts";
+import {
+  type EventReminderRow,
+  eventTarget,
+  isAuthorized,
+  type PushTarget,
+  targetPath,
+  type TaskReminderRow,
+  taskTarget,
+} from "./logic.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -76,6 +87,33 @@ Deno.serve(async (request) => {
     return json({ error: "lookup_failed" }, 500);
   }
   targets.push(...((reminders ?? []) as PushTarget[]));
+
+  // Chat events about to start (the tick wrote the reminders).
+  const { data: events, error: eventsError } = await admin.rpc(
+    "claim_chat_event_reminder_pushes",
+    { max_reminders: 200 },
+  );
+  if (eventsError) {
+    return json({ error: "lookup_failed" }, 500);
+  }
+  targets.push(...((events ?? []) as EventReminderRow[]).map(eventTarget));
+
+  // Tasks that came due: writes the inbox entries and hands out the pushes.
+  const { data: tasks, error: tasksError } = await admin.rpc(
+    "due_list_item_reminders",
+  );
+  if (tasksError) {
+    return json({ error: "lookup_failed" }, 500);
+  }
+  targets.push(...((tasks ?? []) as TaskReminderRow[]).map(taskTarget));
+
+  // Files of expired disappearing messages. Not a push, but it needs the
+  // service role and Storage, so it rides on the same tick.
+  try {
+    await cleanUpExpired(admin);
+  } catch {
+    // Tried again on the next tick.
+  }
 
   const gone: string[] = [];
   let delivered = 0;

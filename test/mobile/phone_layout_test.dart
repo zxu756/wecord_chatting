@@ -10,6 +10,7 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -636,6 +637,7 @@ void main() {
       for (final key in [
         'phone-home-search',
         'phone-home-add-friends',
+        'phone-home-saved',
         'phone-home-new',
       ]) {
         expectFullyVisible(tester, find.byKey(ValueKey(key)));
@@ -677,6 +679,15 @@ void main() {
       await settle(tester);
       expect(find.byType(ContactsScreen), findsOneWidget);
       expect(find.text('Friends'), findsWidgets);
+      expect(userPanel, findsNothing);
+      await tester.tap(find.byKey(const ValueKey('paper-page-back')));
+      await settle(tester);
+      expect(userPanel, findsOneWidget);
+
+      // Saved sits next to Add friend, as it does beside Friends on desktop.
+      await tester.tap(find.byKey(const ValueKey('phone-home-saved')));
+      await settle(tester);
+      expect(find.byType(SavedMessagesScreen), findsOneWidget);
       expect(userPanel, findsNothing);
       await tester.tap(find.byKey(const ValueKey('paper-page-back')));
       await settle(tester);

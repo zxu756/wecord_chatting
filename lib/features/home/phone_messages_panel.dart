@@ -10,6 +10,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/conversation_preview.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -109,13 +110,16 @@ class PhoneMessagesPanel extends ConsumerWidget {
               key: const ValueKey('phone-friends-row'),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-              itemCount: sortedFriends.length + 1,
+              itemCount: sortedFriends.length + 2,
               separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 if (index == 0) {
                   return _AddFriendTile(requestCount: requestCount);
                 }
-                final friend = sortedFriends[index - 1];
+                if (index == 1) {
+                  return const _SavedTile();
+                }
+                final friend = sortedFriends[index - 2];
                 return _FriendTile(
                   friend: friend,
                   presence: presence(friend.id),
@@ -312,6 +316,33 @@ class _QuickFriendTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Saved", second in the friends row: the messages kept for later, where
+/// desktop has its Saved entry beside Friends and Notifications.
+class _SavedTile extends StatelessWidget {
+  const _SavedTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return _QuickFriendTile(
+      key: const ValueKey('phone-home-saved'),
+      label: tr('Saved'),
+      onPressed: () => openPage(context, SavedMessagesScreen.path),
+      leading: Container(
+        width: 58,
+        height: 58,
+        decoration: ShapeDecoration(
+          color: c.raised,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        child: Icon(Icons.bookmark_border_rounded, size: 22, color: c.muted),
       ),
     );
   }

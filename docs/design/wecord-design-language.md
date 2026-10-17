@@ -247,6 +247,12 @@ the WeCord components in new and restyled screens.
   y≈58; the panel (`PanelSurface`, top-left radius 28) starts 46 below the
   top. Large title row: 26/800 title + 40px round buttons (search raised,
   compose accent).
+- **Saved on the phone home**: the quick row under the Messages title starts
+  with two 58 squircle tiles, *Add friend* (Friends, with the request badge)
+  and *Saved* (bookmark), before the friends; Notifications is the bell on the
+  floating user panel. That matches desktop, where Saved is the third row
+  under Friends and Notifications. Settings keeps its *Saved messages* row as
+  a second, familiar way in.
 - **Floating user panel**: glass pill, 64 tall, radius 32, 28 above the
   bottom, spanning from 10 px inside the rail's left to 10 px from the right
   edge; lists end above it.

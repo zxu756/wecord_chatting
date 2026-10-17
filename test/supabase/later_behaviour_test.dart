@@ -32,24 +32,20 @@ void main() {
     }
   }
 
-  test(
-    'scheduled messages, reminders and saved messages behave',
-    () async {
-      final reason = await unavailable();
-      if (reason != null) {
-        markTestSkipped(reason);
-        return;
-      }
-      final result = await Process.run('psql', [
-        databaseUrl,
-        '-v',
-        'ON_ERROR_STOP=1',
-        '-q',
-        '-f',
-        'test/supabase/later_behaviour.sql',
-      ]);
-      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+  test('scheduled messages, reminders and saved messages behave', () async {
+    final reason = await unavailable();
+    if (reason != null) {
+      markTestSkipped(reason);
+      return;
+    }
+    final result = await Process.run('psql', [
+      databaseUrl,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-q',
+      '-f',
+      'test/supabase/later_behaviour.sql',
+    ]);
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

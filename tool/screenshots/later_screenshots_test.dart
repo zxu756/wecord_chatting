@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
@@ -226,6 +227,74 @@ void main() {
     await world.open(tester, '/notifications');
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('inbox-filter-reminders')));
+    await settle(tester);
+  });
+
+  SavedMessage saved(
+    String id,
+    String body, {
+    bool done = false,
+    bool available = true,
+    int minutesAgo = 30,
+  }) {
+    return SavedMessage(
+      id: id,
+      messageId: available ? 'm-$id' : null,
+      conversationId: 'dm-1',
+      savedAt: DateTime.now().subtract(Duration(minutes: minutesAgo)),
+      doneAt: done ? DateTime.now() : null,
+      senderId: bart.id,
+      senderName: available ? bart.displayName : '',
+      body: available ? body : '',
+      available: available,
+    );
+  }
+
+  FakeSavedMessagesRepository savedRepo() => FakeSavedMessagesRepository([
+    saved(
+      's1',
+      'Bring the tripod and the long lens on Saturday',
+      minutesAgo: 25,
+    ),
+    saved(
+      's2',
+      'Trail map: https://example.com/trails/north-lot',
+      minutesAgo: 600,
+    ),
+    saved('s3', '', available: false, minutesAgo: 3000),
+    saved('s4', 'Book the cabin before Friday', done: true, minutesAgo: 5000),
+  ]);
+
+  screen('v1-saved-active', (tester) async {
+    final world = PhoneWorld()
+      ..extraOverrides = [
+        savedMessagesRepositoryProvider.overrideWithValue(savedRepo()),
+      ];
+    await world.open(tester, '/saved');
+    await settle(tester);
+  });
+
+  screen('v2-saved-done', (tester) async {
+    final world = PhoneWorld()
+      ..extraOverrides = [
+        savedMessagesRepositoryProvider.overrideWithValue(savedRepo()),
+      ];
+    await world.open(tester, '/saved');
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('saved-filter-done')));
+    await settle(tester);
+  });
+
+  screen('v3-message-menu-save', (tester) async {
+    await openChat(
+      tester,
+      overrides: [
+        savedMessagesRepositoryProvider.overrideWithValue(savedRepo()),
+      ],
+    );
+    await tester.longPress(
+      find.textContaining('Also this', findRichText: true).first,
+    );
     await settle(tester);
   });
 }

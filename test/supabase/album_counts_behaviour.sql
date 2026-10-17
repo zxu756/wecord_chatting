@@ -7,6 +7,10 @@
 
 begin;
 
+-- One behaviour script at a time: they change the same tables, and test
+-- files run in parallel.
+select pg_advisory_xact_lock(7770001);
+
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql
 \i supabase/migrations/202610170004_album_push.sql

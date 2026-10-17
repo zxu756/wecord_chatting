@@ -51,4 +51,23 @@ const zhLater = <String, String>{
   'Could not set the reminder. Try again.': '无法设置提醒，请重试。',
   'A message you wanted to be reminded about': '你想被提醒的一条消息',
   'Message unavailable': '消息不可用',
+
+  // Saved messages.
+  'Saved': '已保存',
+  'Saved messages': '已保存的消息',
+  'Save for later': '稍后再看',
+  'Saved for later': '已保存，稍后再看',
+  'Remove from Saved': '从已保存中移除',
+  'Removed from Saved': '已从已保存中移除',
+  'Could not update Saved. Try again.': '无法更新已保存列表，请重试。',
+  'Could not load saved messages.': '无法加载已保存的消息。',
+  'Active': '待处理',
+  'Mark done': '标记完成',
+  'Undo': '撤销',
+  'Saved {time}': '保存于 {time}',
+  'Nothing saved yet': '还没有保存的消息',
+  'Nothing done yet': '还没有已完成的消息',
+  "Choose Save for later in a message's menu to keep it here.":
+      '在消息菜单中选择“稍后再看”，它就会保存在这里。',
+  'Messages you mark done show up here.': '标记完成的消息会显示在这里。',
 };

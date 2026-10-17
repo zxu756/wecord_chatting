@@ -1,4 +1,5 @@
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/push/push_gateway.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -152,5 +153,70 @@ class FakeRemindersRepository implements RemindersRepository {
     final result = due;
     due = [];
     return result;
+  }
+}
+
+/// In-memory saved messages.
+class FakeSavedMessagesRepository implements SavedMessagesRepository {
+  FakeSavedMessagesRepository([List<SavedMessage> initial = const []])
+    : entries = [...initial];
+
+  final List<SavedMessage> entries;
+  final saved = <String>[];
+  final removed = <String>[];
+  final doneCalls = <({String id, bool done})>[];
+  var failWrites = false;
+
+  @override
+  Future<List<SavedMessage>> list() async => [...entries];
+
+  @override
+  Future<void> save(String messageId) async {
+    if (failWrites) {
+      throw StateError('offline');
+    }
+    saved.add(messageId);
+    entries.insert(
+      0,
+      SavedMessage(
+        id: 'saved-${entries.length}',
+        messageId: messageId,
+        conversationId: 'conversation-1',
+        savedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<void> remove(String id) async {
+    if (failWrites) {
+      throw StateError('offline');
+    }
+    removed.add(id);
+    entries.removeWhere((entry) => entry.id == id);
+  }
+
+  @override
+  Future<void> setDone(String id, {required bool done}) async {
+    if (failWrites) {
+      throw StateError('offline');
+    }
+    doneCalls.add((id: id, done: done));
+    final index = entries.indexWhere((entry) => entry.id == id);
+    final entry = entries[index];
+    entries[index] = SavedMessage(
+      id: entry.id,
+      messageId: entry.messageId,
+      conversationId: entry.conversationId,
+      savedAt: entry.savedAt,
+      doneAt: done ? DateTime.now() : null,
+      senderId: entry.senderId,
+      senderName: entry.senderName,
+      senderAvatarUrl: entry.senderAvatarUrl,
+      body: entry.body,
+      type: entry.type,
+      messageCreatedAt: entry.messageCreatedAt,
+      available: entry.available,
+    );
   }
 }

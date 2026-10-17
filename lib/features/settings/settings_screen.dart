@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
@@ -123,6 +124,17 @@ class SettingsPhonePage extends ConsumerWidget {
             onEdit: () => openProfileEditor(context),
           ),
           SettingsStatusGroup(profile: value),
+          const SizedBox(height: 12),
+          SettingsGroup(
+            children: [
+              SettingsRow(
+                key: const ValueKey('settings-saved-row'),
+                icon: Icons.bookmark_border_rounded,
+                title: tr('Saved messages'),
+                onTap: () => context.push(SavedMessagesScreen.path),
+              ),
+            ],
+          ),
           SettingsSectionHeader(tr('Appearance')),
           const SettingsGroup(
             padding: EdgeInsets.all(12),

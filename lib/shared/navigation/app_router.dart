@@ -22,6 +22,7 @@ import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
@@ -146,6 +147,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: InboxScreen.path,
             builder: (context, state) => const InboxScreen(),
+          ),
+          GoRoute(
+            path: SavedMessagesScreen.path,
+            builder: (context, state) => const SavedMessagesScreen(),
           ),
           GoRoute(
             path: GlobalMessageSearchScreen.path,
@@ -408,6 +413,11 @@ ShellPlacement _placementFor(GoRouterState state) {
       return const ShellPlacement(
         homeSelected: true,
         homeSection: HomeSection.inbox,
+      );
+    case SavedMessagesScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.saved,
       );
     case DiscoveryScreen.path:
       return const ShellPlacement(exploreSelected: true);

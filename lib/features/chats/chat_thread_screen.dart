@@ -74,6 +74,7 @@ import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/later/later_time.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/later_cards.dart' show laterPreview;
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_sheet.dart';
@@ -735,6 +736,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
     });
     final thread = ref.watch(chatThreadProvider(widget.conversationId));
+    final savedIds = ref.watch(savedMessageIdsProvider);
     final pendingEntries = ref.watch(
       conversationOutboxProvider(widget.conversationId),
     );
@@ -1326,6 +1328,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   canStartThread: false,
                   pollActions: pollActions,
                   onRemind: _remindAbout,
+                  isSaved: savedIds.contains(message.id),
+                  onToggleSaved: _toggleSaved,
                 );
               } else {
                 final isCurrentUser = message.isSentBy(currentUserId);
@@ -1373,6 +1377,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   canStartThread:
                       canStartThreads && canSend && pendingEntry == null,
                   onRemind: _remindAbout,
+                  isSaved: savedIds.contains(message.id),
+                  onToggleSaved: _toggleSaved,
                   onOpenThread: _openOrCreateThread,
                   pollActions: pollActions,
                   onPublish: canPublish(message) && pendingEntry == null
@@ -1493,6 +1499,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   canPublish(message),
                 ),
                 _circleId,
+                savedIds.contains(message.id),
                 message.id == _highlightedMessageId,
                 dayStartIds.contains(message.id),
                 message.id == _newMessageDividerId,
@@ -3421,6 +3428,28 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     );
   }
 
+  /// "Save for later" / "Remove from Saved".
+  Future<void> _toggleSaved(ChatMessage message) async {
+    final repository = ref.read(savedMessagesRepositoryProvider);
+    final existing = (ref.read(savedMessagesProvider).value ?? const [])
+        .where((saved) => saved.messageId == message.id)
+        .firstOrNull;
+    try {
+      if (existing != null) {
+        await repository.remove(existing.id);
+      } else {
+        await repository.save(message.id);
+      }
+    } catch (_) {
+      _showSnackBar(tr('Could not update Saved. Try again.'));
+      return;
+    }
+    ref.invalidate(savedMessagesProvider);
+    _showSnackBar(
+      existing != null ? tr('Removed from Saved') : tr('Saved for later'),
+    );
+  }
+
   Future<void> _openScheduledMessages() {
     return showScheduledMessagesSheet(
       context,
@@ -4358,7 +4387,16 @@ class _MessageBubble extends StatelessWidget {
     this.circleId,
     this.onPublish,
     this.onRemind,
+    this.isSaved = false,
+    this.onToggleSaved,
   });
+
+  /// The current user saved this message ("Save for later").
+  final bool isSaved;
+
+  /// Saves the message, or takes it out of Saved; null for messages that
+  /// cannot be saved.
+  final Future<void> Function(ChatMessage message)? onToggleSaved;
 
   /// Sets a reminder about this message ("Remind me"); null for messages
   /// that cannot have one.
@@ -5273,6 +5311,15 @@ class _MessageBubble extends StatelessWidget {
           icon: Icons.alarm_add_outlined,
           label: tr('Remind me'),
           onSelected: () => unawaited(remind(message)),
+        ),
+      if (onToggleSaved case final toggle? when !_isPending && !_isRecalled)
+        MessageAction(
+          key: const ValueKey('message-save'),
+          icon: isSaved
+              ? Icons.bookmark_rounded
+              : Icons.bookmark_border_rounded,
+          label: isSaved ? tr('Remove from Saved') : tr('Save for later'),
+          onSelected: () => unawaited(toggle(message)),
         ),
       if (imageAttachment != null)
         MessageAction(

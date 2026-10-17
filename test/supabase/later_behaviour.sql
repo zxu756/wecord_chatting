@@ -8,8 +8,13 @@
 
 begin;
 
+-- One behaviour script at a time: they change the same tables, and test
+-- files run in parallel.
+select pg_advisory_xact_lock(7770001);
+
 \i supabase/migrations/202610170010_scheduled_messages.sql
 \i supabase/migrations/202610170011_message_reminders.sql
+\i supabase/migrations/202610170012_saved_messages.sql
 
 create temp table ids (name text primary key, id uuid not null);
 grant all on ids to public;
@@ -376,5 +381,99 @@ begin
   raise notice 'ok: the cron call copes with reminders';
 end;
 $$;
+
+-- -------------------------------------------------------------------- saved
+
+select pg_temp.act_as('a');
+create temp table saved_ids (name text, id uuid);
+grant all on saved_ids to public;
+insert into saved_ids
+select 'tripod', public.save_message((select id from ids where name = 'tripod'));
+insert into saved_ids
+select 'again', public.save_message((select id from ids where name = 'tripod'));
+select pg_temp.check(
+  'saving twice keeps one entry',
+  (select count(distinct id) = 1 from saved_ids)
+  and (select count(*) = 1 from public.saved_messages)
+);
+
+select pg_temp.check(
+  'a saved message lists with its text and sender',
+  (select count(*) = 1
+     and bool_and(available and body = 'Bring the tripod' and sender_display_name = 'Bob'
+       and done_at is null)
+   from public.list_saved_messages())
+);
+
+-- Others cannot save what they cannot read, and see nothing of Ada's list.
+select pg_temp.act_as('c');
+do $$
+begin
+  perform public.save_message((select id from ids where name = 'tripod'));
+  raise exception 'FAILED: saved a message Cy cannot read';
+exception when sqlstate 'P0002' then
+  raise notice 'ok: nothing is saved that the caller cannot read';
+end;
+$$;
+select pg_temp.check(
+  'the saved list is private',
+  (select count(*) = 0 from public.list_saved_messages())
+  and (select count(*) = 0 from public.saved_messages)
+);
+select pg_temp.act_as('b');
+delete from public.saved_messages;
+select pg_temp.act_as(null);
+select pg_temp.check(
+  'others cannot remove it',
+  (select count(*) = 1 from public.saved_messages)
+);
+
+-- Done and back.
+select pg_temp.act_as('a');
+select public.set_saved_message_done((select id from public.saved_messages), true);
+select pg_temp.check(
+  'mark done',
+  (select count(*) = 1 and bool_and(done_at is not null) from public.list_saved_messages())
+);
+select public.set_saved_message_done((select id from public.saved_messages), false);
+select pg_temp.check(
+  'undo makes it active again',
+  (select count(*) = 1 and bool_and(done_at is null) from public.list_saved_messages())
+);
+
+-- Lose access: Ada leaves the group, the entry stays, as unavailable.
+select pg_temp.act_as(null);
+delete from public.conversation_members
+where user_id = '00000000-0000-4000-8000-0000000000a1'
+  and conversation_id = (select id from ids where name = 'group');
+select pg_temp.act_as('a');
+select pg_temp.check(
+  'a message the user can no longer read is unavailable',
+  (select count(*) = 1 and bool_and(not available and body is null and sender_display_name is null)
+   from public.list_saved_messages())
+);
+select pg_temp.act_as(null);
+insert into public.conversation_members (conversation_id, user_id, role)
+select id, '00000000-0000-4000-8000-0000000000a1', 'member' from ids where name = 'group';
+
+-- Deleting the message (as the sender does) leaves the entry unavailable.
+update public.messages set recalled_at = now(), body = '' where body = 'Bring the tripod';
+select pg_temp.act_as('a');
+select pg_temp.check(
+  'a deleted message is unavailable',
+  (select count(*) = 1 and bool_and(not available and body is null) from public.list_saved_messages())
+);
+
+-- Hard deletion clears the link but keeps the entry, which can be removed.
+select pg_temp.act_as(null);
+delete from public.messages where body = '';
+select pg_temp.act_as('a');
+select pg_temp.check(
+  'a removed message leaves an unavailable entry',
+  (select count(*) = 1 and bool_and(message_id is null and not available)
+   from public.list_saved_messages())
+);
+delete from public.saved_messages;
+select pg_temp.check('removing deletes the entry', (select count(*) = 0 from public.list_saved_messages()));
 
 rollback;

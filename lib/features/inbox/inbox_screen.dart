@@ -12,6 +12,7 @@ import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/later/later_cards.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -262,6 +263,15 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 PaperPageHeader(
                   title: tr('Notifications'),
                   actions: [
+                    WeCordIconButton(
+                      key: const ValueKey('inbox-saved-button'),
+                      icon: Icons.bookmark_border_rounded,
+                      tooltip: tr('Saved'),
+                      variant: WeCordButtonVariant.onPaper,
+                      onPressed: () =>
+                          openPage(context, SavedMessagesScreen.path),
+                    ),
+                    const SizedBox(width: 8),
                     WeCordIconButton(
                       icon: Icons.refresh_rounded,
                       tooltip: tr('Refresh'),

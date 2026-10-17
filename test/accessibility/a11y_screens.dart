@@ -8,6 +8,7 @@ import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/circles/circle_rpc.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -307,6 +308,30 @@ final moreA11yScreens = <A11yScreen>[
     await world.open(tester, '/notifications');
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('inbox-filter-reminders')));
+    await settle(tester);
+  }),
+  A11yScreen('saved-messages', (tester, world) async {
+    world.extraOverrides = [
+      savedMessagesRepositoryProvider.overrideWithValue(
+        FakeSavedMessagesRepository([
+          SavedMessage(
+            id: 'a',
+            messageId: 'm1',
+            conversationId: 'dm-1',
+            savedAt: DateTime.now().subtract(const Duration(hours: 2)),
+            senderName: 'Bart the Bold',
+            body: 'Bring the tripod',
+          ),
+          SavedMessage(
+            id: 'b',
+            conversationId: 'dm-1',
+            savedAt: DateTime.now().subtract(const Duration(days: 2)),
+            available: false,
+          ),
+        ]),
+      ),
+    ];
+    await world.open(tester, '/saved');
     await settle(tester);
   }),
   A11yScreen(

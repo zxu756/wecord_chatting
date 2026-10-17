@@ -4,6 +4,8 @@
 
 export const DEFAULT_DAILY_LIMIT = 50;
 export const DEFAULT_MAX_INPUT_CHARS = 24_000;
+/// AI requests the guard may spend for one circle per UTC day.
+export const DEFAULT_GUARD_LIMIT_PER_CIRCLE = 500;
 const MIN_MAX_INPUT_CHARS = 2_000;
 const MAX_MAX_INPUT_CHARS = 200_000;
 
@@ -30,6 +32,9 @@ export interface AiConfig {
   maxInputChars: number;
   /// Extra request headers from the optional AI_EXTRA_HEADERS secret.
   extraHeaders: Record<string, string>;
+  /// AI requests the guard of one circle may use per UTC day (charged to
+  /// the circle, not to the member whose message is checked).
+  guardDailyLimit: number;
 }
 
 type Getter = (name: string) => string | undefined;
@@ -134,5 +139,11 @@ export function readAiConfig(get: Getter): AiConfig | null {
       MAX_MAX_INPUT_CHARS,
     ),
     extraHeaders: parseExtraHeaders(get("AI_EXTRA_HEADERS")),
+    guardDailyLimit: readInt(
+      get("AI_GUARD_DAILY_LIMIT_PER_CIRCLE"),
+      DEFAULT_GUARD_LIMIT_PER_CIRCLE,
+      1,
+      1_000_000,
+    ),
   };
 }

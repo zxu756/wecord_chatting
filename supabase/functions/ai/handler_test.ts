@@ -73,6 +73,10 @@ function setup(
     usedToday: () => Promise.resolve(used),
     loadVoiceMessage: () => Promise.resolve(null),
     downloadAudio: () => Promise.resolve(null),
+    guardClaim: () => Promise.resolve(null),
+    guardConsume: () => Promise.resolve({ allowed: true, used: 1 }),
+    guardRefund: () => Promise.resolve(),
+    guardFinish: () => Promise.resolve(null),
     ...overrides,
   };
   return { deps, calls };

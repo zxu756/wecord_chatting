@@ -119,3 +119,14 @@ Deno.test("anything else is refused", () => {
   assertEquals(parseAiRequest({ action: "delete_everything" }), null);
   assertEquals(parseAiRequest("status"), null);
 });
+
+Deno.test("a guard request names one message", () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  assertEquals(parseAiRequest({ action: "guard", message_id: id }), {
+    action: "guard",
+    messageId: id,
+  });
+  assertEquals(parseAiRequest({ action: "guard" }), null);
+  assertEquals(parseAiRequest({ action: "guard", message_id: null }), null);
+  assertEquals(parseAiRequest({ action: "guard", message_id: "nope" }), null);
+});

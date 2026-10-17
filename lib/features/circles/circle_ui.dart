@@ -572,6 +572,7 @@ class CircleMenuItem<T> {
     required this.label,
     this.destructive = false,
     this.tone = SettingsTone.neutral,
+    this.badge = 0,
   });
 
   final T value;
@@ -579,6 +580,9 @@ class CircleMenuItem<T> {
   final String label;
   final bool destructive;
   final SettingsTone tone;
+
+  /// A count shown at the end of the entry (items waiting); nothing at 0.
+  final int badge;
 }
 
 /// A menu of [items]: a sheet of grouped rows on phones; on wide screens a
@@ -626,6 +630,10 @@ Future<T?> showCircleActionMenu<T>(
                     ),
                   ),
                 ),
+                if (item.badge > 0) ...[
+                  const SizedBox(width: 8),
+                  CountBadge(count: item.badge, size: 18),
+                ],
               ],
             ),
           ),
@@ -663,6 +671,14 @@ Future<T?> showCircleActionMenu<T>(
                   title: item.label,
                   destructive: item.destructive,
                   showChevron: false,
+                  trailing: item.badge > 0
+                      ? CountBadge(
+                          count: item.badge,
+                          semanticLabel: tr('{count} waiting', {
+                            'count': item.badge,
+                          }),
+                        )
+                      : null,
                   onTap: () => Navigator.of(menuContext).pop(item.value),
                 ),
             ],

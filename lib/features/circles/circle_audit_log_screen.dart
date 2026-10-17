@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/discovery/circle_discovery_repository.dart';
@@ -511,6 +512,11 @@ IconData circleAuditIcon(String action) {
     'automod_block' => Icons.block,
     'automod_alert' => Icons.campaign_outlined,
     'automod_timeout' => Icons.timer_outlined,
+    'guard_update' => Icons.shield_outlined,
+    'guard_hold' => Icons.pause_circle_outline,
+    'guard_flag' => Icons.flag_outlined,
+    'guard_approve' => Icons.check_circle_outline,
+    'guard_remove' => Icons.delete_outline,
     'onboarding_update' => Icons.rule,
     'discovery_update' => Icons.explore_outlined,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
@@ -770,6 +776,29 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
               {'channel': inChannel},
             ),
     'automod_timeout' => (tr('AutoMod timed out {target}'), {}),
+    'guard_update' => (tr('{actor} updated the AI guard'), {}),
+    'guard_hold' =>
+      inChannel == null
+          ? (tr('AI guard held a message by {target}'), {})
+          : (
+              tr('AI guard held a message by {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'guard_flag' =>
+      inChannel == null
+          ? (tr('AI guard flagged a message by {target}'), {})
+          : (
+              tr('AI guard flagged a message by {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'guard_approve' => (
+      tr('{actor} approved a message by {target} from the review queue'),
+      {},
+    ),
+    'guard_remove' => (
+      tr('{actor} removed a message by {target} from the review queue'),
+      {},
+    ),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
     'discovery_update' => switch (_newValue(changes['is_public'])) {
       true => (tr('{actor} made the circle public'), {}),
@@ -831,6 +860,7 @@ List<CircleAuditDetail> circleAuditDetails(CircleAuditEntry entry) {
         (key == 'channel_name' &&
             (entry.action.startsWith('forum_') ||
                 entry.action.startsWith('automod_') ||
+                entry.action.startsWith('guard_') ||
                 entry.action == 'message_delete')) ||
         (key == 'target_name' &&
             entry.action == 'channel_permissions_update')) {
@@ -878,6 +908,13 @@ String _labelFor(String key) {
     'allow' => tr('Allowed'),
     'mentionable' => tr('Anyone can mention'),
     'rule_name' => tr('Rule'),
+    'verdict' => tr('AI found'),
+    'reason' => tr('Reason'),
+    'was' => tr('Before'),
+    'new_rule' => tr('Who counts as new'),
+    'joined_days' => tr('Joined less than (days)'),
+    'message_count' => tr('Fewer than (messages)'),
+    'action' => tr('When flagged'),
     'content' => tr('Message'),
     'alert_channel_name' => tr('Alert channel'),
     'kind' => tr('Type'),
@@ -947,6 +984,20 @@ String _formatValue(String key, Object? value) {
           key == 'timeout_seconds') &&
       value is num) {
     return _formatSeconds(value);
+  }
+  if (key == 'verdict' && value is String) {
+    return AiGuardVerdict.fromKey(value).label;
+  }
+  if (key == 'was' && value is String) {
+    return value == 'held' ? tr('Held') : tr('Flagged');
+  }
+  if (key == 'new_rule' && value is String) {
+    return AiGuardNewRule.fromKey(value) == AiGuardNewRule.joinedDays
+        ? tr('Recently joined')
+        : tr('Few messages');
+  }
+  if (key == 'action' && (value == 'flag' || value == 'hold')) {
+    return value == 'flag' ? tr('Flag only') : tr('Hold for review');
   }
   if (key == 'kind' && value is String) {
     return switch (value) {

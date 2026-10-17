@@ -29,6 +29,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type AiRequest =
   | { action: "status" }
+  /// The AI guard's check of one message, asked by the database with the
+  /// shared secret (never by a signed-in user).
+  | { action: "guard"; messageId: string }
   | {
     action: "summarize";
     conversationId: string;
@@ -92,6 +95,13 @@ export function parseAiRequest(body: unknown): AiRequest | null {
   switch (fields.action) {
     case "status":
       return { action: "status" };
+    case "guard": {
+      const messageId = optionalId(fields.message_id);
+      if (messageId === null || messageId === "invalid") {
+        return null;
+      }
+      return { action: "guard", messageId };
+    }
     case "summarize": {
       const conversationId = optionalId(fields.conversation_id);
       if (conversationId === null || conversationId === "invalid") {

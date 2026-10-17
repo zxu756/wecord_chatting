@@ -4,6 +4,7 @@
 // several areas reads the same everywhere.
 import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai.dart';
+import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_app.dart';
@@ -87,6 +88,7 @@ const zhAreas = <Map<String, String>>[
   zhCallsMore,
   zhPrivacyMore,
   zhTranscribe,
+  zhAiGuard,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

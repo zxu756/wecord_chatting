@@ -187,6 +187,10 @@ function setup(
       calls.downloads.push(`${bucket}/${path}`);
       return Promise.resolve(new Uint8Array(10));
     },
+    guardClaim: () => Promise.resolve(null),
+    guardConsume: () => Promise.resolve({ allowed: true, used: 1 }),
+    guardRefund: () => Promise.resolve(),
+    guardFinish: () => Promise.resolve(null),
     ...overrides,
   };
   return { deps, calls };

@@ -1897,6 +1897,9 @@ void main() {
 
     await tester.tap(find.byTooltip('Circle menu'));
     await tester.pumpAndSettle();
+    // The menu is longer than the screen: scroll to the row.
+    await tester.ensureVisible(find.text('Notification settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Notification settings'));
     await tester.pumpAndSettle();
 
@@ -2736,6 +2739,8 @@ void main() {
       await tester.tap(find.byTooltip('Circle menu'));
       await tester.pumpAndSettle();
       expect(find.text('Audit log'), findsOneWidget);
+      await tester.ensureVisible(find.text('Audit log'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Audit log'));
       await tester.pumpAndSettle();
       expect(find.byType(CircleAuditLogScreen), findsOneWidget);

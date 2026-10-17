@@ -462,10 +462,12 @@ entrypoint = "./functions/gif-search/index.ts"
 
 [functions.ai]
 enabled = true
-# Signed-in users only; the function reads chat as the caller and counts
-# their requests. Needs the AI_BASE_URL, AI_API_KEY and AI_MODEL secrets
-# (docs/ai-setup.md).
-verify_jwt = true
+# Signed-in users, except for the AI guard, which the database calls with the
+# shared secret DISPATCH_SECRET as the bearer token (no user session). So the
+# gateway does not check the JWT; the function does: it authenticates every
+# other request itself, reads chat as the caller and counts their requests.
+# Needs the AI_BASE_URL, AI_API_KEY and AI_MODEL secrets (docs/ai-setup.md).
+verify_jwt = false
 entrypoint = "./functions/ai/index.ts"
 
 [functions.bot-api]

@@ -11,11 +11,11 @@ export const USER_AGENT = "WeCord/1.0 (+https://wecord.jokebear.fyi)";
 
 export const REQUEST_TIMEOUT_MS = 45_000;
 
-export type ProviderFailure = "busy" | "failed" | "empty";
+export type ProviderFailure = "busy" | "failed" | "empty" | "timeout";
 
 /// The provider could not answer. `busy` is a rate or spend limit on the
 /// provider's side (try again later); `failed` anything else; `empty` an
-/// answer without text.
+/// answer without text; `timeout` that it did not answer in time.
 export class ProviderError extends Error {
   constructor(
     readonly kind: ProviderFailure,
@@ -61,6 +61,10 @@ export interface CompletionOptions {
   /// user's id outside a conversation) and which feature is calling.
   conversationKey: string;
   feature: string;
+  /// Sampling temperature; 0.2 when not given.
+  temperature?: number;
+  /// How long to wait for the provider; [REQUEST_TIMEOUT_MS] when not given.
+  timeoutMs?: number;
 }
 
 /// The URL and init of the provider request.
@@ -89,7 +93,7 @@ export async function buildProviderRequest(
       body: JSON.stringify({
         model: config.model,
         messages: options.messages,
-        temperature: 0.2,
+        temperature: options.temperature ?? 0.2,
         max_tokens: options.maxTokens,
         stream: false,
       }),
@@ -145,14 +149,17 @@ export async function complete(
 ): Promise<string> {
   const { url, init } = await buildProviderRequest(config, options);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
   let response: Response;
   try {
     response = await fetchFn(url, { ...init, signal: controller.signal });
   } catch (error) {
     clearTimeout(timer);
     console.error("ai provider request failed", String(error));
-    throw new ProviderError("failed");
+    throw new ProviderError(controller.signal.aborted ? "timeout" : "failed");
   }
   try {
     if (!response.ok) {

@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   DEFAULT_DAILY_LIMIT,
+  DEFAULT_GUARD_LIMIT_PER_CIRCLE,
   DEFAULT_MAX_INPUT_CHARS,
   normalizeBaseUrl,
   parseExtraHeaders,
@@ -22,6 +23,7 @@ Deno.test("the three required secrets configure AI, with defaults", () => {
     dailyLimit: DEFAULT_DAILY_LIMIT,
     maxInputChars: DEFAULT_MAX_INPUT_CHARS,
     extraHeaders: {},
+    guardDailyLimit: DEFAULT_GUARD_LIMIT_PER_CIRCLE,
   });
 });
 
@@ -100,4 +102,23 @@ Deno.test("extra headers come from a JSON object and cannot spoof identity", () 
   assertEquals(parseExtraHeaders("not json"), {});
   assertEquals(parseExtraHeaders("[1]"), {});
   assertEquals(parseExtraHeaders(undefined), {});
+});
+
+Deno.test("the guard's daily limit per circle is its own secret", () => {
+  assertEquals(
+    readAiConfig(get({ ...base, AI_GUARD_DAILY_LIMIT_PER_CIRCLE: "40" }))
+      ?.guardDailyLimit,
+    40,
+  );
+  assertEquals(
+    readAiConfig(get({ ...base, AI_GUARD_DAILY_LIMIT_PER_CIRCLE: "lots" }))
+      ?.guardDailyLimit,
+    DEFAULT_GUARD_LIMIT_PER_CIRCLE,
+  );
+  // The per-user limit does not touch it.
+  assertEquals(
+    readAiConfig(get({ ...base, AI_DAILY_LIMIT_PER_USER: "3" }))
+      ?.guardDailyLimit,
+    DEFAULT_GUARD_LIMIT_PER_CIRCLE,
+  );
 });

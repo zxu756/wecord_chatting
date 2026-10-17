@@ -14,11 +14,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/time_tokens/time_token.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
+import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
+import '../../test/features/chats/events/chat_events_test.dart'
+    show FakeChatEventsRepository, chatEvent;
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -53,6 +57,7 @@ const _variants = [
 
 void main() {
   setUpAll(loadScreenshotFonts);
+  late FakeChatEventsRepository eventsRepo;
 
   Future<void> shoot(WidgetTester tester, String name) async {
     await settle(tester);
@@ -92,8 +97,10 @@ void main() {
           usePhoneViewport(tester, variant.viewport);
           final world = PhoneWorld()
             ..themeMode = variant.dark ? ThemeMode.dark : ThemeMode.light;
+          eventsRepo = FakeChatEventsRepository([]);
           world.extraOverrides = [
             timeTokenFollowsClockProvider.overrideWithValue(false),
+            chatEventsRepositoryProvider.overrideWithValue(eventsRepo),
           ];
           await open(tester, world, variant);
           await shoot(tester, '$name-${variant.name}');
@@ -181,5 +188,121 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Insert time'));
     await settle(tester);
+  });
+
+  // ------------------------------------------------------------ events
+
+  void seedEvents() {
+    final soon = DateTime.now().add(const Duration(hours: 5));
+    final next = DateTime.now().add(const Duration(days: 6, hours: 3));
+    eventsRepo.events = [
+      chatEvent(
+        id: 'e-1',
+        title: 'Bouldering night',
+        startsAt: soon,
+        endsAt: soon.add(const Duration(hours: 2)),
+        pinned: true,
+        myStatus: ChatEventRsvp.going,
+        description: 'Bring chalk and a friend. Shoes can be rented.',
+        link: 'https://example.com/gym/map',
+        reminders: const [15, 60],
+      ),
+      chatEvent(
+        id: 'e-2',
+        title: 'Gear swap at the community hall',
+        startsAt: next,
+        going: 7,
+        maybe: 3,
+        declined: 1,
+        location: 'Community hall, 5th Street',
+      ),
+      chatEvent(
+        id: 'e-3',
+        title: 'Summer trip planning',
+        startsAt: DateTime.now().subtract(const Duration(days: 12)),
+        cancelled: true,
+      ),
+    ];
+    eventsRepo.reminders = [
+      ChatEventReminder(
+        id: 'r-1',
+        eventId: 'e-1',
+        conversationId: 'dm-1',
+        title: 'Bouldering night',
+        startsAt: DateTime.now().add(const Duration(minutes: 14)),
+        leadMinutes: 15,
+        createdAt: DateTime.now(),
+        isUnread: true,
+      ),
+    ];
+  }
+
+  List<ChatMessage> eventMessages() => [
+    phoneMessage(
+      'ev0',
+      bart,
+      'Who is in for climbing this week?',
+      minutesAgo: 40,
+    ),
+    phoneMessage(
+      'ev1',
+      me,
+      'Ada created an event: Bouldering night',
+      minutesAgo: 30,
+      type: MessageType.system,
+      attachment: const {'kind': 'event', 'event_id': 'e-1'},
+    ),
+    phoneMessage('ev2', bart, 'Count me in!', minutesAgo: 25),
+  ];
+
+  screen('events', 'events1-card', (tester, world, variant) async {
+    seedEvents();
+    world.chats.messages = eventMessages();
+    await openDirect(tester, world);
+  });
+
+  screen('events', 'events2-details', (tester, world, variant) async {
+    seedEvents();
+    world.chats.messages = eventMessages();
+    await openDirect(tester, world);
+    await tester.tap(find.byKey(const ValueKey('chat-event-card-e-1')));
+    await settle(tester);
+  });
+
+  screen('events', 'events3-list', (tester, world, variant) async {
+    seedEvents();
+    world.chats.messages = eventMessages();
+    await openDirect(tester, world);
+    if (find.byTooltip('Events').evaluate().isEmpty) {
+      // Phones keep the rest of the header actions under More.
+      await tester.tap(find.byTooltip('More'));
+      await settle(tester);
+      await tester.tap(find.text('Events'));
+    } else {
+      await tester.tap(find.byTooltip('Events'));
+    }
+    await settle(tester);
+  });
+
+  screen('events', 'events4-editor', (tester, world, variant) async {
+    seedEvents();
+    world.chats.messages = eventMessages();
+    await openDirect(tester, world);
+    await tester.tap(find.byKey(const ValueKey('composer-attach-button')));
+    await settle(tester);
+    await tester.tap(find.text('Events'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('chat-events-new')));
+    await settle(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-event-title-field')),
+      'Pizza night',
+    );
+    await settle(tester);
+  });
+
+  screen('events', 'events5-inbox', (tester, world, variant) async {
+    seedEvents();
+    await world.open(tester, '/notifications');
   });
 }

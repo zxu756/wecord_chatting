@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
+import 'package:wecord/features/chats/events/chat_event_reminder_card.dart';
+import 'package:wecord/features/chats/events/chat_events_providers.dart';
+import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -9,6 +14,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -32,7 +38,14 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
       0;
   final requests = ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
-  return unread + requests;
+  final events =
+      ref
+          .watch(chatEventRemindersProvider)
+          .value
+          ?.where((reminder) => reminder.isUnread)
+          .length ??
+      0;
+  return unread + requests + events;
 });
 
 /// Which notifications the inbox shows.
@@ -55,6 +68,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
   Future<void> _refresh() async {
     ref
       ..invalidate(incomingFriendRequestsProvider)
+      ..invalidate(chatEventRemindersProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
   }
@@ -78,6 +92,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
               const <CircleSummary>[])
         circle.id: circle,
     };
+    final reminders = _filter == InboxFilter.all
+        ? ref.watch(chatEventRemindersProvider).value ??
+              const <ChatEventReminder>[]
+        : const <ChatEventReminder>[];
     final items = inbox.value ?? const <InboxItem>[];
     final unreadMentions = items
         .where((item) => item.isUnread && item.reason != InboxReason.reply)
@@ -134,6 +152,28 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                   _FriendRequestCard(request: request),
                 ],
               ],
+            ),
+          for (final reminder in reminders)
+            ChatEventReminderCard(
+              reminder: reminder,
+              onPressed: () {
+                unawaited(
+                  ref
+                      .read(chatEventsRepositoryProvider)
+                      .markRemindersRead([reminder.id])
+                      .then((_) => ref.invalidate(chatEventRemindersProvider))
+                      .catchError((Object _) {}),
+                );
+                final conversation = conversations[reminder.conversationId];
+                if (conversation != null) {
+                  openConversation(context, conversation);
+                } else {
+                  openPage(
+                    context,
+                    '${ChatsScreen.path}/${reminder.conversationId}',
+                  );
+                }
+              },
             ),
           for (final item in visibleItems)
             _InboxCard(

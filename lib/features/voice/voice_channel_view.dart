@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
+import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
+import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
+import 'package:wecord/features/voice/reactions/floating_reactions.dart';
+import 'package:wecord/features/voice/reactions/reaction_tray.dart';
+import 'package:wecord/features/voice/screen_zoom/zoom_pan_viewer.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -187,6 +194,9 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
       );
     }
 
+    // Shown here, so the mini player stays away.
+    final shownBody = connected ? CallSurface(child: body) : body;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= voiceChatPanelBreakpoint;
@@ -270,6 +280,17 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                         badgeKey: chatBadgeKey,
                         onPressed: () => _toggleChat(wide),
                       ),
+                    if (connected)
+                      VoiceHeaderButton(
+                        key: const ValueKey('voice-call-link-button'),
+                        icon: Icons.link_rounded,
+                        tooltip: tr('Copy call link'),
+                        onPressed: () => showCallLinkSheet(
+                          context,
+                          target: CallLinkTarget.channel(channelId),
+                          name: widget.channelName,
+                        ),
+                      ),
                     for (final action in widget.actions)
                       VoiceHeaderButton(
                         icon: action.isSelected == true
@@ -282,7 +303,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                   ],
                 ),
                 controls: controls,
-                child: body,
+                child: shownBody,
               );
             },
           ),
@@ -631,7 +652,11 @@ typedef VoiceCallPerson = ({
 /// Everyone in the call: shared screens first and across the width, then
 /// a rounded tile per person (their camera, or their avatar), ringed while
 /// they speak. Right-click or long-press opens a person's menu.
-class VoiceCallGrid extends StatelessWidget {
+///
+/// Shared screens zoom and pan ([ZoomPanViewer]). Tapping a tile (or its
+/// "Focus this tile" button) puts it in the spotlight: large, with everyone
+/// else in a strip below; tapping it again shows everyone.
+class VoiceCallGrid extends StatefulWidget {
   const VoiceCallGrid({
     required this.session,
     required this.people,
@@ -653,18 +678,140 @@ class VoiceCallGrid extends StatelessWidget {
   final bool shrinkWrap;
 
   @override
+  State<VoiceCallGrid> createState() => _VoiceCallGridState();
+}
+
+class _VoiceCallGridState extends State<VoiceCallGrid> {
+  /// The tile in the spotlight: `screen:<user id>` or `user:<user id>`.
+  String? _spotlight;
+
+  /// Shared screens zoomed in, by `screen:<user id>`. While one is, the
+  /// page doesn't scroll, so a finger drags the picture instead.
+  final _zoomed = <String>{};
+
+  static const _spacing = 10.0;
+  static const _stripHeight = 92.0;
+  static const _stripTileWidth = 148.0;
+
+  void _toggleSpotlight(String key) {
+    setState(() => _spotlight = _spotlight == key ? null : key);
+  }
+
+  String _nameOf(VoiceCallParticipant participant) =>
+      widget.people[participant.userId]?.name ?? participant.name;
+
+  Widget _screenTile(
+    BuildContext context,
+    VoiceCallParticipant participant, {
+    bool interactive = true,
+  }) {
+    final key = 'screen:${participant.userId}';
+    return _Tile(
+      key: ValueKey('voice-screen-tile-${participant.userId}'),
+      label: tr("{name}'s screen", {'name': _nameOf(participant)}),
+      labelIcon: Icons.screen_share_rounded,
+      speaking: false,
+      dark: true,
+      child: interactive
+          ? ZoomPanViewer(
+              key: ValueKey('voice-screen-zoom-${participant.userId}'),
+              focused: _spotlight == key,
+              onFocus: () => _toggleSpotlight(key),
+              onZoomedChanged: (zoomed) {
+                if (!mounted) {
+                  return;
+                }
+                setState(() {
+                  if (zoomed) {
+                    _zoomed.add(key);
+                  } else {
+                    _zoomed.remove(key);
+                  }
+                });
+              },
+              child: participant.screenView!(context),
+            )
+          : participant.screenView!(context),
+    );
+  }
+
+  Widget _personTile(BuildContext context, VoiceCallParticipant participant) {
+    final people = widget.people;
+    final session = widget.session;
+    final key = 'user:${participant.userId}';
+    return VoiceParticipantMenuRegion(
+      person: VoiceMenuPerson(
+        userId: participant.userId,
+        name: _nameOf(participant),
+        isLocal: participant.isLocal,
+        channelId: session.channelId,
+        serverMute: people[participant.userId]?.serverMute ?? false,
+        serverDeaf: people[participant.userId]?.serverDeaf ?? false,
+      ),
+      moderation: widget.moderation,
+      child: _ParticipantTile(
+        participant: participant,
+        name: _nameOf(participant),
+        avatarUrl: people[participant.userId]?.avatarUrl,
+        deafened:
+            (participant.isLocal && session.selfDeaf) ||
+            (people[participant.userId]?.selfDeaf ?? false),
+        serverDeafened:
+            (participant.isLocal && session.serverDeaf) ||
+            (people[participant.userId]?.serverDeaf ?? false),
+        serverMuted:
+            (participant.isLocal && session.serverMute) ||
+            (people[participant.userId]?.serverMute ?? false),
+        focused: _spotlight == key,
+        onFocus: () => _toggleSpotlight(key),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final participants = session.participants;
+    final participants = widget.session.participants;
+    final shrinkWrap = widget.shrinkWrap;
     final screens = [
       for (final participant in participants)
         if (participant.screenView != null) participant,
     ];
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final locked = screens.any(
+      (participant) => _zoomed.contains('screen:${participant.userId}'),
+    );
+
+    VoiceCallParticipant? spotlightScreen;
+    VoiceCallParticipant? spotlightPerson;
+    final spotlight = _spotlight;
+    if (spotlight != null) {
+      final id = spotlight.substring(spotlight.indexOf(':') + 1);
+      final matches = spotlight.startsWith('screen:') ? screens : participants;
+      final found = matches.where((p) => p.userId == id).firstOrNull;
+      if (spotlight.startsWith('screen:')) {
+        spotlightScreen = found;
+      } else {
+        spotlightPerson = found;
+      }
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 10.0;
         final padding = constraints.maxWidth < 600 ? 14.0 : 20.0;
+
+        if (spotlightScreen != null || spotlightPerson != null) {
+          return _spotlightView(
+            context,
+            constraints,
+            padding: padding,
+            bottomInset: bottomInset,
+            screens: screens,
+            screen: spotlightScreen,
+            person: spotlightPerson,
+            locked: locked,
+          );
+        }
+
         final width = constraints.maxWidth - padding * 2;
         final aspect = width < 420 && !shrinkWrap ? 1.0 : 16 / 10;
         final count = math.max(participants.length, 1);
@@ -674,7 +821,7 @@ class VoiceCallGrid extends StatelessWidget {
             ? 3
             : 4;
         var tileWidth =
-            (width - spacing * (math.min(maxColumns, count) - 1)) /
+            (width - _spacing * (math.min(maxColumns, count) - 1)) /
             math.min(maxColumns, count);
         final height = constraints.maxHeight - bottomInset - 8 - padding;
         if (!shrinkWrap && constraints.hasBoundedHeight && screens.isEmpty) {
@@ -684,8 +831,8 @@ class VoiceCallGrid extends StatelessWidget {
           var best = 0.0;
           for (var columns = 1; columns <= count; columns++) {
             final rows = (count / columns).ceil();
-            final byWidth = (width - spacing * (columns - 1)) / columns;
-            final byHeight = (height - spacing * (rows - 1)) / rows * aspect;
+            final byWidth = (width - _spacing * (columns - 1)) / columns;
+            final byHeight = (height - _spacing * (rows - 1)) / rows * aspect;
             best = math.max(best, math.min(byWidth, byHeight));
           }
           if (best >= 140) {
@@ -701,60 +848,20 @@ class VoiceCallGrid extends StatelessWidget {
             for (final participant in screens) ...[
               AspectRatio(
                 aspectRatio: 16 / 9,
-                child: _Tile(
-                  key: ValueKey('voice-screen-tile-${participant.userId}'),
-                  label: tr("{name}'s screen", {
-                    'name':
-                        people[participant.userId]?.name ?? participant.name,
-                  }),
-                  labelIcon: Icons.screen_share_rounded,
-                  speaking: false,
-                  dark: true,
-                  child: participant.screenView!(context),
-                ),
+                child: _screenTile(context, participant),
               ),
-              const SizedBox(height: spacing),
+              const SizedBox(height: _spacing),
             ],
             Wrap(
               alignment: WrapAlignment.center,
-              spacing: spacing,
-              runSpacing: spacing,
+              spacing: _spacing,
+              runSpacing: _spacing,
               children: [
                 for (final participant in participants)
                   SizedBox(
                     width: tileWidth,
                     height: tileWidth / aspect,
-                    child: VoiceParticipantMenuRegion(
-                      person: VoiceMenuPerson(
-                        userId: participant.userId,
-                        name:
-                            people[participant.userId]?.name ??
-                            participant.name,
-                        isLocal: participant.isLocal,
-                        channelId: session.channelId,
-                        serverMute:
-                            people[participant.userId]?.serverMute ?? false,
-                        serverDeaf:
-                            people[participant.userId]?.serverDeaf ?? false,
-                      ),
-                      moderation: moderation,
-                      child: _ParticipantTile(
-                        participant: participant,
-                        name:
-                            people[participant.userId]?.name ??
-                            participant.name,
-                        avatarUrl: people[participant.userId]?.avatarUrl,
-                        deafened:
-                            (participant.isLocal && session.selfDeaf) ||
-                            (people[participant.userId]?.selfDeaf ?? false),
-                        serverDeafened:
-                            (participant.isLocal && session.serverDeaf) ||
-                            (people[participant.userId]?.serverDeaf ?? false),
-                        serverMuted:
-                            (participant.isLocal && session.serverMute) ||
-                            (people[participant.userId]?.serverMute ?? false),
-                      ),
-                    ),
+                    child: _personTile(context, participant),
                   ),
               ],
             ),
@@ -766,16 +873,19 @@ class VoiceCallGrid extends StatelessWidget {
           padding,
           padding + bottomInset,
         );
+        final physics = locked ? const NeverScrollableScrollPhysics() : null;
         if (shrinkWrap || !constraints.hasBoundedHeight) {
           return SingleChildScrollView(
             key: const ValueKey('voice-call-grid'),
             padding: scrollPadding,
+            physics: physics,
             child: content,
           );
         }
         return SingleChildScrollView(
           key: const ValueKey('voice-call-grid'),
           padding: scrollPadding,
+          physics: physics,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: math.max(
@@ -789,6 +899,117 @@ class VoiceCallGrid extends StatelessWidget {
       },
     );
   }
+
+  /// One tile large (a shared screen or a person) with everyone else in a
+  /// strip below it.
+  Widget _spotlightView(
+    BuildContext context,
+    BoxConstraints constraints, {
+    required double padding,
+    required double bottomInset,
+    required List<VoiceCallParticipant> screens,
+    required bool locked,
+    VoiceCallParticipant? screen,
+    VoiceCallParticipant? person,
+  }) {
+    final participants = widget.session.participants;
+    final main = screen != null
+        ? _screenTile(context, screen)
+        : _personTile(context, person!);
+    final others = <Widget>[
+      for (final other in screens)
+        if (other != screen)
+          _StripTile(
+            key: ValueKey('voice-strip-screen-${other.userId}'),
+            label: tr("{name}'s screen", {'name': _nameOf(other)}),
+            onPressed: () => _toggleSpotlight('screen:${other.userId}'),
+            child: _screenTile(context, other, interactive: false),
+          ),
+      for (final other in participants)
+        if (other != person)
+          KeyedSubtree(
+            key: ValueKey('voice-strip-user-${other.userId}'),
+            child: _personTile(context, other),
+          ),
+    ];
+    final bounded = constraints.hasBoundedHeight && !widget.shrinkWrap;
+    final column = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        if (bounded)
+          Expanded(child: main)
+        else
+          AspectRatio(
+            aspectRatio: screen != null ? 16 / 9 : 16 / 10,
+            child: main,
+          ),
+        if (others.isNotEmpty) ...[
+          const SizedBox(height: _spacing),
+          SizedBox(
+            height: _stripHeight,
+            child: ListView.separated(
+              key: const ValueKey('voice-spotlight-strip'),
+              scrollDirection: Axis.horizontal,
+              itemCount: others.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemBuilder: (context, index) =>
+                  SizedBox(width: _stripTileWidth, child: others[index]),
+            ),
+          ),
+        ],
+      ],
+    );
+    final scrollPadding = EdgeInsets.fromLTRB(
+      padding,
+      widget.shrinkWrap ? padding : 8,
+      padding,
+      padding + bottomInset,
+    );
+    if (bounded) {
+      return Padding(
+        key: const ValueKey('voice-call-grid'),
+        padding: scrollPadding,
+        child: column,
+      );
+    }
+    return SingleChildScrollView(
+      key: const ValueKey('voice-call-grid'),
+      padding: scrollPadding,
+      physics: locked ? const NeverScrollableScrollPhysics() : null,
+      child: column,
+    );
+  }
+}
+
+/// A small tile in the spotlight's strip that puts its content in the
+/// spotlight when tapped.
+class _StripTile extends StatelessWidget {
+  const _StripTile({
+    required this.label,
+    required this.onPressed,
+    required this.child,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return WeCordPressable(
+      semanticLabel: label,
+      hint: tr('Focus this tile'),
+      shape: RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.xl + 2),
+      ),
+      pressedScale: 1,
+      minTapSize: Size.zero,
+      onPressed: onPressed,
+      builder: (context, states) => child,
+    );
+  }
 }
 
 class _ParticipantTile extends StatelessWidget {
@@ -799,6 +1020,8 @@ class _ParticipantTile extends StatelessWidget {
     required this.deafened,
     this.serverMuted = false,
     this.serverDeafened = false,
+    this.focused = false,
+    this.onFocus,
   });
 
   final VoiceCallParticipant participant;
@@ -808,12 +1031,18 @@ class _ParticipantTile extends StatelessWidget {
   final bool serverMuted;
   final bool serverDeafened;
 
+  /// In the spotlight.
+  final bool focused;
+
+  /// Puts the tile in the spotlight, or takes it out.
+  final VoidCallback? onFocus;
+
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final camera = participant.cameraView;
     final silenced = serverDeafened || serverMuted;
-    return _Tile(
+    final tile = _Tile(
       key: ValueKey('voice-tile-${participant.userId}'),
       label: participant.isLocal ? tr('{name} (you)', {'name': name}) : name,
       speaking: participant.isSpeaking,
@@ -827,6 +1056,11 @@ class _ParticipantTile extends StatelessWidget {
           : serverMuted || !participant.microphoneEnabled
           ? Icons.mic_off_rounded
           : null,
+      overlay: FloatingReactions(
+        userId: participant.userId,
+        name: name,
+        child: const SizedBox.shrink(),
+      ),
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
@@ -845,6 +1079,21 @@ class _ParticipantTile extends StatelessWidget {
               ),
             ),
     );
+    if (onFocus == null) {
+      return tile;
+    }
+    return WeCordPressable(
+      key: ValueKey('voice-tile-focus-${participant.userId}'),
+      hint: focused ? tr('Show everyone') : tr('Focus this tile'),
+      shape: RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.xl + 2),
+      ),
+      pressedScale: 1,
+      minTapSize: Size.zero,
+      selected: focused,
+      onPressed: onFocus,
+      builder: (context, states) => tile,
+    );
   }
 }
 
@@ -857,6 +1106,7 @@ class _Tile extends StatelessWidget {
     this.labelIcon,
     this.labelIconColor,
     this.labelIconKey,
+    this.overlay,
     super.key,
   });
 
@@ -869,6 +1119,9 @@ class _Tile extends StatelessWidget {
   final IconData? labelIcon;
   final Color? labelIconColor;
   final Key? labelIconKey;
+
+  /// Drawn over everything else in the tile (floating reactions).
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -944,6 +1197,7 @@ class _Tile extends StatelessWidget {
               ),
             ),
           ),
+          ?overlay,
         ],
       ),
     );
@@ -976,6 +1230,21 @@ class VoiceCallControls extends ConsumerStatefulWidget {
 
 class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
   var _busy = false;
+  var _reactionsOpen = false;
+
+  /// Sends [emoji]; the tray closes once it went out.
+  Future<bool> _react(String emoji) async {
+    final sent = await ref
+        .read(voiceSessionProvider.notifier)
+        .sendReaction(emoji);
+    if (sent) {
+      WeCordHaptics.light();
+      if (mounted) {
+        setState(() => _reactionsOpen = false);
+      }
+    }
+    return sent;
+  }
 
   Future<void> _run(Future<void> Function() action, String failure) async {
     if (_busy) {
@@ -985,8 +1254,14 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       await action();
-    } catch (_) {
-      messenger?.showSnackBar(SnackBar(content: Text(failure)));
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            error is BackgroundBlurUnavailable ? error.toString() : failure,
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -1026,8 +1301,16 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     return KeyedSubtree(
       key: const ValueKey('voice-call-controls'),
       child: VoiceControlBar(
-        above: holdToTalk
-            ? VoiceHoldToTalkButton(session: session, enabled: !_busy)
+        above: holdToTalk || _reactionsOpen
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_reactionsOpen) ReactionTray(onPick: _react),
+                  if (_reactionsOpen && holdToTalk) const SizedBox(height: 10),
+                  if (holdToTalk)
+                    VoiceHoldToTalkButton(session: session, enabled: !_busy),
+                ],
+              )
             : null,
         controls: [
           VoiceControl(
@@ -1072,6 +1355,26 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
               ),
             ),
           ),
+          if (session.video &&
+              session.backgroundSupport != VideoBackgroundSupport.none)
+            VoiceControl(
+              key: const ValueKey('voice-control-blur'),
+              tooltip: switch (session.backgroundSupport) {
+                VideoBackgroundSupport.system => tr('Video effects'),
+                _ =>
+                  session.backgroundBlur
+                      ? tr('Turn off background blur')
+                      : tr('Blur background'),
+              },
+              icon: Icons.blur_on_rounded,
+              on: session.backgroundBlur,
+              onPressed: guard(
+                () => _run(
+                  controller.toggleBackgroundBlur,
+                  tr('Could not change the background.'),
+                ),
+              ),
+            ),
           if (canShareScreen)
             VoiceControl(
               key: const ValueKey('voice-control-screen'),
@@ -1099,6 +1402,13 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 ),
               ),
             ),
+          VoiceControl(
+            key: const ValueKey('voice-control-reactions'),
+            tooltip: tr('Reactions'),
+            icon: Icons.add_reaction_outlined,
+            on: _reactionsOpen,
+            onPressed: () => setState(() => _reactionsOpen = !_reactionsOpen),
+          ),
           ?widget.chat,
         ],
         leaveLabel: tr('Leave'),

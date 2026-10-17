@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,8 @@ import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/voice/call_links/call_link_screen.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/workspace/workspace_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -47,7 +50,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
 
   final router = GoRouter(
-    initialLocation: HomeScreen.path,
+    // A shared call link opened in the browser (https://site/call/<code>)
+    // has no route after a '#', so its page is found from the address.
+    initialLocation:
+        (kIsWeb ? callLinkLocationFor(Uri.base) : null) ?? HomeScreen.path,
     refreshListenable: authRouter,
     redirect: (context, state) {
       final authState = authRouter.authState;
@@ -295,6 +301,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: SettingsScreen.path,
             builder: (context, state) => const SettingsScreen(),
           ),
+          GoRoute(
+            path: '${CallLinkScreen.path}/:code',
+            builder: (context, state) {
+              return CallLinkScreen(
+                key: ValueKey('call-link-${state.pathParameters['code']}'),
+                code: state.pathParameters['code']!,
+              );
+            },
+          ),
         ],
       ),
     ],
@@ -367,9 +382,9 @@ class AuthRouterNotifier extends ChangeNotifier {
   }
 }
 
-/// Invite links opened while signed out (or before auth resolves) ride along
-/// as `?from=` on /loading, /auth and /verify-sign-in, and are reopened
-/// after sign-in.
+/// Invite and call links opened while signed out (or before auth resolves)
+/// ride along as `?from=` on /loading, /auth and /verify-sign-in, and are
+/// reopened after sign-in.
 String? _pendingLocation(Uri uri) {
   final candidate =
       uri.path == AuthScreen.path ||
@@ -378,7 +393,8 @@ String? _pendingLocation(Uri uri) {
       ? uri.queryParameters['from']
       : uri.path;
   if (candidate != null &&
-      candidate.startsWith('${CircleInviteScreen.path}/')) {
+      (candidate.startsWith('${CircleInviteScreen.path}/') ||
+          candidate.startsWith('${CallLinkScreen.path}/'))) {
     return candidate;
   }
   return null;

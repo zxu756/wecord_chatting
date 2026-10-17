@@ -9,6 +9,7 @@ import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_app.dart';
 import 'package:wecord/shared/l10n/zh/zh_app_shell.dart';
 import 'package:wecord/shared/l10n/zh/zh_backend_fixes.dart';
+import 'package:wecord/shared/l10n/zh/zh_calls_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_chat_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_chat_thread.dart';
 import 'package:wecord/shared/l10n/zh/zh_chats.dart';
@@ -79,6 +80,7 @@ const zhAreas = <Map<String, String>>[
   zhAi,
   zhLater,
   zhNotesLists,
+  zhCallsMore,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

@@ -63,6 +63,8 @@ class MainFlutterWindow: NSWindow {
     QuickLookPlugin.register(
       with: flutterViewController.registrar(forPlugin: "QuickLookPlugin"))
     QuickLookPlugin.shared?.attach(window: self)
+    VideoEffectsPlugin.register(
+      with: flutterViewController.registrar(forPlugin: "VideoEffectsPlugin"))
 
     super.awakeFromNib()
   }

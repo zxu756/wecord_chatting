@@ -575,6 +575,14 @@ class VoiceControlBar extends StatelessWidget {
                     ],
                   ],
                 )
+              : count * WeCordSizes.touchTarget > inner
+              // Too many controls for one row of touch targets (a narrow
+              // browser window): a second row, never overlapping buttons.
+              ? Wrap(
+                  alignment: WrapAlignment.center,
+                  runSpacing: 4,
+                  children: buttons,
+                )
               : Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: buttons,

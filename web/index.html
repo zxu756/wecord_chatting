@@ -37,6 +37,18 @@
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
   <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png"/>
 
+  <!-- What LiveKit's background blur imports when it is first used (see
+       lib/features/voice/background/video_background_web.dart): a logger
+       stand-in for livekit-client, and MediaPipe's pinned vision bundle. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "livekit-client": "./blur/livekit_client_shim.js",
+      "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
+    }
+  }
+  </script>
+
   <title>WeCord - chat with friends, groups and circles</title>
   <link rel="manifest" href="manifest.json">
   <style>

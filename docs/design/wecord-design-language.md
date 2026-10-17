@@ -579,3 +579,31 @@ Your own line is tinted `accentSoft`. Tapping the card opens the whole list
 (`ChainSheet`: description, example, avatars, remove buttons for the creator and
 moderators, Copy / Share list, Close / Reopen). The card follows the chain over
 Realtime without any new message per entry; nothing posts "X joined".
+
+## Multi-select, chat history and contact cards
+
+`lib/features/chats/selection/`, `lib/features/chats/merged_forward/`,
+`lib/features/contact_cards/`; backend migrations `202610180070` and `071`.
+
+- **Select.** *Select* in a message's menu (long press, right-click, the
+  hover More) turns the chat into selection mode: the header becomes
+  *Cancel* + "N selected" (glass on phones, the flat 58 bar on desktop), every
+  message gets a round check box and a tap ticks it (an album is one tick;
+  Shift-click ticks a range; Esc leaves), and the composer is replaced by a bar
+  with *Forward*, *Merge & forward*, *Save*, *Copy* and *Delete*. Up to 100
+  messages. Delete is on only when every message is the person's own or they
+  moderate the chat; the server decides in the end. Each row reads to a screen
+  reader as one check box ("Select message: Ada, 9:20: hello").
+- **Chat history.** *Merge & forward* sends the selection as ONE message: a
+  white card with "Chat history: {chat}", the first four lines and the count.
+  It is a text message whose attachment is `{kind: 'chat_history', …}`; the
+  messages are a snapshot in `message_bundles` (text, sender name and avatar,
+  time, attachment metadata), read when the card opens as a read-only page.
+  Files are re-referenced (`message_bundle_files`) with the same access as the
+  single forward. View-once, deleted, expired, in-review messages, polls,
+  stickers and system lines are refused, and so are circle channels as targets.
+  Nesting is kept one level deep.
+- **Contact cards.** The composer's + menu has *Contact card*: a friend or a
+  circle the person can invite to. A person's card opens their profile
+  sheet, a circle's card opens the invite page (`/invite/<code>`, 7-day invite).
+  Cards have no bubble: they are `panel` cards with a `line` border.

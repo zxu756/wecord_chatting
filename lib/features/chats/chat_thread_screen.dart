@@ -72,6 +72,9 @@ import 'package:wecord/features/chats/events/chat_event_widgets.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/chats/view_once.dart';
+import 'package:wecord/features/chats/merged_forward/merged_forward.dart';
+import 'package:wecord/features/chats/selection/chat_selection.dart';
+import 'package:wecord/features/contact_cards/contact_cards.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
@@ -516,6 +519,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// The list items built last, by message, with what they were built
   /// from (see the list's item builder).
   final _itemCache = <String, (Object, Widget)>{};
+
+  /// The list's entries in display order, for Shift-click ranges in
+  /// selection mode.
+  var _displayEntries = const <ChatMessage>[];
 
   /// The message the list is built around (see [MessageListView]); null
   /// for the default (the newest in chats, the first in forum posts).
@@ -1457,7 +1464,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             : searchResultCount == 1
             ? tr('1 result')
             : tr('{count} results', {'count': searchResultCount});
-        final header = ChatThreadHeader(
+        final selecting = ref.watch(
+          chatSelectionProvider(
+            widget.conversationId,
+          ).select((state) => state.active),
+        );
+        final threadHeader = ChatThreadHeader(
           desktop: desktop,
           compact: compact,
           onBack: widget.onBack,
@@ -1493,6 +1505,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 )
               : null,
         );
+        final header = selecting
+            ? ChatSelectionHeader(
+                conversationId: widget.conversationId,
+                desktop: desktop,
+              )
+            : threadHeader;
         final catchUpBanner = AiCatchUpBanner(
           key: ValueKey('ai-catch-up-${widget.conversationId}'),
           conversationId: widget.conversationId,
@@ -1588,6 +1606,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             _afterThreadData(data);
             _schedulePendingJump();
             final display = layout.display;
+            _displayEntries = display;
             if (display.isEmpty) {
               return Padding(
                 padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
@@ -1782,7 +1801,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             ),
                       child: bubble,
                     );
-              final highlighted = AnimatedContainer(
+              final highlightedRow = AnimatedContainer(
                 duration: WeCordMotion.durationOf(
                   context,
                   const Duration(milliseconds: 300),
@@ -1796,6 +1815,18 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   ),
                 ),
                 child: framed,
+              );
+              final highlighted = MessageSelectionRow(
+                conversationId: widget.conversationId,
+                message: message,
+                label: () => messageSpokenSummary(
+                  message,
+                  senderName: message.isSentBy(currentUserId)
+                      ? tr('You')
+                      : _senderFor(message, membersById).name,
+                ),
+                entries: () => _displayEntries,
+                child: highlightedRow,
               );
               final showDay =
                   dayStartIds.contains(message.id) &&
@@ -1960,7 +1991,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           },
         );
 
-        final composerArea = Column(
+        final composerColumn = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -2063,6 +2094,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     onCreateChain: conversationType == ConversationType.direct
                         ? null
                         : _openChainComposer,
+                    onContactCard: _openContactCardPicker,
                     onChangeWallpaper: openWallpaper,
                     onInsertTime: _insertTime,
                     onShowEvents:
@@ -2092,6 +2124,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
           ],
         );
+        final composerArea = selecting
+            ? ChatSelectionBar(
+                environment: SelectionEnvironment(
+                  conversationId: widget.conversationId,
+                  conversationTitle: title,
+                  currentUserId: currentUserId,
+                  canModerate: canDeleteAsModerator,
+                  senderName: (message) => message.isSentBy(currentUserId)
+                      ? tr('You')
+                      : _senderFor(message, {
+                          for (final member
+                              in groupDetail?.members ?? const <GroupMember>[])
+                            member.profile.id: member,
+                        }).name,
+                  onChanged: _refreshThread,
+                ),
+                desktop: desktop,
+                bottomGap: composerBottomGap,
+              )
+            : composerColumn;
         final floatingComposer = MeasureSize(
           onChange: (size) {
             if (mounted && size.height != _bottomInset) {
@@ -2206,7 +2258,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     ),
                   ),
           );
-          return withWallpaper(desktopScaffold);
+          return withWallpaper(
+            ChatSelectionKeyboard(
+              conversationId: widget.conversationId,
+              child: desktopScaffold,
+            ),
+          );
         }
         final phoneScaffold = dropZone(
           Scaffold(
@@ -2254,7 +2311,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
           ),
         );
-        return withWallpaper(phoneScaffold);
+        return withWallpaper(
+          ChatSelectionKeyboard(
+            conversationId: widget.conversationId,
+            child: phoneScaffold,
+          ),
+        );
       },
     );
   }
@@ -3404,6 +3466,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       conversationId: widget.conversationId,
     );
     if (posted == true && mounted) {
+      _refreshThread();
+    }
+  }
+
+  Future<void> _openContactCardPicker() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    final sent = await showContactCardPicker(
+      context,
+      conversationId: widget.conversationId,
+    );
+    if (sent == true && mounted) {
       _refreshThread();
     }
   }
@@ -5328,6 +5403,23 @@ class _MessageBubble extends StatelessWidget {
   /// What a screen reader can do with the message, besides reading it.
   List<MessageSemanticAction> _semanticActions(BuildContext context) {
     return [
+      // A card is read as part of the message, so opening it is an action.
+      if (message.chatHistoryCard case final history?)
+        MessageSemanticAction(
+          tr('Open chat history'),
+          () => unawaited(
+            openChatHistory(
+              context,
+              messageId: message.id,
+              title: history.title,
+            ),
+          ),
+        ),
+      if (message.contactCard case final contact?)
+        MessageSemanticAction(
+          contact.isUser ? tr('Open profile') : tr('Open circle invite'),
+          () => unawaited(openContactCard(context, contact)),
+        ),
       for (final action in _actions(context))
         MessageSemanticAction(action.label, action.onSelected),
       MessageSemanticAction(
@@ -5451,14 +5543,24 @@ class _MessageBubble extends StatelessWidget {
     final outgoing = isCurrentUser;
     final textColor = outgoing ? c.onInk : c.ink;
     final media = _mediaOnly;
+    // A chat history or contact card is its own card: no bubble around it.
+    final card =
+        !_isRecalled &&
+        message.replyPreview == null &&
+        message.forwardPreview == null &&
+        (message.chatHistoryCard != null || message.contactCard != null);
     // Over a wallpaper the bubbles stay solid and apart from it.
     final onWallpaper = ChatWallpaperScope.activeOf(context);
     return Container(
-      padding: media
+      padding: card
+          ? EdgeInsets.zero
+          : media
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: outgoing
+        color: card
+            ? null
+            : outgoing
             ? c.ink
             : onWallpaper
             ? WallpaperSurfaces.incomingBubble(tokens)
@@ -5470,7 +5572,9 @@ class _MessageBubble extends StatelessWidget {
                 joinsAbove: isFollowUp,
                 joinsBelow: hasFollowUp,
               ),
-        boxShadow: lifted
+        boxShadow: card
+            ? null
+            : lifted
             ? tokens.shadows.menu
             : onWallpaper
             ? WallpaperSurfaces.bubbleShadow(tokens)
@@ -6141,6 +6245,8 @@ class _MessageBubble extends StatelessWidget {
           label: isSaved ? tr('Remove from Saved') : tr('Save for later'),
           onSelected: () => unawaited(toggle(message)),
         ),
+      if (!_isPending && !_isRecalled && message.type != MessageType.system)
+        selectMessageAction(context, message),
       if (imageAttachment != null)
         MessageAction(
           icon: Icons.visibility_outlined,
@@ -6501,6 +6607,20 @@ class _MessageContent extends StatelessWidget {
         Padding(
           padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
           child: ChainCardView(card: chainCard),
+        ),
+      );
+    } else if (message.chatHistoryCard case final historyCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: ChatHistoryCardView(card: historyCard, messageId: message.id),
+        ),
+      );
+    } else if (message.contactCard case final contactCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: ContactCardView(card: contactCard),
         ),
       );
     } else if (message.workspaceCard case final workspaceCard?) {
@@ -6913,6 +7033,7 @@ class _Composer extends StatelessWidget {
     this.voiceButton,
     this.voicePanel,
     this.onCreateChain,
+    this.onContactCard,
     required this.onInsertTime,
     required this.onChangeWallpaper,
     this.onShowEvents,
@@ -6999,6 +7120,9 @@ class _Composer extends StatelessWidget {
 
   /// Starts a group chain (接龙); null in direct chats.
   final Future<void> Function()? onCreateChain;
+
+  /// Sends a contact card (a friend or a circle); null leaves it out.
+  final Future<void> Function()? onContactCard;
   final Future<void> Function() onInsertTime;
 
   /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
@@ -7081,6 +7205,13 @@ class _Composer extends StatelessWidget {
                       icon: Icons.format_list_numbered_rounded,
                       label: tr('Chain'),
                       onSelected: () => unawaited(onCreateChain!()),
+                    ),
+                  if (onContactCard != null)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-contact-card-entry'),
+                      icon: Icons.contact_page_outlined,
+                      label: tr('Contact card'),
+                      onSelected: () => unawaited(onContactCard!()),
                     ),
                   GlassMenuEntry(
                     key: const ValueKey('composer-schedule-entry'),

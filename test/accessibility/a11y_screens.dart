@@ -38,6 +38,7 @@ import '../features/discovery/discovery_fakes.dart';
 import '../features/file_preview/file_preview_fakes.dart';
 import '../features/later/later_fakes.dart';
 import 'voice_chain_a11y_screens.dart';
+import 'multi_select_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -752,4 +753,5 @@ final allA11yScreens = <A11yScreen>[
   ...desktopLargeTextScreens,
   ...workspaceA11yScreens,
   ...voiceChainA11yScreens,
+  ...multiSelectA11yScreens,
 ];

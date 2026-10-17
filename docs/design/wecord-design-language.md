@@ -545,3 +545,37 @@ list (never per message), photos are decoded no bigger than the screen needs
 on the device (settings in shared preferences, photos as files or in
 IndexedDB), so a chat paints with it instantly; the server's copy replaces it
 when it arrives, and Realtime brings changes from other devices.
+
+## Voice input and group chains
+
+**Voice input** (`lib/features/voice_input/`) is speak-to-type, not a voice
+message. A ghost waveform button (`VoiceInputButton`) sits in the composer: tap
+to start and tap again to finish, or press and hold and let go to finish. On
+phones it takes the GIF button's place (GIFs stay in the Attach menu); on wide
+screens it sits beside the emoji button. While it listens a glass panel
+(`VoiceInputPanel`, menu elevation, radius 22) floats above the composer: a
+status dot and "Listening…", a 中文 / English `WeCordSegmented`, the live
+waveform (`VoiceWaveform`, accent bars on `track` dots), the words so far, a
+one-line caption saying who processes the audio (this device / Apple's speech
+service / the browser's speech service) and Cancel / Done. The same words are
+written live into the text field at the caret; Done keeps them to edit and send
+as text, Cancel (or Esc) puts the field back. Anything that is not the device
+hearing the person (Apple's servers, the browser) is asked about first in the
+panel ("Before you speak"). Typing while it listens ends it. The mode is hidden
+where the platform has no recognizer (Firefox, Android, Windows, Linux) and by
+Settings → Chats → "Show voice input" (on by default). On iOS and macOS it
+is `SFSpeechRecognizer` fed by `AVAudioEngine` (`VoiceInputPlugin` in
+`TranscribePlugin.swift`, channels `wecord/voice_input` and
+`wecord/voice_input/events`), on-device whenever the language allows; on the
+web it is the Web Speech API (the browser reports no loudness, so the waveform
+there is drawn from when speech starts and stops).
+
+**Chains (接龙)** (`lib/features/chain/`, migration `202610180060`) are
+sign-up lists in groups and circle channels (+ menu → Chain). The card in the
+chat (`ChainCardView`, `well` card like notes and polls) shows the numbered list
+(first six lines, "and N more"), a status pill (Open / Closes tomorrow 9 am /
+Closed), "4 of 12 joined" and a small accent Join (Edit my line once you are in).
+Your own line is tinted `accentSoft`. Tapping the card opens the whole list
+(`ChainSheet`: description, example, avatars, remove buttons for the creator and
+moderators, Copy / Share list, Close / Reopen). The card follows the chain over
+Realtime without any new message per entry; nothing posts "X joined".

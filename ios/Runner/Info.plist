@@ -29,9 +29,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>WeCord uses the camera for video in voice channels.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>WeCord uses the microphone to record voice messages and to talk in voice channels.</string>
+	<string>WeCord uses the microphone to record voice messages, to talk in voice channels and to type what you say.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>WeCord uses speech recognition to turn a voice message into text when you ask it to. It runs on your device whenever it can.</string>
+	<string>WeCord uses speech recognition to turn a voice message into text and to type what you say when you ask it to. It runs on your device whenever it can.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>WeCord saves photos and videos from chats to your library when you ask it to.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

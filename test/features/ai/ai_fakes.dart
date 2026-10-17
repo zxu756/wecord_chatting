@@ -41,6 +41,13 @@ class FakeAiRepository implements AiRepository {
   final translateCalls = <({String text, AiLanguage target})>[];
   var statusCalls = 0;
 
+  /// Circles that turned AI off.
+  final disabledCircles = <String>{};
+  final circleSwitchCalls = <(String, bool)>[];
+
+  /// Thrown by [setCircleAiEnabled] when set.
+  Object? circleSwitchError;
+
   Future<void> _wait() async {
     await gate?.future;
     if (error case final error?) {
@@ -96,5 +103,25 @@ class FakeAiRepository implements AiRepository {
     translateCalls.add((text: text, target: target));
     await _wait();
     return translated;
+  }
+
+  @override
+  Future<bool> circleAiEnabled(String circleId) async =>
+      !disabledCircles.contains(circleId);
+
+  @override
+  Future<void> setCircleAiEnabled(
+    String circleId, {
+    required bool enabled,
+  }) async {
+    circleSwitchCalls.add((circleId, enabled));
+    if (circleSwitchError case final error?) {
+      throw error;
+    }
+    if (enabled) {
+      disabledCircles.remove(circleId);
+    } else {
+      disabledCircles.add(circleId);
+    }
   }
 }

@@ -39,6 +39,13 @@ abstract interface class AiRepository {
     required AiLanguage target,
     String? conversationId,
   });
+
+  /// Whether the circle allows AI features (on unless a manager turned
+  /// them off).
+  Future<bool> circleAiEnabled(String circleId);
+
+  /// Turns AI features on or off for a circle; for members who manage it.
+  Future<void> setCircleAiEnabled(String circleId, {required bool enabled});
 }
 
 class SupabaseAiRepository implements AiRepository {
@@ -139,6 +146,27 @@ class SupabaseAiRepository implements AiRepository {
       'conversation_id': ?conversationId,
     });
   }
+
+  @override
+  Future<bool> circleAiEnabled(String circleId) async {
+    final row = await _client
+        .from('circles')
+        .select('ai_enabled')
+        .eq('id', circleId)
+        .maybeSingle();
+    return row?['ai_enabled'] as bool? ?? true;
+  }
+
+  @override
+  Future<void> setCircleAiEnabled(
+    String circleId, {
+    required bool enabled,
+  }) async {
+    await _client.rpc(
+      'set_circle_ai_enabled',
+      params: {'target_circle_id': circleId, 'enabled': enabled},
+    );
+  }
 }
 
 /// Used where there is no server (tests): AI is not set up.
@@ -171,6 +199,13 @@ class NoAiRepository implements AiRepository {
     required AiLanguage target,
     String? conversationId,
   }) => Future.error(const AiNotConfiguredException());
+
+  @override
+  Future<bool> circleAiEnabled(String circleId) async => true;
+
+  @override
+  Future<void> setCircleAiEnabled(String circleId, {required bool enabled}) =>
+      Future.error(const AiNotConfiguredException());
 }
 
 final aiRepositoryProvider = Provider<AiRepository>((ref) {
@@ -266,9 +301,22 @@ class AiEnabledController extends Notifier<bool> {
   }
 }
 
+/// Whether a circle allows AI features: on unless a manager turned them
+/// off. Assumed on until known.
+final circleAiEnabledProvider = FutureProvider.autoDispose.family<bool, String>(
+  (ref, circleId) {
+    return ref.watch(aiRepositoryProvider).circleAiEnabled(circleId);
+  },
+);
+
 /// Whether AI entry points show for a conversation of [circleId] (null
-/// outside circles): the server has AI set up and the user has it on.
+/// outside circles): the server has AI set up, the user has it on, and the
+/// circle allows it.
 final aiAvailableProvider = Provider.family<bool, String?>((ref, circleId) {
-  return ref.watch(aiEnabledProvider) &&
-      ref.watch(aiStatusProvider).value != null;
+  if (!ref.watch(aiEnabledProvider) ||
+      ref.watch(aiStatusProvider).value == null) {
+    return false;
+  }
+  return circleId == null ||
+      (ref.watch(circleAiEnabledProvider(circleId)).value ?? true);
 });

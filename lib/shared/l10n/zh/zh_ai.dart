@@ -30,6 +30,24 @@ const zhAi = <String, String>{
   'Translating…': '正在翻译…',
   'Translated to {language}': '已翻译为{language}',
   'Show original': '显示原文',
+  // Settings → AI and the circle switch.
+  'AI': 'AI',
+  'AI features': 'AI 功能',
+  'Checking…': '正在检查…',
+  "AI isn't set up on this server yet. Whoever runs the server can turn it on (see docs/ai-setup.md).":
+      '此服务器尚未设置 AI。服务器管理员可以开启它（见 docs/ai-setup.md）。',
+  "Couldn't check whether AI is set up. Try again later.":
+      '无法确认 AI 是否已设置，请稍后再试。',
+  'Summaries, rewriting and translation. Only what you ask about is sent to the AI provider.':
+      '总结、改写和翻译。只有你要求处理的内容会发送给 AI 服务商。',
+  'Today': '今天',
+  "You've used all {limit} AI requests for today. It resets tomorrow.":
+      '你已用完今天的 {limit} 次 AI 请求，明天会重置。',
+  '{used} of {limit} requests used today': '今天已用 {used} / {limit} 次请求',
+  'Allow AI features in this circle': '允许在此圈子使用 AI 功能',
+  "Catch-up summaries, rewriting and translating in this circle's chats. Members can still turn AI off for themselves.":
+      '在此圈子的聊天中使用总结、改写和翻译。成员仍可为自己关闭 AI。',
+  "Couldn't update AI features. Try again.": '无法更新 AI 功能，请重试。',
   // Errors.
   "AI features aren't set up on this server yet.": '此服务器尚未设置 AI 功能。',
   "You've reached today's AI limit of {limit} requests. It resets tomorrow.":

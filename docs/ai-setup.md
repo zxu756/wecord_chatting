@@ -36,14 +36,16 @@ supabase secrets set AI_EXTRA_HEADERS='{"x-team":"wecord"}'
 ```
 
 The function reads them on each request, so a new value applies right away
-(no redeploy needed). Deploy the function itself once:
+(no redeploy needed). Apply the database migrations first (the function calls
+`ai_consume_request` and `conversation_ai_allowed`), then deploy the function
+itself once:
 
 ```sh
 supabase functions deploy ai
 ```
 
-Check it: in the app open Settings → AI. It shows "Ready" once the function
-sees all three secrets (and how many requests you have used today).
+Check it: in the app open Settings → AI. It shows how many requests you have used today once the function
+sees all three secrets, and a note that AI is not set up otherwise.
 
 ## Provider examples
 

@@ -46,7 +46,15 @@ Deno.serve(async (request) => {
       return error || !data?.user ? null : data.user.id;
     },
     loadMessages: (options) => loadMessages(userClient, options),
-    circleAllows: () => Promise.resolve(true),
+    circleAllows: async (_userId, conversationId) => {
+      const { data, error } = await userClient.rpc("conversation_ai_allowed", {
+        target_conversation_id: conversationId,
+      });
+      if (error) {
+        throw new Error(`conversation_ai_allowed: ${error.message}`);
+      }
+      return data !== false;
+    },
     consume: async (userId, limit) => {
       const { data, error } = await admin.rpc("ai_consume_request", {
         p_user_id: userId,

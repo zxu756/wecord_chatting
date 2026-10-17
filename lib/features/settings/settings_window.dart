@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
@@ -21,6 +22,7 @@ enum SettingsWindowSection {
   privacy,
   appearance,
   voice,
+  ai,
   notifications,
   shortcuts,
   language,
@@ -303,6 +305,11 @@ class _SettingsNav extends ConsumerWidget {
                     tr('Voice & video'),
                   ),
                   item(
+                    SettingsWindowSection.ai,
+                    Icons.auto_awesome_outlined,
+                    tr('AI'),
+                  ),
+                  item(
                     SettingsWindowSection.notifications,
                     Icons.notifications_none_rounded,
                     tr('Notifications'),
@@ -491,6 +498,14 @@ class _SectionPage extends ConsumerWidget {
                 onPressed: SettingsWindowScope.maybeOf(context)?.onClose,
               ),
             ),
+          ],
+        );
+      case SettingsWindowSection.ai:
+        return SettingsPage(
+          title: tr('AI'),
+          children: const [
+            SizedBox(height: 16),
+            AiSettingsGroup(showHeader: false),
           ],
         );
       case SettingsWindowSection.notifications:

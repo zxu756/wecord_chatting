@@ -285,6 +285,16 @@ final moreA11yScreens = <A11yScreen>[
     await tester.tap(find.byKey(const ValueKey('ai-rewrite-fix')));
     await settle(tester);
   }),
+  A11yScreen('ai-settings', (tester, world) async {
+    world.extraOverrides = _aiOverrides();
+    await world.open(tester, '/me');
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('ai-enabled-switch')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await settle(tester);
+  }),
   A11yScreen('ai-translation', (tester, world) async {
     world.extraOverrides = _aiOverrides();
     await _openThread(tester, world);

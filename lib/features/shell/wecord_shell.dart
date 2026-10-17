@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/home/user_panel.dart';
+import 'package:wecord/features/location/live_location_sharer.dart';
 import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/features/push/push_shell_listener.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
@@ -76,7 +77,9 @@ class WeCordShell extends StatelessWidget {
       key: _bodyKey,
       child: AppKeyboardShortcuts(
         child: NotificationShellListener(
-          child: IncomingCallListener(child: PushShellListener(child: child)),
+          child: LiveLocationShellListener(
+            child: IncomingCallListener(child: PushShellListener(child: child)),
+          ),
         ),
       ),
     );

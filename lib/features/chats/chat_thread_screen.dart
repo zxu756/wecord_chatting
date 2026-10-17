@@ -97,6 +97,10 @@ import 'package:wecord/features/later/later_cards.dart' show laterPreview;
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_sheet.dart';
 import 'package:wecord/features/later/when_sheet.dart';
+import 'package:wecord/features/location/live_location_banner.dart';
+import 'package:wecord/features/location/location_actions.dart';
+import 'package:wecord/features/location/location_cards.dart';
+import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -1521,6 +1525,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
             ),
           if (canCall) ChatEventStrip(conversationId: widget.conversationId),
+          if (canCall)
+            LiveLocationBanner(
+              conversationId: widget.conversationId,
+              desktop: desktop,
+            ),
           if (_isSearchingMessages && !inlineSearch)
             _SearchBar(
               controller: _searchController,
@@ -2039,6 +2048,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    onSendLocation: _sendLocation,
+                    onShareLiveLocation:
+                        conversationType == ConversationType.direct ||
+                            conversationType == ConversationType.group
+                        ? _shareLiveLocation
+                        : null,
                     onChangeWallpaper: openWallpaper,
                     onInsertTime: _insertTime,
                     onShowEvents:
@@ -3369,6 +3384,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (posted == true && mounted) {
       _refreshThread();
     }
+  }
+
+  Future<void> _sendLocation() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    await sendLocationFlow(context, ref, conversationId: widget.conversationId);
+  }
+
+  Future<void> _shareLiveLocation() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    await shareLiveLocationFlow(
+      context,
+      ref,
+      conversationId: widget.conversationId,
+    );
   }
 
   Future<void> _votePoll(ChatMessage message, List<String> optionIds) async {
@@ -5280,6 +5313,8 @@ class _MessageBubble extends StatelessWidget {
       MessageType.voice || MessageType.file || MessageType.poll => false,
       MessageType.text =>
         message.album == null &&
+            message.locationCard == null &&
+            message.liveLocationCard == null &&
             message.interaction == null &&
             firstLinkInMarkdown(message.body, mentions: message.mentions) ==
                 null,
@@ -6047,6 +6082,7 @@ class _MessageBubble extends StatelessWidget {
       // in.
       if (message.type != MessageType.poll &&
           message.type != MessageType.sticker &&
+          message.liveLocationCard == null &&
           !message.isViewOnce)
         MessageAction(
           slot: MessageActionSlot.forward,
@@ -6056,7 +6092,11 @@ class _MessageBubble extends StatelessWidget {
         ),
       if (_canTranslate(context)) _translateAction(context),
       if (_canTranscribe) _transcribeAction(context),
-      if (canCompose && isCurrentUser && message.type == MessageType.text)
+      if (canCompose &&
+          isCurrentUser &&
+          message.type == MessageType.text &&
+          message.locationCard == null &&
+          message.liveLocationCard == null)
         MessageAction(
           icon: Icons.edit_outlined,
           label: tr('Edit'),
@@ -6457,6 +6497,31 @@ class _MessageContent extends StatelessWidget {
                   textColor: textColor,
                   actions: pollActions,
                 ),
+        ),
+      );
+    } else if (message.locationCard case final location?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 0),
+          child: LocationMessageCard(
+            place: location.place,
+            textColor: cards ? c.ink : textColor,
+            sharedBy: message.senderNickname ?? message.sender?.displayName,
+          ),
+        ),
+      );
+    } else if (message.liveLocationCard case final live?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 0),
+          child: LiveLocationMessageCard(
+            card: live,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            senderName:
+                message.senderNickname ?? message.sender?.displayName ?? '',
+            textColor: cards ? c.ink : textColor,
+          ),
         ),
       );
     } else if (message.workspaceCard case final workspaceCard?) {
@@ -6866,6 +6931,8 @@ class _Composer extends StatelessWidget {
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
+    this.onSendLocation,
+    this.onShareLiveLocation,
     required this.onInsertTime,
     required this.onChangeWallpaper,
     this.onShowEvents,
@@ -6943,6 +7010,11 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
+
+  /// Sends a place from the map; live location only where the chat can
+  /// share it (direct chats and groups).
+  final Future<void> Function()? onSendLocation;
+  final Future<void> Function()? onShareLiveLocation;
   final Future<void> Function() onInsertTime;
 
   /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
@@ -7019,6 +7091,20 @@ class _Composer extends StatelessWidget {
                     label: tr('Create poll'),
                     onSelected: () => unawaited(onCreatePoll()),
                   ),
+                  if (onSendLocation != null)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-location-entry'),
+                      icon: Icons.location_on_outlined,
+                      label: tr('Location'),
+                      onSelected: () => unawaited(onSendLocation!()),
+                    ),
+                  if (onShareLiveLocation != null)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-live-location-entry'),
+                      icon: Icons.near_me_outlined,
+                      label: tr('Share live location'),
+                      onSelected: () => unawaited(onShareLiveLocation!()),
+                    ),
                   GlassMenuEntry(
                     key: const ValueKey('composer-schedule-entry'),
                     icon: Icons.schedule_send_outlined,

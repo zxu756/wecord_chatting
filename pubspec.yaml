@@ -51,6 +51,11 @@ dependencies:
   # Drop files onto the chat window (macOS and the web).
   desktop_drop: ^0.8.4
   livekit_noise_filter: ^0.3.0
+  # Maps (OpenStreetMap-compatible tiles) and the device position, for sending
+  # a location and sharing it live (lib/features/location/).
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  geolocator: ^14.1.1
 
 dev_dependencies:
   flutter_test:

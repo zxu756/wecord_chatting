@@ -166,6 +166,10 @@ Future<void> showConversationActions(
   WidgetRef ref,
   ConversationSummary conversation,
 ) async {
+  // The note to self stays where it is: nothing to pin, mute or delete.
+  if (conversation.isNoteToSelf) {
+    return;
+  }
   final title = conversation.title?.trim().isNotEmpty == true
       ? conversation.title!
       : tr('Conversation');

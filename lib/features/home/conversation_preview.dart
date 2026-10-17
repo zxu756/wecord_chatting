@@ -128,7 +128,9 @@ String conversationRowLabel(
 }) {
   final unreadCount = conversation.unreadCount;
   final lastMessageAt = conversation.lastMessageAt;
-  final isDirect = conversation.type == ConversationType.direct;
+  final isDirect =
+      conversation.type == ConversationType.direct &&
+      !conversation.isNoteToSelf;
   return spokenList([
     title,
     if (isDirect)

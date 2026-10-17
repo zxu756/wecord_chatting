@@ -29,7 +29,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>WeCord uses speech recognition to turn a voice message into text when you ask it to. It runs on your Mac whenever it can.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>WeCord uses the camera for video in voice channels.</string>
+	<string>WeCord uses the camera for video in voice channels and to scan QR codes.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

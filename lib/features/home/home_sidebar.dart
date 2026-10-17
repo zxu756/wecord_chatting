@@ -13,6 +13,7 @@ import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
+import 'package:wecord/features/note_to_self/note_to_self.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
@@ -80,8 +81,16 @@ class HomeSidebar extends ConsumerWidget {
     final directMessages = [
       for (final conversation
           in conversations.value ?? const <ConversationSummary>[])
-        if (conversation.isDirectMessage) conversation,
+        if (conversation.isDirectMessage && !conversation.isNoteToSelf)
+          conversation,
     ];
+    // The note to self comes first, even before the server made it.
+    final listed = withNoteToSelfFirst([
+      for (final conversation
+          in conversations.value ?? const <ConversationSummary>[])
+        if (conversation.isNoteToSelf) conversation,
+      ...directMessages,
+    ]);
 
     return Material(
       type: MaterialType.transparency,
@@ -175,6 +184,19 @@ class HomeSidebar extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  for (final conversation in listed)
+                    _DirectMessageRow(
+                      conversation: conversation,
+                      currentUserId: currentUserId,
+                      selected:
+                          section == HomeSection.conversation &&
+                          conversation.id == selectedConversationId,
+                      presence: presenceOf(
+                        conversation.directUserId,
+                        onlineUserIds: onlineUserIds,
+                        statuses: presenceStatuses,
+                      ),
+                    ),
                   if (conversations.isLoading && directMessages.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(16),
@@ -187,21 +209,7 @@ class HomeSidebar extends ConsumerWidget {
                         tr('No conversations yet'),
                         style: theme.textTheme.bodySmall,
                       ),
-                    )
-                  else
-                    for (final conversation in directMessages)
-                      _DirectMessageRow(
-                        conversation: conversation,
-                        currentUserId: currentUserId,
-                        selected:
-                            section == HomeSection.conversation &&
-                            conversation.id == selectedConversationId,
-                        presence: presenceOf(
-                          conversation.directUserId,
-                          onlineUserIds: onlineUserIds,
-                          statuses: presenceStatuses,
-                        ),
-                      ),
+                    ),
                 ],
               ),
             ),
@@ -426,7 +434,9 @@ class _DirectMessageRow extends ConsumerWidget {
     final tokens = context.tokens;
     final c = tokens.colors;
     final density = context.density;
-    final title = conversation.title?.trim().isNotEmpty == true
+    final title = conversation.isNoteToSelf
+        ? noteToSelfTitle()
+        : conversation.title?.trim().isNotEmpty == true
         ? conversation.title!
         : tr('Conversation');
     final unread = conversation.unreadCount > 0 || conversation.isMarkedUnread;
@@ -441,7 +451,9 @@ class _DirectMessageRow extends ConsumerWidget {
     final status = activeCustomStatus(conversation.directCustomStatus);
     final preview =
         conversationPreview(conversation, currentUserId: currentUserId) ??
-        (group
+        (conversation.isNoteToSelf
+            ? (icon: null, text: noteToSelfHint())
+            : group
             ? (
                 icon: null,
                 text: tr('{count} members', {
@@ -505,15 +517,19 @@ class _DirectMessageRow extends ConsumerWidget {
               ),
               child: Row(
                 children: [
-                  ResolvedAvatar(
-                    name: title,
-                    avatarUrl: conversation.avatarUrl,
-                    size: density.avatar(36),
-                    squircle: group,
-                    showPresence: conversation.type == ConversationType.direct,
-                    presence: presence,
-                    ringColor: ring,
-                  ),
+                  if (conversation.isNoteToSelf)
+                    NoteToSelfAvatar(size: density.avatar(36))
+                  else
+                    ResolvedAvatar(
+                      name: title,
+                      avatarUrl: conversation.avatarUrl,
+                      size: density.avatar(36),
+                      squircle: group,
+                      showPresence:
+                          conversation.type == ConversationType.direct,
+                      presence: presence,
+                      ringColor: ring,
+                    ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(

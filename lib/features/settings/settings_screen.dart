@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
+import 'package:wecord/features/qr/qr_entries.dart';
 import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
@@ -128,6 +129,8 @@ class SettingsPhonePage extends ConsumerWidget {
             onEdit: () => openProfileEditor(context),
           ),
           SettingsStatusGroup(profile: value),
+          const SizedBox(height: 12),
+          const ProfileToolsGroup(),
           const SizedBox(height: 12),
           SettingsGroup(
             children: [

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/qr/qr_entries.dart';
 import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
@@ -456,6 +457,8 @@ class _SectionPage extends ConsumerWidget {
               const SizedBox(height: 12),
               ProfileEditor(profile: profile),
               SettingsStatusGroup(profile: profile),
+              const SizedBox(height: 12),
+              const ProfileToolsGroup(),
             ],
           ),
         );

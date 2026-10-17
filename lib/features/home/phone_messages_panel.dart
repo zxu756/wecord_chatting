@@ -11,6 +11,8 @@ import 'package:wecord/features/home/conversation_preview.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
+import 'package:wecord/features/note_to_self/note_to_self.dart';
+import 'package:wecord/features/qr/qr_link_handler.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -44,11 +46,19 @@ class PhoneMessagesPanel extends ConsumerWidget {
         ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
     final currentUserId = ref.watch(authStateProvider).value?.id;
 
-    final chats = [
+    final directChats = [
       for (final conversation
           in conversations.value ?? const <ConversationSummary>[])
-        if (conversation.isDirectMessage) conversation,
+        if (conversation.isDirectMessage && !conversation.isNoteToSelf)
+          conversation,
     ];
+    // The note to self comes first, even before the server made it.
+    final chats = withNoteToSelfFirst([
+      for (final conversation
+          in conversations.value ?? const <ConversationSummary>[])
+        if (conversation.isNoteToSelf) conversation,
+      ...directChats,
+    ]);
     final sortedFriends = [
       ...friends.where((friend) => onlineIds.contains(friend.id)),
       ...friends.where((friend) => !onlineIds.contains(friend.id)),
@@ -128,33 +138,32 @@ class PhoneMessagesPanel extends ConsumerWidget {
             ),
           ),
         ),
-        if (conversations.isLoading && chats.isEmpty)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          sliver: SliverList.separated(
+            itemCount: chats.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 2),
+            itemBuilder: (context, index) => PhoneConversationRow(
+              conversation: chats[index],
+              currentUserId: currentUserId,
+              presence: presence(chats[index].directUserId),
+            ),
+          ),
+        ),
+        if (conversations.isLoading && directChats.isEmpty)
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             ),
           )
-        else if (chats.isEmpty)
+        else if (directChats.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
               child: Text(
                 tr('No conversations yet'),
                 style: theme.textTheme.bodyMedium?.copyWith(color: c.muted),
-              ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            sliver: SliverList.separated(
-              itemCount: chats.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 2),
-              itemBuilder: (context, index) => PhoneConversationRow(
-                conversation: chats[index],
-                currentUserId: currentUserId,
-                presence: presence(chats[index].directUserId),
               ),
             ),
           ),
@@ -192,6 +201,14 @@ Future<void> showNewConversationMenu(
             showChevron: false,
             onTap: () => Navigator.of(sheetContext).pop(_NewChoice.group),
           ),
+          SettingsRow(
+            key: const ValueKey('phone-new-scan'),
+            icon: Icons.qr_code_scanner_rounded,
+            tone: SettingsTone.warning,
+            title: tr('Scan'),
+            showChevron: false,
+            onTap: () => Navigator.of(sheetContext).pop(_NewChoice.scan),
+          ),
         ],
       ),
     ),
@@ -204,6 +221,8 @@ Future<void> showNewConversationMenu(
       await _pickFriendToMessage(context, ref);
     case _NewChoice.group:
       await createGroupChat(context, ref);
+    case _NewChoice.scan:
+      await openQrScanner(context, ref);
     case null:
       break;
   }
@@ -224,7 +243,7 @@ Future<void> _pickFriendToMessage(BuildContext context, WidgetRef ref) async {
   }
 }
 
-enum _NewChoice { message, group }
+enum _NewChoice { message, group, scan }
 
 /// Opens the direct message with [friend], starting one if needed.
 Future<void> openDirectMessage(
@@ -475,7 +494,9 @@ class PhoneConversationRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
-    final title = conversation.title?.trim().isNotEmpty == true
+    final title = conversation.isNoteToSelf
+        ? noteToSelfTitle()
+        : conversation.title?.trim().isNotEmpty == true
         ? conversation.title!
         : tr('Conversation');
     final unreadCount = conversation.unreadCount;
@@ -484,7 +505,9 @@ class PhoneConversationRow extends ConsumerWidget {
     final group = conversation.type == ConversationType.group;
     final ConversationPreview? preview =
         conversationPreview(conversation, currentUserId: currentUserId) ??
-        (group && conversation.memberCount > 0
+        (conversation.isNoteToSelf
+            ? (icon: null, text: noteToSelfHint())
+            : group && conversation.memberCount > 0
             ? (
                 icon: null,
                 text: tr('{count} members', {
@@ -550,14 +573,17 @@ class PhoneConversationRow extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                ResolvedAvatar(
-                  name: title,
-                  avatarUrl: conversation.avatarUrl,
-                  squircle: group,
-                  showPresence: conversation.type == ConversationType.direct,
-                  presence: presence,
-                  ringColor: background,
-                ),
+                if (conversation.isNoteToSelf)
+                  const NoteToSelfAvatar()
+                else
+                  ResolvedAvatar(
+                    name: title,
+                    avatarUrl: conversation.avatarUrl,
+                    squircle: group,
+                    showPresence: conversation.type == ConversationType.direct,
+                    presence: presence,
+                    ringColor: background,
+                  ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

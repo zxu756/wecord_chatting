@@ -1,0 +1,98 @@
+// Chinese for QR codes and scanning (My QR code, Scan, the group QR code and
+// the links they open), pat-pat (拍一拍) and the note to self (文件传输助手).
+const zhQrPat = <String, String>{
+  // My QR code.
+  'My QR code': '我的二维码',
+  'Scan to add me on WeCord': '扫码添加我为好友',
+  'Add me on WeCord: {link}': '在 WeCord 上添加我：{link}',
+  'QR code': '二维码',
+  'QR code for {name}': '{name}的二维码',
+  "Couldn't load your QR code.": '无法加载你的二维码。',
+  'Save image': '保存图片',
+  'Download started': '已开始下载',
+  "Couldn't make the picture. Try again.": '无法生成图片，请重试。',
+  "Couldn't save the picture. Try again.": '无法保存图片，请重试。',
+  'Reset QR code': '重置二维码',
+  'Makes the current code and link stop working': '让当前的二维码和链接失效',
+  'Reset your QR code?': '重置你的二维码？',
+  'Your old QR code and link stop working right away. People who already added you stay your friends.':
+      '旧的二维码和链接会立即失效。已经加你为好友的人不受影响。',
+  'Your QR code was reset.': '你的二维码已重置。',
+  "Couldn't reset the QR code. Try again.": '无法重置二维码，请重试。',
+  // Scan.
+  'Scan': '扫一扫',
+  'Point the camera at a QR code.': '将摄像头对准二维码。',
+  'Choose from photos': '从相册选择',
+  'No QR code found in that picture.': '这张图片里没有找到二维码。',
+  "Couldn't open that picture. Try another.": '无法打开这张图片，请换一张。',
+  'Camera access is off': '摄像头权限未开启',
+  'No camera available': '没有可用的摄像头',
+  'Allow the camera for WeCord in your system settings, or choose a picture with a QR code instead.':
+      '请在系统设置中允许 WeCord 使用摄像头，或改为选择一张带二维码的图片。',
+  'You can still choose a picture with a QR code.': '你仍然可以选择一张带二维码的图片。',
+  'Turn on the light': '打开补光灯',
+  'Turn off the light': '关闭补光灯',
+  // What a scanned code opens.
+  'Scanned text': '扫描结果',
+  'Open link': '打开链接',
+  "Couldn't open the link.": '无法打开链接。',
+  'This link is not from WeCord. Open it only if you trust where it came from.':
+      '这个链接不是 WeCord 的。只有在信任来源时才打开。',
+  "This QR code doesn't work. It may have been reset.": '这个二维码无效，可能已被重置。',
+  "Couldn't open the QR code. Try again.": '无法打开二维码，请重试。',
+  'Opening the QR code…': '正在打开二维码…',
+  'Could not open the QR code': '无法打开二维码',
+  "This QR code doesn't work": '这个二维码无效',
+  'It may have been reset, or the person is not available. Ask them for a new one.':
+      '二维码可能已被重置，或对方暂时无法使用。请向对方要一个新的二维码。',
+  // Group QR code.
+  'Group QR code': '群二维码',
+  'Lets people join; works for 7 days': '让别人扫码入群，7 天内有效',
+  'Scan to join the group': '扫码加入群聊',
+  'Join my group on WeCord: {link}': '加入我在 WeCord 的群聊：{link}',
+  "Couldn't load the QR code.": '无法加载二维码。',
+  'Refresh QR code': '刷新二维码',
+  'Makes the current code stop working and starts 7 new days':
+      '当前二维码会立即失效，并重新计算 7 天有效期',
+  'A new QR code was made.': '已生成新的二维码。',
+  'Anyone with this code can join the group, for 7 days.':
+      '拿到这个二维码的人 7 天内都可以加入群聊。',
+  'This group QR code has expired': '这个群二维码已过期',
+  "This group QR code doesn't work": '这个群二维码无效',
+  'Ask a group admin for a new one.': '请向群管理员要一个新的二维码。',
+  'Check that the whole code was scanned, then try again.':
+      '请确认扫到了完整的二维码，然后重试。',
+  "You're already in this group.": '你已经在这个群里了。',
+  'Open chat': '打开聊天',
+  'Join group': '加入群聊',
+  "Couldn't join the group. Try again.": '无法加入群聊，请重试。',
+  // Pat-pat.
+  'Pat suffix': '拍一拍后缀',
+  "'s shoulder": '的肩膀',
+  "'s head": '的小脑袋',
+  "'s hand": '的手',
+  "e.g. 's shoulder": '例如：的肩膀',
+  "Friends see this after your name when they pat you. Double tap a friend's picture in a chat to pat them.":
+      '好友拍你时，会在你的名字后面看到这段文字。在聊天里双击好友的头像即可拍一拍。',
+  "Couldn't save the suffix. Try again.": '无法保存后缀，请重试。',
+  'Bart': '小明',
+  'Pat {name}': '拍一拍{name}',
+  'You patted {name}{suffix}': '你拍了拍“{name}”{suffix}',
+  '{name} patted you{suffix}': '“{name}”拍了拍你{suffix}',
+  '{name} patted {target}{suffix}': '“{name}”拍了拍“{target}”{suffix}',
+  'You took back a pat': '你撤回了拍一拍',
+  '{name} took back a pat': '“{name}”撤回了拍一拍',
+  'Take back the pat': '撤回拍一拍',
+  "It's too late to take that pat back.": '已经过了可以撤回拍一拍的时间。',
+  "Couldn't take the pat back. Try again.": '无法撤回拍一拍，请重试。',
+  'You just patted them. Try again in a moment.': '你刚刚拍过对方，请稍等一下再试。',
+  'That is a lot of pats. Try again later.': '拍得有点多了，请稍后再试。',
+  "You can't pat them here.": '在这里不能拍对方。',
+  "Couldn't pat. Try again.": '拍一拍失败，请重试。',
+  // Note to self.
+  'Note to self': '文件传输助手',
+  'Send text, photos and files to your devices': '在你的各台设备之间发送文字、照片和文件',
+  'Send something to your devices': '发送给你的其他设备',
+  'Only you can see this chat': '只有你能看到这个聊天',
+  "Couldn't open your note to self.": '无法打开文件传输助手。',
+};

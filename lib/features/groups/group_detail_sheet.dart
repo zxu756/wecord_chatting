@@ -9,6 +9,7 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/qr/group_qr_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -190,6 +191,26 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                 tone: SettingsTone.accent,
                 title: tr('Invite friends'),
                 onTap: _isSaving ? null : () => _showInviteSheet(detail),
+              ),
+            // Whoever may add members can share the group's QR code.
+            if (canManage)
+              SettingsRow(
+                key: const ValueKey('group-detail-qr'),
+                icon: Icons.qr_code_2_rounded,
+                tone: SettingsTone.success,
+                title: tr('Group QR code'),
+                subtitle: tr('Lets people join; works for 7 days'),
+                onTap: _isSaving
+                    ? null
+                    : () => unawaited(
+                        showGroupQrSheet(
+                          context,
+                          conversationId: widget.conversationId,
+                          title: detail.title,
+                          avatarUrl: detail.avatarUrl,
+                          memberCount: detail.memberCount,
+                        ),
+                      ),
               ),
             SettingsRow(
               key: const ValueKey('group-detail-leave'),

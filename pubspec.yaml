@@ -51,6 +51,8 @@ dependencies:
   # Drop files onto the chat window (macOS and the web).
   desktop_drop: ^0.8.4
   livekit_noise_filter: ^0.3.0
+  mobile_scanner: ^7.4.2
+  zxing2: ^0.2.4
 
 dev_dependencies:
   flutter_test:

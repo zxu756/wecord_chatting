@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/note_to_self/note_to_self.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -46,6 +50,11 @@ String circleLocation(String circleId, {String? conversationId}) {
 /// Opens [conversation] where it lives: circle channels and their threads
 /// inside the circle, other chats under the direct messages.
 void openConversation(BuildContext context, ConversationSummary conversation) {
+  // The note to self before the server made it: make it, then open it.
+  if (conversation.id == noteToSelfPlaceholderId) {
+    unawaited(openNoteToSelf(context, ProviderScope.containerOf(context)));
+    return;
+  }
   final title = conversation.title?.trim().isNotEmpty == true
       ? conversation.title!
       : conversation.isThread

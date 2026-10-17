@@ -11,6 +11,7 @@ import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/qr/qr_entries.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -107,6 +108,7 @@ class _SearchSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsSectionHeader(tr('Add friend')),
+        const AddFriendQrActions(),
         WeCordTextField(
           hint: tr('Search profiles'),
           prefixIcon: Icons.person_search_outlined,

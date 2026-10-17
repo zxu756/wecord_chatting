@@ -256,6 +256,9 @@ class _CircleChannelThreadScreenState
                 ? detail.slowmodeFor(channel)
                 : null,
             topic: channel?.topic,
+            circleMemberIds: detail == null
+                ? null
+                : {for (final member in detail.members) member.profile.id},
             isAnnouncementChannel: channel?.isAnnouncement ?? false,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(

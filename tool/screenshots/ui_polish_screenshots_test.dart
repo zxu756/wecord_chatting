@@ -216,6 +216,20 @@ void main() {
     await openChannel(tester, world, wide: true);
   });
 
+  // A channel without a topic.
+  phone('circle-channel-notopic', (tester, world) async {
+    world.chats.messages = richMessages();
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.text('announcements').first);
+    await settle(tester);
+  });
+  desktop('circle-channel-notopic', (tester, world) async {
+    world.chats.messages = richMessages();
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.text('announcements').first);
+    await settle(tester);
+  });
+
   // The circle menu (items 3 and 5).
   phone('circle-menu', openCircleMenu);
   desktop('circle-menu', openCircleMenu);

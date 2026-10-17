@@ -387,6 +387,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.timedOutUntil,
     this.slowmodeSeconds,
     this.topic,
+    this.circleMemberIds,
     this.forumPost = false,
     this.onBack,
     this.isAnnouncementChannel = false,
@@ -424,6 +425,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// A channel's topic, shown under the title instead of the online state;
   /// tapping it shows all of it.
   final String? topic;
+
+  /// The ids of the circle's members, for a channel without a topic: its
+  /// header then says "16 members · 4 online" like a group's.
+  final Set<String>? circleMemberIds;
 
   /// A forum post: its first message shows as the opening post, larger and
   /// with the post's title, and the rest as replies. Posts read top down:
@@ -737,6 +742,38 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         _messageSearchQuery = '';
       }
     });
+  }
+
+  /// "16 members · 4 online" under the title of a group or of a channel
+  /// without a topic; null for direct chats and threads (and while the
+  /// members load), which show the person's presence instead.
+  String? _memberLine({
+    required ConversationType? type,
+    required GroupDetail? groupDetail,
+    required ConversationSummary? summary,
+    required Set<String> onlineUserIds,
+  }) {
+    final Set<String>? ids = switch (type) {
+      ConversationType.group =>
+        groupDetail == null
+            ? null
+            : {for (final member in groupDetail.members) member.profile.id},
+      ConversationType.channel => widget.circleMemberIds,
+      _ => null,
+    };
+    final count =
+        ids?.length ??
+        (type == ConversationType.group && (summary?.memberCount ?? 0) > 0
+            ? summary!.memberCount
+            : null);
+    if (count == null) {
+      return null;
+    }
+    final online = ids == null ? 0 : ids.where(onlineUserIds.contains).length;
+    return [
+      count == 1 ? tr('1 member') : tr('{count} members', {'count': count}),
+      if (online > 0) tr('{count} online', {'count': online}),
+    ].join(' · ');
   }
 
   void _showTopic(String title, String topic) {
@@ -1329,6 +1366,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     : null,
                 ringColor: desktop ? c.panel : tokens.glass.solidFill,
               );
+        final memberLine = _memberLine(
+          type: conversationType,
+          groupDetail: groupDetail,
+          summary: conversationSummary,
+          onlineUserIds: onlineUserIds,
+        );
         final subtitle = topic != null
             ? Text(
                 topic,
@@ -1358,6 +1401,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     TextSpan(
                       text: isThread
                           ? _threadSubtitle(conversationSummary)
+                          : memberLine != null
+                          ? [
+                              memberLine,
+                              if (disappearingSeconds != null)
+                                disappearingShortLabel(disappearingSeconds),
+                            ].join(' · ')
                           : [
                               peerPresence?.label ??
                                   (peerIsOnline ? tr('Online') : tr('Offline')),

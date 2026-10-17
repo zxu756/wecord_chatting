@@ -500,6 +500,9 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       timedOutUntil: widget.detail.currentUserTimedOutUntil,
       slowmodeSeconds: widget.detail.slowmodeFor(channel),
       topic: channel.topic,
+      circleMemberIds: {
+        for (final member in widget.detail.members) member.profile.id,
+      },
       isAnnouncementChannel: channel.isAnnouncement,
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );

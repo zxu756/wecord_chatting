@@ -252,7 +252,20 @@ the WeCord components in new and restyled screens.
   messages and a circle's channels share one width: 292, resizable
   220–420.
 - Content on `panel` with a 1px `lineSoft` left edge; header 58 with a
-  hairline bottom border, 36 icon buttons, a raised search field (200 wide).
+  hairline bottom border, 36 icon buttons, a raised search field (208 wide).
+- **Chat header rule.** The wide header shows at most three or four primary
+  actions and a **More** (`…`) button; the title gets everything else. Direct
+  chats: voice call, video call, side panel (profile), search field. Groups:
+  voice call, video call, group details, search field. Circle channels:
+  pinned messages, member list, search field. Threads: close. Everything else
+  (notes and lists, pinned messages in chats, media, events, disappearing
+  messages, wallpaper, summarize, channel settings, archive) is in More, a
+  glass menu (`showGlassMenu`) that lists each action with its icon and the
+  same label the button's tooltip had, so keyboard use and screen readers are
+  unchanged and no action is lost. More shows as selected while something it
+  opened (the notes panel) is open. An action opts into the bar with
+  `ChatThreadAction.primary`; phones ignore it and keep search, one primary
+  action and More, as before.
 - Optional right panel on `sidebar`: the circle member list (248,
   resizable 200–360) or a direct chat's profile (300, resizable 240–420).
   The header toggle opens and closes it.

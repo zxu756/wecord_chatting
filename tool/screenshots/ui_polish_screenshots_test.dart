@@ -156,10 +156,7 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await Scrollable.ensureVisible(
-      tester.element(finder),
-      alignment: 0.6,
-    );
+    await Scrollable.ensureVisible(tester.element(finder), alignment: 0.6);
     await settle(tester);
   }
 
@@ -214,6 +211,20 @@ void main() {
   desktop('group-header', openGroup);
   desktop('circle-channel', (tester, world) async {
     await openChannel(tester, world, wide: true);
+  });
+
+  Future<void> openMore(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('chat-header-more')));
+    await settle(tester);
+  }
+
+  desktop('dm-header-more', (tester, world) async {
+    await openDm(tester, world);
+    await openMore(tester);
+  });
+  desktop('circle-channel-more', (tester, world) async {
+    await openChannel(tester, world, wide: true);
+    await openMore(tester);
   });
 
   // A channel without a topic.

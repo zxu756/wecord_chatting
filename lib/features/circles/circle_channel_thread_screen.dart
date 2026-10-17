@@ -137,6 +137,7 @@ class _CircleChannelThreadScreenState
       ChatThreadAction(
         tooltip: tr('Show member list'),
         icon: Icons.people_outline,
+        primary: true,
         onPressed: detail == null ? null : _showMembers,
       ),
       if (detail != null && channel != null && detail.canOpenChannelSettings)

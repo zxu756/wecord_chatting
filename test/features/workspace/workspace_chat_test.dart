@@ -10,6 +10,14 @@ import 'package:wecord/shared/models/conversation.dart';
 import '../../mobile/phone_test_support.dart';
 import 'workspace_world.dart';
 
+/// Picks [label] from the wide chat header's More menu.
+Future<void> openFromMore(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const ValueKey('chat-header-more')));
+  await settle(tester);
+  await tester.tap(find.text(label));
+  await settle(tester);
+}
+
 Future<void> openDirect(WidgetTester tester, PhoneWorld world) {
   return world.open(
     tester,
@@ -267,14 +275,14 @@ void main() {
       });
     }
 
+    // The wide header keeps a few primary buttons; Notes is in More.
     desktopTest('Notes opens a panel beside the chat, which closes again', (
       tester,
       workspace,
     ) async {
       await openDirect(tester, workspace.world);
       expect(find.byType(WorkspacePanel), findsNothing);
-      await tester.tap(find.byTooltip('Notes and lists'));
-      await settle(tester);
+      await openFromMore(tester, 'Notes and lists');
       expect(find.byType(WorkspacePanel), findsOneWidget);
       expect(find.text('Trailhead rules'), findsOneWidget);
       // The chat is still there beside it.
@@ -295,8 +303,7 @@ void main() {
       workspace,
     ) async {
       await openDirect(tester, workspace.world);
-      await tester.tap(find.byTooltip('Notes and lists'));
-      await settle(tester);
+      await openFromMore(tester, 'Notes and lists');
       await tester.drag(
         find.byKey(const ValueKey('resize-docs')),
         const Offset(-80, 0),
@@ -311,8 +318,7 @@ void main() {
       workspace,
     ) async {
       await openDirect(tester, workspace.world);
-      await tester.tap(find.byTooltip('Notes and lists'));
-      await settle(tester);
+      await openFromMore(tester, 'Notes and lists');
       await tester.tap(find.byKey(const ValueKey('workspace-tab-lists')));
       await settle(tester);
       expect(find.text('Launch checklist'), findsOneWidget);

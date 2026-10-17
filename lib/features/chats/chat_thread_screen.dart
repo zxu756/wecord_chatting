@@ -170,7 +170,14 @@ class ChatThreadAction {
     this.selectedIcon,
     this.isSelected,
     this.menuOnly = false,
+    this.primary = false,
   });
+
+  /// Stays a button in the wide header; every other action moves into its
+  /// More menu, so the title keeps the room (see the design language's
+  /// header rule). Phones ignore it: they keep search, one primary action
+  /// of their own choosing and More.
+  final bool primary;
 
   /// Only in the More menu: wide headers have no room for another button
   /// (the title would be squeezed out) and reach it another way.
@@ -1057,6 +1064,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final pinnedAction = ChatThreadAction(
       tooltip: tr('Pinned messages'),
       icon: Icons.push_pin_outlined,
+      // Pins are what a channel's header is for; elsewhere they are in More.
+      primary: conversationType == ConversationType.channel,
       onPressed: () => _showPinnedMessages(canPinMessages),
     );
     final canCall =
@@ -1079,6 +1088,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ? ChatThreadAction(
             tooltip: tr('Start voice call'),
             icon: Icons.call_outlined,
+            primary: true,
             onPressed: () => startDirectCall(
               context,
               ref,
@@ -1091,6 +1101,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ? ChatThreadAction(
             tooltip: tr('Start video call'),
             icon: Icons.videocam_outlined,
+            primary: true,
             onPressed: () => startDirectCall(
               context,
               ref,
@@ -1140,6 +1151,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ? ChatThreadAction(
             tooltip: tr('Group details'),
             icon: Icons.group_outlined,
+            primary: true,
             onPressed: () => _showGroupDetails(title),
           )
         : null;
@@ -1316,6 +1328,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 icon: Icons.view_sidebar_outlined,
                 selectedIcon: Icons.view_sidebar_rounded,
                 isSelected: showProfile,
+                primary: true,
                 onPressed: () {
                   setState(() => _profileForced = !showProfile && !profileFits);
                   ref
@@ -1326,9 +1339,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         final headerActions = [
           for (final action in appBarActions)
             if (!inlineSearch || !identical(action, searchAction)) action,
-          // Narrow desktop panes have no room for one more icon; there the
-          // composer's + menu opens the same list.
-          if (compact || constraints.maxWidth >= 1000) ?eventsAction,
+          ?eventsAction,
           ?profileAction,
         ];
         // Small phones keep more of the name.

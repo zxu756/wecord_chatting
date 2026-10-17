@@ -204,6 +204,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
     final closeThread = ChatThreadAction(
       tooltip: tr('Close thread'),
       icon: Icons.close,
+      primary: true,
       onPressed: () => setState(() => _openThread = null),
     );
     final selectedChannel = _selectedChannel;
@@ -297,6 +298,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
           isSelected: showMembers,
           icon: Icons.people_outline,
           selectedIcon: Icons.people,
+          primary: true,
           onPressed: () => _toggleMembers(open: !showMembers, fits: fits),
         );
         final thread = _openThread;

@@ -100,4 +100,36 @@ const zhMiscFeatures = <String, String>{
   'Upcoming': '即将开始',
   'What should people know? (optional)': '大家需要知道什么？（可选）',
   'Your answer: {answer}': '你的回复：{answer}',
+
+  // Cleaning up groups
+  'Untitled group': '未命名群聊',
+  'Leave 1 group?': '退出 1 个群聊？',
+  'Leave {count} groups?': '退出 {count} 个群聊？',
+  'You will stop getting their messages and they will leave your chat list. A member can add you back later.':
+      '你将不再收到这些群的消息，它们也会从聊天列表中消失。之后群成员可以再次拉你入群。',
+  'Leaving 1 group…': '正在退出 1 个群聊…',
+  'Leaving {count} groups…': '正在退出 {count} 个群聊…',
+  'Undo': '撤销',
+  'Nothing changed. You are still in them.': '没有任何更改，你仍在这些群里。',
+  'Left 1 group.': '已退出 1 个群聊。',
+  'Left {count} groups.': '已退出 {count} 个群聊。',
+  'Left {left}, but {failed} could not be left. Try again.':
+      '已退出 {left} 个，另有 {failed} 个无法退出，请重试。',
+  'Clean up groups': '清理群聊',
+  'Leave group chats nobody has written in for a while. You choose which ones, and you can undo before anything happens.':
+      '退出已经很久没人发言的群聊。由你选择退出哪些，执行前还可以撤销。',
+  'Quiet for': '沉寂时长',
+  'Could not load your groups. Try again.': '无法加载你的群聊，请重试。',
+  'Nothing to clean up': '没有需要清理的群聊',
+  'Every group of yours has had a message in the last {count} days.':
+      '你的每个群在最近 {count} 天内都有消息。',
+  '{count} quiet groups': '{count} 个沉寂的群聊',
+  '{selected} of {total} selected': '已选 {selected} / {total}',
+  'Select none': '取消全选',
+  'Select all': '全选',
+  'Leave {count}': '退出 {count} 个',
+  'Last activity {when}': '最后活动：{when}',
+  'You are the only owner. Hand it over first.': '你是唯一的群主，请先转让群主。',
+  'Leave group chats nobody writes in any more': '退出没人再发言的群聊',
+  'Chats': '聊天',
 };

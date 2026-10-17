@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
@@ -150,6 +151,7 @@ class SettingsPhonePage extends ConsumerWidget {
                 ),
             ],
           ),
+          ChatSettingsGroup(header: tr('Chats')),
           const NotificationSettingsGroups(),
           PrivacySettingsGroup(header: tr('Privacy & Safety')),
           AccountActionsGroup(username: value.username, header: tr('Account')),

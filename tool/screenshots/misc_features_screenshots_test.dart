@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/time_tokens/time_token.dart';
+import 'package:wecord/features/groups/group_cleanup.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -23,6 +24,7 @@ import 'package:wecord/shared/models/message.dart';
 
 import '../../test/features/chats/events/chat_events_test.dart'
     show FakeChatEventsRepository, chatEvent;
+import '../../test/features/groups/group_cleanup_test.dart' show quietGroup;
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -101,6 +103,9 @@ void main() {
           world.extraOverrides = [
             timeTokenFollowsClockProvider.overrideWithValue(false),
             chatEventsRepositoryProvider.overrideWithValue(eventsRepo),
+            groupCleanupRepositoryProvider.overrideWithValue(
+              _ScreenshotCleanupRepository(),
+            ),
           ];
           await open(tester, world, variant);
           await shoot(tester, '$name-${variant.name}');
@@ -305,4 +310,91 @@ void main() {
     seedEvents();
     await world.open(tester, '/notifications');
   });
+
+  // ------------------------------------- settings pages: cleanup, export
+
+  /// The scrollable of the page on top (settings pages stack).
+  Finder topPageScrollable() => find
+      .descendant(
+        of: find.byKey(const ValueKey('settings-page-list')).last,
+        matching: find.byType(Scrollable),
+      )
+      .first;
+
+  /// Opens Settings and taps [tile], on the phone page or in the desktop
+  /// window's [section].
+  Future<void> openSettingsRow(
+    WidgetTester tester,
+    PhoneWorld world,
+    _Variant variant, {
+    required String section,
+    required String tile,
+  }) async {
+    await world.open(tester, '/me');
+    await settle(tester);
+    if (variant.desktop) {
+      await tester.tap(find.byKey(ValueKey('settings-nav-$section')));
+      await settle(tester);
+    }
+    final target = find.byKey(ValueKey(tile));
+    await tester.scrollUntilVisible(
+      target,
+      300,
+      scrollable: topPageScrollable(),
+    );
+    await settle(tester);
+    await tester.ensureVisible(target);
+    await settle(tester);
+    await tester.tap(target);
+    await settle(tester);
+  }
+
+  screen('cleanup', 'cleanup1-list', (tester, world, variant) async {
+    await openSettingsRow(
+      tester,
+      world,
+      variant,
+      section: 'chats',
+      tile: 'group-cleanup-tile',
+    );
+    await tester.tap(find.byKey(const ValueKey('group-cleanup-select-all')));
+    await settle(tester);
+  });
+
+  screen('cleanup', 'cleanup2-undo', (tester, world, variant) async {
+    await openSettingsRow(
+      tester,
+      world,
+      variant,
+      section: 'chats',
+      tile: 'group-cleanup-tile',
+    );
+    await tester.tap(find.byKey(const ValueKey('group-cleanup-30')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('group-cleanup-select-all')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('group-cleanup-leave')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('group-cleanup-confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+  });
+}
+
+class _ScreenshotCleanupRepository implements GroupCleanupRepository {
+  @override
+  Future<List<InactiveGroup>> listInactiveGroups(int days) async {
+    final all = [
+      quietGroup('a', title: 'Summer trip 2025', days: 400, members: 8),
+      quietGroup('b', title: 'Flat 4B', days: 220, members: 4, canLeave: false),
+      quietGroup('c', title: 'Office lunch crew', days: 130, members: 23),
+      quietGroup('d', title: 'Book club', days: 95, members: 11, pinned: true),
+      quietGroup('e', title: 'Wedding planning', days: 45, members: 6),
+    ];
+    return [
+      for (final group in all)
+        if (DateTime.now().difference(group.lastActivityAt).inDays >= days)
+          group,
+    ];
+  }
 }

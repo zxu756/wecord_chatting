@@ -1,19 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
+import 'package:wecord/features/voice_input/voice_input_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-/// Settings -> Chats: housekeeping for your conversations.
-class ChatSettingsGroup extends StatelessWidget {
+/// Settings -> Chats: voice input and housekeeping for your conversations.
+class ChatSettingsGroup extends ConsumerWidget {
   const ChatSettingsGroup({this.header, super.key});
 
   final String? header;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SettingsGroup(
       header: header,
       children: [
+        // Speak to type: only where the device or the browser can do it.
+        if (ref.watch(voiceInputSupportedProvider))
+          SettingsRow.toggle(
+            key: const ValueKey('voice-input-switch'),
+            icon: Icons.graphic_eq_rounded,
+            tone: SettingsTone.accent,
+            title: tr('Show voice input'),
+            subtitle: tr(
+              'Speak to type in the message box and edit the words before sending. This is not a voice message.',
+            ),
+            value: ref.watch(showVoiceInputProvider),
+            onChanged: (value) =>
+                unawaited(ref.read(showVoiceInputProvider.notifier).set(value)),
+          ),
         SettingsRow(
           key: const ValueKey('group-cleanup-tile'),
           icon: Icons.cleaning_services_outlined,

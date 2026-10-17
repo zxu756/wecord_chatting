@@ -18,6 +18,9 @@ import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
+import 'package:wecord/features/chain/chain_card.dart';
+import 'package:wecord/features/chain/chain_create_sheet.dart';
+import 'package:wecord/features/chain/chain_models.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
@@ -80,6 +83,9 @@ import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/voice_input/voice_input_button.dart';
+import 'package:wecord/features/voice_input/voice_input_panel.dart';
+import 'package:wecord/features/voice_input/voice_input_settings.dart';
 import 'package:wecord/features/workspace/workspace_cards.dart';
 import 'package:wecord/features/workspace/workspace_navigation.dart';
 import 'package:wecord/features/workspace/workspace_panel.dart';
@@ -2039,6 +2045,24 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    voiceButton: ref.watch(voiceInputAvailableProvider)
+                        ? VoiceInputButton(
+                            owner: widget.conversationId,
+                            field: _composerController,
+                            focus: _composerFocus,
+                            size: desktop ? 36 : 40,
+                            enabled:
+                                !_isSending &&
+                                !_isSendingVoice &&
+                                !_isRecordingVoice,
+                          )
+                        : null,
+                    voicePanel: ref.watch(voiceInputAvailableProvider)
+                        ? VoiceInputPanel(owner: widget.conversationId)
+                        : null,
+                    onCreateChain: conversationType == ConversationType.direct
+                        ? null
+                        : _openChainComposer,
                     onChangeWallpaper: openWallpaper,
                     onInsertTime: _insertTime,
                     onShowEvents:
@@ -3363,6 +3387,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
     final posted = await showPollComposerSheet(
+      context,
+      conversationId: widget.conversationId,
+    );
+    if (posted == true && mounted) {
+      _refreshThread();
+    }
+  }
+
+  Future<void> _openChainComposer() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    final posted = await showChainCreateSheet(
       context,
       conversationId: widget.conversationId,
     );
@@ -6459,6 +6496,13 @@ class _MessageContent extends StatelessWidget {
                 ),
         ),
       );
+    } else if (message.chainCard case final chainCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: ChainCardView(card: chainCard),
+        ),
+      );
     } else if (message.workspaceCard case final workspaceCard?) {
       content.add(
         Padding(
@@ -6866,6 +6910,9 @@ class _Composer extends StatelessWidget {
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
+    this.voiceButton,
+    this.voicePanel,
+    this.onCreateChain,
     required this.onInsertTime,
     required this.onChangeWallpaper,
     this.onShowEvents,
@@ -6943,6 +6990,15 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
+
+  /// Voice input (speak to type): the button next to the emoji button, and
+  /// the panel above the composer while it listens. Null where the platform
+  /// can't dictate or the person switched it off.
+  final Widget? voiceButton;
+  final Widget? voicePanel;
+
+  /// Starts a group chain (接龙); null in direct chats.
+  final Future<void> Function()? onCreateChain;
   final Future<void> Function() onInsertTime;
 
   /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
@@ -7019,6 +7075,13 @@ class _Composer extends StatelessWidget {
                     label: tr('Create poll'),
                     onSelected: () => unawaited(onCreatePoll()),
                   ),
+                  if (onCreateChain != null)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-chain-entry'),
+                      icon: Icons.format_list_numbered_rounded,
+                      label: tr('Chain'),
+                      onSelected: () => unawaited(onCreateChain!()),
+                    ),
                   GlassMenuEntry(
                     key: const ValueKey('composer-schedule-entry'),
                     icon: Icons.schedule_send_outlined,
@@ -7244,6 +7307,7 @@ class _Composer extends StatelessWidget {
             ?aiButton,
             gif,
             emoji,
+            ?voiceButton,
             mic,
             const SizedBox(width: 2),
             sending ?? sendButton(),
@@ -7256,7 +7320,9 @@ class _Composer extends StatelessWidget {
                     value.text.trim().isEmpty ? const SizedBox.shrink() : ai,
               ),
             emoji,
-            gif,
+            // Voice input takes the GIF button's place on phones (GIFs stay
+            // in the Attach menu).
+            voiceButton ?? gif,
             const SizedBox(width: 2),
             // Phones show the microphone until there is something to send.
             ValueListenableBuilder<TextEditingValue>(
@@ -7412,6 +7478,7 @@ class _Composer extends StatelessWidget {
                 const SizedBox(height: 6),
               ],
               ?scheduledBanner,
+              ?voicePanel,
               pill,
             ],
           ),

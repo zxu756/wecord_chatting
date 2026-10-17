@@ -24,6 +24,13 @@ enum ResizablePanel {
     min: WeCordSizes.profilePanelMin,
     initial: WeCordSizes.profilePanelDefault,
     max: WeCordSizes.profilePanelMax,
+  ),
+
+  /// A conversation's notes and lists.
+  docs(
+    min: WeCordSizes.docsPanelMin,
+    initial: WeCordSizes.docsPanelDefault,
+    max: WeCordSizes.docsPanelMax,
   );
 
   const ResizablePanel({
@@ -56,8 +63,10 @@ class PanelLayout {
     this.sidebarWidth = WeCordSizes.sidebarDefault,
     this.membersWidth = WeCordSizes.memberListDefault,
     this.profileWidth = WeCordSizes.profilePanelDefault,
+    this.docsWidth = WeCordSizes.docsPanelDefault,
     this.membersCollapsed = false,
     this.profileCollapsed = false,
+    this.docsCollapsed = true,
   });
 
   /// Reads what [toJson] wrote, clamping widths to their ranges; anything
@@ -71,14 +80,18 @@ class PanelLayout {
       sidebarWidth: width('sidebar', ResizablePanel.sidebar),
       membersWidth: width('members', ResizablePanel.members),
       profileWidth: width('profile', ResizablePanel.profile),
+      docsWidth: width('docs', ResizablePanel.docs),
       membersCollapsed: json['membersCollapsed'] == true,
       profileCollapsed: json['profileCollapsed'] == true,
+      // Closed until somebody opens it.
+      docsCollapsed: json['docsCollapsed'] != false,
     );
   }
 
   final double sidebarWidth;
   final double membersWidth;
   final double profileWidth;
+  final double docsWidth;
 
   /// The user closed the circle member list.
   final bool membersCollapsed;
@@ -86,16 +99,21 @@ class PanelLayout {
   /// The user closed the direct chat's profile panel.
   final bool profileCollapsed;
 
+  /// The notes and lists panel is closed (it starts closed).
+  final bool docsCollapsed;
+
   double widthOf(ResizablePanel panel) => switch (panel) {
     ResizablePanel.sidebar => sidebarWidth,
     ResizablePanel.members => membersWidth,
     ResizablePanel.profile => profileWidth,
+    ResizablePanel.docs => docsWidth,
   };
 
   bool collapsedOf(ResizablePanel panel) => switch (panel) {
     ResizablePanel.sidebar => false,
     ResizablePanel.members => membersCollapsed,
     ResizablePanel.profile => profileCollapsed,
+    ResizablePanel.docs => docsCollapsed,
   };
 
   PanelLayout withWidth(ResizablePanel panel, double width) {
@@ -104,8 +122,10 @@ class PanelLayout {
       sidebarWidth: panel == ResizablePanel.sidebar ? clamped : sidebarWidth,
       membersWidth: panel == ResizablePanel.members ? clamped : membersWidth,
       profileWidth: panel == ResizablePanel.profile ? clamped : profileWidth,
+      docsWidth: panel == ResizablePanel.docs ? clamped : docsWidth,
       membersCollapsed: membersCollapsed,
       profileCollapsed: profileCollapsed,
+      docsCollapsed: docsCollapsed,
     );
   }
 
@@ -114,12 +134,14 @@ class PanelLayout {
       sidebarWidth: sidebarWidth,
       membersWidth: membersWidth,
       profileWidth: profileWidth,
+      docsWidth: docsWidth,
       membersCollapsed: panel == ResizablePanel.members
           ? collapsed
           : membersCollapsed,
       profileCollapsed: panel == ResizablePanel.profile
           ? collapsed
           : profileCollapsed,
+      docsCollapsed: panel == ResizablePanel.docs ? collapsed : docsCollapsed,
     );
   }
 
@@ -127,8 +149,10 @@ class PanelLayout {
     'sidebar': sidebarWidth,
     'members': membersWidth,
     'profile': profileWidth,
+    'docs': docsWidth,
     'membersCollapsed': membersCollapsed,
     'profileCollapsed': profileCollapsed,
+    'docsCollapsed': docsCollapsed,
   };
 
   @override
@@ -137,16 +161,20 @@ class PanelLayout {
       other.sidebarWidth == sidebarWidth &&
       other.membersWidth == membersWidth &&
       other.profileWidth == profileWidth &&
+      other.docsWidth == docsWidth &&
       other.membersCollapsed == membersCollapsed &&
-      other.profileCollapsed == profileCollapsed;
+      other.profileCollapsed == profileCollapsed &&
+      other.docsCollapsed == docsCollapsed;
 
   @override
   int get hashCode => Object.hash(
     sidebarWidth,
     membersWidth,
     profileWidth,
+    docsWidth,
     membersCollapsed,
     profileCollapsed,
+    docsCollapsed,
   );
 
   @override

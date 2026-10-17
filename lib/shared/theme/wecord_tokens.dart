@@ -633,6 +633,11 @@ abstract final class WeCordSizes {
   static const profilePanelMin = 240.0;
   static const profilePanelMax = 420.0;
 
+  /// The notes and lists panel beside a chat: 440, resizable 340–760.
+  static const docsPanelDefault = 440.0;
+  static const docsPanelMin = 340.0;
+  static const docsPanelMax = 760.0;
+
   /// The narrowest the centre content (the chat) gets before right panels
   /// close and then the sidebar shrinks.
   static const contentMin = 420.0;

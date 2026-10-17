@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/workspace/workspace_navigation.dart';
+import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -11,7 +15,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 /// What a quick switcher entry opens.
-enum QuickSwitchKind { direct, group, channel, circle }
+enum QuickSwitchKind { direct, group, channel, circle, note }
 
 /// A place the quick switcher can jump to.
 class QuickSwitchItem {
@@ -24,9 +28,27 @@ class QuickSwitchItem {
     this.conversation,
     this.lastActivityAt,
     this.unread = false,
+    this.note,
   });
 
+  /// A note found by its title.
+  factory QuickSwitchItem.fromNote(NoteSearchHit hit) {
+    return QuickSwitchItem(
+      kind: QuickSwitchKind.note,
+      id: hit.id,
+      title: hit.title.trim().isEmpty ? tr('Untitled') : hit.title.trim(),
+      subtitle: hit.circleName != null
+          ? '${hit.conversationTitle ?? ''} \u00b7 ${hit.circleName}'
+          : hit.conversationTitle,
+      lastActivityAt: hit.updatedAt,
+      note: hit,
+    );
+  }
+
   final QuickSwitchKind kind;
+
+  /// Set for notes.
+  final NoteSearchHit? note;
 
   /// The conversation id, or the circle id for circles.
   final String id;
@@ -195,12 +217,44 @@ Future<void> showQuickSwitcher(BuildContext context) async {
 }
 
 void openQuickSwitchItem(BuildContext context, QuickSwitchItem item) {
+  final note = item.note;
+  if (note != null) {
+    _openNote(context, note);
+    return;
+  }
   final conversation = item.conversation;
   if (conversation != null) {
     openConversation(context, conversation);
     return;
   }
   openPage(context, circleLocation(item.id));
+}
+
+/// Opens a note: beside its conversation on wide layouts, as a page on
+/// phones.
+void _openNote(BuildContext context, NoteSearchHit note) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final wide = isWideLayout(MediaQuery.sizeOf(context).width);
+  final conversation = container
+      .read(conversationsProvider)
+      .value
+      ?.where((conversation) => conversation.id == note.conversationId)
+      .firstOrNull;
+  if (wide && conversation != null) {
+    container.read(workspaceRequestProvider.notifier).state = WorkspaceRequest(
+      conversationId: note.conversationId,
+      tab: WorkspaceTab.notes,
+      noteId: note.id,
+    );
+    openConversation(context, conversation);
+    return;
+  }
+  openWorkspace(
+    context,
+    conversationId: note.conversationId,
+    noteId: note.id,
+    title: note.conversationTitle,
+  );
 }
 
 class QuickSwitcherDialog extends ConsumerStatefulWidget {
@@ -229,7 +283,19 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
       circles:
           ref.watch(circleSummariesProvider).value ?? const <CircleSummary>[],
     );
-    return searchQuickSwitchItems(items, _controller.text);
+    final found = searchQuickSwitchItems(items, _controller.text);
+    // Notes whose title matches, after the places.
+    final query = _controller.text.trim();
+    if (query.length >= 2 && !'@#*'.contains(query[0])) {
+      final notes = ref.watch(noteSearchProvider(query)).value;
+      if (notes != null && notes.isNotEmpty) {
+        return [
+          ...found,
+          for (final hit in notes.take(6)) QuickSwitchItem.fromNote(hit),
+        ];
+      }
+    }
+    return found;
   }
 
   KeyEventResult _handleKey(
@@ -379,6 +445,13 @@ class _QuickSwitchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final leading = switch (item.kind) {
+      QuickSwitchKind.note => ThingAvatar(
+        size: 32,
+        label: item.note?.icon ?? '',
+        icon: item.note == null ? Icons.description_outlined : null,
+        color: c.raised,
+        foregroundColor: c.muted,
+      ),
       QuickSwitchKind.channel => ThingAvatar(
         size: 32,
         icon: Icons.tag_rounded,
@@ -402,6 +475,10 @@ class _QuickSwitchTile extends StatelessWidget {
       QuickSwitchKind.group => tr('Group'),
       QuickSwitchKind.channel => item.subtitle ?? tr('Channel'),
       QuickSwitchKind.circle => tr('Circle'),
+      QuickSwitchKind.note =>
+        item.subtitle == null || item.subtitle!.trim().isEmpty
+            ? tr('Note')
+            : tr('Note in {place}', {'place': item.subtitle!}),
     };
     return WeCordPressable(
       key: ValueKey('quick-switch-${item.id}'),

@@ -14,6 +14,7 @@ import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
 
 import '../features/discovery/discovery_fakes.dart';
+import 'workspace_a11y_screens.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -272,4 +273,8 @@ final moreA11yScreens = <A11yScreen>[
 ];
 
 /// Every screen the guard and the screenshot tool visit.
-final allA11yScreens = <A11yScreen>[...a11yScreens, ...moreA11yScreens];
+final allA11yScreens = <A11yScreen>[
+  ...a11yScreens,
+  ...moreA11yScreens,
+  ...workspaceA11yScreens,
+];

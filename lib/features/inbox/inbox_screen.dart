@@ -8,6 +8,9 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
+import 'package:wecord/features/lists/list_models.dart';
+import 'package:wecord/features/workspace/task_notification_card.dart';
+import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -32,11 +35,18 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
       0;
   final requests = ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
-  return unread + requests;
+  final tasks =
+      ref
+          .watch(taskNotificationsProvider)
+          .value
+          ?.where((notification) => notification.isUnread)
+          .length ??
+      0;
+  return unread + requests + tasks;
 });
 
 /// Which notifications the inbox shows.
-enum InboxFilter { all, mentions, replies, friends }
+enum InboxFilter { all, mentions, replies, tasks, friends }
 
 /// Mentions of and replies to the current user, with pending friend
 /// requests on top. Chips narrow it to mentions, replies or requests.
@@ -57,6 +67,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(incomingFriendRequestsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
+    ref.invalidate(taskNotificationsProvider);
   }
 
   @override
@@ -79,6 +90,12 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         circle.id: circle,
     };
     final items = inbox.value ?? const <InboxItem>[];
+    final taskNotifications =
+        ref.watch(taskNotificationsProvider).value ??
+        const <TaskNotification>[];
+    final unreadTasks = taskNotifications
+        .where((notification) => notification.isUnread)
+        .length;
     final unreadMentions = items
         .where((item) => item.isUnread && item.reason != InboxReason.reply)
         .length;
@@ -94,8 +111,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         items.where((item) => item.reason != InboxReason.reply).toList(),
       InboxFilter.replies =>
         items.where((item) => item.reason == InboxReason.reply).toList(),
+      InboxFilter.tasks => const <InboxItem>[],
       InboxFilter.friends => const <InboxItem>[],
     };
+    final showTasks =
+        _filter == InboxFilter.all || _filter == InboxFilter.tasks;
 
     Widget chip(InboxFilter filter, String label, [int? count]) {
       return WeCordChip(
@@ -135,12 +155,26 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 ],
               ],
             ),
-          for (final item in visibleItems)
-            _InboxCard(
-              item: item,
-              conversation: conversations[item.conversationId],
-              circles: circles,
-            ),
+          // Messages and task notices, newest first.
+          for (final entry in _newestFirst(
+            visibleItems,
+            showTasks ? taskNotifications : const <TaskNotification>[],
+          ))
+            switch (entry) {
+              final InboxItem item => _InboxCard(
+                item: item,
+                conversation: conversations[item.conversationId],
+                circles: circles,
+              ),
+              final TaskNotification notification => TaskNotificationCard(
+                notification: notification,
+                conversationName: _placeOf(
+                  conversations[notification.conversationId],
+                  circles,
+                ),
+              ),
+              _ => const SizedBox.shrink(),
+            },
         ];
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -200,6 +234,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                       const SizedBox(width: 6),
                       chip(InboxFilter.replies, tr('Replies'), unreadReplies),
                       const SizedBox(width: 6),
+                      chip(InboxFilter.tasks, tr('Tasks'), unreadTasks),
+                      const SizedBox(width: 6),
                       chip(InboxFilter.friends, tr('Friends'), requests.length),
                     ],
                   ),
@@ -214,6 +250,34 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ),
     );
   }
+}
+
+/// Messages and task notices mixed, the newest first.
+List<Object> _newestFirst(
+  List<InboxItem> messages,
+  List<TaskNotification> tasks,
+) {
+  final entries = <(DateTime, Object)>[
+    for (final item in messages) (item.createdAt, item),
+    for (final notification in tasks) (notification.createdAt, notification),
+  ]..sort((a, b) => b.$1.compareTo(a.$1));
+  return [for (final entry in entries) entry.$2];
+}
+
+/// "#channel · Circle" or the group's name, or null for a direct message.
+String? _placeOf(
+  ConversationSummary? conversation,
+  Map<String, CircleSummary> circles,
+) {
+  if (conversation == null || conversation.type == ConversationType.direct) {
+    return null;
+  }
+  final circle = circles[conversation.circleId];
+  final title = conversation.title?.trim() ?? '';
+  if (circle != null) {
+    return title.isEmpty ? circle.name : '$title \u00b7 ${circle.name}';
+  }
+  return title.isEmpty ? null : title;
 }
 
 /// A white card on the paper page.
@@ -677,7 +741,13 @@ class _EmptyInbox extends StatelessWidget {
           if (filter != InboxFilter.friends) ...[
             const SizedBox(height: 6),
             Text(
-              tr('Mentions and replies from the last 30 days show up here.'),
+              filter == InboxFilter.tasks
+                  ? tr(
+                      'Tasks assigned to you, and their due dates, show up here.',
+                    )
+                  : tr(
+                      'Mentions and replies from the last 30 days show up here.',
+                    ),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: c.muted, height: 1.4),
             ),

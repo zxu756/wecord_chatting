@@ -26,6 +26,7 @@ import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/workspace/workspace_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -207,6 +208,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               return ChatMediaScreen(
                 conversationId: state.pathParameters['conversationId']!,
+              );
+            },
+          ),
+          // A conversation's notes and lists as a page; ?tab=, ?note=,
+          // ?list= and ?item= say what is open.
+          GoRoute(
+            path: '/chats/:conversationId/workspace',
+            builder: (context, state) {
+              final query = state.uri.queryParameters;
+              return WorkspaceScreen(
+                conversationId: state.pathParameters['conversationId']!,
+                title: state.extra is String ? state.extra! as String : null,
+                tab: WorkspaceScreen.tabFrom(query),
+                noteId: query['note'],
+                listId: query['list'],
+                itemId: query['item'],
               );
             },
           ),

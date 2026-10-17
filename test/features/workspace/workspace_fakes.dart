@@ -256,6 +256,9 @@ class FakeListsRepository implements ListsRepository {
   final conversation = StreamController<void>.broadcast();
   var failUpserts = false;
 
+  /// The server answers every change with a refusal (SQLSTATE 42501).
+  var refuseUpserts = false;
+
   @override
   Future<List<TaskListSummary>> listLists(String conversationId) async =>
       summaries;
@@ -346,6 +349,9 @@ class FakeListsRepository implements ListsRepository {
   ) async {
     if (failUpserts) {
       throw StateError('offline');
+    }
+    if (refuseUpserts) {
+      throw StateError('42501 You cannot edit this list');
     }
     upserts.add({...fields, 'list_id': listId});
     final id = fields['id']! as String;

@@ -8,6 +8,7 @@
 //
 // Answers {created, pushed, removed}. See docs/chat-events.md.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import {
   isSchedulerToken,
@@ -52,7 +53,12 @@ Deno.serve(async (request) => {
   });
   if (claimed.error) return json({ error: "claim_failed" }, 500);
 
-  const targets = (claimed.data ?? []) as ReminderTarget[];
+  // Times in an event's title are written for each subscriber's zone.
+  const targets = await writeTimesForTargets(
+    admin,
+    (claimed.data ?? []) as ReminderTarget[],
+    Math.floor(Date.now() / 1000),
+  );
   const gone: string[] = [];
   let pushed = 0;
   await Promise.all(targets.map(async (target) => {

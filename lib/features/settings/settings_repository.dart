@@ -267,11 +267,10 @@ class SupabaseSettingsDataSource implements SettingsDataSource {
 
   @override
   Future<Map<String, dynamic>> currentProfile(String currentUserId) async {
-    final row = await _client
-        .from('profiles')
-        .select('*,custom_status')
-        .eq('id', currentUserId)
-        .single();
+    // The bio, pronouns and banner aren't readable from the table (see
+    // 202610170101_profile_visibility_enforced); the caller's own come from
+    // this function.
+    final row = await _client.rpc('get_my_profile').single();
     return row;
   }
 
@@ -281,7 +280,9 @@ class SupabaseSettingsDataSource implements SettingsDataSource {
   ) async {
     final rows = await _client
         .from('blocks')
-        .select('blocked:profiles!blocks_blocked_id_fkey(*)')
+        .select(
+          'blocked:profiles!blocks_blocked_id_fkey(id,username,display_name,avatar_url,created_at,updated_at)',
+        )
         .eq('blocker_id', currentUserId)
         .order('created_at');
     return rows;

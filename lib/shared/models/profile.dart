@@ -24,7 +24,7 @@ class Profile {
       displayName: json['display_name'] as String,
       alias: json['alias'] as String?,
       avatarUrl: json['avatar_url'] as String?,
-      bio: json['bio'] as String,
+      bio: json['bio'] as String? ?? '',
       createdAt: _parseTimestamp(json['created_at']),
       updatedAt: _parseTimestamp(json['updated_at']),
       customStatus: CustomStatus.maybeFromJson(json['custom_status']),

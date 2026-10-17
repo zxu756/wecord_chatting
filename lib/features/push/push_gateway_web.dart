@@ -27,6 +27,9 @@ class BrowserPushGateway implements PushGateway {
   String? get permission => supported ? web.Notification.permission : null;
 
   @override
+  String? get timeZone => browserTimeZone();
+
+  @override
   Future<String?> requestPermission() async {
     if (!supported) {
       return null;
@@ -130,6 +133,26 @@ class BrowserPushGateway implements PushGateway {
       p256dh: _base64UrlEncode(p256dh.toDart.asUint8List()),
       auth: _base64UrlEncode(auth.toDart.asUint8List()),
     );
+  }
+}
+
+/// The browser's IANA time zone, from
+/// `Intl.DateTimeFormat().resolvedOptions().timeZone`: the name the browser
+/// itself uses, DST rules included. Null when it reports none.
+String? browserTimeZone() {
+  try {
+    final intl = globalContext['Intl'];
+    if (intl.isUndefinedOrNull) {
+      return null;
+    }
+    final format = (intl as JSObject).callMethod<JSObject>(
+      'DateTimeFormat'.toJS,
+    );
+    final options = format.callMethod<JSObject>('resolvedOptions'.toJS);
+    final zone = options['timeZone'];
+    return zone.isA<JSString>() ? (zone as JSString).toDart : null;
+  } catch (_) {
+    return null;
   }
 }
 

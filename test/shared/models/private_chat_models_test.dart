@@ -96,6 +96,24 @@ void main() {
     expect(profile.copyWith(displayName: 'A').displayName, 'A');
   });
 
+  test('Profile parses rows that leave the bio out', () {
+    // Message senders, group members and search results no longer carry the
+    // bio, which only the profile summary returns (and only to people the
+    // owner lets in).
+    final profile = Profile.fromJson({
+      'id': 'user-1',
+      'username': 'alex',
+      'display_name': 'Alex',
+      'avatar_url': null,
+      'created_at': '2026-05-18T00:00:00.000Z',
+      'updated_at': '2026-05-18T00:01:00.000Z',
+    });
+
+    expect(profile.bio, '');
+    expect(profile.pronouns, isNull);
+    expect(profile.bannerUrl, isNull);
+  });
+
   test('Profile copyWith can clear avatarUrl', () {
     final profile = Profile.fromJson({
       'id': 'user-1',

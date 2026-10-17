@@ -25,7 +25,8 @@ String pushLanguageCode(AppLanguage language) =>
 /// This browser's push state. When subscribed, the subscription is saved
 /// to the server again, so it follows whoever is signed in, survives the
 /// browser rotating it and carries the app's language, which it saves
-/// again when the language setting changes.
+/// again when the language setting changes, and the device's time zone,
+/// saved again at every start so travelling is followed.
 final pushStatusProvider = FutureProvider.autoDispose<PushStatus>((ref) async {
   final gateway = ref.watch(pushGatewayProvider);
   final repository = ref.read(pushRepositoryProvider);
@@ -49,7 +50,7 @@ final pushStatusProvider = FutureProvider.autoDispose<PushStatus>((ref) async {
     savedCode = code;
     unawaited(
       repository
-          .register(subscription, language: code)
+          .register(subscription, language: code, timeZone: gateway.timeZone)
           .catchError((Object _) {}),
     );
   });
@@ -65,7 +66,11 @@ final pushStatusProvider = FutureProvider.autoDispose<PushStatus>((ref) async {
         ref.read(appLanguageProvider),
   );
   try {
-    await repository.register(subscription, language: code);
+    await repository.register(
+      subscription,
+      language: code,
+      timeZone: gateway.timeZone,
+    );
     savedCode = code;
     saved = subscription;
   } catch (_) {
@@ -95,6 +100,7 @@ Future<PushEnableError?> enablePush(WidgetRef ref) async {
     await repository.register(
       subscription,
       language: pushLanguageCode(ref.read(appLanguageProvider)),
+      timeZone: gateway.timeZone,
     );
     return null;
   } on PushNotConfiguredException {

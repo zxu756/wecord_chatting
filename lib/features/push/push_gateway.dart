@@ -26,6 +26,11 @@ abstract interface class PushGateway {
   /// 'granted', 'denied' or 'default'; null where push isn't supported.
   String? get permission;
 
+  /// The device's IANA time zone ('Asia/Shanghai'), which the server writes
+  /// the times in this browser's notifications in. Null when it can't be
+  /// told.
+  String? get timeZone;
+
   Future<String?> requestPermission();
 
   /// This browser's current subscription, if any.

@@ -10,6 +10,7 @@
 // All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { writeTimesForTargets } from "./time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "./webpush.ts";
 
 const corsHeaders = {
@@ -135,7 +136,12 @@ Deno.serve(async (request) => {
     return json({ error: "lookup_failed" }, 500);
   }
 
-  const targets = (data ?? []) as PushTarget[];
+  // Times in the text are written for each subscriber's zone and language.
+  const targets = await writeTimesForTargets(
+    admin,
+    (data ?? []) as PushTarget[],
+    Math.floor(Date.now() / 1000),
+  );
   const gone: string[] = [];
   let sent = 0;
   await Promise.all(targets.map(async (target) => {

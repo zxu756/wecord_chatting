@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/lists/task_board.dart';
 import 'package:wecord/features/lists/task_list_page.dart';
@@ -116,6 +117,62 @@ void main() {
       (item) => item.title == 'Book the venue',
     );
     expect(created.status, 'todo');
+  });
+
+  testWidgets('a task added offline survives closing the app and is sent', (
+    tester,
+  ) async {
+    final workspace = await openList(
+      tester,
+      prepare: (workspace) => workspace.lists.failUpserts = true,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('task-add-field')),
+      'Book the venue',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Book the venue'), findsOneWidget);
+    expect(
+      workspace.lists.items.values.map((i) => i.title),
+      isNot(contains('Book the venue')),
+    );
+    final kept = await SharedPreferences.getInstance();
+    expect(
+      kept.getKeys().where((key) => key.startsWith('wecord.lists.patches.')),
+      hasLength(1),
+    );
+
+    // The app is closed: nothing of the page is left.
+    await tester.pumpWidget(const SizedBox());
+    await settle(tester);
+    expect(
+      workspace.lists.items.values.map((i) => i.title),
+      isNot(contains('Book the venue')),
+    );
+
+    // And opened again once the connection is back.
+    workspace.lists.failUpserts = false;
+    await pumpStandalone(
+      tester,
+      workspace.world,
+      TaskListPage(
+        listId: 'list-launch',
+        conversationId: WorkspaceWorld.conversationId,
+        onBack: () {},
+      ),
+    );
+    await settle(tester);
+    expect(find.text('Book the venue'), findsOneWidget);
+    expect(
+      workspace.lists.items.values.where((i) => i.title == 'Book the venue'),
+      hasLength(1),
+    );
+    expect(
+      kept.getKeys().where((key) => key.startsWith('wecord.lists.patches.')),
+      isEmpty,
+    );
+    await workspace.world.close(tester);
   });
 
   testWidgets('opening a task edits title, status, priority and assignees', (

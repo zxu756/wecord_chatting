@@ -200,8 +200,9 @@ class TextLayout {
 
 /// Paints the picture with its marks into [canvas], in source space: the
 /// canvas must already be set so that (0, 0) is the picture's top-left.
-/// [active] is the stroke being drawn, [skipText] a text overlay shown by
-/// something else (while it is being edited).
+/// [active] is the stroke (or text) being drawn, [skipText] the id of a text
+/// overlay of the document that is being edited and so is drawn as [active]
+/// instead.
 void paintEditorScene(
   ui.Canvas canvas,
   EditorAssets assets,
@@ -219,7 +220,13 @@ void paintEditorScene(
     bounds,
     ui.Paint()..filterQuality = ui.FilterQuality.medium,
   );
-  final items = [...document.items, ?active];
+  // A text being edited is shown by its draft (the [active] item), not by
+  // its old self in the document.
+  final items = [
+    for (final item in document.items)
+      if (!(item is TextOverlay && item.id == skipText)) item,
+    ?active,
+  ];
   var i = 0;
   while (i < items.length) {
     final item = items[i];
@@ -240,9 +247,7 @@ void paintEditorScene(
         ]);
         i = end;
       case TextOverlay():
-        if (item.id != skipText) {
-          paintTextOverlay(canvas, assets, item);
-        }
+        paintTextOverlay(canvas, assets, item);
         i++;
     }
   }

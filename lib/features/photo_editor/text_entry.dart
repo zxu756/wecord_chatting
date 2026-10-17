@@ -72,8 +72,8 @@ class _EditorTextEntryState extends State<EditorTextEntry> {
             ),
           ),
           Positioned(
-            left: 12,
-            right: 12,
+            left: 8,
+            right: 8,
             top: 8,
             child: SafeArea(
               bottom: false,
@@ -83,7 +83,7 @@ class _EditorTextEntryState extends State<EditorTextEntry> {
                   child: WeCordGlass(
                     key: const ValueKey('photo-editor-text-entry'),
                     borderRadius: BorderRadius.circular(WeCordRadii.xl),
-                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -136,7 +136,15 @@ class _EditorTextEntryState extends State<EditorTextEntry> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 4),
+                            EditorOptionButton(
+                              key: const ValueKey('photo-editor-entry-pill'),
+                              icon: Icons.rounded_corner_rounded,
+                              label: tr('Background'),
+                              selected: draft.pill,
+                              onPressed: () => _changed(pill: !draft.pill),
+                            ),
+                            const SizedBox(width: 4),
                             WeCordButton(
                               key: const ValueKey('photo-editor-text-done'),
                               label: tr('Done'),
@@ -146,24 +154,10 @@ class _EditorTextEntryState extends State<EditorTextEntry> {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: EditorColorRow(
-                                compact: true,
-                                keyPrefix: 'photo-editor-entry-color',
-                                selected: draft.color,
-                                onSelected: (color) => _changed(color: color),
-                              ),
-                            ),
-                            EditorOptionButton(
-                              key: const ValueKey('photo-editor-entry-pill'),
-                              icon: Icons.rounded_corner_rounded,
-                              label: tr('Background'),
-                              selected: draft.pill,
-                              onPressed: () => _changed(pill: !draft.pill),
-                            ),
-                          ],
+                        EditorColorRow(
+                          keyPrefix: 'photo-editor-entry-color',
+                          selected: draft.color,
+                          onSelected: (color) => _changed(color: color),
                         ),
                       ],
                     ),

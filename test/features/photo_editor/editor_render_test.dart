@@ -290,6 +290,82 @@ void main() {
     expect((turned.width, turned.height), (120, 80));
   });
 
+  testWidgets('text being edited is drawn once, as its draft', (tester) async {
+    final assets = await makeAssets(tester, color: (x, y) => 0xFF808080);
+    Future<Uint8List> scene({
+      required EditorDocument document,
+      TextOverlay? active,
+      int? skip,
+    }) async {
+      final image = await tester.runAsync(() async {
+        final recorder = PictureRecorder();
+        paintEditorScene(
+          Canvas(recorder),
+          assets,
+          document,
+          active: active,
+          skipText: skip,
+        );
+        final picture = recorder.endRecording();
+        final image = await picture.toImage(120, 80);
+        final data = await image.toByteData(format: ImageByteFormat.rawRgba);
+        image.dispose();
+        picture.dispose();
+        return data!.buffer.asUint8List();
+      });
+      return image!;
+    }
+
+    bool inked(Uint8List rgba, Rect area) {
+      for (var y = area.top.toInt(); y < area.bottom; y++) {
+        for (var x = area.left.toInt(); x < area.right; x++) {
+          if (_pixel(rgba, 120, x, y) != 0x808080) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    const left = Rect.fromLTWH(10, 28, 40, 24);
+    const right = Rect.fromLTWH(70, 28, 40, 24);
+    const original = TextOverlay(
+      id: 5,
+      text: 'Old',
+      color: 0xFF000000,
+      center: Offset(30, 40),
+    );
+    final document = const EditorDocument().withItem(original);
+
+    // Not being edited: drawn where it is.
+    final plain = await scene(document: document);
+    expect(inked(plain, left), isTrue);
+    expect(inked(plain, right), isFalse);
+
+    // Being edited (moved by the draft): only the draft is drawn.
+    final editing = await scene(
+      document: document,
+      active: original.copyWith(text: 'New', center: const Offset(90, 40)),
+      skip: 5,
+    );
+    expect(inked(editing, left), isFalse);
+    expect(inked(editing, right), isTrue);
+
+    // A new text being typed is drawn next to what is there.
+    final typing = await scene(
+      document: document,
+      active: const TextOverlay(
+        id: 6,
+        text: 'New',
+        color: 0xFF000000,
+        center: Offset(90, 40),
+      ),
+      skip: 6,
+    );
+    expect(inked(typing, left), isTrue);
+    expect(inked(typing, right), isTrue);
+  });
+
   testWidgets('a file over the size limit is retried smaller', (tester) async {
     // The limit is 50 MB, far above a test picture: the retry path is only
     // checked through the cap on the long side.

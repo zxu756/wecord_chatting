@@ -236,7 +236,7 @@ class _CallLinkSheetState extends ConsumerState<CallLinkSheet> {
                             key: ValueKey('call-link-${link.code}'),
                             icon: Icons.link_rounded,
                             tone: SettingsTone.accent,
-                            title: callLinkUrl(link.code),
+                            title: callLinkPath(link.code),
                             subtitle: callLinkExpiryLabel(link.expiresAt),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,

@@ -61,9 +61,12 @@ void main() {
     final function = File(
       'supabase/functions/expire-messages/index.ts',
     ).readAsStringSync();
+    final cleanup = File(
+      'supabase/functions/expire-messages/cleanup.ts',
+    ).readAsStringSync();
     expect(function, contains('!== serviceRoleKey'));
-    expect(function, contains('claim_expired_media'));
-    expect(function, contains('finish_expired_media'));
+    expect(cleanup, contains('claim_expired_media'));
+    expect(cleanup, contains('finish_expired_media'));
   });
 
   behaviourTest(

@@ -80,7 +80,6 @@ const zhMiscFeatures = <String, String>{
   'Meeting or map link (optional)': '会议或地图链接（可选）',
   'No answers yet': '还没有人回复',
   'No events yet. Plan something with this chat.': '还没有活动。和这个聊天一起计划点什么吧。',
-  'None': '不提醒',
   'Opens the chat': '打开聊天',
   'Opens the event': '打开活动',
   'Opens the link': '打开链接',
@@ -97,7 +96,6 @@ const zhMiscFeatures = <String, String>{
   'This event is no longer available.': '此活动已不可用。',
   'Unpin from chat header': '从聊天顶部取消固定',
   'Unpinned from the chat.': '已从聊天顶部取消固定。',
-  'Upcoming': '即将开始',
   'What should people know? (optional)': '大家需要知道什么？（可选）',
   'Your answer: {answer}': '你的回复：{answer}',
 

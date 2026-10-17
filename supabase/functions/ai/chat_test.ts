@@ -6,7 +6,12 @@ import {
   selectNewest,
   type SourceMessage,
 } from "./chat.ts";
-import { rewritePrompt, summaryPrompt, translatePrompt } from "./prompts.ts";
+import {
+  bulletRange,
+  rewritePrompt,
+  summaryPrompt,
+  translatePrompt,
+} from "./prompts.ts";
 
 function message(
   n: number,
@@ -110,4 +115,23 @@ Deno.test("prompts fence the data and tell the model to ignore its instructions"
   const translate = translatePrompt({ text: "hola", target: "en" });
   assert(translate[0].content.includes("English"));
   assert(translate[1].content.includes("<source_text>"));
+});
+
+Deno.test("a short log gets a short summary without filler", () => {
+  assertEquals(bulletRange(1), "1");
+  assertEquals(bulletRange(3), "1");
+  assertEquals(bulletRange(7), "1 to 3");
+  assertEquals(bulletRange(400), "1 to 8");
+  const summary = summaryPrompt({
+    lines: ["Xelie2: lol"],
+    omitted: 0,
+    language: "en",
+    recent: true,
+  });
+  assert(summary[0].content.includes("Reply with 1 short bullet points"));
+  assert(
+    summary[0].content.includes(
+      "never add bullets saying that something was not said",
+    ),
+  );
 });

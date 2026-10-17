@@ -1,7 +1,7 @@
 // Chinese for multi-select, merged forwards ("聊天记录") and contact cards.
 const zhMultiSelect = <String, String>{
   // Selection mode.
-  'Select': '多选',
+  'Select': '选择',
   '{count} selected': '已选择 {count} 条',
   'Select message: {message}': '选择消息：{message}',
   'You can select up to {count} messages.': '最多可选择 {count} 条消息。',

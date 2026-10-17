@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/album_label.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -30,6 +31,8 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
     circlesRepository: ref.watch(circlesRepositoryProvider),
     preferencesRepository: ref.watch(notificationPreferencesRepositoryProvider),
     notificationService: ref.watch(localNotificationServiceProvider),
+    remindersRepository: ref.watch(remindersRepositoryProvider),
+    onRemindersChanged: () => ref.invalidate(remindersProvider),
     activeConversationId: () => ref.read(activeConversationIdProvider),
     doNotDisturb: () =>
         ref.read(presenceSettingsProvider).value?.status ==
@@ -41,8 +44,9 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
 
 /// Notifies about new messages while the app runs (polling the
 /// conversation list), and reminds the current user of events they are
-/// interested in [CircleEvent.reminderLead] before they start. Nothing is
-/// shown while the user is in Do Not Disturb.
+/// interested in [CircleEvent.reminderLead] before they start, and when a
+/// message reminder (see "Remind me") comes due. Nothing is shown while
+/// the user is in Do Not Disturb.
 class NotificationCoordinator {
   NotificationCoordinator({
     required this._authRepository,
@@ -51,6 +55,8 @@ class NotificationCoordinator {
     required this._preferencesRepository,
     required this._notificationService,
     required this._activeConversationId,
+    this._remindersRepository,
+    this._onRemindersChanged,
     bool Function()? doNotDisturb,
     DateTime Function()? now,
     Stream<void>? pollTicks,
@@ -62,6 +68,10 @@ class NotificationCoordinator {
   final AuthRepository _authRepository;
   final ChatsRepository _chatsRepository;
   final CirclesRepository? _circlesRepository;
+  final RemindersRepository? _remindersRepository;
+
+  /// Called when a reminder came due, so lists showing reminders reload.
+  final void Function()? _onRemindersChanged;
   final NotificationPreferencesRepository _preferencesRepository;
   final LocalNotificationService _notificationService;
   final String? Function() _activeConversationId;
@@ -86,6 +96,12 @@ class NotificationCoordinator {
   /// [refreshEventReminders].
   static const eventReminderRefreshInterval = Duration(minutes: 5);
 
+  /// Message reminders are asked about every this many poll ticks.
+  static const reminderTickInterval = 6;
+
+  var _reminderTicks = 0;
+  var _checkingMessageReminders = false;
+
   var _eventReminders = const <CircleEventReminder>[];
   DateTime? _eventRemindersFetchedAt;
   var _fetchingEventReminders = false;
@@ -108,10 +124,77 @@ class NotificationCoordinator {
     _pollSubscription = _pollTicks.listen((_) {
       _queueReload();
       unawaited(_checkEventReminders());
+      if (_reminderTicks++ % reminderTickInterval == 0) {
+        unawaited(checkMessageReminders());
+      }
     });
 
     await _ensureBaselineLoaded();
     await refreshEventReminders();
+    await checkMessageReminders();
+  }
+
+  /// Shows a notification for each message reminder that came due since
+  /// the last check (once, on this or another device).
+  Future<void> checkMessageReminders() async {
+    final repository = _remindersRepository;
+    if (repository == null ||
+        _disposed ||
+        _checkingMessageReminders ||
+        _authRepository.currentUser == null) {
+      return;
+    }
+    _checkingMessageReminders = true;
+    try {
+      final due = await repository.claimDue();
+      if (due.isEmpty || _disposed) {
+        return;
+      }
+      _onRemindersChanged?.call();
+      final NotificationPreferences preferences;
+      try {
+        preferences = await _preferencesRepository.load();
+      } catch (_) {
+        return;
+      }
+      // Silenced, not postponed: the reminder waits in Notifications.
+      if (_disposed || !preferences.enabled || _doNotDisturb()) {
+        return;
+      }
+      for (final reminder in due) {
+        final text = switch (reminder.type) {
+          MessageType.text => plainTextFromMarkdown(reminder.body).trim(),
+          MessageType.image => tr('Image'),
+          MessageType.file => tr('File'),
+          MessageType.voice => tr('Voice message'),
+          MessageType.poll => pollPreviewText(reminder.body),
+          MessageType.sticker => stickerPreviewText(reminder.body),
+          MessageType.system => reminder.body,
+        };
+        final sender = reminder.senderName.trim();
+        final body = !preferences.showPreviews || text.isEmpty
+            ? tr('A message you wanted to be reminded about')
+            : sender.isEmpty
+            ? text
+            : '$sender: $text';
+        try {
+          await _notificationService.showMessageNotification(
+            conversationId: reminderNotificationPayload(
+              reminder.conversationId,
+              reminder.messageId,
+            ),
+            title: tr('Reminder'),
+            body: body,
+          );
+        } catch (_) {
+          continue;
+        }
+      }
+    } catch (_) {
+      // The next check tries again.
+    } finally {
+      _checkingMessageReminders = false;
+    }
   }
 
   /// Fetches the events to remind about again: after the current user

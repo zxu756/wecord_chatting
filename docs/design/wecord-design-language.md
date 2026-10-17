@@ -208,6 +208,8 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WeCordTapTarget` / `touchTargetFor` | Grows a control's tappable and accessibility area to the platform's touch target (48 Android, 44 iOS, none on desktop) without changing how it looks; `WeCordPressable` applies it by default (`minTapSize`). |
 | `MotionSafeImage` | Pictures that can animate: still under reduced motion with a play button. |
 | `MessageFrame` (`lib/features/chats/message_semantics.dart`) | A chat message as one stop for screen readers ("{sender}, {time}: {text}, {n} reactions", actions as custom actions) and the keyboard (focus ring, context menu key / Shift+F10 / Enter open its menu). |
+| `WhenSheet` / `showWhenSheet` (`lib/features/later/`) | The "when" picker of Schedule message and Remind me: a grouped list of quick picks with their times and "Pick date and time" (date and time pickers in the device's time zone, which the row names). Times are built from wall-clock fields (`later_time.dart`), so "tomorrow at 9 am" survives daylight saving changes. |
+| `LaterCard` / `ReminderCard` / `LaterMessagePreview` (`lib/features/later/later_cards.dart`) | White cards on paper for reminders (Notifications) and saved messages: sender avatar with a small round badge, the message in a `well` box or an italic "Message unavailable", small pill actions. |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,

@@ -11,6 +11,8 @@ import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/home/phone_messages_panel.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
@@ -24,7 +26,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// What Home shows beside its sidebar.
-enum HomeSection { friends, inbox, conversation }
+enum HomeSection { friends, inbox, saved, conversation }
 
 /// Home's sidebar on wide layouts: the "Messages" title with a compose
 /// button, a search field that jumps anywhere (⌘K), Friends and
@@ -62,8 +64,13 @@ class HomeSidebar extends ConsumerWidget {
     final requestCount =
         ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
     final unreadInbox =
-        ref.watch(inboxProvider).value?.where((item) => item.isUnread).length ??
-        0;
+        (ref
+                .watch(inboxProvider)
+                .value
+                ?.where((item) => item.isUnread)
+                .length ??
+            0) +
+        ref.watch(firedRemindersProvider).length;
     final conversations = ref.watch(conversationsProvider);
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};
@@ -136,6 +143,14 @@ class HomeSidebar extends ConsumerWidget {
                       selected: section == HomeSection.inbox,
                       onTap: () => openPage(context, InboxScreen.path),
                       badgeCount: unreadInbox,
+                    ),
+                  if (wide)
+                    SidebarNavRow(
+                      key: const ValueKey('home-saved'),
+                      icon: Icons.bookmark_border_rounded,
+                      label: tr('Saved'),
+                      selected: section == HomeSection.saved,
+                      onTap: () => openPage(context, SavedMessagesScreen.path),
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 12, 2, 2),

@@ -475,6 +475,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/sound-upload/index.ts"
 
+[functions.scheduled-dispatch]
+enabled = true
+# Called by the database (pg_cron through pg_net) with the shared secret
+# DISPATCH_SECRET as the bearer token, not by a user session.
+verify_jwt = false
+entrypoint = "./functions/scheduled-dispatch/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

@@ -12,6 +12,9 @@ import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
+import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
+import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/circles/circle_rpc.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
@@ -25,6 +28,7 @@ import '../features/chats/emoji_fixtures.dart';
 import '../features/ai/ai_fakes.dart';
 import '../features/discovery/discovery_fakes.dart';
 import '../features/file_preview/file_preview_fakes.dart';
+import '../features/later/later_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -389,6 +393,83 @@ final moreA11yScreens = <A11yScreen>[
       FakeFileFetcher(contents: {'conversation-1/big.txt': 'x'})
         ..gate = Completer<void>(),
     );
+  }),
+  A11yScreen('scheduled-messages', (tester, world) async {
+    world.extraOverrides = [
+      scheduledMessagesRepositoryProvider.overrideWithValue(
+        FakeScheduledMessagesRepository([
+          ScheduledMessage(
+            id: 's1',
+            conversationId: 'dm-1',
+            body: 'Happy birthday, Bart!',
+            sendAt: DateTime.now().add(const Duration(hours: 5)).toUtc(),
+          ),
+          ScheduledMessage(
+            id: 's2',
+            conversationId: 'dm-1',
+            body: 'Standup notes',
+            sendAt: DateTime.now().subtract(const Duration(minutes: 9)).toUtc(),
+            status: ScheduledMessageStatus.failed,
+            lastError: 'automod:Spam',
+          ),
+        ]),
+      ),
+    ];
+    await _openThread(tester, world);
+    await tester.tap(find.byKey(const ValueKey('scheduled-banner')));
+    await settle(tester);
+  }),
+  A11yScreen('reminders', (tester, world) async {
+    world.extraOverrides = [
+      remindersRepositoryProvider.overrideWithValue(
+        FakeRemindersRepository([
+          MessageReminder(
+            id: 'r1',
+            conversationId: 'dm-1',
+            messageId: 'm1',
+            remindAt: DateTime.now().subtract(const Duration(minutes: 4)),
+            senderName: 'Bart the Bold',
+            body: 'Bring the tripod',
+          ),
+          MessageReminder(
+            id: 'r2',
+            conversationId: 'dm-1',
+            remindAt: DateTime.now().add(const Duration(hours: 3)),
+            senderName: 'Bart the Bold',
+            body: 'Send Grace the photos',
+            messageId: 'm2',
+          ),
+        ]),
+      ),
+    ];
+    await world.open(tester, '/notifications');
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('inbox-filter-reminders')));
+    await settle(tester);
+  }),
+  A11yScreen('saved-messages', (tester, world) async {
+    world.extraOverrides = [
+      savedMessagesRepositoryProvider.overrideWithValue(
+        FakeSavedMessagesRepository([
+          SavedMessage(
+            id: 'a',
+            messageId: 'm1',
+            conversationId: 'dm-1',
+            savedAt: DateTime.now().subtract(const Duration(hours: 2)),
+            senderName: 'Bart the Bold',
+            body: 'Bring the tripod',
+          ),
+          SavedMessage(
+            id: 'b',
+            conversationId: 'dm-1',
+            savedAt: DateTime.now().subtract(const Duration(days: 2)),
+            available: false,
+          ),
+        ]),
+      ),
+    ];
+    await world.open(tester, '/saved');
+    await settle(tester);
   }),
   A11yScreen(
     'desktop-settings',

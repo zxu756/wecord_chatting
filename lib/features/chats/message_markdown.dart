@@ -1,3 +1,4 @@
+import 'package:wecord/features/chats/time_tokens/time_token.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -6,7 +7,7 @@ import 'package:wecord/shared/models/message.dart';
 /// Supported: `**bold**`, `*italic*` / `_italic_`, `__underline__`,
 /// `~~strike~~`, `` `inline code` ``, fenced ```` ``` ```` code blocks,
 /// `> quote` lines, `||spoiler||`, bare http(s) links, `\` escapes and
-/// custom emoji tokens `<:name:uuid>`.
+/// custom emoji tokens `<:name:uuid>` and time tokens `<t:unix:style>`.
 /// Anything that does not close stays literal text. There is no HTML.
 
 enum MarkdownStyle { bold, italic, underline, strikethrough, spoiler }
@@ -46,6 +47,14 @@ final class MarkdownCustomEmoji extends MarkdownInline {
 
   final String name;
   final String id;
+}
+
+/// A moment written `<t:unix>` or `<t:unix:style>`, shown in each reader's
+/// own time zone.
+final class MarkdownTimeToken extends MarkdownInline {
+  const MarkdownTimeToken(this.token);
+
+  final TimeToken token;
 }
 
 final class MarkdownMention extends MarkdownInline {
@@ -126,6 +135,7 @@ String? firstLinkInMarkdown(
         case MarkdownText() ||
             MarkdownInlineCode() ||
             MarkdownMention() ||
+            MarkdownTimeToken() ||
             MarkdownCustomEmoji():
           break;
       }
@@ -172,6 +182,8 @@ void _writePlain(
         buffer.write(text);
       case MarkdownCustomEmoji(:final name):
         buffer.write(':$name:');
+      case MarkdownTimeToken(:final token):
+        buffer.write(formatTimeToken(token, now: DateTime.now()));
       case MarkdownStyled(style: MarkdownStyle.spoiler) when hideSpoilers:
         buffer.write(spoilerPlaceholder);
       case MarkdownStyled(:final children):
@@ -374,6 +386,13 @@ class _MarkdownParser {
           flushText();
           nodes.add(MarkdownCustomEmoji(emoji.group(1)!, emoji.group(2)!));
           index = emoji.end;
+          continue;
+        }
+        final time = timeTokenAt(source, index);
+        if (time != null && time.end <= end) {
+          flushText();
+          nodes.add(MarkdownTimeToken(time.token));
+          index = time.end;
           continue;
         }
       }
@@ -623,6 +642,11 @@ class _MarkdownParser {
       final emoji = _customEmojiAt(cursor, end);
       if (emoji != null) {
         cursor = emoji.end;
+        continue;
+      }
+      final time = timeTokenAt(source, cursor);
+      if (time != null && time.end <= end) {
+        cursor = time.end;
         continue;
       }
       final current = source[cursor];

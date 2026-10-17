@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
+import 'package:wecord/features/chats/events/chat_event_reminder_card.dart';
+import 'package:wecord/features/chats/events/chat_events_providers.dart';
+import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -17,6 +20,7 @@ import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -48,7 +52,14 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
           ?.where((notification) => notification.isUnread)
           .length ??
       0;
-  return unread + requests + reminders + tasks;
+  final events =
+      ref
+          .watch(chatEventRemindersProvider)
+          .value
+          ?.where((reminder) => reminder.isUnread)
+          .length ??
+      0;
+  return unread + requests + reminders + tasks + events;
 });
 
 /// Which notifications the inbox shows.
@@ -73,6 +84,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     ref
       ..invalidate(incomingFriendRequestsProvider)
       ..invalidate(remindersProvider)
+      ..invalidate(chatEventRemindersProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -134,6 +146,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         _filter == InboxFilter.all || _filter == InboxFilter.friends;
     final showFiredReminders =
         _filter == InboxFilter.all || _filter == InboxFilter.reminders;
+    final eventReminders = showFiredReminders
+        ? ref.watch(chatEventRemindersProvider).value ??
+              const <ChatEventReminder>[]
+        : const <ChatEventReminder>[];
     final visibleItems = switch (_filter) {
       InboxFilter.all => items,
       InboxFilter.mentions =>
@@ -209,6 +225,28 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                   _FriendRequestCard(request: request),
                 ],
               ],
+            ),
+          for (final reminder in eventReminders)
+            ChatEventReminderCard(
+              reminder: reminder,
+              onPressed: () {
+                unawaited(
+                  ref
+                      .read(chatEventsRepositoryProvider)
+                      .markRemindersRead([reminder.id])
+                      .then((_) => ref.invalidate(chatEventRemindersProvider))
+                      .catchError((Object _) {}),
+                );
+                final conversation = conversations[reminder.conversationId];
+                if (conversation != null) {
+                  openConversation(context, conversation);
+                } else {
+                  openPage(
+                    context,
+                    '${ChatsScreen.path}/${reminder.conversationId}',
+                  );
+                }
+              },
             ),
           // Mentions, replies, due reminders and task notices, newest first.
           for (final entry in [

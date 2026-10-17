@@ -13,6 +13,8 @@ String describeInline(MarkdownInline node) {
     MarkdownLink(:final url) => 'link($url)',
     MarkdownMention(:final text) => 'mention($text)',
     MarkdownCustomEmoji(:final name, :final id) => 'emoji($name,$id)',
+    MarkdownTimeToken(:final token) =>
+      'time(${token.unix},${token.style.code})',
     MarkdownStyled(:final style, :final children) =>
       '${_styleName(style)}(${describeInlines(children)})',
   };
@@ -264,6 +266,31 @@ void main() {
         ),
         'hi',
       );
+    });
+  });
+
+  group('time tokens', () {
+    test('parse with and without a style', () {
+      expect(
+        describe('meet <t:1790000000:R> or <t:1790003600>'),
+        'meet time(1790000000,R) or time(1790003600,f)',
+      );
+    });
+
+    test('work inside emphasis and stay literal when malformed', () {
+      expect(describe('**<t:1790000000:F>**'), 'b(time(1790000000,F))');
+      expect(describe('<t:abc> <t:17:x> <t:>'), '<t:abc> <t:17:x> <t:>');
+    });
+
+    test('are not parsed inside code', () {
+      expect(describe('`<t:1790000000>`'), 'code(<t:1790000000>)');
+    });
+
+    test('read as their time in plain text', () {
+      final text = plainTextFromMarkdown('at <t:1790000000:t> ok');
+      expect(text, startsWith('at '));
+      expect(text, isNot(contains('<t:')));
+      expect(text, endsWith(' ok'));
     });
   });
 

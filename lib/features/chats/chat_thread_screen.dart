@@ -59,7 +59,9 @@ import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
 import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
+import 'package:wecord/features/chats/events/chat_event_widgets.dart';
 import 'package:wecord/features/chats/slash_commands.dart';
+import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
@@ -994,6 +996,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final canCall =
         conversationType == ConversationType.direct ||
         conversationType == ConversationType.group;
+    // Group chats and direct messages can plan events (circles have their
+    // own).
+    final eventsAction = canCall
+        ? ChatThreadAction(
+            tooltip: tr('Events'),
+            icon: Icons.event_outlined,
+            onPressed: () => showChatEventsList(
+              context,
+              conversationId: widget.conversationId,
+              canCreate: canSend,
+            ),
+          )
+        : null;
     final callAction = canCall
         ? ChatThreadAction(
             tooltip: tr('Start voice call'),
@@ -1207,6 +1222,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         final headerActions = [
           for (final action in appBarActions)
             if (!inlineSearch || !identical(action, searchAction)) action,
+          // Narrow desktop panes have no room for one more icon; there the
+          // composer's + menu opens the same list.
+          if (compact || constraints.maxWidth >= 1000) ?eventsAction,
           ?profileAction,
         ];
         // Small phones keep more of the name.
@@ -1342,6 +1360,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                 note: pinnedNote,
               ),
             ),
+          if (canCall) ChatEventStrip(conversationId: widget.conversationId),
           if (_isSearchingMessages && !inlineSearch)
             _SearchBar(
               controller: _searchController,
@@ -1787,6 +1806,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   child: ChatTypingIndicator(name: typingName),
                 ),
               ),
+            if (canSend)
+              TimePhraseSuggestion(
+                controller: _composerController,
+                horizontalPadding: desktop ? 24 : 16,
+                onConverted: () =>
+                    _handleComposerChanged(_composerController.text),
+              ),
             if (!canSend)
               _ReadOnlyComposerNotice(
                 timedOutUntil: widget.timedOutUntil,
@@ -1852,6 +1878,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    onInsertTime: _insertTime,
+                    onShowEvents:
+                        conversationType == ConversationType.direct ||
+                            conversationType == ConversationType.group
+                        ? _showEvents
+                        : null,
                     onPickSticker: _pickAndSendSticker,
                     onPickGif: _pickAndSendGif,
                     onInsertEmoji: _pickAndInsertEmoji,
@@ -3301,6 +3333,46 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         offset: selection.start + emoji.length,
       ),
     );
+    _handleComposerChanged(text);
+  }
+
+  /// The chat's events, with a button to plan a new one (which the chat
+  /// then announces).
+  Future<void> _showEvents() async {
+    await showChatEventsList(
+      context,
+      conversationId: widget.conversationId,
+      canCreate: !_isSlowedDown && _editingMessage == null,
+    );
+    if (mounted) {
+      _refreshThread();
+    }
+  }
+
+  /// Picks a date and time and puts it in the composer at the cursor as a
+  /// time token that every reader sees in their own time zone.
+  Future<void> _insertTime() async {
+    final token = await showInsertTimeSheet(context);
+    if (token == null || !mounted) {
+      return;
+    }
+    final markup = token.markup;
+    final value = _composerController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final text = value.text.replaceRange(
+      selection.start,
+      selection.end,
+      markup,
+    );
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: selection.start + markup.length,
+      ),
+    );
+    _composerFocus.requestFocus();
     _handleComposerChanged(text);
   }
 
@@ -5771,6 +5843,16 @@ class _SystemMessageLine extends StatelessWidget {
     if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
       return AutoModAlertCard(alert: alert);
     }
+    final announcedEvent = message.attachment;
+    if (announcedEvent != null &&
+        announcedEvent['kind'] == 'event' &&
+        announcedEvent['event_id'] is String) {
+      return ChatEventCard(
+        conversationId: message.conversationId,
+        eventId: announcedEvent['event_id'] as String,
+        fallbackTitle: message.body,
+      );
+    }
     final c = context.tokens.colors;
     final pinnedMessageId = message.pinnedMessageId;
     final icon = pinnedMessageId != null
@@ -6357,6 +6439,8 @@ class _Composer extends StatelessWidget {
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
+    required this.onInsertTime,
+    this.onShowEvents,
     required this.onPickSticker,
     required this.onPickGif,
     required this.onInsertEmoji,
@@ -6431,6 +6515,11 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
+  final Future<void> Function() onInsertTime;
+
+  /// Lists this chat's events and plans new ones; null where chats take
+  /// no events.
+  final Future<void> Function()? onShowEvents;
   final Future<void> Function() onPickSticker;
   final Future<void> Function() onPickGif;
   final Future<void> Function() onInsertEmoji;
@@ -6504,6 +6593,17 @@ class _Composer extends StatelessWidget {
                     label: tr('Schedule message'),
                     onSelected: () => unawaited(onSchedule()),
                   ),
+                  GlassMenuEntry(
+                    icon: Icons.schedule_rounded,
+                    label: tr('Insert time'),
+                    onSelected: () => unawaited(onInsertTime()),
+                  ),
+                  if (onShowEvents != null)
+                    GlassMenuEntry(
+                      icon: Icons.event_outlined,
+                      label: tr('Events'),
+                      onSelected: () => unawaited(onShowEvents!()),
+                    ),
                   GlassMenuEntry(
                     icon: Icons.sticky_note_2_outlined,
                     label: tr('Send sticker'),

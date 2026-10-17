@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
@@ -23,6 +24,7 @@ enum SettingsWindowSection {
   appearance,
   voice,
   ai,
+  chats,
   notifications,
   shortcuts,
   language,
@@ -310,6 +312,11 @@ class _SettingsNav extends ConsumerWidget {
                     tr('AI'),
                   ),
                   item(
+                    SettingsWindowSection.chats,
+                    Icons.chat_bubble_outline_rounded,
+                    tr('Chats'),
+                  ),
+                  item(
                     SettingsWindowSection.notifications,
                     Icons.notifications_none_rounded,
                     tr('Notifications'),
@@ -507,6 +514,11 @@ class _SectionPage extends ConsumerWidget {
             SizedBox(height: 16),
             AiSettingsGroup(showHeader: false),
           ],
+        );
+      case SettingsWindowSection.chats:
+        return SettingsPage(
+          title: tr('Chats'),
+          children: const [SizedBox(height: 16), ChatSettingsGroup()],
         );
       case SettingsWindowSection.notifications:
         return SettingsPage(

@@ -43,6 +43,7 @@ import 'package:wecord/shared/l10n/zh/zh_stage.dart';
 import 'package:wecord/shared/l10n/zh/zh_transcribe.dart';
 import 'package:wecord/shared/l10n/zh/zh_safety.dart';
 import 'package:wecord/shared/l10n/zh/zh_search.dart';
+import 'package:wecord/shared/l10n/zh/zh_voice_chain.dart';
 import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_wallpapers.dart';
 
@@ -91,6 +92,7 @@ const zhAreas = <Map<String, String>>[
   zhTranscribe,
   zhAiGuard,
   zhWallpapers,
+  zhVoiceChain,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

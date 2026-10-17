@@ -18,6 +18,9 @@ import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
+import 'package:wecord/features/chain/chain_card.dart';
+import 'package:wecord/features/chain/chain_create_sheet.dart';
+import 'package:wecord/features/chain/chain_models.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
@@ -2039,6 +2042,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    onCreateChain: conversationType == ConversationType.direct
+                        ? null
+                        : _openChainComposer,
                     onChangeWallpaper: openWallpaper,
                     onInsertTime: _insertTime,
                     onShowEvents:
@@ -3363,6 +3369,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
     final posted = await showPollComposerSheet(
+      context,
+      conversationId: widget.conversationId,
+    );
+    if (posted == true && mounted) {
+      _refreshThread();
+    }
+  }
+
+  Future<void> _openChainComposer() async {
+    if (_isSlowedDown || _isSending || _editingMessage != null) {
+      return;
+    }
+    final posted = await showChainCreateSheet(
       context,
       conversationId: widget.conversationId,
     );
@@ -6459,6 +6478,13 @@ class _MessageContent extends StatelessWidget {
                 ),
         ),
       );
+    } else if (message.chainCard case final chainCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: ChainCardView(card: chainCard),
+        ),
+      );
     } else if (message.workspaceCard case final workspaceCard?) {
       content.add(
         Padding(
@@ -6866,6 +6892,7 @@ class _Composer extends StatelessWidget {
     required this.onPickImage,
     required this.onPickFile,
     required this.onCreatePoll,
+    this.onCreateChain,
     required this.onInsertTime,
     required this.onChangeWallpaper,
     this.onShowEvents,
@@ -6943,6 +6970,9 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickImage;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
+
+  /// Starts a group chain (接龙); null in direct chats.
+  final Future<void> Function()? onCreateChain;
   final Future<void> Function() onInsertTime;
 
   /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
@@ -7019,6 +7049,13 @@ class _Composer extends StatelessWidget {
                     label: tr('Create poll'),
                     onSelected: () => unawaited(onCreatePoll()),
                   ),
+                  if (onCreateChain != null)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-chain-entry'),
+                      icon: Icons.format_list_numbered_rounded,
+                      label: tr('Chain'),
+                      onSelected: () => unawaited(onCreateChain!()),
+                    ),
                   GlassMenuEntry(
                     key: const ValueKey('composer-schedule-entry'),
                     icon: Icons.schedule_send_outlined,

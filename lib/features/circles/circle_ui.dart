@@ -690,6 +690,7 @@ Future<T?> showCircleActionMenu<T>(
                   trailing: item.badge > 0
                       ? CountBadge(
                           count: item.badge,
+                          tone: BadgeTone.mention,
                           semanticLabel: tr('{count} waiting', {
                             'count': item.badge,
                           }),

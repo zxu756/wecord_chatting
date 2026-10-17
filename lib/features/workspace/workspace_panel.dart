@@ -687,7 +687,10 @@ class _ListsIndex extends StatelessWidget {
               ].join(', '),
               onTap: () => onOpen(list),
               trailing: list.overdueCount > 0
-                  ? CountBadge(count: list.overdueCount)
+                  ? CountBadge(
+                      count: list.overdueCount,
+                      tone: BadgeTone.mention,
+                    )
                   : Icon(
                       list.defaultView == TaskListView.board
                           ? Icons.view_kanban_outlined

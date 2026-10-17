@@ -204,6 +204,7 @@ class _ManageGroup extends ConsumerWidget {
               ? null
               : CountBadge(
                   count: waiting,
+                  tone: BadgeTone.mention,
                   semanticLabel: tr('{count} waiting', {'count': waiting}),
                 ),
           showChevron: true,

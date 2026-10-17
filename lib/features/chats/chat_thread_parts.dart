@@ -214,10 +214,7 @@ class ChatNewMessagesDivider extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 1,
-              color: c.danger.withValues(alpha: 0.35),
-            ),
+            child: Container(height: 1, color: c.accent.withValues(alpha: 0.4)),
           ),
           const SizedBox(width: 10),
           Semantics(
@@ -228,7 +225,7 @@ class ChatNewMessagesDivider extends StatelessWidget {
               child: Text(
                 tr('NEW'),
                 style: TextStyle(
-                  color: c.dangerText,
+                  color: c.accentText,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -652,6 +649,7 @@ class GlassMenuRow extends StatelessWidget {
                   const SizedBox(width: 8),
                   CountBadge(
                     count: entry.badge,
+                    tone: BadgeTone.mention,
                     size: 18,
                     semanticLabel: tr('{count} waiting', {
                       'count': entry.badge,

@@ -343,6 +343,7 @@ class _CircleAiGuardFormState extends ConsumerState<CircleAiGuardForm> {
                     ? null
                     : CountBadge(
                         count: waiting,
+                        tone: BadgeTone.mention,
                         semanticLabel: tr('{count} waiting', {
                           'count': waiting,
                         }),

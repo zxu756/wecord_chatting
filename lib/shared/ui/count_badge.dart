@@ -5,23 +5,25 @@ import 'package:wecord/shared/ui/motion.dart';
 
 /// What a [CountBadge] counts.
 enum BadgeTone {
-  /// Mentions, notifications, friend requests: red.
-  alert,
+  /// Something needs you: @mentions, the Review queue, friend requests, the
+  /// notification inbox, missed calls. The only red badge.
+  mention,
 
-  /// Unread messages in a list row: the accent.
+  /// Plain unread messages: a calm gray pill (or dot).
   unread,
 
   /// Muted counts: a quiet fill.
   quiet,
 }
 
-/// A pill with a count (99+ above 99), or a dot when [count] is null.
+/// A pill with a count (99+ above 99), or a dot when [count] is null. Gray
+/// unless it is a [BadgeTone.mention]: red means "this needs you".
 /// [ringColor] cuts it out of what it overlaps (the rail, an avatar).
 /// Pops in with a little bounce.
 class CountBadge extends StatelessWidget {
   const CountBadge({
     this.count,
-    this.tone = BadgeTone.alert,
+    this.tone = BadgeTone.unread,
     this.ringColor,
     this.size = 20,
     this.semanticLabel,
@@ -30,7 +32,7 @@ class CountBadge extends StatelessWidget {
 
   /// A plain dot.
   const CountBadge.dot({
-    this.tone = BadgeTone.alert,
+    this.tone = BadgeTone.unread,
     this.ringColor,
     this.size = 10,
     this.semanticLabel,
@@ -45,7 +47,7 @@ class CountBadge extends StatelessWidget {
   final double size;
 
   /// What a screen reader says; "{count} unread" (or "{count} new" for
-  /// alerts) and "Unread" for a dot by default. The real count is read,
+  /// mentions) and "Unread" for a dot by default. The real count is read,
   /// not "99+".
   final String? semanticLabel;
 
@@ -53,8 +55,8 @@ class CountBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final (fill, text) = switch (tone) {
-      BadgeTone.alert => (c.danger, c.onDanger),
-      BadgeTone.unread => (c.accent, c.onAccent),
+      BadgeTone.mention => (c.badgeMention, c.onBadgeMention),
+      BadgeTone.unread => (c.badgeUnread, c.onBadgeUnread),
       BadgeTone.quiet => (c.raisedStrong, c.muted),
     };
     final count = this.count;
@@ -98,7 +100,7 @@ class CountBadge extends StatelessWidget {
         semanticLabel ??
         (count == null
             ? tr('Unread')
-            : tone == BadgeTone.alert
+            : tone == BadgeTone.mention
             ? tr('{count} new', {'count': count})
             : tr('{count} unread', {'count': count}));
     return Semantics(

@@ -217,20 +217,20 @@ class _StageHeader extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: c.successSoft,
+              color: c.liveSoft,
               borderRadius: BorderRadius.circular(WeCordRadii.pill),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.podcasts, size: 13, color: c.successText),
+                Icon(Icons.podcasts, size: 13, color: c.liveText),
                 const SizedBox(width: 4),
                 Text(
                   tr('Live'),
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: c.successText,
+                    color: c.liveText,
                   ),
                 ),
               ],

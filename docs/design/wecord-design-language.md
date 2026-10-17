@@ -76,11 +76,28 @@ use raw hex in widgets.
 | `accentText` | `#1F5FE0` | `#9DB8FF` | Accent text on panels |
 | `success` (+Soft/Text) | `#2E9D67` | `#30A46C` | Online, connected, on |
 | `warning` (+Soft/Text) | `#CA8619` | `#E7A53B` | Idle, raised hand, events today |
-| `danger` (+Soft/Text) | `#E12F35` | `#E12F35` | Destructive, mention badges, do not disturb (white text on it clears 4.5:1) |
+| `danger` (+Soft/Text) | `#E12F35` | `#E12F35` | Destructive, errors, missed calls, do not disturb (white text on it clears 4.5:1) |
+| `badgeMention` / `onBadgeMention` | `#E12F35` / white | `#E12F35` / white | The one red badge: something needs you (see Badges below) |
+| `badgeUnread` / `onBadgeUnread` | `#6F6D76` / white | `#73717C` / white | Plain unread counts and dots: a calm gray |
+| `live` / `onLive`, `liveSoft`, `liveText` | `#1F7A47` / white, `#E3F3EA`, `#1F7846` | `#30A46C` / `#07140D`, `#1A2E23`, `#7EE0A8` | "Live now": events, stages, calls in progress (green, never red) |
 | `scrim` | ink 32% | black 50% | Behind sheets and dialogs |
 
 Presence: online `success`, idle `warning`, do not disturb `danger`,
 offline/invisible `faint`.
+
+**Badges: red means "this needs you".** Red (`badgeMention`) is only for
+@mentions (a circle's mention count on the rail, in the sidebar), the Review
+queue and its menu entries, friend requests, the notification inbox bell and
+its sidebar row, overdue tasks, errors and missed calls. Everything else is
+quiet: a plain unread count of a chat, of Messages on the rail or of a
+conversation row is a gray pill (`badgeUnread`) or a dot, muted chats are
+fainter still (`quiet`), channel rows keep their bold name and ink dot.
+"Live now" pills, event cards and the stage badge use `live` (green). The
+NEW divider in a chat is the accent (`accent` line, `accentText` label). A
+new badge must pick a tone on purpose: `CountBadge` defaults to gray.
+`token_contrast_test.dart` checks the text on each fill (4.5:1) and that the
+fills stand out 3:1 from every surface, in light, dark and both high-contrast
+sets.
 
 Avatar fills without a picture come from `WeCordAvatarColors.forSeed(name)`
 (eight warm/cool mid tones from the mockups) so a person or circle keeps one
@@ -193,7 +210,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WeCordSegmented<T>` | iOS-style segmented control with a sliding white thumb. |
 | `WeCordSwitch` | iOS-style switch (46×28; `compact` 42×26 on desktop). |
 | `SettingsGroup` / `SettingsRow` / `SettingsRow.toggle` / `SettingsIconTile` / `SettingsSectionHeader` | Grouped rounded setting cards: icon tile (tones neutral/accent/success/warning/danger), title, subtitle, value + chevron, trailing widget or switch. |
-| `CountBadge` / `CountBadge.dot` | Count pills (`alert` red, `unread` accent, `quiet`), 99+, optional cut-out ring. |
+| `CountBadge` / `CountBadge.dot` | Count pills (`BadgeTone.mention` red, `unread` gray, `quiet`), 99+, optional cut-out ring. Gray unless told it is a mention. |
 | `WeCordChip` | Filter/tab chips: ink when selected; `onPaper` for white chips on paper; `count`. |
 | `PersonAvatar` | Circle avatar with initial/photo and presence dot (or any `badge`). |
 | `ThingAvatar` (alias `SquircleAvatar`) | Squircle for circles, groups, apps, with icon or initial and a corner `badge`. |

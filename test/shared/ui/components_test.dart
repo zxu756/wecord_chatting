@@ -342,4 +342,43 @@ void main() {
     );
     expect(find.bySemanticsLabel('Comfortable'), findsOneWidget);
   });
+
+  for (final dark in [false, true]) {
+    testWidgets('only mentions are red: badges are gray unless told otherwise '
+        '(${dark ? 'dark' : 'light'})', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CountBadge(count: 3, key: ValueKey('plain')),
+              CountBadge(
+                count: 4,
+                tone: BadgeTone.mention,
+                key: ValueKey('mention'),
+              ),
+              CountBadge.dot(key: ValueKey('dot')),
+            ],
+          ),
+          dark: dark,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final colors = (dark ? WeCordTokens.dark : WeCordTokens.light).colors;
+      Color fillOf(String key) {
+        final box = tester.widget<Container>(
+          find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Container),
+          ),
+        );
+        return (box.decoration! as BoxDecoration).color!;
+      }
+
+      expect(fillOf('plain'), colors.badgeUnread);
+      expect(fillOf('dot'), colors.badgeUnread);
+      expect(fillOf('mention'), colors.badgeMention);
+      expect(colors.badgeUnread, isNot(colors.badgeMention));
+    });
+  }
 }

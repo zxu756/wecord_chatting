@@ -392,7 +392,12 @@ class SidebarNavRow extends StatelessWidget {
                   ),
                 ),
               ),
-              if (badgeCount > 0) CountBadge(count: badgeCount, size: 18),
+              if (badgeCount > 0)
+                CountBadge(
+                  count: badgeCount,
+                  size: 18,
+                  tone: BadgeTone.mention,
+                ),
             ],
           ),
         ),

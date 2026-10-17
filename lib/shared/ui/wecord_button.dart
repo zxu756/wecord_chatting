@@ -197,6 +197,7 @@ class WeCordIconButton extends StatelessWidget {
     this.size = 40,
     this.iconSize,
     this.badgeCount,
+    this.badgeTone = BadgeTone.unread,
     this.selected = false,
     this.focusNode,
     this.onLongPress,
@@ -213,8 +214,11 @@ class WeCordIconButton extends StatelessWidget {
   final double size;
   final double? iconSize;
 
-  /// A red count on the top-right corner (notifications).
+  /// A count on the top-right corner.
   final int? badgeCount;
+
+  /// Gray for unread counts; [BadgeTone.mention] when it needs the person.
+  final BadgeTone badgeTone;
 
   /// Shows the button as switched on (a toggled panel or filter).
   final bool selected;
@@ -271,7 +275,7 @@ class WeCordIconButton extends StatelessWidget {
               Positioned(
                 top: -2,
                 right: -2,
-                child: CountBadge(count: badgeCount, size: 18),
+                child: CountBadge(count: badgeCount, tone: badgeTone, size: 18),
               ),
             ],
           );

@@ -1298,6 +1298,7 @@ class CircleBannerCard extends StatelessWidget {
                                         'circle-review-badge',
                                       ),
                                       count: reviewCount,
+                                      tone: BadgeTone.mention,
                                       size: 16,
                                       ringColor: fill,
                                     ),
@@ -1394,11 +1395,11 @@ class CircleEventCard extends StatelessWidget {
         tr('{count} interested', {'count': next.interestedCount}),
       next.locationLabel,
     ].join(' · ');
-    final fill = live ? c.dangerSoft : c.warningSoft;
+    final fill = live ? c.liveSoft : c.warningSoft;
     final tileFill = live
-        ? c.danger.withValues(alpha: 0.18)
+        ? c.live.withValues(alpha: 0.18)
         : c.warning.withValues(alpha: 0.28);
-    final tileText = live ? c.dangerText : c.warningText;
+    final tileText = live ? c.liveText : c.warningText;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
@@ -1831,8 +1832,8 @@ class _LiveNowPill extends StatelessWidget {
       padding: const EdgeInsets.only(right: 6),
       child: CircleTag(
         label: tr('Live now'),
-        background: c.danger,
-        foreground: c.onDanger,
+        background: c.live,
+        foreground: c.onLive,
       ),
     );
   }

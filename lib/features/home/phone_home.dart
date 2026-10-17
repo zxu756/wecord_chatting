@@ -332,6 +332,7 @@ class PhoneUserPanel extends ConsumerWidget {
             size: 46,
             iconSize: 22,
             badgeCount: inboxCount,
+            badgeTone: BadgeTone.mention,
             onPressed: () => context.push(InboxScreen.path),
           ),
         ],

@@ -350,6 +350,7 @@ class _AddFriendTile extends StatelessWidget {
               key: const ValueKey('phone-friend-requests-badge'),
               count: requestCount,
               size: 18,
+              tone: BadgeTone.mention,
               ringColor: c.panel,
             ),
           ),

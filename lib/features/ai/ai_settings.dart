@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/transcribe/transcribe_controller.dart';
+import 'package:wecord/features/transcribe/voice_transcriber.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -65,6 +67,21 @@ class _AiSettingsGroupState extends ConsumerState<AiSettingsGroup> {
                     unawaited(ref.read(aiEnabledProvider.notifier).set(value))
               : null,
         ),
+        // Voice messages turn into text on the device itself, so this does
+        // not depend on the server's AI. Only where the device can do it.
+        if (ref.watch(voiceTranscriberProvider).runsOnDevice)
+          SettingsRow.toggle(
+            key: const ValueKey('auto-transcribe-switch'),
+            icon: Icons.subtitles_outlined,
+            tone: SettingsTone.accent,
+            title: tr('Auto-transcribe voice messages'),
+            subtitle: tr(
+              'Voice messages in the chat you have open turn into text on this device. The audio never goes to a server this way.',
+            ),
+            value: ref.watch(autoTranscribeProvider),
+            onChanged: (value) =>
+                unawaited(ref.read(autoTranscribeProvider.notifier).set(value)),
+          ),
         if (info != null)
           SettingsRow(
             key: const ValueKey('ai-usage-row'),

@@ -342,7 +342,12 @@ class _MediaRow extends StatelessWidget {
         sentAt: item.createdAt,
       );
     } else if (voice != null) {
-      content = VoiceMessagePlayer(attachment: voice, card: true);
+      content = VoiceMessagePlayer(
+        attachment: voice,
+        card: true,
+        messageId: item.messageId,
+        conversationId: item.conversationId,
+      );
     } else {
       content = Text(_titleFor(item), style: TextStyle(color: c.ink));
     }

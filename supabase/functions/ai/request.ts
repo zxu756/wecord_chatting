@@ -52,6 +52,12 @@ export type AiRequest =
     text: string;
     target: LanguageCode;
     conversationId: string | null;
+  }
+  | {
+    /// Speech to text for one voice message. Only the message id is sent:
+    /// the function finds the audio itself, as the caller.
+    action: "transcribe";
+    messageId: string;
   };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
@@ -147,6 +153,13 @@ export function parseAiRequest(body: unknown): AiRequest | null {
         target: fields.target,
         conversationId,
       };
+    }
+    case "transcribe": {
+      const messageId = optionalId(fields.message_id);
+      if (messageId === null || messageId === "invalid") {
+        return null;
+      }
+      return { action: "transcribe", messageId };
     }
     default:
       return null;

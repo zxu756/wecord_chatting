@@ -13,6 +13,8 @@ import 'package:wecord/features/ai/ai_catch_up.dart';
 import 'package:wecord/features/ai/ai_composer_button.dart';
 import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
 import 'package:wecord/features/ai/ai_translation.dart';
+import 'package:wecord/features/transcribe/transcribe_controller.dart';
+import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
@@ -5826,6 +5828,40 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  /// Whether the menu offers Transcribe: a sent voice message.
+  bool get _canTranscribe =>
+      !_isRecalled &&
+      !_isPending &&
+      !message.isViewOnce &&
+      message.type == MessageType.voice &&
+      message.voiceAttachment != null;
+
+  /// Shows the voice message as text under its waveform, or hides it again.
+  MessageAction _transcribeAction(BuildContext context) {
+    final transcripts = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(transcriptsProvider.notifier);
+    final shown = transcripts.isShown(message.id);
+    final attachment = message.voiceAttachment!;
+    return MessageAction(
+      key: const ValueKey('message-transcribe'),
+      icon: Icons.subtitles_outlined,
+      label: shown ? tr('Hide transcript') : tr('Transcribe'),
+      onSelected: () => shown
+          ? transcripts.hide(message.id)
+          : unawaited(
+              transcripts.show(
+                TranscribeRequest.forMessage(
+                  messageId: message.id,
+                  conversationId: message.conversationId,
+                  attachment: attachment,
+                ),
+              ),
+            ),
+    );
+  }
+
   /// What can be done with this message, in menu order.
   List<MessageAction> _actions(BuildContext context) {
     // View-once media is neither previewed nor forwarded.
@@ -5861,6 +5897,7 @@ class _MessageBubble extends StatelessWidget {
           onSelected: () => onForward(message),
         ),
       if (_canTranslate(context)) _translateAction(context),
+      if (_canTranscribe) _transcribeAction(context),
       if (canCompose && isCurrentUser && message.type == MessageType.text)
         MessageAction(
           icon: Icons.edit_outlined,
@@ -6214,6 +6251,8 @@ class _MessageContent extends StatelessWidget {
             attachment: voiceAttachment!,
             foregroundColor: cards ? c.ink : textColor,
             card: cards,
+            messageId: isPendingMessageId(message.id) ? null : message.id,
+            conversationId: message.conversationId,
           ),
         ),
       );

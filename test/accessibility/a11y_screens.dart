@@ -24,9 +24,11 @@ import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
+import 'package:wecord/features/transcribe/transcribe_models.dart';
 
 import '../features/chats/emoji_fixtures.dart';
 import '../features/ai/ai_fakes.dart';
+import '../features/transcribe/transcribe_fakes.dart';
 import '../features/discovery/discovery_fakes.dart';
 import '../features/file_preview/file_preview_fakes.dart';
 import '../features/later/later_fakes.dart';
@@ -550,7 +552,10 @@ final moreA11yScreens = <A11yScreen>[
     await settle(tester);
   }),
   A11yScreen('ai-settings', (tester, world) async {
-    world.extraOverrides = _aiOverrides();
+    world.extraOverrides = [
+      ..._aiOverrides(),
+      ...transcribeOverrides(FakeVoiceTranscriber()),
+    ];
     await world.open(tester, '/me');
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('ai-enabled-switch')),
@@ -567,6 +572,21 @@ final moreA11yScreens = <A11yScreen>[
     );
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('message-translate')));
+    await settle(tester);
+  }),
+  A11yScreen('voice-transcript', (tester, world) async {
+    world.extraOverrides = transcribeOverrides(FakeVoiceTranscriber());
+    await _openThread(tester, world);
+    await tester.tap(find.byTooltip(tr('Transcribe')).first);
+    await settle(tester);
+  }),
+  A11yScreen('voice-transcript-error', (tester, world) async {
+    world.extraOverrides = transcribeOverrides(
+      FakeVoiceTranscriber()
+        ..error = const TranscribeException(TranscribeFailureKind.failed),
+    );
+    await _openThread(tester, world);
+    await tester.tap(find.byTooltip(tr('Transcribe')).first);
     await settle(tester);
   }),
   A11yScreen('ai-catch-up', (tester, world) async {

@@ -53,10 +53,19 @@ enum AiRewriteMode {
 /// Whether AI is set up on the server and how much of today's limit the
 /// signed-in user has used.
 class AiStatus {
-  const AiStatus({required this.dailyLimit, required this.used});
+  const AiStatus({
+    required this.dailyLimit,
+    required this.used,
+    this.transcribeConfigured = false,
+  });
 
   final int dailyLimit;
   final int used;
+
+  /// Whether the server can also transcribe voice messages (the optional
+  /// AI_TRANSCRIBE_* secrets are set). Only the web uses it: the iPhone and
+  /// Mac apps transcribe on the device.
+  final bool transcribeConfigured;
 
   int get remaining => (dailyLimit - used).clamp(0, dailyLimit);
 }
@@ -120,6 +129,12 @@ class AiLimitReachedException extends AiException {
   final int? used;
 }
 
+/// The server has AI but no speech-to-text provider (the optional
+/// AI_TRANSCRIBE_* secrets).
+class AiTranscribeNotConfiguredException extends AiException {
+  const AiTranscribeNotConfiguredException();
+}
+
 /// The provider is out of capacity or quota for now; try again later.
 class AiBusyException extends AiException {
   const AiBusyException();
@@ -151,11 +166,16 @@ AiException aiExceptionFor(int? status, Object? details) {
         limit: details is Map ? (details['limit'] as num?)?.toInt() : null,
         used: details is Map ? (details['used'] as num?)?.toInt() : null,
       );
+    case 'transcribe_not_configured':
+      return const AiTranscribeNotConfiguredException();
     case 'ai_busy':
       return const AiBusyException();
     case 'ai_disabled_in_circle':
       return const AiDisabledInCircleException();
-    case 'conversation_not_found' || 'text_too_long':
+    case 'conversation_not_found' ||
+        'text_too_long' ||
+        'message_not_found' ||
+        'audio_too_long':
       return const AiRejectedException();
   }
   return const AiFailedException();
@@ -173,6 +193,9 @@ String aiErrorMessage(Object error) {
     ),
     AiLimitReachedException() => tr(
       "You've reached today's AI limit. It resets tomorrow.",
+    ),
+    AiTranscribeNotConfiguredException() => tr(
+      "This server can't transcribe voice messages yet.",
     ),
     AiBusyException() => tr(
       'AI is busy right now. Try again in a little while.',

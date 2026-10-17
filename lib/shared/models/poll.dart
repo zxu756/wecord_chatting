@@ -8,6 +8,9 @@ class PollAttachment {
     required this.options,
     this.multi = false,
     this.endsAt,
+    this.quiz = false,
+    this.anonymous = false,
+    this.allowAdd = false,
   });
 
   /// Parses a poll attachment; null for anything else.
@@ -33,6 +36,9 @@ class PollAttachment {
       options: options,
       multi: json['multi'] == true,
       endsAt: endsAt is String ? DateTime.parse(endsAt).toUtc() : null,
+      quiz: json['quiz'] == true,
+      anonymous: json['anonymous'] == true,
+      allowAdd: json['allow_add'] == true,
     );
   }
 
@@ -49,6 +55,16 @@ class PollAttachment {
 
   /// When voting ends; null for polls without an end.
   final DateTime? endsAt;
+
+  /// One answer is right; it shows (with the explanation) once you have
+  /// voted. A quiz answer cannot be changed.
+  final bool quiz;
+
+  /// Counts show, who voted does not.
+  final bool anonymous;
+
+  /// Any member can add an answer.
+  final bool allowAdd;
 
   bool hasEndedAt(DateTime now) {
     final endsAt = this.endsAt;
@@ -70,6 +86,8 @@ class PollResults {
     this.totalVoters = 0,
     this.myVotes = const <String>{},
     this.closed = false,
+    this.correct,
+    this.explanation,
   });
 
   static PollResults? maybeFromJson(Object? json) {
@@ -91,6 +109,8 @@ class PollResults {
             if (id is String) id,
       },
       closed: json['closed'] == true,
+      correct: json['correct'] as String?,
+      explanation: json['explanation'] as String?,
     );
   }
 
@@ -105,6 +125,13 @@ class PollResults {
 
   /// Ended, ended early or deleted: no more votes.
   final bool closed;
+
+  /// A quiz's right answer, once the server shows it (after you voted, to
+  /// the author, or when the quiz has closed).
+  final String? correct;
+
+  /// Why, if the author said.
+  final String? explanation;
 
   int countFor(String optionId) => counts[optionId] ?? 0;
 

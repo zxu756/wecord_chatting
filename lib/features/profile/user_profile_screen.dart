@@ -382,6 +382,35 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
                     ),
                     const SizedBox(height: 10),
                   ],
+                  if (summary.profileHidden && !isSelf) ...[
+                    Padding(
+                      key: const ValueKey('profile-hidden-note'),
+                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 16,
+                            color: c.subtle,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tr('{name} keeps some details private.', {
+                                'name': profile.displayLabel,
+                              }),
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: c.muted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (summary.mutualCircles.isNotEmpty) ...[
                     _Block(
                       key: const ValueKey('mutual-circles'),

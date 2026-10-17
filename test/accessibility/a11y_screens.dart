@@ -32,6 +32,7 @@ import '../features/file_preview/file_preview_fakes.dart';
 import '../features/later/later_fakes.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
+import '../features/privacy/privacy_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -335,6 +336,13 @@ final moreA11yScreens = <A11yScreen>[
     );
     await settle(tester);
     await tester.tap(find.byTooltip(tr('More reactions')));
+  }),
+  A11yScreen('devices', (tester, world) async {
+    world.extraOverrides = deviceOverrides();
+    await world.open(tester, '/me');
+    final tile = find.byKey(const ValueKey('devices-tile'));
+    await scrollIntoView(tester, tile);
+    await tester.tap(tile);
   }),
   A11yScreen('status-sheet', (tester, world) async {
     await world.open(tester, '/me');

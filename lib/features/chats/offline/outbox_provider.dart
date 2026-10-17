@@ -297,20 +297,23 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
     String caption = '',
     String? replyToMessageId,
     ReplyPreview? replyPreview,
+    bool viewOnce = false,
   }) async {
     final engine = _engine;
     final store = _store;
     if (engine == null || store == null || items.isEmpty) {
       return const [];
     }
-    final groupId = items.length > 1 ? newClientId() : null;
+    // View-once media goes one by one, never as an album, without a
+    // caption or a preview picture.
+    final groupId = items.length > 1 && !viewOnce ? newClientId() : null;
     final createdAt = DateTime.now().toUtc();
     final entries = <OutboxEntry>[];
     try {
       for (final (index, item) in items.indexed) {
         final clientId = newClientId();
         final size = await store.put(clientId, item.data());
-        final preview = item.preview;
+        final preview = viewOnce ? null : item.preview;
         if (preview != null) {
           await store.putPreview(clientId, preview);
         }
@@ -322,19 +325,19 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
           OutboxEntry(
             clientId: clientId,
             conversationId: conversationId,
-            body: index == 0 ? caption : '',
+            body: index == 0 && !viewOnce ? caption : '',
             // Kept in order even when the clock does not move.
             createdAt: createdAt.add(Duration(microseconds: index)),
             replyToMessageId: index == 0 ? replyToMessageId : null,
             replyPreview: index == 0 ? replyPreview : null,
             media: OutboxMedia(
               kind: item.kind,
-              fileName: item.fileName,
+              fileName: viewOnce ? _viewOnceName(item.fileName) : item.fileName,
               mimeType: item.mimeType,
               size: size,
               width: item.width,
               height: item.height,
-              blurhash: item.blurhash,
+              blurhash: viewOnce ? null : item.blurhash,
               groupId: groupId,
               groupIndex: index,
               hasPreview: preview != null,
@@ -342,6 +345,7 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
               originalName: original == null ? null : item.originalFileName,
               originalMimeType: original == null ? null : item.originalMimeType,
               originalQuality: item.originalQuality,
+              viewOnce: viewOnce,
             ),
           ),
         );
@@ -502,4 +506,14 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
   }
 
   void discard(String clientId) => _engine?.discard(clientId);
+}
+
+/// A name that tells nothing about the picture (it is part of the stored
+/// file's path, which recipients can read): "view-once" and the extension.
+String _viewOnceName(String fileName) {
+  final dot = fileName.lastIndexOf('.');
+  final extension = dot > 0 && fileName.length - dot <= 6
+      ? fileName.substring(dot).toLowerCase()
+      : '';
+  return 'view-once$extension';
 }

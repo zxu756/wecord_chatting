@@ -35,6 +35,7 @@ class OutboxMedia {
     this.originalName,
     this.originalMimeType,
     this.originalQuality = false,
+    this.viewOnce = false,
   });
 
   factory OutboxMedia.fromJson(Map<String, dynamic> json) {
@@ -53,6 +54,7 @@ class OutboxMedia {
       originalName: json['original_name'] as String?,
       originalMimeType: json['original_mime_type'] as String?,
       originalQuality: json['original_quality'] == true,
+      viewOnce: json['view_once'] == true,
     );
   }
 
@@ -87,6 +89,10 @@ class OutboxMedia {
   /// The sender had "Original quality" on.
   final bool originalQuality;
 
+  /// The recipients can open it once. It has no blurhash and no preview
+  /// picture, so nothing of it shows before it is opened.
+  final bool viewOnce;
+
   /// The storage bucket: pictures and everything else live apart.
   String get bucket =>
       kind == OutboxMediaKind.image ? 'chat-images' : 'chat-files';
@@ -98,6 +104,16 @@ class OutboxMedia {
 
   /// The attachment JSON the stored message carries.
   Map<String, dynamic> attachmentJson(String path) {
+    final json = _attachmentJson(path);
+    if (viewOnce) {
+      json
+        ..remove('blurhash')
+        ..['view_once'] = true;
+    }
+    return json;
+  }
+
+  Map<String, dynamic> _attachmentJson(String path) {
     return switch (kind) {
       OutboxMediaKind.image => ImageAttachment(
         bucket: bucket,
@@ -137,6 +153,7 @@ class OutboxMedia {
       'original_name': ?originalName,
       'original_mime_type': ?originalMimeType,
       if (originalQuality) 'original_quality': true,
+      if (viewOnce) 'view_once': true,
     };
   }
 }

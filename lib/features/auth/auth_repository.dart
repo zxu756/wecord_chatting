@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:wecord/features/privacy/devices_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/site_url.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -19,6 +22,13 @@ final authProfileBootstrapProvider = FutureProvider<void>((ref) async {
   }
 
   await ref.watch(authRepositoryProvider).ensureCurrentUserProfile();
+  // Tells the server what this device is, for the Devices list.
+  unawaited(
+    ref
+        .read(devicesRepositoryProvider)
+        .registerCurrentDevice()
+        .catchError((Object _) {}),
+  );
 });
 
 class AuthUser {

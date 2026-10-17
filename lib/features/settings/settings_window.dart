@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
+import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
@@ -302,6 +303,11 @@ class _SettingsNav extends ConsumerWidget {
                     tr('Appearance'),
                   ),
                   item(
+                    SettingsWindowSection.chats,
+                    Icons.chat_bubble_outline_rounded,
+                    tr('Chats'),
+                  ),
+                  item(
                     SettingsWindowSection.voice,
                     Icons.headset_mic_outlined,
                     tr('Voice & video'),
@@ -310,11 +316,6 @@ class _SettingsNav extends ConsumerWidget {
                     SettingsWindowSection.ai,
                     Icons.auto_awesome_outlined,
                     tr('AI'),
-                  ),
-                  item(
-                    SettingsWindowSection.chats,
-                    Icons.chat_bubble_outline_rounded,
-                    tr('Chats'),
                   ),
                   item(
                     SettingsWindowSection.notifications,
@@ -518,7 +519,11 @@ class _SectionPage extends ConsumerWidget {
       case SettingsWindowSection.chats:
         return SettingsPage(
           title: tr('Chats'),
-          children: const [SizedBox(height: 16), ChatSettingsGroup()],
+          children: const [
+            SizedBox(height: 16),
+            ChatSettingsGroup(),
+            QuickReactionSettingsGroup(),
+          ],
         );
       case SettingsWindowSection.notifications:
         return SettingsPage(

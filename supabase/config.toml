@@ -498,6 +498,21 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/scheduled-dispatch/index.ts"
 
+[functions.expire-messages]
+enabled = true
+# Called by a scheduler with the service role key as the bearer token, which
+# the function compares itself (so it also works with non-JWT secret keys);
+# users never call it.
+verify_jwt = false
+entrypoint = "./functions/expire-messages/index.ts"
+
+[functions.sessions]
+enabled = true
+# Signed-in users sign out their own devices; the function acts as the
+# caller to check the session is theirs before using the service role.
+verify_jwt = true
+entrypoint = "./functions/sessions/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

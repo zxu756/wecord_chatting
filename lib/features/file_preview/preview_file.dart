@@ -291,7 +291,8 @@ class PreviewFile {
 
   /// The image or file of [message]; null for other messages.
   static PreviewFile? fromMessage(ChatMessage message, {String? senderName}) {
-    if (message.recalledAt != null) {
+    // View-once media is never listed, saved or passed on.
+    if (message.recalledAt != null || message.isViewOnce) {
       return null;
     }
     if (message.type == MessageType.image) {

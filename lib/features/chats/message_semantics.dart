@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:wecord/features/chats/gif_search.dart';
+import 'package:wecord/features/chats/merged_forward/merged_forward_models.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/contact_cards/contact_card_models.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -50,6 +52,10 @@ String messageSpokenContent(ChatMessage message, {required String senderName}) {
   final body = message.body.trim();
   final text = switch (message.type) {
     MessageType.text when gifUrlIn(body) != null => tr('GIF'),
+    MessageType.text when message.chatHistoryCard != null =>
+      message.chatHistoryCard!.heading,
+    MessageType.text when message.contactCard != null =>
+      message.contactCard!.heading,
     MessageType.text => _oneLine(plainTextFromMarkdown(body)),
     MessageType.image => [
       messageImageDescription(message.imageAttachment?.path ?? '', senderName),

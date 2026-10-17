@@ -24,6 +24,7 @@ import 'package:wecord/shared/l10n/zh/zh_later.dart';
 import 'package:wecord/shared/l10n/zh/zh_layout.dart';
 import 'package:wecord/shared/l10n/zh/zh_media_send.dart';
 import 'package:wecord/shared/l10n/zh/zh_misc_features.dart';
+import 'package:wecord/shared/l10n/zh/zh_multi_select.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
@@ -91,6 +92,7 @@ const zhAreas = <Map<String, String>>[
   zhTranscribe,
   zhAiGuard,
   zhWallpapers,
+  zhMultiSelect,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

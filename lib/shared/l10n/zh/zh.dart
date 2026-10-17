@@ -44,6 +44,7 @@ import 'package:wecord/shared/l10n/zh/zh_transcribe.dart';
 import 'package:wecord/shared/l10n/zh/zh_safety.dart';
 import 'package:wecord/shared/l10n/zh/zh_search.dart';
 import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
+import 'package:wecord/shared/l10n/zh/zh_wallpapers.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -89,6 +90,7 @@ const zhAreas = <Map<String, String>>[
   zhPrivacyMore,
   zhTranscribe,
   zhAiGuard,
+  zhWallpapers,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

@@ -13,6 +13,7 @@ import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_sections.dart';
 import 'package:wecord/features/voice/voice_settings_screen.dart';
+import 'package:wecord/features/wallpapers/wallpaper_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -484,6 +485,7 @@ class _SectionPage extends ConsumerWidget {
               children: const [
                 GlassEffectsRow(showIcon: false),
                 DensityRow(showIcon: false),
+                ChatWallpaperRow(showIcon: false),
               ],
             ),
           ],

@@ -151,12 +151,12 @@ PhotoPlan planPhotoCompression({
   );
 }
 
-(int, int) _scaledSize(int width, int height) {
+(int, int) _scaledSize(int width, int height, [int maxEdge = maxPhotoEdge]) {
   final longEdge = math.max(width, height);
-  if (longEdge <= maxPhotoEdge) {
+  if (longEdge <= maxEdge) {
     return (width, height);
   }
-  final factor = maxPhotoEdge / longEdge;
+  final factor = maxEdge / longEdge;
   return (
     math.max(1, (width * factor).round()),
     math.max(1, (height * factor).round()),
@@ -283,6 +283,49 @@ Future<PreparedPhoto> preparePhoto({
     height: plan.height,
     plan: plan,
     blurhash: hash,
+  );
+}
+
+/// Makes [bytes] a JPEG whose longer side is at most [maxEdge], at
+/// [quality], whatever it was (HEIC, PNG, WebP, a huge JPEG): what a
+/// picture needs to be to serve as a chat wallpaper. Metadata is gone and the
+/// orientation is applied to the pixels. Null when the picture cannot be
+/// decoded.
+Future<PreparedPhoto?> prepareJpegPhoto({
+  required Uint8List bytes,
+  required String fileName,
+  required int maxEdge,
+  int quality = photoJpegQuality,
+}) async {
+  final size = await readPhotoSize(bytes);
+  if (size == null || size.$1 <= 0 || size.$2 <= 0) {
+    return null;
+  }
+  final scaled = _scaledSize(size.$1, size.$2, maxEdge);
+  final plan = PhotoPlan(
+    action: PhotoAction.reencode,
+    width: scaled.$1,
+    height: scaled.$2,
+    mimeType: 'image/jpeg',
+    quality: quality,
+  );
+  final encoded = await _decodeAndEncode(bytes, plan);
+  if (encoded == null) {
+    return null;
+  }
+  return PreparedPhoto(
+    bytes: encoded.bytes,
+    mimeType: 'image/jpeg',
+    fileName: _renamed(fileName, 'image/jpeg'),
+    width: encoded.width,
+    height: encoded.height,
+    plan: PhotoPlan(
+      action: PhotoAction.reencode,
+      width: encoded.width,
+      height: encoded.height,
+      mimeType: 'image/jpeg',
+      quality: quality,
+    ),
   );
 }
 

@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
 import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
+import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/navigation/app_router.dart';
@@ -55,6 +56,9 @@ class WeCordApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     // Wipes the offline copy of chats on sign-out.
     ref.watch(offlineSessionGuardProvider);
+    // Reads the wallpapers kept on this device now, so a chat paints with
+    // its own the moment it opens.
+    ref.listen(wallpapersLoadedProvider, (previous, next) {});
     final themeMode = ref.watch(themeModeProvider);
     final glassEffects = ref.watch(glassEffectsProvider);
     final density = ref.watch(densityProvider);

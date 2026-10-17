@@ -105,6 +105,17 @@ class FakeAiRepository implements AiRepository {
     return translated;
   }
 
+  /// What [transcribe] gives back, and the messages it was asked for.
+  String transcribed = 'Server transcript.';
+  final transcribeCalls = <String>[];
+
+  @override
+  Future<String> transcribe({required String messageId}) async {
+    transcribeCalls.add(messageId);
+    await _wait();
+    return transcribed;
+  }
+
   @override
   Future<bool> circleAiEnabled(String circleId) async =>
       !disabledCircles.contains(circleId);

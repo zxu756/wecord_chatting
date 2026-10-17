@@ -1,7 +1,8 @@
 # AI features: setup
 
 WeCord's AI features (catch-up summaries, rewriting a draft in the composer,
-translating a message) run through one Edge Function, `supabase/functions/ai/`.
+translating a message, and on the web transcribing a voice message) run through
+one Edge Function, `supabase/functions/ai/`.
 It talks to any **OpenAI-compatible Chat Completions** provider. Which provider
 and model is decided only by secrets, so switching providers never needs a code
 change or an app update.
@@ -19,6 +20,9 @@ explains why).
 | `AI_MODEL` | yes | The model name the provider expects. |
 | `AI_DAILY_LIMIT_PER_USER` | no | AI requests one user may make per UTC day. Default `50`. |
 | `AI_MAX_INPUT_CHARS` | no | Characters of chat (or text) sent to the model per request. Default `24000`. The newest messages are kept first. |
+| `AI_TRANSCRIBE_BASE_URL` | no | An OpenAI-compatible speech-to-text API root, without `/audio/transcriptions` (see "Voice message transcription"). `https` only (plain `http` for `localhost`). |
+| `AI_TRANSCRIBE_API_KEY` | no | That provider's key. |
+| `AI_TRANSCRIBE_MODEL` | no | The transcription model name, e.g. `whisper-1`. |
 | `AI_EXTRA_HEADERS` | no | A JSON object of extra request headers for providers that need them, e.g. `{"x-team":"wecord"}`. `Authorization`, `Content-Type`, `Accept`, `Host`, `Content-Length` and `User-Agent` cannot be set this way. |
 
 Set them on the project (the key is a secret: never commit it and never put it
@@ -99,6 +103,55 @@ header, put it in `AI_EXTRA_HEADERS`.
 To switch providers later, run `supabase secrets set` again with the new three
 values. Nothing else changes.
 
+## Voice message transcription
+
+Voice messages have a **Transcribe** button. Where it runs:
+
+- **iPhone and Mac apps:** on the device, with the system's speech recognizer
+  (`SFSpeechRecognizer`, in `ios/Runner/TranscribePlugin.swift` and
+  `macos/Runner/TranscribePlugin.swift`). Nothing is sent to WeCord's server.
+  If the device cannot recognize the language on its own, the app says so and
+  only sends the audio to Apple's speech service after the person agrees.
+  Needs no secrets.
+- **Web:** a browser cannot transcribe a file on its own, so the web calls the
+  `ai` function's `transcribe` action, which needs the three optional secrets
+  `AI_TRANSCRIBE_BASE_URL`, `AI_TRANSCRIBE_API_KEY` and `AI_TRANSCRIBE_MODEL`
+  **on top of** the three required ones. Without them the function answers
+  `503 transcribe_not_configured` and the web says "Transcription is
+  available in the iPhone and Mac apps."
+
+```sh
+supabase secrets set \
+  AI_TRANSCRIBE_BASE_URL=https://api.openai.com/v1 \
+  AI_TRANSCRIBE_API_KEY=<your-api-key> \
+  AI_TRANSCRIBE_MODEL=whisper-1
+```
+
+The provider only has to accept OpenAI's `POST {base}/audio/transcriptions`
+(multipart: `file`, `model`, `response_format=json`) and answer `{"text": …}`.
+It is independent of the chat provider, so the two can be different
+companies. The status answer carries `transcribe_configured` so the app knows
+whether to offer it.
+
+How the function treats it:
+
+- The app sends only the **message id**. The function loads the message as the
+  caller (row level security), takes the audio's bucket and path from the
+  message itself, and downloads the audio with the caller's own storage access.
+  A message the caller cannot see is `404 message_not_found`.
+- The same switches as every AI feature apply: the person's Settings → AI
+  switch (the app does not offer it while off), the circle's switch (checked
+  from the message's own conversation: `403 ai_disabled_in_circle`) and the
+  daily limit `AI_DAILY_LIMIT_PER_USER` (one transcription is one request,
+  given back when the provider fails: `429 ai_limit_reached`).
+- Audio over 25 MB is refused (`413 audio_too_long`) before anything is sent.
+- The audio is sent to the provider for that request and not kept; the
+  transcript is **not stored on the server**. The app keeps it on the
+  person's device only (per signed-in user), so it is private to whoever
+  transcribed it.
+- Settings → AI → "Auto-transcribe voice messages" (default off) only ever
+  works on the device (iPhone and Mac); it never calls the server by itself.
+
 ## Local development
 
 ```sh
@@ -119,11 +172,14 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `summarize` | `conversation_id`, optional `after_message_id`, `recent`, `language` (`en`/`zh`) | `{summary, message_count, summarized_count, first_message_id}` |
 | `rewrite` | `mode` (`fix`/`shorter`/`polite`/`formal`/`translate`), `text`, `target` for `translate`, optional `conversation_id` | `{text}` |
 | `translate` | `text`, `target` (`en`/`zh`/`ja`/`ko`/`es`/`fr`), optional `conversation_id` | `{text}` |
+| `transcribe` | `message_id` of a voice message | `{text}` (empty when no speech was found) |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
 (429, with `limit` and `used`), `ai_busy` (503, the provider's own limits),
-`ai_failed` (502), `conversation_not_found` (404), `text_too_long` (413).
+`ai_failed` (502), `conversation_not_found` (404), `text_too_long` (413), and for `transcribe`
+`transcribe_not_configured` (503), `message_not_found` (404), `audio_too_long`
+(413).
 
 ### Privacy and safety
 
@@ -133,11 +189,12 @@ Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 - **Nothing is stored.** Only a per-user, per-day request count is kept
   (`ai_usage`, readable by its owner, written by the function with the service
   role). Message text is not logged or saved, and translations are cached on
-  the user's device only.
+  the user's device only, as are voice message transcripts.
 - **Chat is data, not instructions.** Prompts fence the chat and the user's
   text between tags, tell the model to ignore any instruction inside them and
   never to invent messages, and the function strips control characters, chat
-  template tokens and the fence tags from the content first.
+  template tokens and the fence tags from the content first. (Transcription
+  sends audio, not text, and returns only the provider's transcript.)
 - **Limits.** Each request counts against `AI_DAILY_LIMIT_PER_USER` before the
   provider is called, and is given back if the provider fails.
 - **Controls.** Each user can turn AI off in Settings → AI (on this device).
@@ -149,5 +206,5 @@ Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai
+flutter test test/features/ai test/features/transcribe
 ```

@@ -7,6 +7,12 @@ import { selectNewest, type SourceMessage } from "./chat.ts";
 import { rewritePrompt, summaryPrompt, translatePrompt } from "./prompts.ts";
 import { complete, ProviderError } from "./provider.ts";
 import {
+  audioFileName,
+  MAX_AUDIO_BYTES,
+  readTranscribeConfig,
+  transcribeAudio,
+} from "./transcribe.ts";
+import {
   type AiRequest,
   DEFAULT_RECENT_MESSAGES,
   MAX_SUMMARY_MESSAGES,
@@ -30,6 +36,16 @@ export interface ConversationMessages {
   firstMessageId: string | null;
   /// The latest messages rather than the unread ones.
   recent: boolean;
+}
+
+/// The voice message a transcription is for, read as the caller.
+export interface VoiceMessage {
+  conversationId: string;
+  bucket: string;
+  path: string;
+  mimeType: string;
+  /// The size the sender recorded, in bytes.
+  size: number;
 }
 
 export interface AiDeps {
@@ -61,6 +77,18 @@ export interface AiDeps {
   refund: (userId: string) => Promise<void>;
   /// Requests made today.
   usedToday: (userId: string) => Promise<number>;
+  /// The voice message [messageId], or null when it does not exist, is not
+  /// a voice message, was recalled, or the caller cannot see it.
+  loadVoiceMessage: (
+    userId: string,
+    messageId: string,
+  ) => Promise<VoiceMessage | null>;
+  /// The message's audio, downloaded with the caller's own access, or null
+  /// when it cannot be read.
+  downloadAudio: (
+    bucket: string,
+    path: string,
+  ) => Promise<Uint8Array | null>;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -124,7 +152,11 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
       configured: true,
       daily_limit: config.dailyLimit,
       used: await deps.usedToday(userId),
+      transcribe_configured: readTranscribeConfig(deps.env) !== null,
     });
+  }
+  if (parsed.action === "transcribe") {
+    return await transcribe(parsed, userId, config, deps);
   }
 
   const conversationId = parsed.conversationId;
@@ -151,6 +183,9 @@ async function metered(
   config: AiConfig,
   deps: AiDeps,
   run: () => Promise<Response>,
+  /// A response for an error that is the request's own fault, or null to
+  /// use the usual mapping.
+  mapError: (error: unknown) => Response | null = () => null,
 ): Promise<Response> {
   const { allowed, used } = await deps.consume(userId, config.dailyLimit);
   if (!allowed) {
@@ -163,6 +198,10 @@ async function metered(
     return await run();
   } catch (error) {
     await deps.refund(userId).catch(() => {});
+    const mapped = mapError(error);
+    if (mapped !== null) {
+      return mapped;
+    }
     if (error instanceof ProviderError) {
       return error.kind === "busy"
         ? json({ error: "ai_busy" }, 503)
@@ -249,4 +288,57 @@ async function rewriteOrTranslate(
     }, deps.fetch);
     return json({ text });
   });
+}
+
+class AudioTooLongError extends Error {}
+
+/// Speech to text for a voice message. The audio is found from the message
+/// id as the caller (so only audio they can open is read), sent to the
+/// transcription provider for this request, and not kept.
+async function transcribe(
+  parsed: Extract<AiRequest, { action: "transcribe" }>,
+  userId: string,
+  config: AiConfig,
+  deps: AiDeps,
+): Promise<Response> {
+  const transcribeConfig = readTranscribeConfig(deps.env);
+  if (transcribeConfig === null) {
+    return json({ error: "transcribe_not_configured" }, 503);
+  }
+  const voice = await deps.loadVoiceMessage(userId, parsed.messageId);
+  if (voice === null) {
+    return json({ error: "message_not_found" }, 404);
+  }
+  // The circle's own AI switch is read from the message's conversation, not
+  // from anything the app says.
+  if (!(await deps.circleAllows(userId, voice.conversationId))) {
+    return json({ error: "ai_disabled_in_circle" }, 403);
+  }
+  if (voice.size > MAX_AUDIO_BYTES) {
+    return json({ error: "audio_too_long" }, 413);
+  }
+  return await metered(
+    userId,
+    config,
+    deps,
+    async () => {
+      const bytes = await deps.downloadAudio(voice.bucket, voice.path);
+      if (bytes === null) {
+        throw new ProviderError("failed");
+      }
+      if (bytes.length > MAX_AUDIO_BYTES) {
+        throw new AudioTooLongError();
+      }
+      const text = await transcribeAudio(transcribeConfig, {
+        bytes,
+        mimeType: voice.mimeType,
+        fileName: audioFileName(voice.mimeType, voice.path),
+      }, deps.fetch);
+      return json({ text });
+    },
+    (error) =>
+      error instanceof AudioTooLongError
+        ? json({ error: "audio_too_long" }, 413)
+        : null,
+  );
 }

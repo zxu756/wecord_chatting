@@ -40,6 +40,13 @@ abstract interface class AiRepository {
     String? conversationId,
   });
 
+  /// The text of voice message [messageId], transcribed by the server's
+  /// speech-to-text provider (the web only; the apps transcribe on the
+  /// device). The server finds the audio itself, as the caller. Throws
+  /// [AiTranscribeNotConfiguredException] when the server has no provider.
+  /// An empty string means no speech was found.
+  Future<String> transcribe({required String messageId});
+
   /// Whether the circle allows AI features (on unless a manager turned
   /// them off).
   Future<bool> circleAiEnabled(String circleId);
@@ -78,6 +85,7 @@ class SupabaseAiRepository implements AiRepository {
     return AiStatus(
       dailyLimit: (data['daily_limit'] as num?)?.toInt() ?? 0,
       used: (data['used'] as num?)?.toInt() ?? 0,
+      transcribeConfigured: data['transcribe_configured'] == true,
     );
   }
 
@@ -148,6 +156,19 @@ class SupabaseAiRepository implements AiRepository {
   }
 
   @override
+  Future<String> transcribe({required String messageId}) async {
+    final data = await _invoke({
+      'action': 'transcribe',
+      'message_id': messageId,
+    });
+    final text = data['text'];
+    if (text is! String) {
+      throw const AiFailedException();
+    }
+    return text.trim();
+  }
+
+  @override
   Future<bool> circleAiEnabled(String circleId) async {
     final row = await _client
         .from('circles')
@@ -199,6 +220,10 @@ class NoAiRepository implements AiRepository {
     required AiLanguage target,
     String? conversationId,
   }) => Future.error(const AiNotConfiguredException());
+
+  @override
+  Future<String> transcribe({required String messageId}) =>
+      Future.error(const AiNotConfiguredException());
 
   @override
   Future<bool> circleAiEnabled(String circleId) async => true;

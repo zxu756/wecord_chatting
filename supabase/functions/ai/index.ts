@@ -6,6 +6,9 @@
 //   summarize {conversation_id, after_message_id?, recent?, language}
 //   rewrite {mode, text, target?, conversation_id?}
 //   translate {text, target, conversation_id?}
+//   transcribe {message_id}     -> {text}. Needs the optional secrets
+//     AI_TRANSCRIBE_BASE_URL, AI_TRANSCRIBE_API_KEY and AI_TRANSCRIBE_MODEL
+//     (503 transcribe_not_configured without them).
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage). Answers 503
 // ai_not_configured until the three required secrets are set.
@@ -70,6 +73,42 @@ Deno.serve(async (request) => {
     },
     refund: async (userId) => {
       await admin.rpc("ai_refund_request", { p_user_id: userId });
+    },
+    loadVoiceMessage: async (_userId, messageId) => {
+      const { data } = await userClient
+        .from("messages")
+        .select("conversation_id,type,attachment,recalled_at")
+        .eq("id", messageId)
+        .maybeSingle();
+      const attachment = data?.attachment as
+        | Record<string, unknown>
+        | null
+        | undefined;
+      if (
+        !data || data.type !== "voice" || data.recalled_at ||
+        attachment?.kind !== "voice" ||
+        typeof attachment.bucket !== "string" ||
+        typeof attachment.path !== "string"
+      ) {
+        return null;
+      }
+      return {
+        conversationId: data.conversation_id as string,
+        bucket: attachment.bucket,
+        path: attachment.path,
+        mimeType: typeof attachment.mime_type === "string"
+          ? attachment.mime_type
+          : "audio/wav",
+        size: typeof attachment.size === "number" ? attachment.size : 0,
+      };
+    },
+    downloadAudio: async (bucket, path) => {
+      const { data, error } = await userClient.storage.from(bucket)
+        .download(path);
+      if (error || !data) {
+        return null;
+      }
+      return new Uint8Array(await data.arrayBuffer());
     },
     usedToday: async (userId) => {
       const { data } = await admin.rpc("ai_requests_today", {

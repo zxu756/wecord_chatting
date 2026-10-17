@@ -71,6 +71,8 @@ function setup(
       return Promise.resolve();
     },
     usedToday: () => Promise.resolve(used),
+    loadVoiceMessage: () => Promise.resolve(null),
+    downloadAudio: () => Promise.resolve(null),
     ...overrides,
   };
   return { deps, calls };
@@ -139,7 +141,12 @@ Deno.test("status reports the limit and today's use without counting", async () 
     await handleAiRequest(post({ action: "status" }), deps),
   );
   assertEquals(result.status, 200);
-  assertEquals(result.body, { configured: true, daily_limit: 2, used: 0 });
+  assertEquals(result.body, {
+    configured: true,
+    daily_limit: 2,
+    used: 0,
+    transcribe_configured: false,
+  });
   assertEquals(calls.consumed, 0);
 });
 

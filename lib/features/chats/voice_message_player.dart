@@ -4,24 +4,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/transcribe/transcribe_models.dart';
+import 'package:wecord/features/transcribe/transcript_view.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// A voice message: a round play button, a waveform that fills as it
 /// plays, and the length. [foregroundColor] is the bubble's text color;
-/// [card] puts it on its own rounded card (circle channels).
+/// [card] puts it on its own rounded card (circle channels). With a
+/// [messageId] it also has a Transcribe button, and the transcript shows
+/// under the waveform.
 class VoiceMessagePlayer extends ConsumerStatefulWidget {
   const VoiceMessagePlayer({
     required this.attachment,
     this.foregroundColor,
     this.card = false,
+    this.messageId,
+    this.conversationId,
     super.key,
   });
 
   final VoiceAttachment attachment;
   final Color? foregroundColor;
   final bool card;
+
+  /// The message this voice message belongs to; null (a message still
+  /// sending) leaves out transcribing.
+  final String? messageId;
+  final String? conversationId;
 
   @override
   ConsumerState<VoiceMessagePlayer> createState() => _VoiceMessagePlayerState();
@@ -110,6 +121,14 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
     final foreground = widget.foregroundColor ?? c.ink;
     // The button inverts the bubble: ink on light bubbles, light on ink.
     final buttonIcon = foreground == c.ink ? c.onInk : c.ink;
+    final messageId = widget.messageId;
+    final request = messageId == null
+        ? null
+        : TranscribeRequest.forMessage(
+            messageId: messageId,
+            conversationId: widget.conversationId,
+            attachment: widget.attachment,
+          );
 
     return StreamBuilder<PlayerState>(
       stream: _player.playerStateStream,
@@ -190,13 +209,27 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(width: 4),
+            if (request != null) ...[
+              const SizedBox(width: 2),
+              TranscribeButton(request: request, color: foreground),
+            ] else
+              const SizedBox(width: 4),
           ],
         );
+        final Widget content = request == null
+            ? player
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  player,
+                  TranscriptView(request: request, color: foreground),
+                ],
+              );
         if (!widget.card) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 1),
-            child: player,
+            child: content,
           );
         }
         return Container(
@@ -206,7 +239,7 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
             borderRadius: BorderRadius.circular(WeCordRadii.lg),
             border: Border.all(color: c.lineSoft),
           ),
-          child: player,
+          child: content,
         );
       },
     );

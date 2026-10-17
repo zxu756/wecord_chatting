@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
@@ -25,6 +26,7 @@ class AiChatHarness {
     ConversationType type = ConversationType.direct,
     String? circleId,
     List<ChatMessage>? messages,
+    this.extraOverrides = const [],
   }) {
     chats = chat_fakes.FakeChatsRepository()
       ..conversations = [
@@ -52,6 +54,9 @@ class AiChatHarness {
 
   final FakeAiRepository ai;
   final AiEnabledStore? enabledStore;
+
+  /// More provider overrides, for features that ride on this chat.
+  final List<Override> extraOverrides;
   late final chat_fakes.FakeChatsRepository chats;
 
   static ChatMessage message(
@@ -89,6 +94,7 @@ class AiChatHarness {
         aiEnabledStoreProvider.overrideWithValue(
           enabledStore ?? InMemoryAiEnabledStore(),
         ),
+        ...extraOverrides,
       ],
       child: MaterialApp(
         theme: theme ?? WeCordTheme.light(),

@@ -22,6 +22,8 @@ import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_call.dart';
+import 'package:wecord/features/wallpapers/wallpaper_model.dart';
+import 'package:wecord/features/wallpapers/wallpaper_store.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -37,6 +39,7 @@ import '../features/file_preview/file_preview_fakes.dart';
 import '../features/later/later_fakes.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
+import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
@@ -643,7 +646,77 @@ final moreA11yScreens = <A11yScreen>[
     await tester.tap(find.text(tr('Summarize')));
     await settle(tester);
   }),
+  A11yScreen('wallpaper-picker', (tester, world) async {
+    world.extraOverrides = _wallpaperOverrides(
+      const WallpaperSettings(defaultWallpaper: ChatWallpaper.preset('dawn')),
+    );
+    await _openThread(tester, world);
+    await tester.tap(find.byTooltip(tr('More')));
+    await settle(tester);
+    await tester.tap(find.text(tr('Wallpaper')));
+    await settleWithImages(tester);
+  }),
+  A11yScreen('wallpaper-picker-photo', (tester, world) async {
+    world.extraOverrides = _wallpaperOverrides(
+      const WallpaperSettings(
+        chats: {'dm-1': ChatWallpaper.photo(_wallpaperPhotoPath, blur: true)},
+      ),
+    );
+    await _openThread(tester, world);
+    await tester.tap(find.byTooltip(tr('More')));
+    await settle(tester);
+    await tester.tap(find.text(tr('Wallpaper')));
+    await settleWithImages(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await settleWithImages(tester);
+  }),
+  A11yScreen('wallpaper-chat', (tester, world) async {
+    world.extraOverrides = _wallpaperOverrides(
+      const WallpaperSettings(defaultWallpaper: ChatWallpaper.preset('sage')),
+    );
+    await _openThread(tester, world);
+    await settleWithImages(tester);
+  }),
+  A11yScreen('wallpaper-chat-photo', (tester, world) async {
+    world.extraOverrides = _wallpaperOverrides(
+      const WallpaperSettings(
+        defaultWallpaper: ChatWallpaper.photo(_wallpaperPhotoPath),
+      ),
+    );
+    await _openThread(tester, world);
+    await settleWithImages(tester);
+  }),
+  A11yScreen('wallpaper-group-thread', (tester, world) async {
+    world.extraOverrides = _wallpaperOverrides(
+      const WallpaperSettings(defaultWallpaper: ChatWallpaper.preset('dusk')),
+    );
+    await _openThread(
+      tester,
+      world,
+      id: 'group-1',
+      title: groupDetail.title,
+      type: ConversationType.group,
+      withThread: true,
+    );
+    await settleWithImages(tester);
+  }),
 ];
+
+const _wallpaperPhotoPath = 'user-1/00000000-0000-4000-8000-00000000f0f0.jpg';
+
+/// A wallpaper choice already on the person's account and this device, with
+/// a photo to show.
+List<Override> _wallpaperOverrides(WallpaperSettings settings) {
+  final stores = WallpaperTestStores(
+    repository: FakeWallpaperRepository(settings),
+    cache: InMemoryWallpaperSettingsStore({'user-1': settings}),
+  );
+  stores.photos.photos[_wallpaperPhotoPath] = samplePhotoBytes(
+    width: 320,
+    height: 480,
+  );
+  return stores.overrides;
+}
 
 List<Override> _aiGuardOverrides() {
   final rpc = FakeGuardRpc()

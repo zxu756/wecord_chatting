@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -182,13 +183,15 @@ class ChatDaySeparator extends StatelessWidget {
       child: Center(
         child: Semantics(
           header: true,
-          child: Text(
-            '${chatDayLabel(time)} ${chatClockTime(time)}',
-            key: const ValueKey('chat-day-separator'),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: c.muted,
+          child: WallpaperPill(
+            child: Text(
+              '${chatDayLabel(time)} ${chatClockTime(time)}',
+              key: const ValueKey('chat-day-separator'),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: c.muted,
+              ),
             ),
           ),
         ),
@@ -220,12 +223,15 @@ class ChatNewMessagesDivider extends StatelessWidget {
           Semantics(
             label: tr('New messages'),
             excludeSemantics: true,
-            child: Text(
-              tr('NEW'),
-              style: TextStyle(
-                color: c.dangerText,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
+            child: WallpaperPill(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              child: Text(
+                tr('NEW'),
+                style: TextStyle(
+                  color: c.dangerText,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -325,25 +331,27 @@ class ChatTypingIndicator extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       container: true,
-      child: Row(
-        key: const ValueKey('chat-typing-indicator'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const ExcludeSemantics(child: TypingDots()),
-          const SizedBox(width: 6),
-          if (name case final name?) ...[
-            Flexible(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style.copyWith(fontWeight: FontWeight.w700),
+      child: WallpaperPill(
+        child: Row(
+          key: const ValueKey('chat-typing-indicator'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ExcludeSemantics(child: TypingDots()),
+            const SizedBox(width: 6),
+            if (name case final name?) ...[
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style.copyWith(fontWeight: FontWeight.w700),
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
+              const SizedBox(width: 4),
+            ],
+            Text(tr('typing...'), style: style),
           ],
-          Text(tr('typing...'), style: style),
-        ],
+        ),
       ),
     );
   }

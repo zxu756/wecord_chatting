@@ -13,6 +13,7 @@ import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_sections.dart';
 import 'package:wecord/features/settings/settings_window.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
+import 'package:wecord/features/wallpapers/wallpaper_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -144,7 +145,9 @@ class SettingsPhonePage extends ConsumerWidget {
             children: [ThemeModePicker()],
           ),
           const SizedBox(height: 12),
-          const SettingsGroup(children: [GlassEffectsRow(), DensityRow()]),
+          const SettingsGroup(
+            children: [GlassEffectsRow(), DensityRow(), ChatWallpaperRow()],
+          ),
           SettingsGroup(
             header: tr('Preferences'),
             children: [

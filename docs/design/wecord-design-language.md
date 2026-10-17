@@ -446,3 +446,48 @@ labels ("Bart is here"), the save state ("Saved / Saving… / Offline") is a liv
 region, board cards offer "Move to …" actions, and everything is covered by
 `test/accessibility` (screens `notes-index`, `note-editor`, `lists-index`,
 `task-list`, `task-board`, `task-sheet`).
+
+## Chat wallpapers
+
+A personal picture behind a chat's messages (`lib/features/wallpapers/`;
+backend migration `202610170110_chat_wallpapers.sql`). Only its owner sees it:
+changing it changes nothing for anyone else.
+
+**Choosing.** Settings → Appearance → *Chat wallpaper* sets the default for
+every chat without its own. In a chat, *Wallpaper* (the More menu on phones,
+the + menu on wide screens) sets one for that chat alone; *Use default* clears
+it, and *None* opts the chat out of a default. The picker is a sheet: a live
+preview with two sample bubbles, a grid (None, 12 built-in wallpapers, Photo),
+the photo's *Dim in dark mode* slider, *Blur* switch and drag-to-position, and
+Apply / Cancel. Photos are scaled to 2048 px and compressed (JPEG 80) with
+the chat's image code before they go to the private `wallpapers` bucket.
+
+**Built-ins are drawn in code** (`wallpaper_presets.dart`,
+`wallpaper_painter.dart`): gradients, soft blobs, a quiet dot or grid pattern
+and paper grain, each with a light and a dark tone. The rule is that a
+wallpaper must never be mistaken for the page: every colour of every preset is
+checked in `test/features/wallpapers/wallpaper_presets_test.dart` against both
+bubbles, paper, rail, sidebar, panel, raised, well, glass and the accent
+(contrast at least 1.2:1 *and* a colour distance (ΔE) of at least 9, so a
+change of hue alone does not count), and against being calm (a pattern is at
+most 1.25:1 against its base, blobs and fades at most 1.2:1). The light tones
+are muted mid-light dusty colours, the dark ones deep tinted colours a little
+lighter than the bubbles. Add a preset and the test tells you if it clashes.
+
+**Readable on anything.** Bubbles are solid: other people's are `panel`
+(light) or `raised` (dark) with a thin edge shadow, mine stay `ink`. Text that
+would sit straight on the picture (dates, "NEW", the typing line, read
+receipts, sender names in groups) gets a small `WallpaperPill`. In circle
+channels each message becomes a solid card. A photo always gets a scrim
+(`wallpaperPhotoScrim`): a neutral veil in the light theme, black at the dim
+(25–65 %) in the dark theme. On desktop the wallpaper ends in hairlines against
+the sidebar and the side panels. With the platform's high contrast or Glass
+effects off (the app's reduced transparency) wallpapers fall back to the plain
+background (the picker says so).
+
+**Fast.** The wallpaper is painted once, in its own repaint boundary behind the
+list (never per message), photos are decoded no bigger than the screen needs
+(`ResizeImage`) and blur is applied inside the boundary. The choice is cached
+on the device (settings in shared preferences, photos as files or in
+IndexedDB), so a chat paints with it instantly; the server's copy replaces it
+when it arrives, and Realtime brings changes from other devices.

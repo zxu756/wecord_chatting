@@ -101,6 +101,9 @@ import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
+import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
+import 'package:wecord/features/wallpapers/wallpaper_picker.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -1080,6 +1083,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: openDisappearing,
           )
         : null;
+    void openWallpaper() => unawaited(
+      showWallpaperPicker(context, conversationId: widget.conversationId),
+    );
+    // Wallpapers are personal: this one is only for this chat, only for you.
+    final wallpaperAction = ChatThreadAction(
+      tooltip: tr('Wallpaper'),
+      icon: Icons.wallpaper_outlined,
+      selectedIcon: Icons.wallpaper_rounded,
+      isSelected: ref.watch(
+        wallpapersProvider.select(
+          (state) => state.settings.hasOwn(widget.conversationId),
+        ),
+      ),
+      menuOnly: true,
+      onPressed: openWallpaper,
+    );
     final groupDetailsAction = conversationType == ConversationType.group
         ? ChatThreadAction(
             tooltip: tr('Group details'),
@@ -1144,6 +1163,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       notesAction,
       if (!chatUsesDesktopChrome(context)) listsAction,
       ?disappearingAction,
+      wallpaperAction,
       ChatThreadAction(
         tooltip: tr('Media'),
         icon: Icons.photo_library_outlined,
@@ -1959,6 +1979,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       onAddMore: _showAddMoreMenu,
                     ),
                     onCreatePoll: _openPollComposer,
+                    onChangeWallpaper: openWallpaper,
                     onInsertTime: _insertTime,
                     onShowEvents:
                         conversationType == ConversationType.direct ||
@@ -2002,6 +2023,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           ),
         );
 
+        // The wallpaper is painted once behind the list, not per message.
+        final wallpaperArea = Stack(
+          children: [
+            Positioned.fill(child: ChatWallpaperBackdrop(edges: desktop)),
+            Positioned.fill(child: messagesArea),
+          ],
+        );
+
+        // Gives everything in the chat its wallpaper: bubbles, dates and the
+        // typing line use their wallpaper surfaces while one is showing.
+        Widget withWallpaper(Widget child) => ChatWallpaperHost(
+          conversationId: widget.conversationId,
+          child: child,
+        );
+
         // Files dropped anywhere on the chat go to the tray (macOS and the
         // web), unless the reader cannot send here or something sits over
         // the chat.
@@ -2021,7 +2057,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               Expanded(
                 child: Stack(
                   children: [
-                    Positioned.fill(child: messagesArea),
+                    Positioned.fill(child: wallpaperArea),
                     Positioned(
                       left: 0,
                       right: 0,
@@ -2033,7 +2069,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               ),
             ],
           );
-          return Scaffold(
+          final desktopScaffold = Scaffold(
             backgroundColor: c.panel,
             body: showDocs
                 ? ResizableSidePanelRow(
@@ -2086,8 +2122,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     ),
                   ),
           );
+          return withWallpaper(desktopScaffold);
         }
-        return dropZone(
+        final phoneScaffold = dropZone(
           Scaffold(
             backgroundColor: c.panel,
             body: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -2096,7 +2133,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   : SystemUiOverlayStyle.dark,
               child: Stack(
                 children: [
-                  Positioned.fill(child: messagesArea),
+                  Positioned.fill(child: wallpaperArea),
                   Positioned(
                     left: 0,
                     right: 0,
@@ -2133,6 +2170,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             ),
           ),
         );
+        return withWallpaper(phoneScaffold);
       },
     );
   }
@@ -5316,12 +5354,18 @@ class _MessageBubble extends StatelessWidget {
     final outgoing = isCurrentUser;
     final textColor = outgoing ? c.onInk : c.ink;
     final media = _mediaOnly;
+    // Over a wallpaper the bubbles stay solid and apart from it.
+    final onWallpaper = ChatWallpaperScope.activeOf(context);
     return Container(
       padding: media
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: outgoing ? c.ink : c.raised,
+        color: outgoing
+            ? c.ink
+            : onWallpaper
+            ? WallpaperSurfaces.incomingBubble(tokens)
+            : c.raised,
         borderRadius: lifted
             ? BorderRadius.circular(WeCordRadii.bubble + 2)
             : chatBubbleRadius(
@@ -5329,7 +5373,11 @@ class _MessageBubble extends StatelessWidget {
                 joinsAbove: isFollowUp,
                 joinsBelow: hasFollowUp,
               ),
-        boxShadow: lifted ? tokens.shadows.menu : null,
+        boxShadow: lifted
+            ? tokens.shadows.menu
+            : onWallpaper
+            ? WallpaperSurfaces.bubbleShadow(tokens)
+            : null,
       ),
       child: DefaultTextStyle.merge(
         style: TextStyle(
@@ -5448,7 +5496,9 @@ class _MessageBubble extends StatelessWidget {
                 alignment: outgoing
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
-                child: DisappearingMark(expiresAt: expiresAt),
+                child: WallpaperPill(
+                  child: DisappearingMark(expiresAt: expiresAt),
+                ),
               ),
               0,
             ),
@@ -5458,9 +5508,11 @@ class _MessageBubble extends StatelessWidget {
                 alignment: outgoing
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
-                child: MessageReviewMark(
-                  state: reviewState,
-                  isOwn: isCurrentUser,
+                child: WallpaperPill(
+                  child: MessageReviewMark(
+                    state: reviewState,
+                    isOwn: isCurrentUser,
+                  ),
                 ),
               ),
               0,
@@ -5470,7 +5522,7 @@ class _MessageBubble extends StatelessWidget {
               padding: const EdgeInsets.only(right: 2, top: 2),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: const ChatReadReceipt(),
+                child: const WallpaperPill(child: ChatReadReceipt()),
               ),
             ),
         ];
@@ -5482,29 +5534,39 @@ class _MessageBubble extends StatelessWidget {
               if (sender != null && showSenderName && !isFollowUp)
                 Padding(
                   padding: EdgeInsets.only(left: indent + 6, bottom: 3),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          sender.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: sender.roleColor == null
-                                ? c.muted
-                                : _nameColor(c),
-                          ),
-                        ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: WallpaperPill(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 1,
                       ),
-                      if (sender.isBot) ...[
-                        const SizedBox(width: 6),
-                        const MessageBotTag(),
-                      ],
-                      if (sender.userId case final userId?)
-                        ProfileNameBadges(userId: userId),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              sender.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: sender.roleColor == null
+                                    ? c.muted
+                                    : _nameColor(c),
+                              ),
+                            ),
+                          ),
+                          if (sender.isBot) ...[
+                            const SizedBox(width: 6),
+                            const MessageBotTag(),
+                          ],
+                          if (sender.userId case final userId?)
+                            ProfileNameBadges(userId: userId),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               Row(
@@ -5685,7 +5747,16 @@ class _MessageBubble extends StatelessWidget {
       ],
     );
 
-    final tint = mentionsMe
+    // Over a wallpaper each message is a solid card, so the text is never
+    // straight on the picture.
+    final onWallpaper = ChatWallpaperScope.activeOf(context);
+    final tint = onWallpaper
+        ? (mentionsMe
+              ? Color.alphaBlend(c.accentSoft, c.panel)
+              : hovered
+              ? c.raised
+              : c.panel)
+        : mentionsMe
         ? c.accentSoft.withValues(alpha: 0.6)
         : hovered
         ? c.raised.withValues(alpha: 0.6)
@@ -5720,7 +5791,15 @@ class _MessageBubble extends StatelessWidget {
             : null,
         child: AnimatedContainer(
           duration: WeCordMotion.quick,
-          color: tint,
+          margin: onWallpaper
+              ? EdgeInsets.symmetric(horizontal: desktop ? 14 : 8, vertical: 2)
+              : null,
+          decoration: BoxDecoration(
+            color: tint,
+            borderRadius: onWallpaper
+                ? BorderRadius.circular(WeCordRadii.lg)
+                : null,
+          ),
           padding: EdgeInsets.fromLTRB(
             side,
             density.space(isFollowUp ? 2 : 10),
@@ -6728,6 +6807,7 @@ class _Composer extends StatelessWidget {
     required this.onPickFile,
     required this.onCreatePoll,
     required this.onInsertTime,
+    required this.onChangeWallpaper,
     this.onShowEvents,
     required this.onPickSticker,
     required this.onPickGif,
@@ -6804,6 +6884,10 @@ class _Composer extends StatelessWidget {
   final Future<void> Function() onPickFile;
   final Future<void> Function() onCreatePoll;
   final Future<void> Function() onInsertTime;
+
+  /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
+  /// header has no More menu).
+  final VoidCallback onChangeWallpaper;
 
   /// Lists this chat's events and plans new ones; null where chats take
   /// no events.
@@ -6891,6 +6975,13 @@ class _Composer extends StatelessWidget {
                       icon: Icons.event_outlined,
                       label: tr('Events'),
                       onSelected: () => unawaited(onShowEvents!()),
+                    ),
+                  if (!compact)
+                    GlassMenuEntry(
+                      key: const ValueKey('composer-wallpaper-entry'),
+                      icon: Icons.wallpaper_outlined,
+                      label: tr('Wallpaper'),
+                      onSelected: onChangeWallpaper,
                     ),
                   GlassMenuEntry(
                     icon: Icons.sticky_note_2_outlined,

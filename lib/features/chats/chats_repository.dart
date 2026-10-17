@@ -1721,6 +1721,18 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     }
   }
 
+  /// Whether an updated message row looks like a message the AI guard just
+  /// let through: recent, not deleted and not under review.
+  static bool _mayBeJustReleased(Map<String, dynamic> record) {
+    if (record['review_state'] != null || record['recalled_at'] != null) {
+      return false;
+    }
+    final created = DateTime.tryParse('${record['created_at']}');
+    return created != null &&
+        DateTime.now().toUtc().difference(created.toUtc()) <
+            const Duration(minutes: 2);
+  }
+
   @override
   Stream<ThreadEvent> threadEvents(String conversationId) {
     late RealtimeChannel channel;
@@ -1785,12 +1797,20 @@ class SupabaseChatsDataSource implements ChatsDataSource {
                       ),
                     );
                   default:
+                    final id =
+                        idOf(payload.newRecord, 'id') ??
+                        idOf(payload.oldRecord, 'id');
+                    // A message the AI guard held back is not sent to people
+                    // who may not see it; when it is released they get an
+                    // update for a message they never had. A fresh,
+                    // visible message that changed may be such a release,
+                    // so it is fetched like a new one.
                     emit(
                       ThreadEvent(
-                        ThreadEventKind.messageUpdated,
-                        messageId:
-                            idOf(payload.newRecord, 'id') ??
-                            idOf(payload.oldRecord, 'id'),
+                        _mayBeJustReleased(payload.newRecord)
+                            ? ThreadEventKind.messageInserted
+                            : ThreadEventKind.messageUpdated,
+                        messageId: id,
                       ),
                     );
                 }

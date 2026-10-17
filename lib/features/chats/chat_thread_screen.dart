@@ -42,6 +42,7 @@ import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/chats/message_review_mark.dart';
 import 'package:wecord/features/chats/message_semantics.dart';
 import 'package:wecord/features/chats/offline/connectivity_banner.dart';
 import 'package:wecord/features/chats/media_send/album_fold.dart';
@@ -5449,6 +5450,19 @@ class _MessageBubble extends StatelessWidget {
               ),
               0,
             ),
+          if (message.reviewState case final reviewState?)
+            extra(
+              Align(
+                alignment: outgoing
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: MessageReviewMark(
+                  state: reviewState,
+                  isOwn: isCurrentUser,
+                ),
+              ),
+              0,
+            ),
           if (showReadReceipt)
             Padding(
               padding: const EdgeInsets.only(right: 2, top: 2),
@@ -5627,6 +5641,11 @@ class _MessageBubble extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: DisappearingMark(expiresAt: expiresAt),
+          ),
+        if (message.reviewState case final reviewState?)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: MessageReviewMark(state: reviewState, isOwn: isCurrentUser),
           ),
         if (showReadReceipt)
           const Padding(

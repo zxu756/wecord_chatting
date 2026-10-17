@@ -7,6 +7,30 @@ import 'package:wecord/shared/models/profile.dart';
 
 const _sentinel = Object();
 
+/// Where a message stands with the circle's AI guard (see
+/// `202610170090_ai_guard.sql`). Messages of everyone else are never in
+/// these states for the people who see them, except moderators.
+enum MessageReviewState {
+  /// Waiting for the AI's check.
+  checking,
+
+  /// The AI flagged it; hidden until a moderator decides.
+  held,
+
+  /// A moderator removed it; stays hidden from everyone but its author and
+  /// the moderators.
+  removed;
+
+  static MessageReviewState? maybeFromJson(Object? value) {
+    return switch (value) {
+      'checking' => MessageReviewState.checking,
+      'held' => MessageReviewState.held,
+      'removed' => MessageReviewState.removed,
+      _ => null,
+    };
+  }
+}
+
 enum MessageType {
   text,
   image,
@@ -77,6 +101,7 @@ class ChatMessage {
     this.attachmentGroupId,
     this.album,
     this.expiresAt,
+    this.reviewState,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -123,6 +148,7 @@ class ChatMessage {
       clientId: json['client_id'] as String?,
       attachmentGroupId: json['attachment_group_id'] as String?,
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
+      reviewState: MessageReviewState.maybeFromJson(json['review_state']),
     );
   }
 
@@ -194,6 +220,10 @@ class ChatMessage {
 
   /// When a disappearing message is deleted; null for messages that stay.
   final DateTime? expiresAt;
+
+  /// Set while the circle's AI guard checks or holds the message: only its
+  /// author and moderators see it then. Null for every message others see.
+  final MessageReviewState? reviewState;
 
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
@@ -350,6 +380,7 @@ class ChatMessage {
     Object? publishedAt = _sentinel,
     Object? album = _sentinel,
     Object? expiresAt = _sentinel,
+    Object? reviewState = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -421,6 +452,9 @@ class ChatMessage {
       expiresAt: identical(expiresAt, _sentinel)
           ? this.expiresAt
           : expiresAt as DateTime?,
+      reviewState: identical(reviewState, _sentinel)
+          ? this.reviewState
+          : reviewState as MessageReviewState?,
     );
   }
 }

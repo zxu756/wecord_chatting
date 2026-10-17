@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
+import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
+import 'package:wecord/features/circles/circle_ai_guard_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_bot_widgets.dart';
@@ -8,6 +10,7 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emojis_screen.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
+import 'package:wecord/features/circles/circle_review_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
@@ -15,6 +18,7 @@ import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the circle's settings: its template, tag and bots.
@@ -125,14 +129,18 @@ class _CircleHeaderCard extends StatelessWidget {
 
 /// Rows to the pages that manage the circle, as far as the current user
 /// may open them.
-class _ManageGroup extends StatelessWidget {
+class _ManageGroup extends ConsumerWidget {
   const _ManageGroup({required this.detail});
 
   final CircleDetail detail;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final circleId = detail.circle.id;
+    final canReview = detail.can(CirclePermission.manageMessages);
+    final waiting = canReview
+        ? ref.watch(messageReviewCountProvider(circleId)).value ?? 0
+        : 0;
     final rows = [
       if (detail.canManageRoles)
         SettingsRow(
@@ -160,6 +168,14 @@ class _ManageGroup extends StatelessWidget {
           onTap: () => openCircleAutoModScreen(context, detail),
         ),
         SettingsRow(
+          key: const ValueKey('circle-settings-ai-guard'),
+          icon: Icons.shield_outlined,
+          tone: SettingsTone.accent,
+          title: tr('AI guard'),
+          subtitle: tr('Check new members\' first messages'),
+          onTap: () => openCircleAiGuardScreen(context, detail),
+        ),
+        SettingsRow(
           key: const ValueKey('circle-settings-onboarding'),
           icon: Icons.rule,
           tone: SettingsTone.success,
@@ -175,6 +191,24 @@ class _ManageGroup extends StatelessWidget {
           onTap: () => openCircleDiscoverySettings(context, detail),
         ),
       ],
+      if (canReview)
+        SettingsRow(
+          key: const ValueKey('circle-settings-review'),
+          icon: Icons.fact_check_outlined,
+          tone: SettingsTone.warning,
+          title: tr('Review'),
+          subtitle: waiting == 0
+              ? tr('Nothing is waiting')
+              : tr('{count} waiting', {'count': waiting}),
+          trailing: waiting == 0
+              ? null
+              : CountBadge(
+                  count: waiting,
+                  semanticLabel: tr('{count} waiting', {'count': waiting}),
+                ),
+          showChevron: true,
+          onTap: () => openCircleReviewScreen(context, circleId),
+        ),
       if (detail.canViewAuditLog)
         SettingsRow(
           key: const ValueKey('circle-settings-audit-log'),

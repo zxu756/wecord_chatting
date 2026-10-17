@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
+import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
@@ -23,9 +24,11 @@ import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
+import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
 
 import '../features/chats/emoji_fixtures.dart';
+import '../features/circles/ai_guard_fakes.dart';
 import '../features/ai/ai_fakes.dart';
 import '../features/discovery/discovery_fakes.dart';
 import '../features/file_preview/file_preview_fakes.dart';
@@ -569,6 +572,49 @@ final moreA11yScreens = <A11yScreen>[
     await tester.tap(find.byKey(const ValueKey('message-translate')));
     await settle(tester);
   }),
+  A11yScreen('ai-guard-settings', (tester, world) async {
+    world.extraOverrides = _aiGuardOverrides();
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byTooltip(tr('Circle menu')));
+    await settle(tester);
+    await tester.tap(find.text(tr('AI guard')));
+    await settle(tester);
+  }),
+  A11yScreen('ai-guard-review', (tester, world) async {
+    world.extraOverrides = _aiGuardOverrides();
+    await world.open(tester, '/circles/circle-1');
+    await tester.tap(find.byTooltip(tr('Circle menu')));
+    await settle(tester);
+    await tester.tap(find.text(tr('Review')));
+    await settle(tester);
+  }),
+  A11yScreen('ai-guard-author-state', (tester, world) async {
+    world.extraOverrides = _aiGuardOverrides();
+    world.chats.messages = [
+      phoneMessage('g1', bart, 'Welcome to the circle!', minutesAgo: 30),
+      phoneMessage(
+        'g2',
+        me,
+        'Hi all, happy to join',
+        minutesAgo: 3,
+      ).copyWith(reviewState: MessageReviewState.held),
+      phoneMessage(
+        'g3',
+        me,
+        'Any events this week?',
+        minutesAgo: 0,
+      ).copyWith(reviewState: MessageReviewState.checking),
+    ];
+    await world.open(
+      tester,
+      '/circles/circle-1/channels/conv-general',
+      extra: const ChatThreadRouteExtra(
+        title: '# general',
+        type: ConversationType.channel,
+        circleId: 'circle-1',
+      ),
+    );
+  }),
   A11yScreen('ai-catch-up', (tester, world) async {
     world.extraOverrides = _aiOverrides();
     await _openThread(tester, world);
@@ -578,6 +624,27 @@ final moreA11yScreens = <A11yScreen>[
     await settle(tester);
   }),
 ];
+
+List<Override> _aiGuardOverrides() {
+  final rpc = FakeGuardRpc()
+    ..results['get_circle_ai_guard'] = guardJson(enabled: true)
+    ..results['count_message_reviews'] = 2
+    ..results['list_message_reviews'] = [
+      reviewJson(),
+      reviewJson(
+        id: 'message-2',
+        state: 'flagged',
+        verdict: 'scam',
+        reason: 'Asks for a password',
+        body: 'Send me your password and I will send a prize',
+      ),
+    ];
+  return [
+    circleAiGuardRepositoryProvider.overrideWithValue(
+      CircleAiGuardRepository(rpc),
+    ),
+  ];
+}
 
 List<Override> _aiOverrides() => [
   aiRepositoryProvider.overrideWithValue(FakeAiRepository()),

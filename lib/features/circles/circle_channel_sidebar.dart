@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
+import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
+import 'package:wecord/features/circles/circle_ai_guard_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
@@ -14,6 +16,7 @@ import 'package:wecord/features/circles/circle_channel_settings_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_notification_settings_sheet.dart';
+import 'package:wecord/features/circles/circle_review_screen.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
@@ -31,6 +34,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
+import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -497,6 +501,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
               detail: detail,
               onlineCount: onlineCount,
               compact: wide,
+              reviewCount: _reviewCount(detail, watch: true),
               onMenu: (position) => _openCircleMenu(position),
             ),
             CircleEventsEntry(
@@ -701,10 +706,20 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     );
   }
 
+  /// How many messages wait in the Review queue, for members who moderate.
+  int _reviewCount(CircleDetail detail, {bool watch = false}) {
+    if (!detail.can(CirclePermission.manageMessages)) {
+      return 0;
+    }
+    final count = messageReviewCountProvider(detail.circle.id);
+    return (watch ? ref.watch(count) : ref.read(count)).value ?? 0;
+  }
+
   Future<void> _openCircleMenu(Offset? position) async {
     final detail = widget.detail;
     final currentMember = detail.currentMember;
     final canManageChannels = detail.canManageChannels;
+    final reviewCount = _reviewCount(detail);
     final items = <CircleMenuItem<_CircleMenuAction>>[
       if (detail.canCreateInvites)
         CircleMenuItem(
@@ -748,6 +763,20 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           value: _CircleMenuAction.autoMod,
           icon: Icons.gpp_maybe_outlined,
           label: tr('AutoMod'),
+        ),
+      if (detail.canManageCircle)
+        CircleMenuItem(
+          value: _CircleMenuAction.aiGuard,
+          icon: Icons.shield_outlined,
+          label: tr('AI guard'),
+        ),
+      if (detail.can(CirclePermission.manageMessages))
+        CircleMenuItem(
+          value: _CircleMenuAction.review,
+          icon: Icons.fact_check_outlined,
+          label: tr('Review'),
+          tone: SettingsTone.warning,
+          badge: reviewCount,
         ),
       if (detail.canManageCircle)
         CircleMenuItem(
@@ -831,6 +860,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleBansScreen(context, detail.circle.id);
       case _CircleMenuAction.autoMod:
         openCircleAutoModScreen(context, detail);
+      case _CircleMenuAction.aiGuard:
+        openCircleAiGuardScreen(context, detail);
+      case _CircleMenuAction.review:
+        openCircleReviewScreen(context, detail.circle.id);
       case _CircleMenuAction.onboarding:
         openCircleOnboardingSettings(context, detail);
       case _CircleMenuAction.emojis:
@@ -1065,6 +1098,8 @@ class _CircleMenuHeader extends StatelessWidget {
 }
 
 enum _CircleMenuAction {
+  review,
+  aiGuard,
   invite,
   createChannel,
   createCategory,
@@ -1090,6 +1125,8 @@ const _manageActions = {
   _CircleMenuAction.roles,
   _CircleMenuAction.bans,
   _CircleMenuAction.autoMod,
+  _CircleMenuAction.aiGuard,
+  _CircleMenuAction.review,
   _CircleMenuAction.onboarding,
   _CircleMenuAction.auditLog,
 };
@@ -1106,11 +1143,16 @@ class CircleBannerCard extends StatelessWidget {
     required this.onlineCount,
     required this.onMenu,
     this.compact = false,
+    this.reviewCount = 0,
     super.key,
   });
 
   final CircleDetail detail;
   final int onlineCount;
+
+  /// Messages waiting in the Review queue (moderators only): a badge on the
+  /// menu button, where the moderation tools are.
+  final int reviewCount;
 
   /// Opens the circle menu; with the button's position on wide screens.
   final ValueChanged<Offset?> onMenu;
@@ -1208,7 +1250,11 @@ class CircleBannerCard extends StatelessWidget {
                 Builder(
                   builder: (buttonContext) => WeCordPressable(
                     tooltip: tr('Circle menu'),
-                    semanticLabel: tr('Circle menu'),
+                    semanticLabel: reviewCount > 0
+                        ? tr('Circle menu, {count} waiting for review', {
+                            'count': reviewCount,
+                          })
+                        : tr('Circle menu'),
                     shape: const CircleBorder(),
                     pressedScale: 0.92,
                     onPressed: () {
@@ -1227,21 +1273,41 @@ class CircleBannerCard extends StatelessWidget {
                             ? minTouchTargetSize
                             : buttonSize,
                         child: Center(
-                          child: AnimatedContainer(
-                            duration: WeCordMotion.quick,
-                            width: buttonSize,
-                            height: buttonSize,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(
-                                alpha: hovered ? 0.36 : 0.25,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              AnimatedContainer(
+                                duration: WeCordMotion.quick,
+                                width: buttonSize,
+                                height: buttonSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(
+                                    alpha: hovered ? 0.36 : 0.25,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.more_horiz_rounded,
+                                  size: compact ? 18 : 20,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ),
-                            child: Icon(
-                              Icons.more_horiz_rounded,
-                              size: compact ? 18 : 20,
-                              color: Colors.white,
-                            ),
+                              if (reviewCount > 0)
+                                Positioned(
+                                  right: -4,
+                                  top: -5,
+                                  child: ExcludeSemantics(
+                                    child: CountBadge(
+                                      key: const ValueKey(
+                                        'circle-review-badge',
+                                      ),
+                                      count: reviewCount,
+                                      size: 16,
+                                      ringColor: fill,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       );

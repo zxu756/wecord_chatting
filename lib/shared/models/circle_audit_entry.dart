@@ -114,6 +114,7 @@ enum CircleAuditActionGroup {
   emoji('emoji', 'Emoji'),
   sticker('sticker', 'Stickers'),
   automod('automod', 'AutoMod'),
+  guard('guard', 'AI guard'),
   onboarding('onboarding', 'Onboarding'),
   discovery('discovery', 'Discovery'),
   other('', 'Other');
@@ -153,6 +154,7 @@ enum CircleAuditActionGroup {
     emoji,
     sticker,
     automod,
+    guard,
     onboarding,
     discovery,
   ];

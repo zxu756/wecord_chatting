@@ -8,6 +8,10 @@
 
 begin;
 
+-- The behaviour checks all run DDL and write the same tables; take turns so
+-- they cannot deadlock when the test runner starts them together.
+select pg_advisory_xact_lock(7771001);
+
 \i supabase/migrations/202610170050_chat_events.sql
 
 -- The push subscriptions table comes from an earlier migration that an old

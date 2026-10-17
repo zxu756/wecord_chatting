@@ -445,6 +445,14 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/chat-event-reminders/index.ts"
 
+[functions.data-export]
+enabled = true
+# Signed-in people export their own data: the function acts as the caller to
+# know who they are, then reads only their rows with the service role. With
+# the service role key and {"purge": true} a scheduler deletes old exports.
+verify_jwt = true
+entrypoint = "./functions/data-export/index.ts"
+
 [functions.gif-search]
 enabled = true
 # Signed-in users only; the GIPHY key (GIPHY_API_KEY secret) never leaves

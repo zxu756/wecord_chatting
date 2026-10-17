@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:wecord/features/settings/data_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -847,6 +848,13 @@ class PrivacySettingsGroup extends ConsumerWidget {
               ? null
               : '$blockedCount',
           onTap: () => showBlockedUsersSheet(context, ref),
+        ),
+        SettingsRow(
+          key: const ValueKey('data-export-tile'),
+          icon: Icons.download_rounded,
+          title: tr('Download my data'),
+          subtitle: tr('Get a copy of your profile, friends and messages'),
+          onTap: () => openDataExport(context),
         ),
       ],
     );

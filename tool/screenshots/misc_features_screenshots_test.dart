@@ -17,6 +17,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/time_tokens/time_token.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
+import 'package:wecord/features/settings/data_export.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -25,6 +26,8 @@ import 'package:wecord/shared/models/message.dart';
 import '../../test/features/chats/events/chat_events_test.dart'
     show FakeChatEventsRepository, chatEvent;
 import '../../test/features/groups/group_cleanup_test.dart' show quietGroup;
+import '../../test/features/settings/data_export_test.dart'
+    show FakeDataExportRepository, ready, working;
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -60,6 +63,7 @@ const _variants = [
 void main() {
   setUpAll(loadScreenshotFonts);
   late FakeChatEventsRepository eventsRepo;
+  late FakeDataExportRepository exportRepo;
 
   Future<void> shoot(WidgetTester tester, String name) async {
     await settle(tester);
@@ -100,12 +104,14 @@ void main() {
           final world = PhoneWorld()
             ..themeMode = variant.dark ? ThemeMode.dark : ThemeMode.light;
           eventsRepo = FakeChatEventsRepository([]);
+          exportRepo = FakeDataExportRepository();
           world.extraOverrides = [
             timeTokenFollowsClockProvider.overrideWithValue(false),
             chatEventsRepositoryProvider.overrideWithValue(eventsRepo),
             groupCleanupRepositoryProvider.overrideWithValue(
               _ScreenshotCleanupRepository(),
             ),
+            dataExportRepositoryProvider.overrideWithValue(exportRepo),
           ];
           await open(tester, world, variant);
           await shoot(tester, '$name-${variant.name}');
@@ -378,6 +384,46 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('group-cleanup-confirm')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
+  });
+
+  screen('export', 'export1-request', (tester, world, variant) async {
+    await openSettingsRow(
+      tester,
+      world,
+      variant,
+      section: 'privacy',
+      tile: 'data-export-tile',
+    );
+  });
+
+  screen('export', 'export2-progress', (tester, world, variant) async {
+    exportRepo.statuses = [null, working('messages', 52, detail: '41000')];
+    await openSettingsRow(
+      tester,
+      world,
+      variant,
+      section: 'privacy',
+      tile: 'data-export-tile',
+    );
+    final request = find.byKey(const ValueKey('data-export-request'));
+    await tester.scrollUntilVisible(
+      request,
+      300,
+      scrollable: topPageScrollable(),
+    );
+    await tester.tap(request);
+    await settle(tester);
+  });
+
+  screen('export', 'export3-ready', (tester, world, variant) async {
+    exportRepo.statuses = [ready()];
+    await openSettingsRow(
+      tester,
+      world,
+      variant,
+      section: 'privacy',
+      tile: 'data-export-tile',
+    );
   });
 }
 

@@ -13,6 +13,8 @@ import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
+import 'package:wecord/features/moments/moments_screen.dart';
+import 'package:wecord/features/moments/moments_widgets.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
@@ -26,7 +28,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// What Home shows beside its sidebar.
-enum HomeSection { friends, inbox, saved, conversation }
+enum HomeSection { friends, inbox, saved, moments, conversation }
 
 /// Home's sidebar on wide layouts: the "Messages" title with a compose
 /// button, a search field that jumps anywhere (⌘K), Friends and
@@ -151,6 +153,15 @@ class HomeSidebar extends ConsumerWidget {
                       label: tr('Saved'),
                       selected: section == HomeSection.saved,
                       onTap: () => openPage(context, SavedMessagesScreen.path),
+                    ),
+                  if (wide)
+                    SidebarNavRow(
+                      key: const ValueKey('home-moments'),
+                      icon: Icons.auto_awesome_motion_outlined,
+                      label: tr('Moments'),
+                      selected: section == HomeSection.moments,
+                      onTap: () => openPage(context, MomentsScreen.path),
+                      trailing: MomentsUnseenAvatar(ringColor: c.sidebar),
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 12, 2, 2),
@@ -345,6 +356,7 @@ class SidebarNavRow extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.badgeCount = 0,
+    this.trailing,
     super.key,
   });
 
@@ -353,6 +365,9 @@ class SidebarNavRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool selected;
   final int badgeCount;
+
+  /// Shown at the end of the row (Moments: the latest poster's avatar).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +413,7 @@ class SidebarNavRow extends StatelessWidget {
                   size: 18,
                   tone: BadgeTone.mention,
                 ),
+              ?trailing,
             ],
           ),
         ),

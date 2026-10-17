@@ -7,6 +7,10 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/friend_tags/friend_profile_extras.dart';
+import 'package:wecord/features/friend_tags/friend_tags_models.dart';
+import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
+import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
@@ -51,6 +55,9 @@ final sentFriendRequestIdsProvider = StateProvider.autoDispose<Set<String>>((
 
 /// Whether the friends list shows everyone or only who is online.
 final _onlineOnlyProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// The tag the friends list is narrowed to; null for no tag.
+final _tagFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
 
 /// Friends: find people to add, answer requests, and the friends list.
 class ContactsScreen extends ConsumerWidget {
@@ -278,15 +285,34 @@ class _FriendsSection extends ConsumerWidget {
     final statuses = ref.watch(presenceStatusesProvider).value;
     PresenceStatus? presence(String id) =>
         presenceOf(id, onlineUserIds: onlineIds, statuses: statuses);
+    final tagData =
+        ref.watch(friendTagsProvider).value ?? const FriendTagsData();
+    final tagId = ref.watch(_tagFilterProvider);
+    // A tag that was deleted no longer narrows the list.
+    final activeTag = tagId == null ? null : tagData.tagById(tagId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsSectionHeader(
           tr('Friends'),
-          trailing: friends.maybeWhen(
-            data: (friends) => _NewGroupButton(friends: friends),
-            orElse: () => const _NewGroupButton(friends: []),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              WeCordButton(
+                key: const ValueKey('contacts-tags'),
+                label: tr('Tags'),
+                icon: Icons.sell_outlined,
+                size: WeCordButtonSize.small,
+                variant: WeCordButtonVariant.onPaper,
+                onPressed: () => context.push(FriendTagsScreen.path),
+              ),
+              const SizedBox(width: 6),
+              friends.maybeWhen(
+                data: (friends) => _NewGroupButton(friends: friends),
+                orElse: () => const _NewGroupButton(friends: []),
+              ),
+            ],
           ),
         ),
         friends.when(
@@ -318,37 +344,84 @@ class _FriendsSection extends ConsumerWidget {
                             friend.username.toLowerCase().contains(query);
                       })
                       .toList(growable: false);
-            final visibleFriends = onlineOnly
+            final shown = onlineOnly
                 ? matching
                       .where((friend) => presence(friend.id) != null)
                       .toList(growable: false)
                 : matching;
+            final visibleFriends = activeTag == null
+                ? shown
+                : tagData.inTag(shown, activeTag.id);
+            final starredFriends = [
+              for (final friend in visibleFriends)
+                if (tagData.isStarred(friend.id)) friend,
+            ];
+            final otherFriends = [
+              for (final friend in visibleFriends)
+                if (!tagData.isStarred(friend.id)) friend,
+            ];
+
+            Widget group(List<Profile> people) => SettingsGroup(
+              separatorIndent: 72,
+              children: [
+                for (final friend in people)
+                  _PersonRow(
+                    key: ValueKey('friend-${friend.id}'),
+                    profile: friend,
+                    presence: presenceColor(context, presence(friend.id)),
+                    onTap: () => context.push('/profile/${friend.id}'),
+                    trailing: _FriendActions(
+                      profile: friend,
+                      starred: tagData.isStarred(friend.id),
+                    ),
+                  ),
+              ],
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    WeCordChip(
-                      key: const ValueKey('friends-filter-all'),
-                      label: tr('All'),
-                      count: friends.length,
-                      onPaper: true,
-                      selected: !onlineOnly,
-                      onPressed: () =>
-                          ref.read(_onlineOnlyProvider.notifier).state = false,
-                    ),
-                    const SizedBox(width: 6),
-                    WeCordChip(
-                      key: const ValueKey('friends-filter-online'),
-                      label: tr('Online'),
-                      count: online.length,
-                      onPaper: true,
-                      selected: onlineOnly,
-                      onPressed: () =>
-                          ref.read(_onlineOnlyProvider.notifier).state = true,
-                    ),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      WeCordChip(
+                        key: const ValueKey('friends-filter-all'),
+                        label: tr('All'),
+                        count: friends.length,
+                        onPaper: true,
+                        selected: !onlineOnly && activeTag == null,
+                        onPressed: () {
+                          ref.read(_onlineOnlyProvider.notifier).state = false;
+                          ref.read(_tagFilterProvider.notifier).state = null;
+                        },
+                      ),
+                      const SizedBox(width: 6),
+                      WeCordChip(
+                        key: const ValueKey('friends-filter-online'),
+                        label: tr('Online'),
+                        count: online.length,
+                        onPaper: true,
+                        selected: onlineOnly,
+                        onPressed: () =>
+                            ref.read(_onlineOnlyProvider.notifier).state = true,
+                      ),
+                      for (final tag in tagData.tags) ...[
+                        const SizedBox(width: 6),
+                        WeCordChip(
+                          key: ValueKey('friends-filter-tag-${tag.id}'),
+                          label: tag.name,
+                          icon: Icons.sell_outlined,
+                          count: tagData.membersOf(tag.id).length,
+                          onPaper: true,
+                          selected: activeTag?.id == tag.id,
+                          onPressed: () =>
+                              ref.read(_tagFilterProvider.notifier).state =
+                                  activeTag?.id == tag.id ? null : tag.id,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 WeCordTextField(
@@ -361,21 +434,20 @@ class _FriendsSection extends ConsumerWidget {
                 ),
                 const SizedBox(height: 10),
                 if (visibleFriends.isEmpty)
-                  _Note(tr('No matching friends.'))
-                else
-                  SettingsGroup(
-                    separatorIndent: 72,
-                    children: [
-                      for (final friend in visibleFriends)
-                        _PersonRow(
-                          key: ValueKey('friend-${friend.id}'),
-                          profile: friend,
-                          presence: presenceColor(context, presence(friend.id)),
-                          onTap: () => context.push('/profile/${friend.id}'),
-                          trailing: _FriendActions(profile: friend),
-                        ),
-                    ],
-                  ),
+                  _Note(
+                    activeTag != null && shown.isNotEmpty
+                        ? tr('No friends in this tag.')
+                        : tr('No matching friends.'),
+                  )
+                else ...[
+                  if (starredFriends.isNotEmpty) ...[
+                    SettingsSectionHeader(tr('Starred')),
+                    group(starredFriends),
+                  ],
+                  if (starredFriends.isNotEmpty && otherFriends.isNotEmpty)
+                    SettingsSectionHeader(tr('Other friends')),
+                  if (otherFriends.isNotEmpty) group(otherFriends),
+                ],
               ],
             );
           },
@@ -505,15 +577,27 @@ class _MessageFriendButtonState extends ConsumerState<_MessageFriendButton> {
 }
 
 class _FriendActions extends ConsumerWidget {
-  const _FriendActions({required this.profile});
+  const _FriendActions({required this.profile, this.starred = false});
 
   final Profile profile;
+  final bool starred;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        WeCordIconButton(
+          key: ValueKey('friend-star-${profile.id}'),
+          icon: starred ? Icons.star_rounded : Icons.star_border_rounded,
+          tooltip: starred ? tr('Remove star') : tr('Star'),
+          size: 38,
+          variant: WeCordButtonVariant.ghost,
+          selected: starred,
+          onPressed: () =>
+              toggleFriendStar(context, ref, profile, starred: !starred),
+        ),
+        const SizedBox(width: 2),
         WeCordIconButton(
           icon: Icons.edit_outlined,
           tooltip: tr('Edit alias'),

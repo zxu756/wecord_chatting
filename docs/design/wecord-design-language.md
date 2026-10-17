@@ -247,11 +247,13 @@ the WeCord components in new and restyled screens.
   y≈58; the panel (`PanelSurface`, top-left radius 28) starts 46 below the
   top. Large title row: 26/800 title + 40px round buttons (search raised,
   compose accent).
-- **Saved on the phone home**: the quick row under the Messages title starts
-  with two 58 squircle tiles, *Add friend* (Friends, with the request badge)
-  and *Saved* (bookmark), before the friends; Notifications is the bell on the
-  floating user panel. That matches desktop, where Saved is the third row
-  under Friends and Notifications. Settings keeps its *Saved messages* row as
+- **Saved and Moments on the phone home**: the quick row under the Messages
+  title starts with three 58 squircle tiles, *Add friend* (Friends, with the
+  request badge), *Saved* (bookmark) and *Moments* (with the latest poster's
+  avatar on its corner while there is news), before the friends;
+  Notifications is the bell on the floating user panel. That matches desktop,
+  where Saved and Moments are the third and fourth rows under Friends and
+  Notifications. Settings keeps its *Saved messages* row as
   a second, familiar way in.
 - **Floating user panel**: glass pill, 64 tall, radius 32, 28 above the
   bottom, spanning from 10 px inside the rail's left to 10 px from the right
@@ -545,3 +547,57 @@ list (never per message), photos are decoded no bigger than the screen needs
 on the device (settings in shared preferences, photos as files or in
 IndexedDB), so a chat paints with it instantly; the server's copy replaces it
 when it arrives, and Realtime brings changes from other devices.
+
+## Moments, friend tags and stars
+
+Friends' posts (朋友圈) and the private labels that go with them
+(`lib/features/moments/`, `lib/features/friend_tags/`; backend migrations
+`202610180040` to `042`).
+
+**Where it shows up.** Phone: a *Moments* tile in the quick row of the home,
+after Add friend and Saved. Desktop: the *Moments* row under Saved in the home
+sidebar. Both carry the **latest poster's avatar** on a ring while there are
+posts since the person last opened Moments (never a red badge: nothing needs
+them). Settings -> Privacy & Safety -> *Moments* holds the viewer-side
+privacy; Notifications has a *Moments* chip with a card per like, comment and
+reply (the same card shape as tasks: avatar with a small round badge, the
+words in a `well` box, the Moment's first picture at the end).
+
+**The page** is a paper page like Notifications: large title, a compose
+button, then a rounded cover card (picture or the person's color with soft
+lights, avatar on a `panel` ring and the name in white over a bottom
+gradient) and white post cards 12 apart: avatar, name, age, text, a grid of
+thumbnails (one large, two or four in two columns, otherwise three), the
+place, a heart and comment button and, in a `well` block, who liked and the
+first three comments ("View all" for the rest). Only the author sees that a
+post is not for every friend (a quiet chip: *Only me*, *Some friends*,
+*Hidden from some*). Likes are accent hearts, not red.
+
+**Posting.** Text (2000 characters) plus up to nine photos *or* a link, a
+place and *Who can see this*: Friends, Only me, **Only share with** or
+**Don't share with** (friends and tags, chosen in one sheet whose Done button
+stays pinned). Photos are scaled to 1920 px (JPEG 82) with a 480 px thumbnail
+(the chat's compression code), uploaded to the private `moments` bucket as
+`<me>/<post id>-<n>.jpg` and `-t.jpg`, and the post is made with
+`create_moment` under an id chosen on the device, so a retry never posts it
+twice. No video yet.
+
+**Who can see what is decided in SQL** (`moments_post_visible_to`): friends
+only, neither blocked; private; the live audience (a friend added to a tag
+later sees the tag's older posts, one added to a hidden tag does not); the
+author's *Don't let them see my Moments* per friend; the author's *Visible
+range* (all, 6 months, a month, 3 days; never for the author). *Hide their
+Moments* only leaves the feed; the friend's page still opens. Likes and
+comments follow WeChat's rule: a viewer sees one only when they are friends
+with (or are) the poster **and** the person who liked or commented, and for a
+reply also the person replied to (`moments_interaction_visible`). Pictures
+are readable only by those who may see the post, covers by friends who have
+not been hidden from. The audience columns of a post cannot be read by
+anyone, even the people they name. `test/supabase/moments_behaviour.sql` runs
+every mode.
+
+**Friend tags and stars** are private to their owner (RLS): a *Starred* group
+leads the friends list (and a star button on each row), tag chips filter it,
+the *Tags* page makes, renames, deletes and fills tags, and a friend's
+profile has *Star*, *Tags* and *Moments* rows. Unfriending removes the friend
+from tags, stars and Moments choices.

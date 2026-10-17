@@ -1,0 +1,486 @@
+import 'package:flutter/foundation.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
+
+/// Most photos in one Moment.
+const maxMomentPhotos = 9;
+
+/// Longest Moment text and comment, as the server enforces them.
+const maxMomentTextLength = 2000;
+const maxMomentCommentLength = 500;
+
+/// Who can see a Moment (the server's `visibility`).
+enum MomentVisibility {
+  /// Every friend.
+  friends('friends'),
+
+  /// Only the author.
+  private('private'),
+
+  /// Only the chosen friends and tags ("Only share with").
+  only('only'),
+
+  /// Every friend but the chosen ones ("Don't share with").
+  except('except');
+
+  const MomentVisibility(this.wire);
+
+  final String wire;
+
+  static MomentVisibility fromWire(Object? value) {
+    return MomentVisibility.values.firstWhere(
+      (visibility) => visibility.wire == value,
+      orElse: () => MomentVisibility.friends,
+    );
+  }
+}
+
+/// The audience chosen for a Moment: a mode and, for "only" and "except",
+/// friends and tags.
+@immutable
+class MomentAudience {
+  const MomentAudience({
+    this.visibility = MomentVisibility.friends,
+    this.friendIds = const {},
+    this.tagIds = const {},
+  });
+
+  static const everyone = MomentAudience();
+
+  final MomentVisibility visibility;
+  final Set<String> friendIds;
+  final Set<String> tagIds;
+
+  bool get usesLists =>
+      visibility == MomentVisibility.only ||
+      visibility == MomentVisibility.except;
+
+  /// A list mode needs at least one friend or tag to mean anything.
+  bool get isComplete =>
+      !usesLists || friendIds.isNotEmpty || tagIds.isNotEmpty;
+
+  MomentAudience copyWith({
+    MomentVisibility? visibility,
+    Set<String>? friendIds,
+    Set<String>? tagIds,
+  }) {
+    return MomentAudience(
+      visibility: visibility ?? this.visibility,
+      friendIds: friendIds ?? this.friendIds,
+      tagIds: tagIds ?? this.tagIds,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is MomentAudience &&
+      other.visibility == visibility &&
+      setEquals(other.friendIds, friendIds) &&
+      setEquals(other.tagIds, tagIds);
+
+  @override
+  int get hashCode => Object.hash(
+    visibility,
+    Object.hashAllUnordered(friendIds),
+    Object.hashAllUnordered(tagIds),
+  );
+}
+
+/// A picture of a Moment: the full one and its thumbnail, both paths in the
+/// private `moments` bucket.
+@immutable
+class MomentPhoto {
+  const MomentPhoto({
+    required this.path,
+    required this.thumb,
+    this.width = 0,
+    this.height = 0,
+  });
+
+  factory MomentPhoto.fromJson(Map<String, dynamic> json) {
+    return MomentPhoto(
+      path: json['path'] as String,
+      thumb: json['thumb'] as String? ?? json['path'] as String,
+      width: (json['w'] as num?)?.toInt() ?? 0,
+      height: (json['h'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final String path;
+  final String thumb;
+  final int width;
+  final int height;
+
+  double? get aspectRatio => width > 0 && height > 0 ? width / height : null;
+}
+
+enum MomentKind {
+  text,
+  photos,
+  link;
+
+  static MomentKind fromWire(Object? value) {
+    return MomentKind.values.firstWhere(
+      (kind) => kind.name == value,
+      orElse: () => MomentKind.text,
+    );
+  }
+}
+
+/// Somebody who liked a Moment (only people the viewer may see).
+@immutable
+class MomentLiker {
+  const MomentLiker({required this.userId, required this.name, this.avatarUrl});
+
+  factory MomentLiker.fromJson(Map<String, dynamic> json) {
+    return MomentLiker(
+      userId: json['user_id'] as String,
+      name: json['name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+
+  final String userId;
+  final String name;
+  final String? avatarUrl;
+}
+
+/// A comment or a reply.
+@immutable
+class MomentComment {
+  const MomentComment({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.body,
+    required this.createdAt,
+    this.avatarUrl,
+    this.replyToCommentId,
+    this.replyToUserId,
+    this.replyToName,
+  });
+
+  factory MomentComment.fromJson(Map<String, dynamic> json) {
+    return MomentComment(
+      id: json['id'] as String,
+      userId: json['user_id'] as String,
+      name: json['name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+      body: json['body'] as String? ?? '',
+      createdAt: DateTime.parse(json['created_at'] as String),
+      replyToCommentId: json['reply_to_comment_id'] as String?,
+      replyToUserId: json['reply_to_user_id'] as String?,
+      replyToName: json['reply_to_name'] as String?,
+    );
+  }
+
+  final String id;
+  final String userId;
+  final String name;
+  final String? avatarUrl;
+  final String body;
+  final DateTime createdAt;
+  final String? replyToCommentId;
+  final String? replyToUserId;
+  final String? replyToName;
+
+  bool get isReply => replyToUserId != null;
+}
+
+/// A Moment as the viewer may see it: the likes and comments are already
+/// only the ones the viewer is allowed to read.
+@immutable
+class MomentPost {
+  const MomentPost({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.createdAt,
+    this.authorAvatarUrl,
+    this.body = '',
+    this.kind = MomentKind.text,
+    this.photos = const [],
+    this.linkUrl,
+    this.linkTitle,
+    this.location,
+    this.visibility = MomentVisibility.friends,
+    this.likeCount = 0,
+    this.likedByMe = false,
+    this.likes = const [],
+    this.commentCount = 0,
+    this.comments = const [],
+  });
+
+  factory MomentPost.fromJson(Map<String, dynamic> json) {
+    final photos = json['photos'];
+    final likes = json['likes'];
+    final comments = json['comments'];
+    return MomentPost(
+      id: json['id'] as String,
+      authorId: json['author_id'] as String,
+      authorName: json['author_name'] as String? ?? '',
+      authorAvatarUrl: json['author_avatar_url'] as String?,
+      body: json['body'] as String? ?? '',
+      kind: MomentKind.fromWire(json['kind']),
+      photos: photos is List
+          ? [
+              for (final photo in photos)
+                MomentPhoto.fromJson(Map<String, dynamic>.from(photo as Map)),
+            ]
+          : const [],
+      linkUrl: json['link_url'] as String?,
+      linkTitle: json['link_title'] as String?,
+      location: json['location'] as String?,
+      visibility: MomentVisibility.fromWire(json['visibility']),
+      createdAt: DateTime.parse(json['created_at'] as String),
+      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
+      likedByMe: json['liked_by_me'] as bool? ?? false,
+      likes: likes is List
+          ? [
+              for (final like in likes)
+                MomentLiker.fromJson(Map<String, dynamic>.from(like as Map)),
+            ]
+          : const [],
+      commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+      comments: comments is List
+          ? [
+              for (final comment in comments)
+                MomentComment.fromJson(
+                  Map<String, dynamic>.from(comment as Map),
+                ),
+            ]
+          : const [],
+    );
+  }
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String? authorAvatarUrl;
+  final String body;
+  final MomentKind kind;
+  final List<MomentPhoto> photos;
+  final String? linkUrl;
+  final String? linkTitle;
+  final String? location;
+  final MomentVisibility visibility;
+  final DateTime createdAt;
+  final int likeCount;
+  final bool likedByMe;
+  final List<MomentLiker> likes;
+  final int commentCount;
+  final List<MomentComment> comments;
+
+  MomentPost copyWith({
+    int? likeCount,
+    bool? likedByMe,
+    List<MomentLiker>? likes,
+    int? commentCount,
+    List<MomentComment>? comments,
+  }) {
+    return MomentPost(
+      id: id,
+      authorId: authorId,
+      authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
+      body: body,
+      kind: kind,
+      photos: photos,
+      linkUrl: linkUrl,
+      linkTitle: linkTitle,
+      location: location,
+      visibility: visibility,
+      createdAt: createdAt,
+      likeCount: likeCount ?? this.likeCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+      likes: likes ?? this.likes,
+      commentCount: commentCount ?? this.commentCount,
+      comments: comments ?? this.comments,
+    );
+  }
+}
+
+/// How far back friends can see the person's older Moments.
+enum MomentsRange {
+  all('all'),
+  sixMonths('six_months'),
+  oneMonth('one_month'),
+  threeDays('three_days');
+
+  const MomentsRange(this.wire);
+
+  final String wire;
+
+  static MomentsRange fromWire(Object? value) {
+    return MomentsRange.values.firstWhere(
+      (range) => range.wire == value,
+      orElse: () => MomentsRange.all,
+    );
+  }
+
+  String get label => switch (this) {
+    MomentsRange.all => tr('All'),
+    MomentsRange.sixMonths => tr('Last 6 months'),
+    MomentsRange.oneMonth => tr('Last month'),
+    MomentsRange.threeDays => tr('Last 3 days'),
+  };
+}
+
+/// The person's own Moments settings.
+@immutable
+class MomentsSettings {
+  const MomentsSettings({this.range = MomentsRange.all, this.coverPath});
+
+  final MomentsRange range;
+  final String? coverPath;
+}
+
+/// A person's Moments page header: their name and, when the viewer may see
+/// it, their cover.
+@immutable
+class MomentsProfile {
+  const MomentsProfile({
+    required this.userId,
+    required this.name,
+    this.avatarUrl,
+    this.coverPath,
+    this.canView = true,
+  });
+
+  final String userId;
+  final String name;
+  final String? avatarUrl;
+  final String? coverPath;
+  final bool canView;
+}
+
+/// A friend the person hides Moments from, or whose Moments they hide.
+@immutable
+class MomentsFriendPref {
+  const MomentsFriendPref({
+    required this.friendId,
+    required this.name,
+    this.avatarUrl,
+    this.hideMine = false,
+    this.hideTheirs = false,
+  });
+
+  final String friendId;
+  final String name;
+  final String? avatarUrl;
+
+  /// "Don't let them see my Moments"
+  final bool hideMine;
+
+  /// "Hide their Moments"
+  final bool hideTheirs;
+}
+
+/// New Moments since the person last looked: how many and who posted last.
+@immutable
+class MomentsUnseen {
+  const MomentsUnseen({
+    required this.count,
+    this.latestAuthorId,
+    this.latestAuthorName,
+    this.latestAuthorAvatarUrl,
+  });
+
+  static const none = MomentsUnseen(count: 0);
+
+  final int count;
+  final String? latestAuthorId;
+  final String? latestAuthorName;
+  final String? latestAuthorAvatarUrl;
+}
+
+enum MomentNotificationKind {
+  like,
+  comment,
+  reply;
+
+  static MomentNotificationKind fromWire(Object? value) {
+    return MomentNotificationKind.values.firstWhere(
+      (kind) => kind.name == value,
+      orElse: () => MomentNotificationKind.like,
+    );
+  }
+}
+
+/// A like, comment or reply on the person's Moment or comment.
+@immutable
+class MomentNotification {
+  const MomentNotification({
+    required this.id,
+    required this.kind,
+    required this.postId,
+    required this.actorId,
+    required this.actorName,
+    required this.createdAt,
+    required this.isUnread,
+    this.actorAvatarUrl,
+    this.snippet = '',
+    this.postExcerpt = '',
+    this.postThumb,
+  });
+
+  factory MomentNotification.fromJson(Map<String, dynamic> json) {
+    return MomentNotification(
+      id: json['id'] as String,
+      kind: MomentNotificationKind.fromWire(json['kind']),
+      postId: json['post_id'] as String,
+      actorId: json['actor_id'] as String,
+      actorName: json['actor_name'] as String? ?? '',
+      actorAvatarUrl: json['actor_avatar_url'] as String?,
+      snippet: json['snippet'] as String? ?? '',
+      postExcerpt: json['post_excerpt'] as String? ?? '',
+      postThumb: json['post_thumb'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      isUnread: json['is_unread'] as bool? ?? false,
+    );
+  }
+
+  final String id;
+  final MomentNotificationKind kind;
+  final String postId;
+  final String actorId;
+  final String actorName;
+  final String? actorAvatarUrl;
+  final String snippet;
+  final String postExcerpt;
+  final String? postThumb;
+  final DateTime createdAt;
+  final bool isUnread;
+}
+
+/// The words for who can see a Moment, e.g. "Friends", "Only me" or
+/// "Only: Family, Bob". [tagNames] and [friendNames] are the chosen ones.
+String momentAudienceLabel(
+  MomentAudience audience, {
+  Iterable<String> tagNames = const [],
+  Iterable<String> friendNames = const [],
+}) {
+  String names() {
+    final all = [...tagNames, ...friendNames];
+    if (all.length <= 2) {
+      return all.join(', ');
+    }
+    return tr('{first}, {second} and {count} more', {
+      'first': all[0],
+      'second': all[1],
+      'count': all.length - 2,
+    });
+  }
+
+  return switch (audience.visibility) {
+    MomentVisibility.friends => tr('Friends'),
+    MomentVisibility.private => tr('Only me'),
+    MomentVisibility.only =>
+      audience.isComplete
+          ? tr('Only: {names}', {'names': names()})
+          : tr('Only share with…'),
+    MomentVisibility.except =>
+      audience.isComplete
+          ? tr('Not: {names}', {'names': names()})
+          : tr("Don't share with…"),
+  };
+}

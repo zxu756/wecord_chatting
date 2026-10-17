@@ -23,7 +23,11 @@ import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
+import 'package:wecord/features/moments/moment_composer_screen.dart';
+import 'package:wecord/features/moments/moment_detail_screen.dart';
+import 'package:wecord/features/moments/moments_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
@@ -158,6 +162,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: SavedMessagesScreen.path,
             builder: (context, state) => const SavedMessagesScreen(),
+          ),
+          GoRoute(
+            path: MomentsScreen.path,
+            builder: (context, state) => const MomentsScreen(),
+            routes: [
+              GoRoute(
+                path: 'compose',
+                builder: (context, state) => const MomentComposerScreen(),
+              ),
+              GoRoute(
+                path: 'of/:userId',
+                builder: (context, state) => MomentsScreen(
+                  key: ValueKey('moments-of-${state.pathParameters['userId']}'),
+                  userId: state.pathParameters['userId'],
+                ),
+              ),
+              GoRoute(
+                path: ':postId',
+                builder: (context, state) => MomentDetailScreen(
+                  key: ValueKey('moment-${state.pathParameters['postId']}'),
+                  postId: state.pathParameters['postId']!,
+                  focusComment: state.uri.queryParameters['comment'] == '1',
+                  replyToId: state.uri.queryParameters['reply'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: FriendTagsScreen.path,
+            builder: (context, state) => const FriendTagsScreen(),
           ),
           GoRoute(
             path: GlobalMessageSearchScreen.path,
@@ -451,6 +485,16 @@ ShellPlacement _placementFor(GoRouterState state) {
       return const ShellPlacement(
         homeSelected: true,
         homeSection: HomeSection.saved,
+      );
+    case MomentsScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.moments,
+      );
+    case FriendTagsScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.friends,
       );
     case DiscoveryScreen.path:
       return const ShellPlacement(exploreSelected: true);

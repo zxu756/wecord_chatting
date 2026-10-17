@@ -211,6 +211,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WhenSheet` / `showWhenSheet` (`lib/features/later/`) | The "when" picker of Schedule message and Remind me: a grouped list of quick picks with their times and "Pick date and time" (date and time pickers in the device's time zone, which the row names). Times are built from wall-clock fields (`later_time.dart`), so "tomorrow at 9 am" survives daylight saving changes. |
 | `LaterCard` / `ReminderCard` / `LaterMessagePreview` (`lib/features/later/later_cards.dart`) | White cards on paper for reminders (Notifications) and saved messages: sender avatar with a small round badge, the message in a `well` box or an italic "Message unavailable", small pill actions. |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
+| `NoteEditor` / `NotePage` / `TaskListPage` / `TaskBoardView` / `WorkspacePanel` (`lib/features/notes`, `lists`, `workspace`) | Shared notes and task lists of a conversation: the block editor with its format bar and carets of other people, the list and board views, and the panel/page that holds them (see Notes and Lists below). |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,
 `OutlinedButton` = secondary raised pill (no outline), `TextButton` =
@@ -346,3 +347,101 @@ the WeCord components in new and restyled screens.
   (the `desktop-*-2x-text` screens, and `test/accessibility/large_text_test.dart`
   fails when text in a sidebar row is taller than the row): rows use
   `minHeight`, never a fixed `height`.
+
+## Notes and Lists
+
+Every conversation (circle channel, group or direct chat) can have shared
+**notes** and **task lists**. They live in `lib/features/notes/`,
+`lib/features/lists/` and `lib/features/workspace/`; the backend is
+migrations `202610170060` to `065`.
+
+**Where they show up.** The chat header has *Notes* and *Lists* buttons (in
+More on phones). On desktop they open a right-hand panel
+(`ResizablePanel.docs`, 440 wide, 340–760, resizable like the others; it takes
+the profile panel's place and closes first when the window is narrow). On
+phones, and from links, they open as full pages at
+`/chats/:id/workspace?tab=&note=&list=&item=`. A note can be **pinned**: it
+shows as a slim accent banner under the chat header. Notes also appear in the
+quick switcher (by title), shared notes, tasks and lists are **cards** in the
+chat, and the message menu has **Create task** (the task links back to the
+message and the message shows its task with a check box).
+
+**Notes are block documents.** A note is a list of blocks (paragraph, h1–h3,
+bullet, numbered, to-do, quote, code, divider, picture), each its own row in
+`note_blocks` with a fractional ordering key (`lib/shared/models/fractional_key.dart`),
+a revision, inline marks (bold, italic, strike, code, link, mention) and
+properties. Why not a CRDT: there is no maintained Dart Yjs-compatible
+package, and blocks give per-block last-writer-wins with real merging where it
+matters:
+
+- `note_apply_ops` applies a change only if it was based on the block's
+  current revision; otherwise it answers with the current block. The client
+  (`NoteSyncEngine`) merges three ways — text by the one contiguous edit each
+  side made (both kept when apart, both texts kept when they overlap), marks
+  character by character (what either side removed is gone, what either side
+  added stays), kind/position/props field by field — and sends again.
+  Nothing typed is dropped and nothing is overwritten blindly.
+- Offline edits stay dirty and are kept on the device (`NoteDraftStore`); when
+  the connection returns, or the note is reopened, the server's state is merged
+  into them exactly like a live change. Creating a block is idempotent (same
+  id, same content), deletes win and are tombstoned.
+- Realtime streams `note_blocks`; presence/cursors ride a Realtime presence
+  channel (`note-presence-<id>`: name, block, offset), drawn as a coloured
+  caret with the person's name.
+- History: a snapshot is taken before the first change after 10 quiet
+  minutes (and every 30 minutes of continuous work), or on demand; restoring
+  snapshots what it replaces first.
+
+**Who can do what** (enforced in SQL, `can_current_user_*_note`): anyone who
+can see the conversation reads; anyone who can send there edits; *Only
+managers can edit* (per note) limits editing to `manage_messages` holders (or
+group admins); pinning, locking and deleting others' notes are manager actions.
+Lists follow the same rule (view = see the conversation, edit = send; the
+author or a manager deletes a list). Pictures live in the private
+`note-files` bucket with policies like `chat-files`.
+
+**Editor.** Design C throughout: 28/800 titles, paper-white panel, ink text,
+accent only for links, mentions and the caret. Shortcuts: ⌘/Ctrl+B, I, E
+(code), Shift+X (strike), K (link); markdown at the start of a paragraph:
+`# `, `## `, `### `, `- `, `* `, `1. `, `[] `, `[x] `, `> `, ` ``` `; `---`
+then Enter makes a divider; `/` opens the block menu; Enter continues lists
+and ends them on an empty item; Backspace at the start turns a block back into
+text, then joins it to the one before. The format bar floats as glass over the
+keyboard on phones and is a flat bar on desktop.
+
+**Lists.** Items have a title, notes, status (To do / In progress / Done or
+the list's own, each of kind *todo*, *active* or *done*), priority, due date
+(all-day or with a time), up to 10 assignees and the message they came from.
+Item changes are field patches (`upsert_task_item`), so two people changing
+different fields never undo each other. The list view groups by status with
+filters (All, Mine, Overdue, Open) and sorting; the board has a column per
+status and drag and drop (long press on touch; auto-scroll at the edges; every
+move is also an accessibility action "Move to …").
+
+**Notifications.** Assigning someone makes an inbox entry (`task_notifications`,
+the *Tasks* chip on the Notifications page) and a push: the assigner's app calls
+the `push` Edge Function with `{task_item_id}`, which claims the assignment
+pushes (`claim_task_assignment_push`) once. **Due reminders** are for the
+scheduler (the pg_cron dispatcher): call
+
+```sql
+select * from public.due_list_item_reminders();
+```
+
+every few minutes with the service role. It creates the `due_soon` (within an
+hour; all-day items within 12 hours) and `overdue` notifications that are new
+(one per person, item and due date) and returns one row per push subscription
+to notify: `notification_id, user_id, subscription_id, endpoint, p256dh,
+auth, conversation_id, circle_id, title, body`. Deliver each row as a web push
+like the `push` function does (`title`/`body`, target
+`/#/circles/<circle_id>?c=<conversation_id>` or `/#/chats/<conversation_id>`),
+and drop subscriptions the push service reports gone with
+`remove_push_subscriptions`. People in do-not-disturb or with the circle level
+"none"/muted get the inbox entry but no push.
+
+**Accessibility.** Rows read as sentences; check boxes say "Mark "x" as done";
+the editor's blocks are text fields with hints, the other people's carets have
+labels ("Bart is here"), the save state ("Saved / Saving… / Offline") is a live
+region, board cards offer "Move to …" actions, and everything is covered by
+`test/accessibility` (screens `notes-index`, `note-editor`, `lists-index`,
+`task-list`, `task-board`, `task-sheet`).

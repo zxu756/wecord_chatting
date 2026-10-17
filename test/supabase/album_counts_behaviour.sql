@@ -7,9 +7,9 @@
 
 begin;
 
--- One behaviour script at a time: they change the same tables, and test
--- files run in parallel.
-select pg_advisory_xact_lock(7770001);
+-- The behaviour scripts run side by side (flutter test runs files in
+-- parallel) and each applies DDL: take turns so they cannot deadlock.
+do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql

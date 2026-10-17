@@ -71,6 +71,10 @@ import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/features/workspace/workspace_cards.dart';
+import 'package:wecord/features/workspace/workspace_navigation.dart';
+import 'package:wecord/features/workspace/workspace_panel.dart';
+import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -515,6 +519,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// The desktop profile panel was opened while there wasn't room for it.
   var _profileForced = false;
 
+  /// The notes and lists panel beside the chat (wide layouts), and what it
+  /// was last asked to show.
+  var _workspaceOpen = false;
+  WorkspaceRequest? _workspaceRequest;
+  final _workspaceKey = GlobalKey<WorkspacePanelState>();
+
   @override
   void initState() {
     super.initState();
@@ -524,6 +534,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       activeConversationIdProvider.notifier,
     );
     _scheduleActiveConversationUpdate(widget.conversationId);
+    // A note opened from the quick switcher asked for this chat's panel.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final request = mounted ? ref.read(workspaceRequestProvider) : null;
+      if (request != null && request.conversationId == widget.conversationId) {
+        _showWorkspace(request);
+      }
+    });
     unawaited(_restoreDraft());
     // Browsers hand pasted pictures and files over as events; macOS asks the
     // pasteboard when the text field is pasted into (see _pasteFilesAction).
@@ -759,6 +776,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
   }
 
+  /// Opens the notes and lists panel on what [request] asks for.
+  void _showWorkspace(WorkspaceRequest request) {
+    ref.read(workspaceRequestProvider.notifier).state = null;
+    final alreadyOpen = _workspaceOpen;
+    setState(() {
+      _workspaceOpen = true;
+      _workspaceRequest = request;
+    });
+    unawaited(
+      ref
+          .read(panelLayoutProvider.notifier)
+          .setCollapsed(ResizablePanel.docs, false),
+    );
+    if (alreadyOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _workspaceKey.currentState?.show(request);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // A scheduled message that went out shows up here; its list follows.
@@ -769,6 +806,20 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       (_, _) =>
           ref.invalidate(scheduledMessagesProvider(widget.conversationId)),
     );
+    ref.listen(workspaceRequestProvider, (_, request) {
+      if (request != null && request.conversationId == widget.conversationId) {
+        _showWorkspace(request);
+      }
+    });
+    // Dragging the panel shut closes it.
+    ref.listen(panelLayoutProvider.select((layout) => layout.docsCollapsed), (
+      _,
+      collapsed,
+    ) {
+      if (collapsed && _workspaceOpen) {
+        setState(() => _workspaceOpen = false);
+      }
+    });
     ref.listen(pendingMessageJumpProvider, (_, jump) {
       if (jump != null &&
           ref.read(chatThreadProvider(widget.conversationId)).hasValue) {
@@ -787,6 +838,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             (width: layout.profileWidth, collapsed: layout.profileCollapsed),
       ),
     );
+    final docsWidth = ref.watch(
+      panelLayoutProvider.select((layout) => layout.docsWidth),
+    );
+    final pinnedNote = ref
+        .watch(conversationWorkspaceProvider(widget.conversationId))
+        .value
+        ?.pinnedNote;
     _voiceMessageRecorder = ref.watch(voiceMessageRecorderProvider);
     final conversationSummary = ref
         .watch(chatConversationSummaryProvider(widget.conversationId))
@@ -989,12 +1047,41 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: _catchUpController.requestSummary,
           )
         : null;
+    final notesAction = ChatThreadAction(
+      tooltip: chatUsesDesktopChrome(context)
+          ? tr('Notes and lists')
+          : tr('Notes'),
+      icon: Icons.description_outlined,
+      selectedIcon: Icons.description_rounded,
+      isSelected: _workspaceOpen,
+      onPressed: () => openWorkspace(
+        context,
+        conversationId: widget.conversationId,
+        tab: _workspaceRequest?.tab ?? WorkspaceTab.notes,
+        title: title,
+      ),
+    );
+    // The desktop panel has both tabs, so it needs only the one button.
+    final listsAction = ChatThreadAction(
+      tooltip: tr('Lists'),
+      icon: Icons.checklist_rounded,
+      isSelected:
+          _workspaceOpen && _workspaceRequest?.tab == WorkspaceTab.lists,
+      onPressed: () => openWorkspace(
+        context,
+        conversationId: widget.conversationId,
+        tab: WorkspaceTab.lists,
+        title: title,
+      ),
+    );
     // Search comes first: phones keep it next to the primary action.
     final appBarActions = [
       searchAction,
       ?callAction,
       ?videoCallAction,
       pinnedAction,
+      notesAction,
+      if (!chatUsesDesktopChrome(context)) listsAction,
       ChatThreadAction(
         tooltip: tr('Media'),
         icon: Icons.photo_library_outlined,
@@ -1055,9 +1142,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     // wide circle layout also gets the compact header.
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = isCompactWidth(constraints.maxWidth);
-        // Desktop puts the search field in the header when there is room.
-        final inlineSearch = desktop && constraints.maxWidth >= 760;
+        // The notes and lists panel takes the profile's place when open.
+        final docsPlacement = resolveSidePanel(
+          ResizablePanel.docs,
+          width: docsWidth,
+          collapsed: !_workspaceOpen || !desktop,
+          rowWidth: constraints.maxWidth,
+          forced: true,
+        );
+        final showDocs = desktop && docsPlacement.shown;
         // Direct chats on desktop can show the other person's profile, in
         // a resizable panel that closes first when the window gets narrow.
         final profileUserId =
@@ -1084,6 +1177,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           forced: _profileForced,
         );
         final showProfile = profilePlacement.shown;
+        // What the chat itself gets, beside the panel that is open.
+        final chatWidth =
+            constraints.maxWidth -
+            (showDocs
+                ? docsPlacement.width
+                : showProfile
+                ? profilePlacement.width
+                : 0);
+        final compact = isCompactWidth(
+          constraints.maxWidth - (showDocs ? docsPlacement.width : 0),
+        );
+        // Desktop puts the search field in the header when there is room.
+        final inlineSearch = desktop && chatWidth >= 760;
         final profileAction = profileUserId == null
             ? null
             : ChatThreadAction(
@@ -1225,6 +1331,16 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               conversationSummary?.announcement.trim().isNotEmpty == true)
             _AnnouncementStrip(
               announcement: conversationSummary!.announcement.trim(),
+            ),
+          if (pinnedNote != null)
+            Padding(
+              padding: desktop
+                  ? const EdgeInsets.fromLTRB(20, 10, 20, 0)
+                  : EdgeInsets.zero,
+              child: PinnedNoteBanner(
+                conversationId: widget.conversationId,
+                note: pinnedNote,
+              ),
             ),
           if (_isSearchingMessages && !inlineSearch)
             _SearchBar(
@@ -1806,7 +1922,44 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           );
           return Scaffold(
             backgroundColor: c.panel,
-            body: profileUserId == null
+            body: showDocs
+                ? ResizableSidePanelRow(
+                    panel: ResizablePanel.docs,
+                    placement: docsPlacement,
+                    content: dropZone(chatColumn),
+                    side: WorkspacePanel(
+                      key: _workspaceKey,
+                      conversationId: widget.conversationId,
+                      title: title,
+                      initialTab: _workspaceRequest?.tab ?? WorkspaceTab.notes,
+                      initialNoteId: _workspaceRequest?.noteId,
+                      initialListId: _workspaceRequest?.listId,
+                      initialItemId: _workspaceRequest?.itemId,
+                      onClose: () {
+                        setState(() => _workspaceOpen = false);
+                        unawaited(
+                          ref
+                              .read(panelLayoutProvider.notifier)
+                              .setCollapsed(ResizablePanel.docs, true),
+                        );
+                      },
+                      onOpenPage: () {
+                        final request = _workspaceRequest;
+                        setState(() => _workspaceOpen = false);
+                        context.go(
+                          workspaceLocation(
+                            widget.conversationId,
+                            tab: request?.tab ?? WorkspaceTab.notes,
+                            noteId: request?.noteId,
+                            listId: request?.listId,
+                            itemId: request?.itemId,
+                          ),
+                          extra: title,
+                        );
+                      },
+                    ),
+                  )
+                : profileUserId == null
                 ? dropZone(chatColumn)
                 : ResizableSidePanelRow(
                     panel: ResizablePanel.profile,
@@ -5425,6 +5578,14 @@ class _MessageBubble extends StatelessWidget {
           label: tr('Edit'),
           onSelected: () => onEdit(message),
         ),
+      if (canCompose && !_isRecalled && message.type != MessageType.system)
+        MessageAction(
+          key: const ValueKey('message-create-task'),
+          icon: Icons.add_task_rounded,
+          label: tr('Create task'),
+          onSelected: () =>
+              unawaited(showCreateTaskFromMessage(context, message)),
+        ),
       if (canPin)
         MessageAction(
           icon: message.isPinned
@@ -5789,6 +5950,16 @@ class _MessageContent extends StatelessWidget {
                 ),
         ),
       );
+    } else if (message.workspaceCard case final workspaceCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: WorkspaceCardView(
+            card: workspaceCard,
+            conversationId: message.conversationId,
+          ),
+        ),
+      );
     } else if (gifUrlIn(message.body) case final gifUrl?) {
       content.add(
         Padding(
@@ -5809,6 +5980,8 @@ class _MessageContent extends StatelessWidget {
         ),
       );
     }
+
+    content.add(MessageTaskChip(message: message));
 
     if (message.editedAt != null) {
       content.add(const SizedBox(height: 2));

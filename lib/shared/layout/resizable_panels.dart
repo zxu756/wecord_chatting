@@ -11,6 +11,7 @@ String resizablePanelLabel(ResizablePanel panel) => switch (panel) {
   ResizablePanel.sidebar => tr('Sidebar width'),
   ResizablePanel.members => tr('Member list width'),
   ResizablePanel.profile => tr('Profile panel width'),
+  ResizablePanel.docs => tr('Notes and lists panel width'),
 };
 
 /// Builds with the sidebar's width in [available] (everything right of the

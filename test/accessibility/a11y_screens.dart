@@ -29,6 +29,7 @@ import '../features/ai/ai_fakes.dart';
 import '../features/discovery/discovery_fakes.dart';
 import '../features/file_preview/file_preview_fakes.dart';
 import '../features/later/later_fakes.dart';
+import 'workspace_a11y_screens.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -540,4 +541,5 @@ final allA11yScreens = <A11yScreen>[
   ...a11yScreens,
   ...moreA11yScreens,
   ...desktopLargeTextScreens,
+  ...workspaceA11yScreens,
 ];

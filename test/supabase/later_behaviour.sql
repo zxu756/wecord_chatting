@@ -10,7 +10,7 @@ begin;
 
 -- One behaviour script at a time: they change the same tables, and test
 -- files run in parallel.
-select pg_advisory_xact_lock(7770001);
+do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 
 \i supabase/migrations/202610170010_scheduled_messages.sql
 \i supabase/migrations/202610170011_message_reminders.sql

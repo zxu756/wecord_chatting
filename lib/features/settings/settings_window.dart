@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/features/settings/settings_page.dart';
@@ -20,6 +21,7 @@ enum SettingsWindowSection {
   profile,
   privacy,
   appearance,
+  chat,
   voice,
   notifications,
   shortcuts,
@@ -298,6 +300,11 @@ class _SettingsNav extends ConsumerWidget {
                     tr('Appearance'),
                   ),
                   item(
+                    SettingsWindowSection.chat,
+                    Icons.chat_bubble_outline_rounded,
+                    tr('Chat'),
+                  ),
+                  item(
                     SettingsWindowSection.voice,
                     Icons.headset_mic_outlined,
                     tr('Voice & video'),
@@ -472,6 +479,11 @@ class _SectionPage extends ConsumerWidget {
               ],
             ),
           ],
+        );
+      case SettingsWindowSection.chat:
+        return SettingsPage(
+          title: tr('Chat'),
+          children: const [SizedBox(height: 16), ChatSettingsGroup()],
         );
       case SettingsWindowSection.voice:
         // Voice brings its own page; the window adds its close button.

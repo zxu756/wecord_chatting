@@ -104,4 +104,12 @@ const zhPrivacyMore = <String, String>{
   'Pick a day and time…': '选择日期和时间…',
   'Closes {time}': '{time}截止',
   'Fewer options': '收起选项',
+
+  // Double-tap reaction and Settings → Chat.
+  'Chat': '聊天',
+  'Quick reaction': '快捷表情',
+  'Added when you double-tap a message': '双击消息时添加',
+  'Double-tap a message (double-click on a computer) to react with it.':
+      '双击消息（电脑上为双击鼠标）即可用它回应。',
+  'Back to {emoji}': '恢复为 {emoji}',
 };

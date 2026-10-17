@@ -53,6 +53,7 @@ import 'package:wecord/features/chats/offline/outbox_provider.dart';
 import 'package:wecord/features/chats/pending_message.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/chats/poll_composer_sheet.dart';
+import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/chats/poll_message.dart';
 import 'package:wecord/features/chats/polls_repository.dart';
 import 'package:wecord/features/chats/role_mentions.dart';
@@ -741,6 +742,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
     );
     _voiceMessageRecorder = ref.watch(voiceMessageRecorderProvider);
+    // Loaded early, so the first double tap already knows the choice.
+    ref.watch(quickReactionProvider);
     final conversationSummary = ref
         .watch(chatConversationSummaryProvider(widget.conversationId))
         .value;
@@ -4878,7 +4881,11 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   )
                 : null,
-            child: visual,
+            child: QuickDoubleTap(
+              enabled: canShowActions,
+              onDoubleTap: () => _quickReact(bubbleContext),
+              child: visual,
+            ),
           ),
         );
         final toolbar = hovered
@@ -5191,7 +5198,11 @@ class _MessageBubble extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              row(context),
+              QuickDoubleTap(
+                enabled: canShowActions,
+                onDoubleTap: () => _quickReact(rowContext),
+                child: row(context),
+              ),
               if (hovered)
                 Positioned(
                   top: isFollowUp ? -6 : -4,
@@ -5226,6 +5237,24 @@ class _MessageBubble extends StatelessWidget {
       onMore: (buttonContext) =>
           _showContextMenu(buttonContext, globalRectOf(buttonContext)),
     );
+  }
+
+  /// A double tap (touch) or double click (desktop) reacts with the
+  /// user's quick reaction: a tick of haptics and a small pop. Reacting
+  /// again with one already made does nothing, so a stray second double
+  /// tap cannot take it back.
+  void _quickReact(BuildContext context) {
+    final emoji = ProviderScope.containerOf(
+      context,
+    ).read(quickReactionProvider);
+    WeCordHaptics.light();
+    playQuickReactionPop(context, emoji);
+    final reacted = message.reactions.any(
+      (reaction) => reaction.emoji == emoji && reaction.reactedByMe,
+    );
+    if (!reacted) {
+      unawaited(onToggleReaction(message, emoji));
+    }
   }
 
   Future<void> _pickReaction(BuildContext context) async {

@@ -48,8 +48,13 @@ const _desktop = PhoneViewport(
 void main() {
   setUpAll(loadScreenshotFonts);
 
+  // A screen that wants a moment of motion caught turns this off.
+  var settleBeforeShot = true;
+
   Future<void> shoot(WidgetTester tester, String name) async {
-    await settle(tester);
+    if (settleBeforeShot) {
+      await settle(tester);
+    }
     final renderView = tester.binding.renderViews.first;
     final layer = renderView.debugLayer! as OffsetLayer;
     await tester.runAsync(() async {
@@ -363,6 +368,39 @@ void main() {
       find.byKey(const ValueKey('poll-anonymous-switch')),
     );
     await tester.tap(find.byKey(const ValueKey('poll-anonymous-switch')));
+  });
+
+  // 5. Double-tap reaction and Settings -> Chat.
+  screen('double-tap-pop', (tester, world, desktop) async {
+    await openDirect(
+      tester,
+      world,
+      messages: [
+        phoneMessage('q1', bart, 'We are shipping on Friday!', minutesAgo: 30),
+        phoneMessage('q2', me, 'Amazing news.', minutesAgo: 20),
+        phoneMessage('q3', bart, 'Double-tap me.', minutesAgo: 5),
+      ],
+    );
+    final message = find.text('Double-tap me.');
+    await tester.tap(message);
+    await tester.pump(const Duration(milliseconds: 40));
+    await tester.tap(message);
+    await tester.pump(const Duration(milliseconds: 160));
+    settleBeforeShot = false;
+    addTearDown(() => settleBeforeShot = true);
+  });
+
+  screen('chat-settings', (tester, world, desktop) async {
+    await world.open(tester, '/me');
+    if (desktop) {
+      await tester.tap(find.byKey(const ValueKey('settings-nav-chat')));
+      await settle(tester);
+    } else {
+      await scrollIntoView(
+        tester,
+        find.byKey(const ValueKey('quick-reaction-row')),
+      );
+    }
   });
 
   // MARKER: more screens

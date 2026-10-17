@@ -10,8 +10,6 @@ begin;
 -- files run in parallel.
 do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 -- The scripts that apply the same earlier migrations take this one.
-select pg_advisory_xact_lock(7770001);
-select pg_advisory_xact_lock(7771001);
 
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql

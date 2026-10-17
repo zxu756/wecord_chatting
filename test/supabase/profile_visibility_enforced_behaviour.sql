@@ -12,8 +12,6 @@ begin;
 -- files run in parallel.
 do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 -- The scripts that apply the same earlier migrations take these.
-select pg_advisory_xact_lock(7770001);
-select pg_advisory_xact_lock(7771001);
 
 -- The latest definitions of the functions the migration patches.
 \i supabase/migrations/202610140004_bans_and_timeouts.sql

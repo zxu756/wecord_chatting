@@ -36,9 +36,13 @@ class WallpaperState {
 /// The signed-in person's id, for keeping their wallpapers apart.
 final wallpaperUserIdProvider = Provider<String?>((ref) {
   try {
-    final state = ref.watch(authStateProvider);
+    final state = ref.watch(
+      authStateProvider.select(
+        (state) => (hasValue: state.hasValue, id: state.value?.id),
+      ),
+    );
     if (state.hasValue) {
-      return state.value?.id;
+      return state.id;
     }
     return ref.read(authRepositoryProvider).currentUser?.id;
   } on Object {

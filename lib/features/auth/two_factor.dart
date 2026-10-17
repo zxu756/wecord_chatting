@@ -121,8 +121,12 @@ class SupabaseTwoFactorRepository implements TwoFactorRepository {
 
   @override
   Future<String?> verifiedFactorId() async {
-    final factors = await _mfa.listFactors();
-    return factors.totp.firstOrNull?.id;
+    // Not mfa.listFactors(): it refreshes the session first, so a page that
+    // shows this would refresh the token every time it is built, and a
+    // burst of refreshes is rate limited, which signs the app out. getUser
+    // reads the same factors fresh from the server without a refresh.
+    final user = (await _client.auth.getUser()).user;
+    return _verifiedTotp(user?.factors);
   }
 
   @override

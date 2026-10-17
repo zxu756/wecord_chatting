@@ -12,7 +12,10 @@ class ProfileBootstrapGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bootstrap = ref.watch(authProfileBootstrapProvider);
 
+    // Once the app has been shown, a re-run keeps it on screen: replacing
+    // it with a spinner would tear down every page and window above it.
     return bootstrap.when(
+      skipLoadingOnReload: true,
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, stackTrace) => _ProfileBootstrapError(error: error),

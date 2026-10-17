@@ -16,8 +16,12 @@ final authStateProvider = StreamProvider<AuthUser?>((ref) {
 });
 
 final authProfileBootstrapProvider = FutureProvider<void>((ref) async {
-  final authState = ref.watch(authStateProvider);
-  if (authState.value == null) {
+  // Only a different person re-runs this: a token refresh must not, since
+  // the gate would swap the whole app for a spinner while it runs.
+  final userId = ref.watch(
+    authStateProvider.select((state) => state.value?.id),
+  );
+  if (userId == null) {
     return;
   }
 
@@ -31,11 +35,21 @@ final authProfileBootstrapProvider = FutureProvider<void>((ref) async {
   );
 });
 
+/// The signed-in person. Equal by value: Auth re-emits the same person on
+/// every token refresh and user re-read, and those must not look like a
+/// change to the providers and pages that watch [authStateProvider].
 class AuthUser {
   const AuthUser({required this.id, this.email});
 
   final String id;
   final String? email;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AuthUser && other.id == id && other.email == email;
+
+  @override
+  int get hashCode => Object.hash(id, email);
 }
 
 abstract interface class AuthRepository {

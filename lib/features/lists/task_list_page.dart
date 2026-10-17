@@ -12,6 +12,8 @@ import 'package:wecord/features/lists/lists_repository.dart';
 import 'package:wecord/features/lists/task_board.dart';
 import 'package:wecord/features/lists/task_item_sheet.dart';
 import 'package:wecord/features/lists/task_list_controller.dart';
+import 'package:wecord/features/lists/task_patch_store.dart';
+import 'package:wecord/features/lists/task_patch_sync.dart';
 import 'package:wecord/features/lists/task_status_editor.dart';
 import 'package:wecord/features/lists/task_widgets.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
@@ -55,6 +57,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   var _loading = true;
   Object? _error;
   var _openedInitial = false;
+
+  /// The changes kept from a previous run are put back with the first
+  /// snapshot that arrives.
+  var _draftApplied = false;
   final _collapsed = <String>{};
   final _addController = TextEditingController();
   final _addFocus = FocusNode();
@@ -67,6 +73,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       repository: repository,
       currentUserId: ref.read(authRepositoryProvider).currentUser?.id,
       newId: newClientId,
+      store: ref.read(taskPatchStoreProvider),
     )..addListener(_changed);
     unawaited(_load(first: true));
     _items = repository
@@ -92,7 +99,22 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       if (first) {
         _view = snapshot.list.defaultView;
       }
-      _controller.load(snapshot);
+      TaskListDraft? draft;
+      final userId = _controller.currentUserId;
+      if (!_draftApplied && userId != null) {
+        try {
+          draft = await ref
+              .read(taskPatchStoreProvider)
+              .load(userId, widget.listId);
+        } on Object {
+          // Nothing kept, or storage is gone.
+        }
+        if (!mounted) {
+          return;
+        }
+      }
+      _draftApplied = true;
+      _controller.load(snapshot, draft: draft);
       setState(() {
         _loading = false;
         _error = null;

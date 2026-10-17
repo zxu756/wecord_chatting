@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/lists/lists_repository.dart';
+import 'package:wecord/features/lists/task_patch_store.dart';
 import 'package:wecord/shared/models/fractional_key.dart';
 
 /// Which items a list shows.
@@ -29,11 +30,18 @@ enum TaskSort { manual, dueDate, priority, newest }
 /// fields never overwrite each other. While patches are waiting, changes
 /// that arrive from the server are shown with the waiting patches on top,
 /// so a local drag or edit is not undone by a late echo.
+///
+/// With a [store] the waiting patches are also kept on the device (and the
+/// items made here and not stored yet with them), so they survive closing
+/// the app: [load] puts a stored [TaskListDraft] back on top of the server's
+/// state, the same way, and sends it. A patch the server refuses is dropped
+/// for good; one it could not be asked about stays stored.
 class TaskListController extends ChangeNotifier {
   TaskListController({
     required this.repository,
     required this.currentUserId,
     required this.newId,
+    this.store,
     DateTime Function()? clock,
     this.retryAfter = const Duration(seconds: 5),
   }) : _clock = clock ?? DateTime.now;
@@ -43,6 +51,19 @@ class TaskListController extends ChangeNotifier {
   final String Function() newId;
   final Duration retryAfter;
   final DateTime Function() _clock;
+
+  /// Where waiting patches are kept across restarts; null keeps them in
+  /// memory only.
+  final TaskPatchStore? store;
+
+  /// The lists with a controller on screen, so the background retry
+  /// ([TaskPatchSync]) leaves their patches to it.
+  static final _open = <String, int>{};
+  static bool isListOpen(String listId) => (_open[listId] ?? 0) > 0;
+  String? _openListId;
+
+  /// Writes to [store] one after another, in the order they were asked for.
+  Future<void> _writes = Future<void>.value();
 
   TaskList? _list;
   final _items = <String, TaskItem>{};
@@ -78,11 +99,22 @@ class TaskListController extends ChangeNotifier {
     return item == null || item.deleted ? null : item;
   }
 
-  void load(TaskSnapshot snapshot) {
+  /// Takes the list as the server has it. Patches kept in [draft] (from a
+  /// previous run) are put back first, so they show on top of the server's
+  /// state and are sent like any others.
+  void load(TaskSnapshot snapshot, {TaskListDraft? draft}) {
     _list = snapshot.list;
+    if (_openListId != snapshot.list.id) {
+      _forgetOpen();
+      _openListId = snapshot.list.id;
+      _open[_openListId!] = (_open[_openListId!] ?? 0) + 1;
+    }
     final fresh = <String, TaskItem>{
       for (final item in snapshot.items) item.id: item,
     };
+    if (draft != null) {
+      _restore(draft, fresh);
+    }
     // Items made here and not stored yet stay.
     for (final id in _creating) {
       final local = _items[id];
@@ -96,6 +128,54 @@ class TaskListController extends ChangeNotifier {
         for (final entry in fresh.entries) entry.key: _overlay(entry.value),
       });
     notifyListeners();
+    if (draft != null && _pending.isNotEmpty) {
+      _scheduleFlush();
+    }
+  }
+
+  /// Puts the patches of [draft] back: on the server's items when they are
+  /// still there, and as new items when they were made here and never
+  /// stored. A patch for an item that is gone is dropped.
+  void _restore(TaskListDraft draft, Map<String, TaskItem> fresh) {
+    var dropped = false;
+    for (final entry in draft.patches.entries) {
+      final id = entry.key;
+      final known = fresh[id];
+      if (known == null) {
+        final createdAt = draft.created[id];
+        if (createdAt == null) {
+          dropped = true;
+          continue;
+        }
+        fresh[id] = _restoredItem(id, entry.value, createdAt);
+        _creating.add(id);
+      } else if (known.deleted) {
+        dropped = true;
+        continue;
+      }
+      _pending[id] = {...entry.value, ...?_pending[id]};
+    }
+    if (dropped) {
+      _persist();
+    }
+  }
+
+  /// An item made on this device and not stored yet, from its first patch.
+  TaskItem _restoredItem(
+    String id,
+    Map<String, Object?> patch,
+    DateTime createdAt,
+  ) {
+    final list = _list!;
+    return TaskItem(
+      id: id,
+      listId: list.id,
+      title: '${patch['title'] ?? ''}',
+      status: '${patch['status'] ?? list.statuses.first.id}',
+      pos: '${patch['pos'] ?? 'V'}',
+      createdBy: currentUserId,
+      createdAt: createdAt,
+    );
   }
 
   void setFilter(TaskFilter value) {
@@ -232,6 +312,7 @@ class TaskListController extends ChangeNotifier {
       if (priority != TaskPriority.none) 'priority': priority.value,
       if (details != null && details.isNotEmpty) 'details': details,
     };
+    _persist();
     notifyListeners();
     _scheduleFlush();
     return item;
@@ -247,6 +328,7 @@ class TaskListController extends ChangeNotifier {
     }
     _items[id] = _apply(item, fields);
     _pending[id] = {...?_pending[id], ...fields};
+    _persist();
     notifyListeners();
     _scheduleFlush();
   }
@@ -315,8 +397,10 @@ class TaskListController extends ChangeNotifier {
     }
     _items[id] = item.copyWith(deleted: true);
     _pending.remove(id);
+    final wasCreating = _creating.remove(id);
+    _persist();
     notifyListeners();
-    if (_creating.remove(id)) {
+    if (wasCreating) {
       return;
     }
     unawaited(() async {
@@ -442,6 +526,7 @@ class TaskListController extends ChangeNotifier {
             break;
           }
         }
+        _persist();
         if (!_disposed) {
           notifyListeners();
         }
@@ -454,12 +539,43 @@ class TaskListController extends ChangeNotifier {
     }
   }
 
-  bool _isRefusal(Object error) {
-    // PostgREST errors carry the SQLSTATE; connection problems do not.
-    final text = '$error';
-    return text.contains('42501') ||
-        text.contains('22023') ||
-        text.contains('P0002');
+  bool _isRefusal(Object error) => isTaskPatchRefusal(error);
+
+  /// Keeps the waiting patches on the device (or forgets them when none
+  /// are left).
+  void _persist() {
+    final store = this.store;
+    final userId = currentUserId;
+    final list = _list;
+    if (store == null || userId == null || list == null) {
+      return;
+    }
+    final draft = TaskListDraft(
+      userId: userId,
+      listId: list.id,
+      patches: {
+        for (final entry in _pending.entries) entry.key: {...entry.value},
+      },
+      created: {
+        for (final id in _creating)
+          if (_pending.containsKey(id)) id: _items[id]?.createdAt ?? _clock(),
+      },
+    );
+    _writes = _writes.then((_) => store.save(draft)).catchError((Object _) {});
+  }
+
+  void _forgetOpen() {
+    final id = _openListId;
+    if (id == null) {
+      return;
+    }
+    final count = (_open[id] ?? 1) - 1;
+    if (count <= 0) {
+      _open.remove(id);
+    } else {
+      _open[id] = count;
+    }
+    _openListId = null;
   }
 
   Future<void> _reload() async {
@@ -494,7 +610,10 @@ class TaskListController extends ChangeNotifier {
     _disposed = true;
     _retry?.cancel();
     _flushTimer?.cancel();
-    // Changes still waiting get one last try.
+    _forgetOpen();
+    // Changes still waiting get one last try. What cannot be sent stays in
+    // the store, for the next time the list is opened or the background
+    // retry.
     final list = _list;
     if (list != null && _pending.isNotEmpty) {
       final leftovers = {
@@ -502,15 +621,33 @@ class TaskListController extends ChangeNotifier {
           entry.key: {...entry.value, 'id': entry.key},
       };
       unawaited(() async {
-        for (final fields in leftovers.values) {
+        for (final entry in leftovers.entries) {
           try {
-            await repository.upsertItem(list.id, fields);
-          } on Object {
-            // Gone offline for good; the server keeps its version.
+            await repository.upsertItem(list.id, entry.value);
+            _pending.remove(entry.key);
+            _creating.remove(entry.key);
+            _persist();
+          } on Object catch (error) {
+            if (_isRefusal(error)) {
+              _pending.remove(entry.key);
+              _creating.remove(entry.key);
+              _persist();
+            }
+            // Otherwise offline: kept in the store.
           }
         }
       }());
     }
     super.dispose();
   }
+}
+
+/// Whether [error] is the server refusing a change (not allowed, not valid,
+/// item gone) rather than the connection failing. PostgREST errors carry the
+/// SQLSTATE; connection problems do not.
+bool isTaskPatchRefusal(Object error) {
+  final text = '$error';
+  return text.contains('42501') ||
+      text.contains('22023') ||
+      text.contains('P0002');
 }

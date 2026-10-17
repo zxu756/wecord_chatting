@@ -5,6 +5,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/outbox_provider.dart';
+import 'package:wecord/features/lists/task_patch_sync.dart';
 
 /// Keeps the offline copy to the signed-in user: when they sign out (or
 /// another account signs in) the cache, the outbox and the cached media
@@ -20,6 +21,12 @@ final offlineSessionGuardProvider = Provider<void>((ref) {
     } catch (_) {
       // Nothing to wipe, or storage is gone.
     }
+    try {
+      // Task changes that were never sent go with the account.
+      await ref.read(taskPatchStoreProvider).clearAll();
+    } catch (_) {
+      // Nothing kept, or storage is gone.
+    }
   }
 
   if (userId == null) {
@@ -31,6 +38,9 @@ final offlineSessionGuardProvider = Provider<void>((ref) {
   // as the app does, so queued messages go out when the connection
   // returns even with no chat open.
   ref.listen(outboxProvider, (previous, next) {});
+  // Likewise for task changes left over from lists that were closed (or an
+  // app that was) before they were sent.
+  ref.listen(taskPatchSyncProvider, (previous, next) {});
   ref.listen<AsyncValue<AuthUser?>>(authStateProvider, (previous, next) {
     if (!next.hasValue) {
       return;

@@ -99,6 +99,7 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/file_preview/file_preview_scope.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/image_text/image_text_sheet.dart';
 import 'package:wecord/features/later/later_time.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
@@ -6252,6 +6253,23 @@ class _MessageBubble extends StatelessWidget {
           icon: Icons.visibility_outlined,
           label: tr('Preview'),
           onSelected: () => unawaited(onPreviewImage(imageAttachment)),
+        ),
+      if (imageAttachment != null && !_isPending)
+        MessageAction(
+          key: const ValueKey('message-copy-image-text'),
+          icon: Icons.document_scanner_outlined,
+          label: tr('Copy text from picture'),
+          onSelected: () => unawaited(
+            showImageTextSheet(
+              context,
+              circleId: circleId,
+              file: PreviewFile.fromImageAttachment(
+                imageAttachment,
+                messageId: message.id,
+                conversationId: message.conversationId,
+              ),
+            ),
+          ),
         ),
       if (onPublish case final publish?)
         MessageAction(

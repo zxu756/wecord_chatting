@@ -16,6 +16,7 @@ import 'package:wecord/features/file_preview/viewers/image_preview.dart';
 import 'package:wecord/features/file_preview/viewers/pdf_preview.dart';
 import 'package:wecord/features/file_preview/viewers/text_preview.dart';
 import 'package:wecord/features/file_preview/viewers/video_preview.dart';
+import 'package:wecord/features/image_text/image_text_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
@@ -462,6 +463,9 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
       onSave: _save,
       onShare: _share,
       onOpenIn: _openIn,
+      onCopyText: _current.kind == PreviewKind.image
+          ? () => unawaited(showImageTextSheet(context, file: _current))
+          : null,
     );
 
     final Widget content;
@@ -738,6 +742,7 @@ class _TopBar extends StatelessWidget {
     required this.onSave,
     required this.onShare,
     required this.onOpenIn,
+    this.onCopyText,
   });
 
   final PreviewFile file;
@@ -749,6 +754,9 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onSave;
   final ValueChanged<BuildContext> onShare;
   final ValueChanged<BuildContext> onOpenIn;
+
+  /// Opens "Copy text from picture"; null for what is not a picture.
+  final VoidCallback? onCopyText;
 
   @override
   Widget build(BuildContext context) {
@@ -848,6 +856,15 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
+              if (onCopyText != null)
+                WeCordIconButton(
+                  key: const ValueKey('file-preview-copy-text'),
+                  icon: Icons.document_scanner_outlined,
+                  tooltip: tr('Copy text from picture'),
+                  variant: WeCordButtonVariant.ghost,
+                  size: 40,
+                  onPressed: busy == null ? onCopyText : null,
+                ),
               action(
                 _FileAction.save,
                 Icons.download_rounded,

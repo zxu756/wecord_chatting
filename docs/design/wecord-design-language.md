@@ -228,6 +228,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WhenSheet` / `showWhenSheet` (`lib/features/later/`) | The "when" picker of Schedule message and Remind me: a grouped list of quick picks with their times and "Pick date and time" (date and time pickers in the device's time zone, which the row names). Times are built from wall-clock fields (`later_time.dart`), so "tomorrow at 9 am" survives daylight saving changes. |
 | `LaterCard` / `ReminderCard` / `LaterMessagePreview` (`lib/features/later/later_cards.dart`) | White cards on paper for reminders (Notifications) and saved messages: sender avatar with a small round badge, the message in a `well` box or an italic "Message unavailable", small pill actions. |
 | `showOptionPicker` / `OptionPickerBody` (`lib/features/privacy/option_picker.dart`) | A sheet of choices as rows with a check on the current one and an explaining note (disappearing messages, profile visibility). |
+| `PhotoEditorScreen` / `EditorCanvas` / `ImageTextSheet` (`lib/features/photo_editor`, `image_text`) | The photo editor opened from the media tray's pencil button, and the *Text from picture* sheet (see Photo editor and text from pictures below). |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 | `NoteEditor` / `NotePage` / `TaskListPage` / `TaskBoardView` / `WorkspacePanel` (`lib/features/notes`, `lists`, `workspace`) | Shared notes and task lists of a conversation: the block editor with its format bar and carets of other people, the list and board views, and the panel/page that holds them (see Notes and Lists below). |
 
@@ -500,6 +501,58 @@ labels ("Bart is here"), the save state ("Saved / Saving… / Offline") is a liv
 region, board cards offer "Move to …" actions, and everything is covered by
 `test/accessibility` (screens `notes-index`, `note-editor`, `lists-index`,
 `task-list`, `task-board`, `task-sheet`).
+
+## Photo editor and text from pictures
+
+**Editing before sending** (`lib/features/photo_editor/`). Every photo waiting
+in the media tray has a round pencil button (bottom right of its thumbnail;
+accent-filled once the photo was edited). It opens a full-screen editor that is
+always dark, like the media viewer: a top bar (Cancel, Undo, Redo, Done), the
+picture, and a `panel` dock with the options of the chosen tool above the tool
+selector (Draw, Text, Mosaic, Crop; an icon and its name each).
+
+- **Draw**: 8 colors and 3 widths; one pen stroke is one undo step.
+- **Text**: tap an empty spot (or *Add text*) to type; the text can be moved,
+  resized and turned with two fingers, or with the corner handle (resize and
+  turn together), or with the toolbar (*Edit text*, *Smaller*, *Larger*, *Turn
+  text*, *Delete text*) and the keyboard (arrows move, + / - resize, [ / ]
+  turn, Enter edits, Delete removes). *Background* puts a pill of the chosen
+  color behind it (text turns black or white, whichever reads).
+- **Mosaic**: *Pixelate* or *Blur* brush, 3 sizes. The brush paints a mask over
+  a shrunk copy of the picture, so the original pixels under it are never part
+  of the result.
+- **Crop**: Free, 1:1, 4:3 and 16:9 (choose a ratio again to turn it between
+  landscape and portrait), *Rotate* a quarter turn, *Reset*. Arrow keys move
+  the crop, Alt + arrows resize it.
+
+Pinch, trackpad pinch, or ⌘ / Ctrl + scroll zooms; scroll or two fingers pan;
+*Fit to screen* appears while zoomed. ⌘Z / ⇧⌘Z (Ctrl on the web and Windows)
+undo and redo, Esc cancels (asking before it throws edits away). Done renders
+the picture at its own resolution (at most 2560 px on the long side, 4096 with
+*Original quality*) as a JPEG through `prepareJpegPhoto`, and the tray swaps it
+in. The picture as chosen stays in the draft (`DraftAttachment.source`, with
+the edits in `DraftAttachment.edits`) until it is sent, so the editor opens
+again where it was left, and undoing everything puts the original back.
+
+The model (`editor_model.dart`, `crop_math.dart`, `editor_session.dart`) is
+plain Dart and works in the picture's own pixels: marks are stored apart from
+the turn and the crop, so a mark turns with the picture and a crop can always
+be widened again. The screen and the exported file are painted by the same
+function (`paintEditorScene`). No package was added: Flutter's canvas covers
+drawing, the mosaic and the export on iOS, macOS and the web alike.
+
+**Text from pictures** (`lib/features/image_text/`). *Copy text from picture*
+is in the picture viewer's top bar and in the message menu of sent and
+received pictures. It opens a sheet with the text in a `well` block, *Copy*,
+*Select* (selects it all) and, where AI is on, *Translate* (the same
+`AiRepository.translate` as translating a message, into the app's language).
+The iPhone and Mac apps read the picture on the device with Apple Vision
+(`VNRecognizeTextRequest`, accurate level, zh-Hans, zh-Hant and en-US) through
+`ImageTextPlugin` (channel `wecord/image_text`); the picture is downloaded to
+the viewer's file cache first and never sent anywhere else. On the web nothing
+is downloaded or read: the sheet says *Available in the iPhone and Mac apps*.
+Results are kept on the device per message and signed-in user
+(`SharedPreferencesImageTextCache`), including "no text found".
 
 ## Chat wallpapers
 

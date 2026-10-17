@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/media_send/media_draft.dart';
 import 'package:wecord/features/chats/media_send/media_picker.dart';
+import 'package:wecord/features/chats/media_send/photo_compression.dart';
+import 'package:wecord/features/photo_editor/editor_model.dart';
+import 'package:wecord/features/photo_editor/editor_render.dart';
 
 /// What the tray above the composer holds: the files chosen for the next
 /// message, its caption, and the quality switch.
@@ -173,6 +176,77 @@ class MediaTrayController extends Notifier<MediaTrayState> {
       ],
       leftOut: 0,
     );
+  }
+
+  /// Swaps the picture [id] for its edited copy [photo] (from the photo
+  /// editor). The picture as chosen stays in [DraftAttachment.source] until
+  /// it is sent, so it can be edited again or put back.
+  Future<void> applyEdit(
+    String id, {
+    required EditedPhoto photo,
+    required EditorDocument document,
+  }) async {
+    final index = state.items.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      return;
+    }
+    final item = state.items[index];
+    final source = item.source ?? item.file;
+    final name = _editedName(source.name.isNotEmpty ? source.name : item.name);
+    final thumbnail = await makeThumbnail(photo.bytes) ?? item.thumbnail;
+    if (_disposed) {
+      return;
+    }
+    final edited = item.copyWith(
+      file: XFile.fromData(
+        photo.bytes,
+        name: name,
+        mimeType: 'image/jpeg',
+        length: photo.bytes.length,
+      ),
+      name: name,
+      mimeType: 'image/jpeg',
+      size: photo.bytes.length,
+      thumbnail: thumbnail,
+      width: photo.width,
+      height: photo.height,
+      source: source,
+      edits: document,
+    );
+    _replace(id, edited);
+  }
+
+  /// Puts the picture [id] back as it was chosen, undoing its edits.
+  Future<void> resetEdit(String id) async {
+    final index = state.items.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      return;
+    }
+    final source = state.items[index].source;
+    if (source == null) {
+      return;
+    }
+    final original = await buildDraft(source);
+    if (_disposed) {
+      return;
+    }
+    _replace(id, original.copyWith(id: id));
+  }
+
+  void _replace(String id, DraftAttachment next) {
+    state = state.copyWith(
+      items: [
+        for (final item in state.items)
+          if (item.id == id) next else item,
+      ],
+    );
+  }
+
+  /// "IMG_1.HEIC" -> "IMG_1.jpg".
+  static String _editedName(String name) {
+    final dot = name.lastIndexOf('.');
+    final stem = dot > 0 ? name.substring(0, dot) : name;
+    return '${stem.isEmpty ? 'photo' : stem}.jpg';
   }
 
   void setCaption(String caption) {

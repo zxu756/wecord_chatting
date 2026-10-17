@@ -67,6 +67,8 @@ class MainFlutterWindow: NSWindow {
       with: flutterViewController.registrar(forPlugin: "VideoEffectsPlugin"))
     TranscribePlugin.register(
       with: flutterViewController.registrar(forPlugin: "TranscribePlugin"))
+    ImageTextPlugin.register(
+      with: flutterViewController.registrar(forPlugin: "ImageTextPlugin"))
 
     super.awakeFromNib()
   }

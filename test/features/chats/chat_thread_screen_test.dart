@@ -3504,6 +3504,62 @@ void main() {
     expect(find.byType(FilePreviewScreen), findsOneWidget);
   });
 
+  testWidgets('image action menu offers Copy text from picture', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: '',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+          type: MessageType.image,
+          attachment: const ImageAttachment(
+            bucket: 'chat-images',
+            path: 'conversation-1/photo.png',
+            mimeType: 'image/png',
+            size: 3,
+          ).toJson(),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy text from picture'), findsOneWidget);
+
+    await tester.tap(find.text('Copy text from picture'));
+    await tester.pumpAndSettle();
+    // Tests have no Apple Vision, like the web: the sheet says where it
+    // works instead of reading or sending the picture anywhere.
+    expect(find.text('Text from picture'), findsOneWidget);
+    expect(find.text('Available in the iPhone and Mac apps'), findsOneWidget);
+  });
+
+  testWidgets('text messages have no Copy text from picture', (tester) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-2',
+          body: 'Just words',
+          createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.text('Just words'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy text from picture'), findsNothing);
+  });
+
   testWidgets('empty composer does not send', (tester) async {
     final repository = FakeChatsRepository();
 

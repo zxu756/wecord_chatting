@@ -36,6 +36,7 @@ class VoiceSettings {
     this.autoGainControl = true,
     this.userVolumes = const {},
     this.soundboardVolume = defaultSoundboardVolume,
+    this.backgroundBlur = false,
   });
 
   factory VoiceSettings.fromJson(Map<String, dynamic> json) {
@@ -58,6 +59,7 @@ class VoiceSettings {
         final num volume => volume.toDouble().clamp(0.0, 1.0),
         _ => defaultSoundboardVolume,
       },
+      backgroundBlur: json['background_blur'] == true,
     );
   }
 
@@ -75,6 +77,10 @@ class VoiceSettings {
 
   /// How loud soundboard sounds play, 0 (off) to 1.
   final double soundboardVolume;
+
+  /// Blur the background behind the camera where the device can (see
+  /// [VideoBackgroundSupport.inApp]); cameras start blurred.
+  final bool backgroundBlur;
 
   bool get pushToTalk => inputMode == VoiceInputMode.pushToTalk;
 
@@ -103,6 +109,7 @@ class VoiceSettings {
     bool? autoGainControl,
     Map<String, double>? userVolumes,
     double? soundboardVolume,
+    bool? backgroundBlur,
   }) {
     return VoiceSettings(
       inputMode: inputMode ?? this.inputMode,
@@ -112,6 +119,7 @@ class VoiceSettings {
       autoGainControl: autoGainControl ?? this.autoGainControl,
       userVolumes: userVolumes ?? this.userVolumes,
       soundboardVolume: soundboardVolume ?? this.soundboardVolume,
+      backgroundBlur: backgroundBlur ?? this.backgroundBlur,
     );
   }
 
@@ -123,6 +131,7 @@ class VoiceSettings {
     'auto_gain_control': autoGainControl,
     'user_volumes': userVolumes,
     'soundboard_volume': soundboardVolume,
+    if (backgroundBlur) 'background_blur': true,
   };
 
   @override
@@ -134,7 +143,8 @@ class VoiceSettings {
         other.echoCancellation == echoCancellation &&
         other.autoGainControl == autoGainControl &&
         mapEquals(other.userVolumes, userVolumes) &&
-        other.soundboardVolume == soundboardVolume;
+        other.soundboardVolume == soundboardVolume &&
+        other.backgroundBlur == backgroundBlur;
   }
 
   @override
@@ -148,6 +158,7 @@ class VoiceSettings {
       userVolumes.entries.map((entry) => Object.hash(entry.key, entry.value)),
     ),
     soundboardVolume,
+    backgroundBlur,
   );
 }
 
@@ -252,6 +263,10 @@ class VoiceSettingsController extends Notifier<VoiceSettings> {
 
   Future<void> setAutoGainControl(bool enabled) {
     return update(state.copyWith(autoGainControl: enabled));
+  }
+
+  Future<void> setBackgroundBlur(bool enabled) {
+    return update(state.copyWith(backgroundBlur: enabled));
   }
 
   /// Sets how loud soundboard sounds play, 0 (off) to 1.

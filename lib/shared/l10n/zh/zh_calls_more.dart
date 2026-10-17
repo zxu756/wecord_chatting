@@ -51,4 +51,12 @@ const zhCallsMore = <String, String>{
   'Zoom {percent}%': '缩放 {percent}%',
   'Focus this tile': '聚焦此画面',
   'Show everyone': '显示所有人',
+
+  // Background blur.
+  'Blur background': '模糊背景',
+  'Turn off background blur': '关闭背景模糊',
+  'Video effects': '视频效果',
+  'Could not change the background.': '无法更改背景。',
+  'Could not blur the background, so the camera stayed off.':
+      '无法模糊背景，因此摄像头保持关闭。',
 };

@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/reactions/reaction_message.dart';
 
 /// How well the current user's connection to the voice server works.
@@ -69,7 +70,28 @@ abstract interface class VoiceCall implements Listenable {
 
   Future<void> setMicrophoneEnabled(bool enabled);
 
+  /// Starts or stops the camera. With [VideoBackgroundSupport.inApp] blur on,
+  /// throws [BackgroundBlurUnavailable] (and leaves the camera off) when the
+  /// blur can't start, rather than send the camera unblurred.
   Future<void> setCameraEnabled(bool enabled);
+
+  /// How the camera's background can be blurred on this device; `none`
+  /// hides the option.
+  VideoBackgroundSupport get backgroundSupport;
+
+  /// Whether the background is blurred: WeCord's own blur is on, or (with
+  /// the system's effect) the user has it on.
+  bool get backgroundBlur;
+
+  /// Blurs the camera's background, or stops. For
+  /// [VideoBackgroundSupport.inApp]; it applies from the next camera start
+  /// when the camera is off. Throws [BackgroundBlurUnavailable] when the
+  /// blur can't start.
+  Future<void> setBackgroundBlur(bool enabled);
+
+  /// Opens the system's video effects, where the user switches the blur
+  /// ([VideoBackgroundSupport.system]).
+  Future<void> showSystemVideoEffects();
 
   /// Starts sharing [sourceId] (a screen or window on desktop; browsers
   /// ask themselves when it is null), or stops sharing.

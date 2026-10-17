@@ -5,16 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:wecord/features/voice/ai_noise_filter.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
+import 'package:wecord/features/voice/background/video_background_platform.dart';
 import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_volume.dart';
 
 /// Connects to LiveKit rooms.
 class LiveKitVoiceCallConnector implements VoiceCallConnector {
-  /// [noiseBackend] makes the AI noise filter; tests swap in a fake.
-  const LiveKitVoiceCallConnector({this.noiseBackend = openKrispBackend});
+  /// [noiseBackend] makes the AI noise filter and [effects] (the platform's
+  /// by default) blurs the camera's background; tests swap in fakes.
+  const LiveKitVoiceCallConnector({
+    this.noiseBackend = openKrispBackend,
+    this.effects,
+  });
 
   final AiNoiseBackendFactory noiseBackend;
+  final VideoBackgroundEffects? effects;
 
   @override
   Future<bool> aiNoiseSupported() => krispSupportedHere();
@@ -45,8 +52,15 @@ class LiveKitVoiceCallConnector implements VoiceCallConnector {
         ),
       ),
     );
-    final call = LiveKitVoiceCall._(room, filter, audio)
-      .._volumes = Map.of(userVolumes);
+    final backgroundEffects = effects ?? platformVideoBackgroundEffects();
+    final backgroundSupport = await backgroundEffects.detect();
+    final call = LiveKitVoiceCall._(
+      room,
+      filter,
+      audio,
+      backgroundEffects,
+      backgroundSupport,
+    ).._volumes = Map.of(userVolumes);
     try {
       await room.connect(url, token);
     } catch (_) {
@@ -108,16 +122,31 @@ Future<VoiceScreenSource?> pickLiveKitScreenSource(BuildContext context) async {
 }
 
 class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
-  LiveKitVoiceCall._(this._room, this._filter, this._audio) {
+  LiveKitVoiceCall._(
+    this._room,
+    this._filter,
+    this._audio,
+    this._effects,
+    this._support,
+  ) {
     _listener = _room.createListener();
     _listener.listen(_onEvent);
     _room.addListener(_changed);
     _filter?.addListener(_filterChanged);
     unawaited(_filter?.setEnabled(_audio.noiseSuppression));
+    if (_support == VideoBackgroundSupport.system) {
+      unawaited(_readSystemBlur());
+    }
   }
 
   final lk.Room _room;
   final AiNoiseFilter? _filter;
+  final VideoBackgroundEffects _effects;
+  final VideoBackgroundSupport _support;
+  var _blur = false;
+  BlurProcessor? _blurProcessor;
+  var _systemBlur = false;
+  Timer? _systemBlurPoll;
   var _audio = const VoiceAudioProcessing();
   var _filterFallbackDone = false;
   Timer? _filterFallback;
@@ -286,7 +315,126 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
 
   @override
   Future<void> setCameraEnabled(bool enabled) async {
-    await _room.localParticipant?.setCameraEnabled(enabled);
+    final local = _room.localParticipant;
+    if (local == null) {
+      return;
+    }
+    if (_support == VideoBackgroundSupport.system) {
+      await local.setCameraEnabled(enabled);
+      _watchSystemBlur(enabled);
+      return;
+    }
+    if (_support != VideoBackgroundSupport.inApp) {
+      await local.setCameraEnabled(enabled);
+      return;
+    }
+    // With our own blur the camera is stopped and published afresh each
+    // time: LiveKit puts the unprocessed picture back on a camera that was
+    // only muted, which would send it unblurred.
+    if (enabled) {
+      await _startCamera(local);
+    } else {
+      await _stopCamera(local);
+    }
+  }
+
+  lk.LocalTrackPublication? _cameraOf(lk.LocalParticipant local) =>
+      local.getTrackPublicationBySource(lk.TrackSource.camera);
+
+  Future<void> _stopCamera(lk.LocalParticipant local) async {
+    _blurProcessor = null;
+    final publication = _cameraOf(local);
+    if (publication != null) {
+      await local.removePublishedTrack(publication.sid);
+    }
+  }
+
+  Future<void> _startCamera(lk.LocalParticipant local) async {
+    final running = _cameraOf(local);
+    if (running != null && !running.muted) {
+      return;
+    }
+    await _stopCamera(local);
+    final processor = _blur ? _effects.createBlurProcessor() : null;
+    _blurProcessor = processor;
+    try {
+      await local.setCameraEnabled(
+        true,
+        cameraCaptureOptions: lk.CameraCaptureOptions(processor: processor),
+      );
+    } catch (_) {
+      _blurProcessor = null;
+      rethrow;
+    }
+  }
+
+  @override
+  VideoBackgroundSupport get backgroundSupport => _support;
+
+  @override
+  bool get backgroundBlur =>
+      _support == VideoBackgroundSupport.system ? _systemBlur : _blur;
+
+  @override
+  Future<void> setBackgroundBlur(bool enabled) async {
+    if (_support != VideoBackgroundSupport.inApp) {
+      return;
+    }
+    _blur = enabled;
+    final local = _room.localParticipant;
+    final camera = local == null ? null : _cameraOf(local);
+    if (local == null || camera == null || camera.muted) {
+      _changed();
+      return;
+    }
+    try {
+      final processor = _blurProcessor;
+      if (processor != null) {
+        // Already on the camera: switch it without restarting.
+        await processor.setBlurEnabled(enabled);
+      } else if (enabled) {
+        await _stopCamera(local);
+        try {
+          await _startCamera(local);
+        } catch (_) {
+          // The camera is off now, and must not come back unblurred.
+          throw const BackgroundBlurUnavailable();
+        }
+      }
+    } catch (_) {
+      _blur = false;
+      rethrow;
+    } finally {
+      _changed();
+    }
+  }
+
+  @override
+  Future<void> showSystemVideoEffects() async {
+    await _effects.showSystemEffects();
+    unawaited(_readSystemBlur());
+  }
+
+  /// Follows the system's blur while the camera is on, since the user
+  /// switches it outside the app.
+  void _watchSystemBlur(bool cameraOn) {
+    _systemBlurPoll?.cancel();
+    _systemBlurPoll = null;
+    unawaited(_readSystemBlur());
+    if (cameraOn) {
+      _systemBlurPoll = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => unawaited(_readSystemBlur()),
+      );
+    }
+  }
+
+  Future<void> _readSystemBlur() async {
+    final enabled = await _effects.systemBlurEnabled();
+    if (!_closed && enabled != _systemBlur) {
+      _systemBlur = enabled;
+      _changed();
+    }
   }
 
   @override
@@ -390,6 +538,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
     }
     _closing = true;
     _filterFallback?.cancel();
+    _systemBlurPoll?.cancel();
     try {
       await _room.disconnect();
     } finally {

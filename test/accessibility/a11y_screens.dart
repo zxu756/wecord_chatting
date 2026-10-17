@@ -8,12 +8,14 @@ import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_rpc.dart';
+import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
 
 import '../features/discovery/discovery_fakes.dart';
+import '../features/voice/call_links_fakes.dart';
 import '../mobile/phone_test_support.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
@@ -81,6 +83,21 @@ void _withVoice(PhoneWorld world) {
       ),
     ];
   };
+}
+
+/// Joins the Lounge voice channel from the circle's page.
+Future<void> _joinLounge(WidgetTester tester, PhoneWorld world) async {
+  await world.open(tester, '/circles/circle-1');
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
+    200,
+    scrollable: find.byType(Scrollable).last,
+  );
+  // Clear of the floating user panel.
+  await tester.drag(find.byType(Scrollable).last, const Offset(0, -200));
+  await settle(tester);
+  await tester.tap(find.byKey(const ValueKey('circle-channel-row-ch-lounge')));
+  await settle(tester);
 }
 
 /// The screens, in the order of the main flows.
@@ -252,6 +269,29 @@ final moreA11yScreens = <A11yScreen>[
       find.byKey(const ValueKey('circle-channel-row-ch-lounge')),
     );
     await settle(tester);
+  }),
+  A11yScreen('call-link-sheet', (tester, world) async {
+    _withVoice(world);
+    final links = FakeCallLinksRepository();
+    await links.create(
+      const CallLinkTarget.channel('ch-lounge'),
+      CallLinkExpiry.week,
+    );
+    world.extraOverrides = [
+      callLinksRepositoryProvider.overrideWithValue(links),
+    ];
+    await _joinLounge(tester, world);
+    await tester.tap(find.byKey(const ValueKey('voice-call-link-button')));
+  }),
+  A11yScreen('call-link-no-access', (tester, world) async {
+    final links = FakeCallLinksRepository();
+    links.resolutions['abcd2345efgh'] = const CallLinkResolution.problem(
+      CallLinkProblem.noAccess,
+    );
+    world.extraOverrides = [
+      callLinksRepositoryProvider.overrideWithValue(links),
+    ];
+    await world.open(tester, '/call/abcd2345efgh');
   }),
   A11yScreen(
     'desktop-settings',

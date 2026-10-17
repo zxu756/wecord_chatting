@@ -19,5 +19,8 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "QuickLookPlugin") {
       QuickLookPlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "VideoEffectsPlugin") {
+      VideoEffectsPlugin.register(with: registrar)
+    }
   }
 }

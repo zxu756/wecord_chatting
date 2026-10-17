@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -282,6 +283,16 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   bool get microphone => _microphone;
 
+  /// What the device offers for the camera's background (set before the
+  /// call connects with [FakeVoiceCallConnector.backgroundSupport]).
+  VideoBackgroundSupport support = VideoBackgroundSupport.none;
+  bool blur = false;
+
+  /// Thrown by [setCameraEnabled] (turning it on) and [setBackgroundBlur]
+  /// when set.
+  Object? blurError;
+  var systemEffectsShown = 0;
+
   final _reactions = StreamController<VoiceReaction>.broadcast();
 
   /// The emoji the current user sent.
@@ -352,8 +363,33 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   @override
   Future<void> setCameraEnabled(bool enabled) async {
+    final failure = blurError;
+    if (enabled && failure != null && blur) {
+      throw failure;
+    }
     camera = enabled;
     notifyListeners();
+  }
+
+  @override
+  VideoBackgroundSupport get backgroundSupport => support;
+
+  @override
+  bool get backgroundBlur => blur;
+
+  @override
+  Future<void> setBackgroundBlur(bool enabled) async {
+    final failure = blurError;
+    if (enabled && failure != null) {
+      throw failure;
+    }
+    blur = enabled;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> showSystemVideoEffects() async {
+    systemEffectsShown++;
   }
 
   @override
@@ -396,6 +432,9 @@ class FakeVoiceCallConnector implements VoiceCallConnector {
   /// Whether the device can run the AI noise filter.
   bool aiNoise = false;
 
+  /// What new calls offer for the camera's background.
+  VideoBackgroundSupport backgroundSupport = VideoBackgroundSupport.none;
+
   /// Set before connecting to shape the next call.
   void Function(FakeVoiceCall call)? prepare;
 
@@ -423,6 +462,7 @@ class FakeVoiceCallConnector implements VoiceCallConnector {
     );
     call
       ..audio = audio
+      ..support = backgroundSupport
       ..userVolumes = Map.of(userVolumes);
     prepare?.call(call);
     calls.add(call);

@@ -25,6 +25,9 @@ dependencies:
   url_launcher: ^6.3.3
   livekit_client: ^2.13.1
   flutter_webrtc: ^1.6.2+hotfix.4
+  # The browser's MediaStreamTrack, for the background blur on the web (was
+  # already here through flutter_webrtc).
+  dart_webrtc: ^1.8.2
   webview_flutter: ^4.14.1
   file_selector: ^1.1.0
   video_player: ^2.14.1

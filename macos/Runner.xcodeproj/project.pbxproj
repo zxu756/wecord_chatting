@@ -22,6 +22,7 @@
 
 /* Begin PBXBuildFile section */
 		14AB0E11B1A5FF93F91A6B9F /* QuickLookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */; };
+		E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */; };
 		1CFCDF6946D6E46C361A5BB5 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C4A12A8F95DD2503ED91AF6 /* Pods_RunnerTests.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -92,6 +93,7 @@
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		B7196CAC6E58DBC7149DFF74 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLookPlugin.swift; sourceTree = "<group>"; };
+		E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEffectsPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +190,7 @@
 				33CC11242044D66E0003C045 /* Resources */,
 				33BA886A226E78AF003329D5 /* Configs */,
 				F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */,
+				E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -436,6 +439,7 @@
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 				14AB0E11B1A5FF93F91A6B9F /* QuickLookPlugin.swift in Sources */,
+				E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

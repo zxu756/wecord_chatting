@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
@@ -1253,8 +1254,14 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       await action();
-    } catch (_) {
-      messenger?.showSnackBar(SnackBar(content: Text(failure)));
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            error is BackgroundBlurUnavailable ? error.toString() : failure,
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -1348,6 +1355,26 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
               ),
             ),
           ),
+          if (session.video &&
+              session.backgroundSupport != VideoBackgroundSupport.none)
+            VoiceControl(
+              key: const ValueKey('voice-control-blur'),
+              tooltip: switch (session.backgroundSupport) {
+                VideoBackgroundSupport.system => tr('Video effects'),
+                _ =>
+                  session.backgroundBlur
+                      ? tr('Turn off background blur')
+                      : tr('Blur background'),
+              },
+              icon: Icons.blur_on_rounded,
+              on: session.backgroundBlur,
+              onPressed: guard(
+                () => _run(
+                  controller.toggleBackgroundBlur,
+                  tr('Could not change the background.'),
+                ),
+              ),
+            ),
           if (canShareScreen)
             VoiceControl(
               key: const ValueKey('voice-control-screen'),

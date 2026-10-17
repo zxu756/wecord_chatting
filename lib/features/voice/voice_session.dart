@@ -9,6 +9,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/push/push_repository.dart';
+import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
 import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/soundboard_player.dart';
@@ -52,6 +53,11 @@ final voiceSessionProvider =
         connector: ref.watch(voiceCallConnectorProvider),
         settings: ref.read(voiceSettingsProvider),
         onCallJoined: ref.watch(pushRepositoryProvider).notifyCall,
+        onBackgroundBlurChanged: (enabled) {
+          unawaited(
+            ref.read(voiceSettingsProvider.notifier).setBackgroundBlur(enabled),
+          );
+        },
         onMembersChanged: (session) {
           if (session.circleId case final circleId?) {
             ref.invalidate(voiceStatesProvider(circleId));
@@ -150,6 +156,8 @@ class VoiceSession {
     this.stageInvited = false,
     this.handRaised = false,
     this.noiseMode = VoiceNoiseMode.standard,
+    this.backgroundSupport = VideoBackgroundSupport.none,
+    this.backgroundBlur = false,
   });
 
   /// The circle and voice channel, for a voice channel; null in a call.
@@ -201,6 +209,13 @@ class VoiceSession {
   /// The noise suppression the microphone is using.
   final VoiceNoiseMode noiseMode;
 
+  /// How this device can blur the camera's background; `none` hides the
+  /// option.
+  final VideoBackgroundSupport backgroundSupport;
+
+  /// The background is blurred (or the system's effect is on).
+  final bool backgroundBlur;
+
   /// In a stage's audience, where the microphone stays off.
   bool get stageListener => stage && !stageSpeaker;
 
@@ -239,6 +254,8 @@ class VoiceSession {
     bool? stageInvited,
     bool? handRaised,
     VoiceNoiseMode? noiseMode,
+    VideoBackgroundSupport? backgroundSupport,
+    bool? backgroundBlur,
   }) {
     return VoiceSession(
       circleId: circleId,
@@ -262,6 +279,8 @@ class VoiceSession {
       stageInvited: stageInvited ?? this.stageInvited,
       handRaised: handRaised ?? this.handRaised,
       noiseMode: noiseMode ?? this.noiseMode,
+      backgroundSupport: backgroundSupport ?? this.backgroundSupport,
+      backgroundBlur: backgroundBlur ?? this.backgroundBlur,
     );
   }
 }
@@ -275,6 +294,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     required this._connector,
     this._onMembersChanged,
     this._onCallJoined,
+    this._onBackgroundBlurChanged,
     this._settings = const VoiceSettings(),
   }) : super(null);
 
@@ -289,6 +309,9 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   /// Called with each call joined, so a newly started one rings by push
   /// (the server ignores calls someone else started).
   final Future<void> Function(String callId)? _onCallJoined;
+
+  /// Called when the user switches the background blur, to remember it.
+  final void Function(bool enabled)? _onBackgroundBlurChanged;
 
   VoiceCall? _call;
 
@@ -512,8 +535,18 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     final serverSilenced =
         current != null &&
         (current.serverMute || current.serverDeaf || current.stageListener);
+    final backgroundSupport = call.backgroundSupport;
+    if (backgroundSupport == VideoBackgroundSupport.inApp &&
+        _settings.backgroundBlur) {
+      // Applies when the camera starts.
+      unawaited(call.setBackgroundBlur(true).catchError((Object _) {}));
+    }
     state = current?.copyWith(
       status: VoiceSessionStatus.connected,
+      backgroundSupport: backgroundSupport,
+      backgroundBlur: backgroundSupport == VideoBackgroundSupport.inApp
+          ? _settings.backgroundBlur
+          : call.backgroundBlur,
       // Without a working microphone the user starts muted; server-muted,
       // the microphone was never opened.
       selfMute:
@@ -763,6 +796,8 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
       participants: call.participants,
       quality: call.quality,
       noiseMode: call.noiseMode,
+      backgroundSupport: call.backgroundSupport,
+      backgroundBlur: call.backgroundBlur,
     );
   }
 
@@ -916,12 +951,66 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     if (session == null || call == null) {
       return;
     }
-    await call.setCameraEnabled(!session.video);
+    try {
+      await call.setCameraEnabled(!session.video);
+    } on BackgroundBlurUnavailable {
+      await _blurFailed(call);
+      rethrow;
+    }
     if (!mounted) {
       return;
     }
     state = state?.copyWith(video: !session.video);
     await _pushFlags();
+  }
+
+  /// The blur could not start, so the camera is off. Blur is switched off,
+  /// and the next try starts the camera without it.
+  Future<void> _blurFailed(VoiceCall call) async {
+    try {
+      await call.setBackgroundBlur(false);
+    } catch (_) {
+      // Off already.
+    }
+    _onBackgroundBlurChanged?.call(false);
+    if (!mounted) {
+      return;
+    }
+    state = state?.copyWith(video: false, backgroundBlur: false);
+    await _pushFlags();
+  }
+
+  /// Blurs the background behind the camera, or stops. With the system's
+  /// effect (iOS, macOS) it opens the system's video effects instead, where
+  /// the user switches it. Throws [BackgroundBlurUnavailable] when the blur
+  /// can't start; the camera is then off.
+  Future<void> toggleBackgroundBlur() async {
+    final session = state;
+    final call = _call;
+    if (session == null || call == null) {
+      return;
+    }
+    switch (session.backgroundSupport) {
+      case VideoBackgroundSupport.none:
+        return;
+      case VideoBackgroundSupport.system:
+        await call.showSystemVideoEffects();
+        return;
+      case VideoBackgroundSupport.inApp:
+        break;
+    }
+    final next = !session.backgroundBlur;
+    try {
+      await call.setBackgroundBlur(next);
+    } on BackgroundBlurUnavailable {
+      await _blurFailed(call);
+      rethrow;
+    }
+    if (!mounted) {
+      return;
+    }
+    state = state?.copyWith(backgroundBlur: next);
+    _onBackgroundBlurChanged?.call(next);
   }
 
   /// Starts sharing [source], or stops sharing when it is null.

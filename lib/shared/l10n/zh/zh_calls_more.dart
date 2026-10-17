@@ -40,4 +40,9 @@ const zhCallsMore = <String, String>{
   'Move to top right': '移到右上角',
   'Move to bottom left': '移到左下角',
   'Move to bottom right': '移到右下角',
+
+  // Reactions.
+  'Reactions': '表情回应',
+  'Send {emoji}': '发送 {emoji}',
+  '{name} reacted {emoji}': '{name} 回应了 {emoji}',
 };

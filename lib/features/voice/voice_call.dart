@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:wecord/features/voice/reactions/reaction_message.dart';
 
 /// How well the current user's connection to the voice server works.
 enum VoiceConnectionQuality { unknown, lost, poor, good, excellent }
@@ -58,6 +59,13 @@ abstract interface class VoiceCall implements Listenable {
   /// Completes when the room disconnects on its own (network loss, kicked
   /// by the server), not after [disconnect].
   Future<void> get disconnected;
+
+  /// Reactions other people in the room send. Your own are not repeated
+  /// here (the session shows them as it sends them).
+  Stream<VoiceReaction> get reactions;
+
+  /// Sends [emoji] (one of [callReactionEmojis]) to everyone in the room.
+  Future<void> sendReaction(String emoji);
 
   Future<void> setMicrophoneEnabled(bool enabled);
 

@@ -7,6 +7,8 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
+import 'package:wecord/features/voice/reactions/floating_reactions.dart';
+import 'package:wecord/features/voice/reactions/reaction_tray.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -844,6 +846,11 @@ class _ParticipantTile extends StatelessWidget {
           : serverMuted || !participant.microphoneEnabled
           ? Icons.mic_off_rounded
           : null,
+      overlay: FloatingReactions(
+        userId: participant.userId,
+        name: name,
+        child: const SizedBox.shrink(),
+      ),
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
@@ -874,6 +881,7 @@ class _Tile extends StatelessWidget {
     this.labelIcon,
     this.labelIconColor,
     this.labelIconKey,
+    this.overlay,
     super.key,
   });
 
@@ -886,6 +894,9 @@ class _Tile extends StatelessWidget {
   final IconData? labelIcon;
   final Color? labelIconColor;
   final Key? labelIconKey;
+
+  /// Drawn over everything else in the tile (floating reactions).
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -961,6 +972,7 @@ class _Tile extends StatelessWidget {
               ),
             ),
           ),
+          ?overlay,
         ],
       ),
     );
@@ -993,6 +1005,21 @@ class VoiceCallControls extends ConsumerStatefulWidget {
 
 class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
   var _busy = false;
+  var _reactionsOpen = false;
+
+  /// Sends [emoji]; the tray closes once it went out.
+  Future<bool> _react(String emoji) async {
+    final sent = await ref
+        .read(voiceSessionProvider.notifier)
+        .sendReaction(emoji);
+    if (sent) {
+      WeCordHaptics.light();
+      if (mounted) {
+        setState(() => _reactionsOpen = false);
+      }
+    }
+    return sent;
+  }
 
   Future<void> _run(Future<void> Function() action, String failure) async {
     if (_busy) {
@@ -1043,8 +1070,16 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     return KeyedSubtree(
       key: const ValueKey('voice-call-controls'),
       child: VoiceControlBar(
-        above: holdToTalk
-            ? VoiceHoldToTalkButton(session: session, enabled: !_busy)
+        above: holdToTalk || _reactionsOpen
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_reactionsOpen) ReactionTray(onPick: _react),
+                  if (_reactionsOpen && holdToTalk) const SizedBox(height: 10),
+                  if (holdToTalk)
+                    VoiceHoldToTalkButton(session: session, enabled: !_busy),
+                ],
+              )
             : null,
         controls: [
           VoiceControl(
@@ -1116,6 +1151,13 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 ),
               ),
             ),
+          VoiceControl(
+            key: const ValueKey('voice-control-reactions'),
+            tooltip: tr('Reactions'),
+            icon: Icons.add_reaction_outlined,
+            on: _reactionsOpen,
+            onPressed: () => setState(() => _reactionsOpen = !_reactionsOpen),
+          ),
           ?widget.chat,
         ],
         leaveLabel: tr('Leave'),

@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/features/voice/livekit_voice_call.dart';
+import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/soundboard_player.dart';
 import 'package:wecord/features/voice/soundboard_repository.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -290,6 +291,12 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   final Future<void> Function(String callId)? _onCallJoined;
 
   VoiceCall? _call;
+
+  /// Reactions in the current call, others' as they arrive and the current
+  /// user's as they are sent. Floats over the sender's tile.
+  final _reactions = StreamController<VoiceReaction>.broadcast();
+  StreamSubscription<VoiceReaction>? _reactionSubscription;
+  var _sendLimit = ReactionRateLimiter();
   Timer? _heartbeat;
   Timer? _retryMicrophone;
   AppLifecycleListener? _lifecycle;
@@ -454,10 +461,45 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     }
   }
 
+  /// Reactions in the call now, from everyone including the current user.
+  Stream<VoiceReaction> get reactions => _reactions.stream;
+
+  /// Sends [emoji] to the call. False when it was held back (too many in a
+  /// row, see [ReactionRateLimiter]) or there is no call.
+  Future<bool> sendReaction(String emoji) async {
+    final session = state;
+    final call = _call;
+    if (session == null ||
+        call == null ||
+        !session.isConnected ||
+        !callReactionEmojis.contains(emoji) ||
+        !_sendLimit.allow()) {
+      return false;
+    }
+    final userId = _localParticipant(call)?.userId;
+    if (userId != null && !_reactions.isClosed) {
+      // LiveKit doesn't send it back, so show it right away.
+      _reactions.add(VoiceReaction(userId: userId, emoji: emoji));
+    }
+    try {
+      await call.sendReaction(emoji);
+    } catch (_) {
+      // Others miss this one; the sender still saw it.
+    }
+    return true;
+  }
+
   /// [carried] is the session before a move, whose mute and deafen stay.
   void _connected(VoiceCall call, {VoiceSession? carried}) {
     _call = call;
     call.addListener(_syncFromCall);
+    _sendLimit = ReactionRateLimiter();
+    unawaited(_reactionSubscription?.cancel());
+    _reactionSubscription = call.reactions.listen((reaction) {
+      if (!_reactions.isClosed) {
+        _reactions.add(reaction);
+      }
+    });
     unawaited(
       call.disconnected.then((_) {
         if (identical(_call, call)) {
@@ -697,6 +739,8 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     unawaited(_ownStateChanges?.cancel());
     _ownStateChanges = null;
     call?.removeListener(_syncFromCall);
+    unawaited(_reactionSubscription?.cancel());
+    _reactionSubscription = null;
     return call;
   }
 
@@ -988,6 +1032,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   void dispose() {
     _disposed = true;
     unawaited(leave());
+    unawaited(_reactions.close());
     super.dispose();
   }
 }

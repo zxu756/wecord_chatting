@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:wecord/features/voice/ai_noise_filter.dart';
+import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_volume.dart';
 
@@ -126,6 +127,8 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   var _closed = false;
   var _remoteAudioEnabled = true;
   var _volumes = <String, double>{};
+  final _reactions = StreamController<VoiceReaction>.broadcast();
+  final _reactionReceiver = ReactionReceiver();
 
   void _onEvent(lk.RoomEvent event) {
     switch (event) {
@@ -142,6 +145,16 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
         final volume = _volumes[participant.identity];
         if (volume != null) {
           unawaited(_applyVolume(track, volume));
+        }
+      case lk.DataReceivedEvent(:final participant, :final data, :final topic):
+        // The sender is who LiveKit says, whatever the message claims.
+        final reaction = _reactionReceiver.receive(
+          senderId: participant?.identity,
+          topic: topic,
+          data: data,
+        );
+        if (reaction != null && !_reactions.isClosed) {
+          _reactions.add(reaction);
         }
       case lk.LocalTrackPublishedEvent(:final publication)
           when publication.kind == lk.TrackType.AUDIO:
@@ -249,6 +262,21 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       lk.ConnectionQuality.lost => VoiceConnectionQuality.lost,
       _ => VoiceConnectionQuality.unknown,
     };
+  }
+
+  @override
+  Stream<VoiceReaction> get reactions => _reactions.stream;
+
+  @override
+  Future<void> sendReaction(String emoji) async {
+    if (!callReactionEmojis.contains(emoji)) {
+      return;
+    }
+    await _room.localParticipant?.publishData(
+      encodeReaction(emoji),
+      reliable: true,
+      topic: reactionTopic,
+    );
   }
 
   @override
@@ -368,6 +396,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       _closed = true;
       _filter?.removeListener(_filterChanged);
       disposeRemoteAudioVolumes();
+      unawaited(_reactions.close());
       _room.removeListener(_changed);
       await _listener.dispose();
       await _room.dispose();

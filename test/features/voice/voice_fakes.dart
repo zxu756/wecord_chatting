@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wecord/features/voice/reactions/reaction_message.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/shared/models/voice.dart';
@@ -281,6 +282,16 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   bool get microphone => _microphone;
 
+  final _reactions = StreamController<VoiceReaction>.broadcast();
+
+  /// The emoji the current user sent.
+  final sentReactions = <String>[];
+
+  /// Simulates [userId] sending [emoji].
+  void receiveReaction(String userId, String emoji) {
+    _reactions.add(VoiceReaction(userId: userId, emoji: emoji));
+  }
+
   /// Simulates the server ending the call.
   void dropConnection() {
     if (!_disconnected.isCompleted) {
@@ -324,6 +335,14 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   @override
   Future<void> get disconnected => _disconnected.future;
+
+  @override
+  Stream<VoiceReaction> get reactions => _reactions.stream;
+
+  @override
+  Future<void> sendReaction(String emoji) async {
+    sentReactions.add(emoji);
+  }
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {

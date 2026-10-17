@@ -145,9 +145,72 @@ Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
   features in this circle); the function then answers `ai_disabled_in_circle`
   for that circle's channels and threads.
 
+## AI guard for new members
+
+Circle managers can turn on **AI guard for new members** (Circle settings → AI
+guard; off by default, and only while the circle's AI switch is on). The first
+messages of a new member (joined less than 1, 3 or 7 days ago, or fewer than N
+messages in the circle) wait for a check before the others see them. A message
+the AI flags stays held for the moderators (Hold) or is released with a flag
+(Flag); moderators decide in the circle's Review queue. Moderators, managers,
+bots and the owner are never held, and only text messages are checked (pictures
+and files are not).
+
+How a check runs, and why the database starts it:
+
+1. A trigger on `messages` (`202610170090_ai_guard.sql`) marks a message from a
+   guarded member `checking`. Every way of sending goes through it (the app,
+   scheduled sends, the REST API), so a client cannot skip the check or choose
+   its own state. Others cannot see the message, count it as unread or
+   mentioned, search it, or be pushed about it until it is released.
+2. The same insert posts to `POST /functions/v1/ai` through **pg_net**, with
+   `{"action": "guard", "message_id": ...}` and the shared secret as bearer
+   token. It starts the moment the message is stored, needs no cron delay and
+   cannot be skipped by a client. (The alternative, the sender's app calling
+   `ai` after sending, would let a modified client leave messages unchecked
+   or released, and would need a cron sweep anyway for apps that go offline
+   between the send and the call.)
+3. The function claims the message, counts the request against the **circle**
+   (`ai_circle_usage`, limit `AI_GUARD_DAILY_LIMIT_PER_CIRCLE`, default 500
+   per UTC day; never the member), classifies the text and the hosts of its
+   links into `allow` / `spam` / `scam` / `harassment` / `sexual` / `other` with
+   a short reason, and hands the answer to `finish_message_review`. It uses
+   the same `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` as every other feature,
+   at temperature 0 with a 15 second timeout.
+4. **Fail open.** If the AI is not set up, the circle turned it off, the
+   circle's limit is reached, the provider fails, answers badly or is too slow,
+   or the database cannot reach the function (no pg_net or Vault secrets), the
+   message is released and recorded as "not checked" with the reason. A sweep
+   (`run_ai_guard_sweep`, every minute through pg_cron) releases checks that
+   never came back after 60 seconds. AutoMod keeps working: its triggers run
+   before the guard and can still block the message.
+5. Releasing moves the message to the end of the chat (when it waited), updates
+   the conversation's latest message and queues the push. `scheduled-dispatch`
+   claims it (`claim_released_message_pushes`) and pushes it through
+   `claim_push_delivery`; the release also wakes `scheduled-dispatch` through
+   pg_net, so it is prompt.
+
+Set up (once, besides the usual AI secrets):
+
+- The Vault secrets `wecord_functions_url` and `wecord_dispatch_secret` and the
+  function secret `DISPATCH_SECRET` (the same ones `scheduled-dispatch` uses,
+  see `supabase/functions/scheduled-dispatch`). Without them messages are
+  released unchecked.
+- Deploy `ai` so the gateway lets the shared secret through: `verify_jwt = false`
+  is set in `supabase/config.toml` (the function authenticates every other
+  request itself). With the CLI: `supabase functions deploy ai` (it reads the
+  config) or `--no-verify-jwt`. Redeploy `scheduled-dispatch` too.
+- Optional: `supabase secrets set AI_GUARD_DAILY_LIMIT_PER_CIRCLE=200`.
+
+Privacy: only the **text** of messages from guarded members, and the host names
+of its links, is sent to the model, and only while the guard is on. Nothing is
+stored beyond the category and a short reason (`message_reviews`, readable by
+moderators), and the circle's daily request count.
+
 ## Tests
+
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai
+flutter test test/features/ai test/supabase/ai_guard_test.dart
 ```

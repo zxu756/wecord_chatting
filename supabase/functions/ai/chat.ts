@@ -28,7 +28,7 @@ const CONTROL_CHARS = new RegExp(
 const TEMPLATE_TOKENS = /<\|[^|>\n]{0,40}\|>|\[\/?INST\]|<<\/?SYS>>/gi;
 /// The tags the prompts use to fence data.
 const FENCE_TAGS =
-  /<\s*\/?\s*(chat_log|text_to_process|source_text|system|assistant|user)\b/gi;
+  /<\s*\/?\s*(chat_log|text_to_process|source_text|message|link_domains|system|assistant|user)\b/gi;
 
 /// [text] without control and bidi characters, template tokens and the
 /// prompts' own fence tags, so it stays data.

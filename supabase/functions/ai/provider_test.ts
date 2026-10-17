@@ -19,6 +19,7 @@ const config: AiConfig = {
   dailyLimit: 50,
   maxInputChars: 24000,
   extraHeaders: {},
+  guardDailyLimit: 500,
 };
 const options = {
   messages: [{ role: "user" as const, content: "hi" }],

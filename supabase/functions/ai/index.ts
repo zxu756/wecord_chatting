@@ -6,6 +6,12 @@
 //   summarize {conversation_id, after_message_id?, recent?, language}
 //   rewrite {mode, text, target?, conversation_id?}
 //   translate {text, target, conversation_id?}
+//   guard {message_id}          -> the AI guard for new members: only the
+//     database calls it (pg_net, Authorization: Bearer <DISPATCH_SECRET>, so
+//     deploy with verify_jwt = false). It classifies the text of a message
+//     held back from the circle, charges the circle's daily AI limit
+//     (AI_GUARD_DAILY_LIMIT_PER_CIRCLE) and releases or holds the message;
+//     when AI cannot answer it releases the message as "not checked".
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage). Answers 503
 // ai_not_configured until the three required secrets are set.
@@ -76,6 +82,54 @@ Deno.serve(async (request) => {
         p_user_id: userId,
       });
       return typeof data === "number" ? data : 0;
+    },
+    guardClaim: async (messageId) => {
+      const { data, error } = await admin.rpc("ai_guard_claim", {
+        p_message_id: messageId,
+      });
+      if (error) {
+        throw new Error(`ai_guard_claim: ${error.message}`);
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | { circle_id?: string; body?: string; ai_enabled?: boolean }
+        | null
+        | undefined;
+      if (!row?.circle_id) {
+        return null;
+      }
+      return {
+        circleId: row.circle_id,
+        body: row.body ?? "",
+        aiEnabled: row.ai_enabled !== false,
+      };
+    },
+    guardConsume: async (circleId, limit) => {
+      const { data, error } = await admin.rpc("ai_consume_circle_request", {
+        p_circle_id: circleId,
+        p_limit: limit,
+      });
+      if (error) {
+        throw new Error(`ai_consume_circle_request: ${error.message}`);
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | { allowed?: boolean; used?: number }
+        | null;
+      return { allowed: row?.allowed === true, used: row?.used ?? 0 };
+    },
+    guardRefund: async (circleId) => {
+      await admin.rpc("ai_refund_circle_request", { p_circle_id: circleId });
+    },
+    guardFinish: async (messageId, result) => {
+      const { data, error } = await admin.rpc("finish_message_review", {
+        p_message_id: messageId,
+        p_verdict: result.verdict?.category ?? "not_checked",
+        p_reason: result.verdict?.reason ?? null,
+        p_unchecked_reason: result.unchecked ?? null,
+      });
+      if (error) {
+        throw new Error(`finish_message_review: ${error.message}`);
+      }
+      return typeof data === "string" ? data : null;
     },
   });
 });

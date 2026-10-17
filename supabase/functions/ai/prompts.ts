@@ -86,6 +86,40 @@ export function rewritePrompt(options: {
   ];
 }
 
+/// The prompt that classifies one message of a new member for the AI guard.
+/// [domains] are the hosts of the links in it (a page behind a link is never
+/// opened). The answer is one JSON object, see parseGuardVerdict.
+export function guardPrompt(options: {
+  text: string;
+  domains: string[];
+}): ChatMessage[] {
+  const system =
+    "You screen the first messages of new members of a community chat so moderators can catch abuse. " +
+    DATA_RULES +
+    "Classify the message into exactly one category:\n" +
+    '- "allow": an ordinary message. Blunt, off-topic, rude-but-not-targeted, swearing, jokes, questions, other languages and links to well-known sites are all allow.\n' +
+    '- "spam": unsolicited advertising or self-promotion, invite or referral links, repeated junk, crypto or giveaway promotion, mass-mention bait.\n' +
+    '- "scam": phishing or fraud: asking for passwords, codes, seed phrases, payment or personal data, fake prizes or support, impersonating staff, links to lookalike or suspicious domains.\n' +
+    '- "harassment": insults aimed at people, threats, hate speech, bullying.\n' +
+    '- "sexual": explicit sexual content or sexual solicitation.\n' +
+    '- "other": clearly harmful in another way (doxxing, encouraging self-harm, selling illegal goods).\n' +
+    'When unsure, choose "allow": a wrongly held message costs more than a missed one. ' +
+    'Reply with one JSON object and nothing else: {"category": "<one of the six>", "reason": "<one short sentence in English, at most 120 characters, saying what makes it that category>"}. ' +
+    'For "allow" the reason may be empty.';
+  const links = options.domains.length === 0
+    ? "(no links)"
+    : options.domains.join("\n");
+  return [
+    { role: "system", content: system },
+    {
+      role: "user",
+      content: `<message>\n${
+        cleanText(options.text)
+      }\n</message>\n<link_domains>\n${links}\n</link_domains>`,
+    },
+  ];
+}
+
 /// The prompt that translates a chat message for its reader.
 export function translatePrompt(options: {
   text: string;

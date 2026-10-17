@@ -1,6 +1,6 @@
 // Pushes for things the database does on its own: scheduled messages that
-// were sent, reminders that came due, chat events about to start and tasks
-// that came due. The same tick removes the files of expired disappearing
+// were sent, messages the AI guard released, reminders that came due, chat
+// events about to start and tasks that came due. The same tick removes the files of expired disappearing
 // messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -71,6 +71,30 @@ Deno.serve(async (request) => {
   }
   for (
     const row of (sent ?? []) as { message_id: string; sender_id: string }[]
+  ) {
+    const { data } = await admin.rpc("claim_push_delivery", {
+      target_message_id: row.message_id,
+      caller_id: row.sender_id,
+    });
+    targets.push(...((data ?? []) as PushTarget[]));
+  }
+
+  // Messages the AI guard released (allowed, not checked, flagged in flag
+  // mode, or approved by a moderator): they were held back from everyone,
+  // so nobody has been told yet. Pushed like a message the sender just sent.
+  const { data: released, error: releasedError } = await admin.rpc(
+    "claim_released_message_pushes",
+  );
+  if (releasedError) {
+    // Not fatal: the other pushes still go out (and the releases are
+    // claimed again on the next wake-up).
+    console.error(
+      "claim_released_message_pushes failed",
+      releasedError.message,
+    );
+  }
+  for (
+    const row of (released ?? []) as { message_id: string; sender_id: string }[]
   ) {
     const { data } = await admin.rpc("claim_push_delivery", {
       target_message_id: row.message_id,

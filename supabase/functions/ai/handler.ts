@@ -4,7 +4,18 @@
 
 import { type AiConfig, readAiConfig } from "./config.ts";
 import { selectNewest, type SourceMessage } from "./chat.ts";
-import { rewritePrompt, summaryPrompt, translatePrompt } from "./prompts.ts";
+import {
+  extractLinkDomains,
+  guardText,
+  type GuardVerdict,
+  parseGuardVerdict,
+} from "./guard.ts";
+import {
+  guardPrompt,
+  rewritePrompt,
+  summaryPrompt,
+  translatePrompt,
+} from "./prompts.ts";
 import { complete, ProviderError } from "./provider.ts";
 import {
   type AiRequest,
@@ -31,6 +42,31 @@ export interface ConversationMessages {
   /// The latest messages rather than the unread ones.
   recent: boolean;
 }
+
+/// How long the guard waits for the provider: a message is held back from
+/// the others meanwhile, so a slow model counts as unavailable.
+export const GUARD_TIMEOUT_MS = 15_000;
+
+/// A message waiting for the guard, as the database hands it out.
+export interface GuardClaim {
+  circleId: string;
+  body: string;
+  /// Whether the circle still allows AI features.
+  aiEnabled: boolean;
+}
+
+/// Why a message was released without a check.
+export type UncheckedReason =
+  | "not_configured"
+  | "ai_off"
+  | "limit"
+  | "error"
+  | "timeout";
+
+/// What the guard hands in for a message.
+export type GuardResult =
+  | { verdict: GuardVerdict; unchecked?: undefined }
+  | { verdict?: undefined; unchecked: UncheckedReason };
 
 export interface AiDeps {
   env: (name: string) => string | undefined;
@@ -61,6 +97,24 @@ export interface AiDeps {
   refund: (userId: string) => Promise<void>;
   /// Requests made today.
   usedToday: (userId: string) => Promise<number>;
+
+  /// The guard (service calls only, see [handleGuardRequest]).
+  /// Claims a message that waits for its check; null when it does not (any
+  /// more) or another call has it.
+  guardClaim: (messageId: string) => Promise<GuardClaim | null>;
+  /// Counts a request against the circle's day; allowed is false at the
+  /// limit.
+  guardConsume: (
+    circleId: string,
+    limit: number,
+  ) => Promise<{ allowed: boolean; used: number }>;
+  guardRefund: (circleId: string) => Promise<void>;
+  /// Hands in the result. Resolves to the review's new state ('released',
+  /// 'held' or 'flagged') or null.
+  guardFinish: (
+    messageId: string,
+    result: GuardResult,
+  ) => Promise<string | null>;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -99,6 +153,12 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   if (token === "" || token === authorization) {
     return json({ error: "unauthorized" }, 401);
   }
+  // The database asks for the AI guard with the shared secret as the bearer
+  // token (the same DISPATCH_SECRET as scheduled-dispatch). It is the only
+  // thing that secret may do here; nobody signed in can use it.
+  if (isDispatchAuthorized(authorization, deps.env("DISPATCH_SECRET") ?? "")) {
+    return await handleGuardRequest(request, deps);
+  }
   const userId = await deps.authenticate(authorization);
   if (userId === null) {
     return json({ error: "unauthorized" }, 401);
@@ -115,6 +175,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
     return json({ error: "invalid_request" }, 400);
   }
 
+  if (parsed.action === "guard") {
+    // Only the database (with the shared secret) may ask for a check.
+    return json({ error: "forbidden" }, 403);
+  }
   const config = readAiConfig(deps.env);
   if (config === null) {
     return json({ error: "ai_not_configured" }, 503);
@@ -249,4 +313,120 @@ async function rewriteOrTranslate(
     }, deps.fetch);
     return json({ text });
   });
+}
+
+/// Whether [header] is `Bearer <secret>`, compared in constant time. An
+/// empty secret (not configured) never matches.
+export function isDispatchAuthorized(
+  header: string | null,
+  secret: string,
+): boolean {
+  if (secret === "" || header === null) {
+    return false;
+  }
+  const expected = new TextEncoder().encode(`Bearer ${secret}`);
+  const given = new TextEncoder().encode(header);
+  let difference = expected.length ^ given.length;
+  for (let index = 0; index < expected.length; index++) {
+    difference |= expected[index] ^ (given[index] ?? 0);
+  }
+  return difference === 0;
+}
+
+/// The AI guard: classifies the text of one new member's message that the
+/// database holds back (messages.review_state 'checking') and hands the
+/// answer to finish_message_review, which releases or holds it.
+///
+/// Fails open: when AI is not set up, the circle turned it off, the
+/// circle's daily limit is reached or the provider fails, answers badly or
+/// is too slow, the message is released as "not checked". Only the claim or
+/// the hand-in itself failing leaves the message waiting (answer 500); the
+/// database's sweep releases it within two minutes.
+///
+/// Only the message's text and the hosts of its links go to the model. The
+/// request is charged to the circle (ai_circle_usage), never to the member.
+export async function handleGuardRequest(
+  request: Request,
+  deps: AiDeps,
+): Promise<Response> {
+  let body: unknown;
+  try {
+    body = JSON.parse(await request.text());
+  } catch {
+    return json({ error: "invalid_body" }, 400);
+  }
+  const parsed = parseAiRequest(body);
+  if (parsed === null || parsed.action !== "guard") {
+    return json({ error: "invalid_request" }, 400);
+  }
+  const messageId = parsed.messageId;
+
+  const claim = await deps.guardClaim(messageId);
+  if (claim === null) {
+    return json({ ok: true, skipped: true });
+  }
+
+  const release = async (unchecked: UncheckedReason) => {
+    const state = await deps.guardFinish(messageId, { unchecked });
+    return json({ ok: true, state, unchecked });
+  };
+
+  try {
+    if (!claim.aiEnabled) {
+      return await release("ai_off");
+    }
+    const config = readAiConfig(deps.env);
+    if (config === null) {
+      return await release("not_configured");
+    }
+    const { allowed } = await deps.guardConsume(
+      claim.circleId,
+      config.guardDailyLimit,
+    );
+    if (!allowed) {
+      return await release("limit");
+    }
+
+    let verdict: GuardVerdict | null;
+    try {
+      const text = guardText(claim.body);
+      const answer = await complete(config, {
+        messages: guardPrompt({ text, domains: extractLinkDomains(text) }),
+        maxTokens: 160,
+        temperature: 0,
+        timeoutMs: GUARD_TIMEOUT_MS,
+        conversationKey: claim.circleId,
+        feature: "guard",
+      }, deps.fetch);
+      verdict = parseGuardVerdict(answer);
+    } catch (error) {
+      await deps.guardRefund(claim.circleId).catch(() => {});
+      if (error instanceof ProviderError) {
+        return await release(
+          error.kind === "timeout"
+            ? "timeout"
+            : error.kind === "busy"
+            ? "limit"
+            : "error",
+        );
+      }
+      throw error;
+    }
+    if (verdict === null) {
+      // An answer that is not a verdict is no use, and not the circle's cost.
+      await deps.guardRefund(claim.circleId).catch(() => {});
+      return await release("error");
+    }
+
+    const state = await deps.guardFinish(messageId, { verdict });
+    return json({ ok: true, state, category: verdict.category });
+  } catch (error) {
+    console.error("ai guard failed", String(error));
+    try {
+      return await release("error");
+    } catch (inner) {
+      console.error("ai guard could not release", String(inner));
+      return json({ error: "internal" }, 500);
+    }
+  }
 }

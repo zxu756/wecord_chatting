@@ -71,6 +71,10 @@ function setup(
       return Promise.resolve();
     },
     usedToday: () => Promise.resolve(used),
+    guardClaim: () => Promise.resolve(null),
+    guardConsume: () => Promise.resolve({ allowed: true, used: 1 }),
+    guardRefund: () => Promise.resolve(),
+    guardFinish: () => Promise.resolve(null),
     ...overrides,
   };
   return { deps, calls };

@@ -12,6 +12,9 @@ class UnsupportedPushGateway implements PushGateway {
   String? get permission => null;
 
   @override
+  String? get timeZone => null;
+
+  @override
   Future<String?> requestPermission() async => null;
 
   @override

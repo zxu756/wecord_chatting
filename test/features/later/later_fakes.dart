@@ -101,6 +101,7 @@ class RecordingPushRepository implements PushRepository {
     PushSubscriptionInfo subscription, {
     String language = 'en',
     String? userAgent,
+    String? timeZone,
   }) async {}
 
   @override

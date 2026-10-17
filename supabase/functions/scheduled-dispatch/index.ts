@@ -16,6 +16,7 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import { cleanUpExpired } from "../expire-messages/cleanup.ts";
 import {
@@ -139,9 +140,15 @@ Deno.serve(async (request) => {
     // Tried again on the next tick.
   }
 
+  // Times in the text are written for each subscriber's zone and language.
+  const ready = await writeTimesForTargets(
+    admin,
+    targets,
+    Math.floor(Date.now() / 1000),
+  );
   const gone: string[] = [];
   let delivered = 0;
-  await Promise.all(targets.map(async (target) => {
+  await Promise.all(ready.map(async (target) => {
     try {
       const status = await sendWebPush(keys, target, {
         title: target.title,

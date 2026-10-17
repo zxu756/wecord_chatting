@@ -17,11 +17,13 @@ abstract interface class PushRepository {
 
   /// Saves this browser's subscription for the signed-in user. [language]
   /// ('en' or 'zh') is the app's language, which the server writes this
-  /// browser's notifications in.
+  /// browser's notifications in; [timeZone] is its IANA time zone, which
+  /// the server writes the times in them in (UTC when null).
   Future<void> register(
     PushSubscriptionInfo subscription, {
     String? userAgent,
     String language = 'en',
+    String? timeZone,
   });
 
   Future<void> unregister(String endpoint);
@@ -74,6 +76,7 @@ class SupabasePushRepository implements PushRepository {
     PushSubscriptionInfo subscription, {
     String? userAgent,
     String language = 'en',
+    String? timeZone,
   }) async {
     await _client.rpc<void>(
       'register_push_subscription',
@@ -83,6 +86,7 @@ class SupabasePushRepository implements PushRepository {
         'target_auth': subscription.auth,
         'target_user_agent': userAgent,
         'target_language': language,
+        'target_time_zone': timeZone,
       },
     );
   }
@@ -123,6 +127,7 @@ class NoPushRepository implements PushRepository {
     PushSubscriptionInfo subscription, {
     String? userAgent,
     String language = 'en',
+    String? timeZone,
   }) async {}
 
   @override

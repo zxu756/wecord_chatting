@@ -21,6 +21,9 @@ class FakePushGateway implements PushGateway {
   @override
   String? permission = 'default';
 
+  @override
+  String? timeZone = 'Asia/Shanghai';
+
   String grant = 'granted';
   PushSubscriptionInfo? current;
   final subscribedWith = <String>[];
@@ -54,6 +57,7 @@ class FakePushRepository implements PushRepository {
   bool configured = true;
   final registered = <String>[];
   final languages = <String>[];
+  final timeZones = <String?>[];
   final unregistered = <String>[];
   final notified = <String>[];
   final calls = <String>[];
@@ -71,9 +75,11 @@ class FakePushRepository implements PushRepository {
     PushSubscriptionInfo subscription, {
     String? userAgent,
     String language = 'en',
+    String? timeZone,
   }) async {
     registered.add(subscription.endpoint);
     languages.add(language);
+    timeZones.add(timeZone);
   }
 
   @override
@@ -225,6 +231,38 @@ void main() {
     await ref.read(appLanguageProvider.notifier).set(AppLanguage.english);
     await tester.pumpAndSettle();
     expect(repository.languages, ['en', 'zh', 'en']);
+  });
+
+  testWidgets('the browser is saved with its time zone', (tester) async {
+    gateway.current = _subscription;
+    await pumpTile(tester);
+    expect(repository.timeZones, ['Asia/Shanghai']);
+  });
+
+  testWidgets('turning push on saves the time zone too', (tester) async {
+    gateway.timeZone = 'America/Los_Angeles';
+    await pumpTile(tester);
+    await tester.tap(find.byKey(const ValueKey('push-notifications')));
+    await tester.pumpAndSettle();
+    expect(repository.timeZones, isNotEmpty);
+    expect(repository.timeZones, everyElement('America/Los_Angeles'));
+  });
+
+  testWidgets('an unknown time zone is saved as unknown', (tester) async {
+    gateway.timeZone = null;
+    gateway.current = _subscription;
+    await pumpTile(tester);
+    expect(repository.timeZones, [null]);
+  });
+
+  testWidgets('changing the language keeps sending the time zone', (
+    tester,
+  ) async {
+    gateway.current = _subscription;
+    final ref = await pumpTile(tester);
+    await ref.read(appLanguageProvider.notifier).set(AppLanguage.chinese);
+    await tester.pumpAndSettle();
+    expect(repository.timeZones, ['Asia/Shanghai', 'Asia/Shanghai']);
   });
 
   test('the language code follows the setting', () {

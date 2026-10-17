@@ -9,6 +9,11 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/ai/ai_catch_up.dart';
+import 'package:wecord/features/ai/ai_composer_button.dart';
+import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
+import 'package:wecord/features/ai/ai_translation.dart';
+import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
@@ -407,6 +412,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
 class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _composerController = TextEditingController();
   final _searchController = TextEditingController();
+  final _catchUpController = AiCatchUpController();
 
   /// Focus of the message box; the jump-to-message-box shortcut uses it.
   final _composerFocus = FocusNode(debugLabel: 'message box');
@@ -634,6 +640,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     });
     _composerController.dispose();
     _searchController.dispose();
+    _catchUpController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -645,6 +652,39 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       }
       _activeConversationController.state = conversationId;
     });
+  }
+
+  /// Opens the AI rewrite sheet for the draft (the composer's AI button,
+  /// ⌘/Ctrl+Shift+E). Nothing is sent from it.
+  void _openAiRewrite() {
+    if (!ref.read(aiAvailableProvider(_circleId)) ||
+        _isRecordingVoice ||
+        _isSending ||
+        _isSendingVoice ||
+        !mounted) {
+      return;
+    }
+    void setDraft(String text) {
+      _composerController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      _handleComposerChanged(text);
+      _composerFocus.requestFocus();
+    }
+
+    unawaited(
+      showAiRewriteSheet(
+        context,
+        draft: _composerController.text,
+        conversationId: widget.conversationId,
+        onReplace: setDraft,
+        onInsertBelow: (text) {
+          final current = _composerController.text.trimRight();
+          setDraft(current.isEmpty ? text : '$current\n$text');
+        },
+      ),
+    );
   }
 
   void _toggleMessageSearch() {
@@ -926,6 +966,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             onPressed: () => _setThreadArchived(threadId, !threadArchived),
           )
         : null;
+    final summarizeAction = ref.watch(aiAvailableProvider(circleId))
+        ? ChatThreadAction(
+            tooltip: tr('Summarize'),
+            icon: Icons.auto_awesome_outlined,
+            onPressed: _catchUpController.requestSummary,
+          )
+        : null;
     // Search comes first: phones keep it next to the primary action.
     final appBarActions = [
       searchAction,
@@ -941,6 +988,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       ),
       ?groupDetailsAction,
       ?archiveAction,
+      ?summarizeAction,
       ...widget.extraActions,
     ];
     // Next to search on phones: the circle's member list, a direct call,
@@ -1138,6 +1186,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   onOpenFullSearch: _openFullSearch,
                 )
               : null,
+        );
+        final catchUpBanner = AiCatchUpBanner(
+          key: ValueKey('ai-catch-up-${widget.conversationId}'),
+          conversationId: widget.conversationId,
+          circleId: circleId,
+          controller: _catchUpController,
+          unreadCount: conversationSummary?.unreadCount,
+          readMarker: _initialReadMarker,
+          firstUnreadId: _newMessageDividerId,
+          desktop: desktop,
+          onJumpToMessage: (id) => unawaited(_scrollToMessage(id)),
         );
         final banners = <Widget>[
           const ConnectivityBanner(
@@ -1634,6 +1693,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     onSend: _sendMessage,
                     onPickImage: _pickPhotosAndVideos,
                     onPickFile: _pickFilesForTray,
+                    aiButton: AiComposerButton(
+                      circleId: circleId,
+                      size: desktop ? 36 : 40,
+                      onPressed: _isSending || _isSendingVoice
+                          ? null
+                          : _openAiRewrite,
+                    ),
                     attachmentTray: MediaTray(
                       conversationId: widget.conversationId,
                       desktop: desktop,
@@ -1694,6 +1760,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             children: [
               header,
               ...banners,
+              catchUpBanner,
               Expanded(
                 child: Stack(
                   children: [
@@ -1756,6 +1823,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
                               child: banner,
                             ),
+                          catchUpBanner,
                         ],
                       ),
                     ),
@@ -3268,6 +3336,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         }
         _startEdit(message);
         return KeyEventResult.handled;
+      case ComposerShortcut.rewriteWithAi:
+        if (!ref.read(aiAvailableProvider(_circleId))) {
+          return KeyEventResult.ignored;
+        }
+        _openAiRewrite();
+        return KeyEventResult.handled;
       case null:
         return KeyEventResult.ignored;
     }
@@ -4475,6 +4549,13 @@ class _MessageBubble extends StatelessWidget {
               enlargeEmojiOnly: true,
             ),
           ),
+        if (!isRecalled && message.type == MessageType.text)
+          AiTranslationView(
+            messageId: message.id,
+            text: message.body,
+            conversationId: message.conversationId,
+            color: c.ink,
+          ),
         if (image != null) ...[
           const SizedBox(height: 12),
           _ImageMessageContent(
@@ -4610,6 +4691,27 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _content(BuildContext context, Color textColor) {
     final isRecalled = _isRecalled;
+    final content = _messageContent(isRecalled, textColor);
+    if (isRecalled || message.type != MessageType.text) {
+      return content;
+    }
+    // A translation (message menu → Translate) sits under the text.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        content,
+        AiTranslationView(
+          messageId: message.id,
+          text: message.body,
+          conversationId: message.conversationId,
+          color: textColor,
+        ),
+      ],
+    );
+  }
+
+  Widget _messageContent(bool isRecalled, Color textColor) {
     return _MessageContent(
       message: message,
       messagesById: messagesById,
@@ -5067,6 +5169,41 @@ class _MessageBubble extends StatelessWidget {
         null;
   }
 
+  /// Whether the menu offers Translate: a text message, and AI available.
+  bool _canTranslate(BuildContext context) {
+    return !_isRecalled &&
+        message.type == MessageType.text &&
+        message.body.trim().isNotEmpty &&
+        !_isPending &&
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(aiAvailableProvider(circleId));
+  }
+
+  /// Translate to the app's language, or hide the translation again.
+  MessageAction _translateAction(BuildContext context) {
+    final translations = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(aiTranslationsProvider.notifier);
+    final shown = translations.isShown(message.id);
+    return MessageAction(
+      key: const ValueKey('message-translate'),
+      icon: Icons.translate_rounded,
+      label: shown ? tr('Show original') : tr('Translate'),
+      onSelected: () => shown
+          ? translations.hide(message.id)
+          : unawaited(
+              translations.translate(
+                message.id,
+                message.body,
+                conversationId: message.conversationId,
+              ),
+            ),
+    );
+  }
+
   /// What can be done with this message, in menu order.
   List<MessageAction> _actions(BuildContext context) {
     final imageAttachment = _isRecalled ? null : message.imageAttachment;
@@ -5097,6 +5234,7 @@ class _MessageBubble extends StatelessWidget {
           label: tr('Forward'),
           onSelected: () => onForward(message),
         ),
+      if (_canTranslate(context)) _translateAction(context),
       if (canCompose && isCurrentUser && message.type == MessageType.text)
         MessageAction(
           icon: Icons.edit_outlined,
@@ -5858,7 +5996,12 @@ class _Composer extends StatelessWidget {
     required this.onCancelEdit,
     required this.availableHeight,
     this.attachmentTray,
+    this.aiButton,
   });
+
+  /// The AI rewrite button (see [AiComposerButton]); on phones it only
+  /// shows once there is a draft.
+  final Widget? aiButton;
 
   /// The tray of files waiting to be sent, above the composer pill.
   final Widget? attachmentTray;
@@ -6158,6 +6301,7 @@ class _Composer extends StatelessWidget {
           ]
         : desktop
         ? <Widget>[
+            ?aiButton,
             gif,
             emoji,
             mic,
@@ -6165,6 +6309,12 @@ class _Composer extends StatelessWidget {
             sending ?? sendButton(),
           ]
         : <Widget>[
+            if (aiButton case final ai?)
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, _) =>
+                    value.text.trim().isEmpty ? const SizedBox.shrink() : ai,
+              ),
             emoji,
             gif,
             const SizedBox(width: 2),

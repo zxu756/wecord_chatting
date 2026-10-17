@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_automod_screen.dart';
 import 'package:wecord/features/circles/circle_bot_widgets.dart';
@@ -52,6 +53,7 @@ class CircleSettingsScreen extends ConsumerWidget {
             _CircleHeaderCard(detail: detail),
             _ManageGroup(detail: detail),
             if (detail.canManageCircle) ...[
+              CircleAiSwitch(circleId: circleId),
               CircleTemplateSection(
                 key: ValueKey('circle-template-$circleId'),
                 circleId: circleId,

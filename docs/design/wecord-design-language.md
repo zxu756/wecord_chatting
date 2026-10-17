@@ -208,6 +208,7 @@ to talk and joining calls; `heavy` only to confirm something destructive.
 | `WeCordTapTarget` / `touchTargetFor` | Grows a control's tappable and accessibility area to the platform's touch target (48 Android, 44 iOS, none on desktop) without changing how it looks; `WeCordPressable` applies it by default (`minTapSize`). |
 | `MotionSafeImage` | Pictures that can animate: still under reduced motion with a play button. |
 | `MessageFrame` (`lib/features/chats/message_semantics.dart`) | A chat message as one stop for screen readers ("{sender}, {time}: {text}, {n} reactions", actions as custom actions) and the keyboard (focus ring, context menu key / Shift+F10 / Enter open its menu). |
+| `showOptionPicker` / `OptionPickerBody` (`lib/features/privacy/option_picker.dart`) | A sheet of choices as rows with a check on the current one and an explaining note (disappearing messages, profile visibility). |
 | `ResizableDivider` | The handle on a resizable column's edge (below): 8 px hit strip, resize cursor, accent line on hover/drag/focus, spring settle, double-click reset, keyboard and slider semantics. `ResizableSidebarRow` / `ResizableSidePanelRow` (`lib/shared/layout/resizable_panels.dart`) wire it to the saved widths. |
 
 Material widgets still work and are themed: `FilledButton` = ink pill,

@@ -70,10 +70,7 @@ DeviceSession _session(
 Widget _app(_FakeDevices devices) {
   return ProviderScope(
     overrides: [devicesRepositoryProvider.overrideWithValue(devices)],
-    child: MaterialApp(
-      theme: WeCordTheme.light(),
-      home: const DevicesScreen(),
-    ),
+    child: MaterialApp(theme: WeCordTheme.light(), home: const DevicesScreen()),
   );
 }
 
@@ -100,7 +97,9 @@ void main() {
       'Edge on Windows',
     );
     expect(
-      describeUserAgent('Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Firefox/121.0'),
+      describeUserAgent(
+        'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Firefox/121.0',
+      ),
       'Firefox on Linux',
     );
     expect(describeUserAgent('curl/8'), '');
@@ -149,7 +148,10 @@ void main() {
     expect(find.text('Ada MacBook'), findsOneWidget);
     expect(find.text('macOS · WeCord 1.2.0 · Active now'), findsOneWidget);
     expect(find.text('iPhone or iPad'), findsOneWidget);
-    expect(find.text('iOS · WeCord 1.2.0 · Active 3 hours ago'), findsOneWidget);
+    expect(
+      find.text('iOS · WeCord 1.2.0 · Active 3 hours ago'),
+      findsOneWidget,
+    );
     expect(find.text('Web'), findsWidgets);
     // This device cannot be signed out from here.
     expect(find.byKey(const ValueKey('device-sign-out-mac')), findsNothing);

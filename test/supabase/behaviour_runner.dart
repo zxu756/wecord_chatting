@@ -32,24 +32,20 @@ Future<String?> _unavailable() async {
 /// A test that runs [script] (a path from the repository root) with psql
 /// and fails with its output when the script raises.
 void behaviourTest(String name, String script) {
-  test(
-    name,
-    () async {
-      final reason = await _unavailable();
-      if (reason != null) {
-        markTestSkipped(reason);
-        return;
-      }
-      final result = await Process.run('psql', [
-        _databaseUrl,
-        '-v',
-        'ON_ERROR_STOP=1',
-        '-q',
-        '-f',
-        script,
-      ]);
-      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+  test(name, () async {
+    final reason = await _unavailable();
+    if (reason != null) {
+      markTestSkipped(reason);
+      return;
+    }
+    final result = await Process.run('psql', [
+      _databaseUrl,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-q',
+      '-f',
+      script,
+    ]);
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

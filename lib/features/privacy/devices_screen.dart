@@ -257,7 +257,10 @@ class _DeviceRow extends StatelessWidget {
       if (session.platform.isNotEmpty) session.platform,
       if (session.appVersion.isNotEmpty)
         tr('WeCord {version}', {'version': session.appVersion}),
-      if (session.isCurrent) tr('Active now') else lastActiveLabel(session.lastActiveAt),
+      if (session.isCurrent)
+        tr('Active now')
+      else
+        lastActiveLabel(session.lastActiveAt),
     ].join(' · ');
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 64),

@@ -15,8 +15,16 @@ void main() {
   });
 
   test('quiz answers live where clients cannot read them', () {
-    expect(sql, contains('create table if not exists public.poll_quiz_answers'));
-    expect(sql, contains('revoke all on public.poll_quiz_answers from anon, authenticated;'));
+    expect(
+      sql,
+      contains('create table if not exists public.poll_quiz_answers'),
+    );
+    expect(
+      sql,
+      contains(
+        'revoke all on public.poll_quiz_answers from anon, authenticated;',
+      ),
+    );
     expect(sql, contains('enable row level security'));
   });
 
@@ -33,7 +41,10 @@ void main() {
   });
 
   test('anonymous polls hide who voted in the list and the table', () {
-    expect(sql, contains("coalesce(m.attachment->>'anonymous', 'false') <> 'true'"));
+    expect(
+      sql,
+      contains("coalesce(m.attachment->>'anonymous', 'false') <> 'true'"),
+    );
     expect(sql, contains("m.attachment->>'anonymous' = 'true'"));
     expect(sql, contains('user_id = auth.uid()'));
   });

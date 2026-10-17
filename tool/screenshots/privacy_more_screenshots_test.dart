@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/disappearing_messages.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/view_once.dart';
 import 'package:wecord/shared/models/poll.dart';
@@ -30,6 +31,8 @@ import 'package:wecord/shared/models/profile.dart';
 
 import '../../test/features/chats/media_send/media_fakes.dart';
 import '../../test/features/privacy/privacy_fakes.dart';
+import '../../test/features/profile/user_profile_screen_test.dart'
+    as profile_fakes;
 import '../../test/mobile/phone_test_support.dart';
 import 'screenshot_fonts.dart';
 
@@ -401,6 +404,35 @@ void main() {
         find.byKey(const ValueKey('quick-reaction-row')),
       );
     }
+  });
+
+  // 6. Profile visibility.
+  screen('profile-visibility', (tester, world, desktop) async {
+    world.extraOverrides = deviceOverrides();
+    await world.open(tester, '/me');
+    if (desktop) {
+      await tester.tap(find.byKey(const ValueKey('settings-nav-privacy')));
+      await settle(tester);
+    }
+    final row = find.byKey(const ValueKey('profile-visibility-row'));
+    await scrollIntoView(tester, row);
+    await tester.tap(row);
+  });
+
+  screen('profile-hidden', (tester, world, desktop) async {
+    world.profileData.rpcResult = [
+      {
+        ...profile_fakes.summaryJson(
+          profile_fakes.noneSummary(
+            displayName: bart.displayName,
+            username: bart.username,
+          ),
+        ),
+        'bio': '',
+        'profile_hidden': true,
+      },
+    ];
+    await world.open(tester, '${UserProfileScreen.path}/user-2');
   });
 
   // MARKER: more screens

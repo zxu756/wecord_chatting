@@ -36,6 +36,7 @@ class ProfileSummary {
     required this.hasBlockedMe,
     this.mutualFriends = const <MutualFriend>[],
     this.mutualCircles = const <MutualCircle>[],
+    this.profileHidden = false,
   });
 
   factory ProfileSummary.fromJson(Map<String, dynamic> json) {
@@ -56,6 +57,7 @@ class ProfileSummary {
         for (final item in _maps(json['mutual_circles']))
           MutualCircle.fromJson(item),
       ],
+      profileHidden: json['profile_hidden'] == true,
     );
   }
 
@@ -71,6 +73,10 @@ class ProfileSummary {
 
   /// Circles both the viewer and this user are in.
   final List<MutualCircle> mutualCircles;
+
+  /// Their bio, pronouns, banner and mutuals are kept from this viewer
+  /// by their profile visibility setting.
+  final bool profileHidden;
 
   bool get canStartChat =>
       relationshipStatus == ProfileRelationshipStatus.friend;

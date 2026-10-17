@@ -35,7 +35,10 @@ class _FakeViewOnce implements ViewOnceRepository {
       throw error;
     }
     opened.add(messageId);
-    return const ViewOnceFile(url: 'https://example.invalid/x.jpg', isVideo: false);
+    return const ViewOnceFile(
+      url: 'https://example.invalid/x.jpg',
+      isVideo: false,
+    );
   }
 
   @override
@@ -173,7 +176,10 @@ void main() {
       kind: DraftKind.file,
     );
     expect(const MediaTrayState().canViewOnce, isFalse);
-    expect(MediaTrayState(items: [photo], viewOnce: true).sendsViewOnce, isTrue);
+    expect(
+      MediaTrayState(items: [photo], viewOnce: true).sendsViewOnce,
+      isTrue,
+    );
     expect(
       MediaTrayState(items: [photo, doc], viewOnce: true).sendsViewOnce,
       isFalse,
@@ -330,7 +336,10 @@ void main() {
     ) async {
       await pickTwoPhotos(tester);
 
-      expect(find.byKey(const ValueKey('media-tray-view-once')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('media-tray-view-once')),
+        findsOneWidget,
+      );
       expect(find.textContaining('Let people open each photo'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('media-tray-view-once')));
       await tester.pump();

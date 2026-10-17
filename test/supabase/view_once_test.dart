@@ -31,12 +31,15 @@ void main() {
     expect(sql, contains("where attachment->>'view_once' = 'true'"));
   });
 
-  test('clients cannot write opens and see only their own or their media\'s', () {
-    expect(sql, contains('revoke all on public.message_view_once_opens'));
-    expect(sql, contains('grant select on public.message_view_once_opens'));
-    expect(sql, contains('user_id = auth.uid()'));
-    expect(sql, contains('m.sender_id = auth.uid()'));
-  });
+  test(
+    'clients cannot write opens and see only their own or their media\'s',
+    () {
+      expect(sql, contains('revoke all on public.message_view_once_opens'));
+      expect(sql, contains('grant select on public.message_view_once_opens'));
+      expect(sql, contains('user_id = auth.uid()'));
+      expect(sql, contains('m.sender_id = auth.uid()'));
+    },
+  );
 
   test('view-once is refused where it makes no sense and never forwarded', () {
     expect(sql, contains("conversation_kind not in ('direct', 'group')"));

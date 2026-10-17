@@ -112,4 +112,17 @@ const zhPrivacyMore = <String, String>{
   'Double-tap a message (double-click on a computer) to react with it.':
       '双击消息（电脑上为双击鼠标）即可用它回应。',
   'Back to {emoji}': '恢复为 {emoji}',
+
+  // Profile visibility.
+  'Everyone': '所有人',
+  'Friends and shared circles': '好友和共同圈子的成员',
+  'Friends only': '仅好友',
+  'Anyone who finds your profile.': '任何找到你资料的人。',
+  'Your friends and people in a circle with you.': '你的好友，以及与你同在一个圈子的人。',
+  'Only people you are friends with.': '只有与你是好友的人。',
+  'Profile visibility': '资料可见范围',
+  'Who can see your bio, pronouns, banner and mutuals': '谁能看到你的简介、代词、横幅和共同好友',
+  'Your name, picture and status stay visible to everyone. You always see your own full profile.':
+      '你的名字、头像和状态对所有人可见。你始终能看到自己的完整资料。',
+  '{name} keeps some details private.': '{name}隐藏了部分资料。',
 };

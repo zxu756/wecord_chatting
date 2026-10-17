@@ -45,4 +45,10 @@ const zhCallsMore = <String, String>{
   'Reactions': '表情回应',
   'Send {emoji}': '发送 {emoji}',
   '{name} reacted {emoji}': '{name} 回应了 {emoji}',
+
+  // Screen share zoom and focus.
+  'Reset zoom': '重置缩放',
+  'Zoom {percent}%': '缩放 {percent}%',
+  'Focus this tile': '聚焦此画面',
+  'Show everyone': '显示所有人',
 };

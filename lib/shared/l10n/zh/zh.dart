@@ -37,6 +37,7 @@ import 'package:wecord/shared/l10n/zh/zh_photo_editor.dart';
 import 'package:wecord/shared/l10n/zh/zh_privacy_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_polish.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
+import 'package:wecord/shared/l10n/zh/zh_qr_pat.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_chat.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_circles.dart';
@@ -99,6 +100,7 @@ const zhAreas = <Map<String, String>>[
   zhMultiSelect,
   zhPhotoEditor,
   zhLocation,
+  zhQrPat,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

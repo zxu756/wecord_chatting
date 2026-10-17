@@ -110,6 +110,7 @@ class ConversationSummary {
     this.threadLastActivityAt,
     this.canSendMessages = true,
     this.slowmodeSeconds = 0,
+    this.isNoteToSelf = false,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -166,6 +167,7 @@ class ConversationSummary {
       ),
       canSendMessages: json['can_send_messages'] as bool? ?? true,
       slowmodeSeconds: (json['slowmode_seconds'] as num?)?.toInt() ?? 0,
+      isNoteToSelf: json['is_note_to_self'] as bool? ?? false,
     );
   }
 
@@ -239,6 +241,10 @@ class ConversationSummary {
   /// The channel's slowmode for the current user, in seconds; 0 when off,
   /// exempt, or not a circle channel.
   final int slowmodeSeconds;
+
+  /// The user's note to self (文件传输助手): a direct chat with nobody else,
+  /// listed first. Never unread, never receipted, never pushed.
+  final bool isNoteToSelf;
 
   bool get isThread => type == ConversationType.thread;
 
@@ -346,6 +352,7 @@ class ConversationSummary {
       threadLastActivityAt: threadLastActivityAt,
       canSendMessages: canSendMessages,
       slowmodeSeconds: slowmodeSeconds,
+      isNoteToSelf: isNoteToSelf,
     );
   }
 }

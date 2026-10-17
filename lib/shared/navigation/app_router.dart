@@ -25,6 +25,8 @@ import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
+import 'package:wecord/features/qr/qr_link_screens.dart';
+import 'package:wecord/features/qr/qr_links.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
@@ -53,7 +55,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     // A shared call link opened in the browser (https://site/call/<code>)
     // has no route after a '#', so its page is found from the address.
     initialLocation:
-        (kIsWeb ? callLinkLocationFor(Uri.base) : null) ?? HomeScreen.path,
+        (kIsWeb
+            ? callLinkLocationFor(Uri.base) ?? qrLinkLocationFor(Uri.base)
+            : null) ??
+        HomeScreen.path,
     refreshListenable: authRouter,
     redirect: (context, state) {
       final authState = authRouter.authState;
@@ -301,6 +306,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: SettingsScreen.path,
             builder: (context, state) => const SettingsScreen(),
           ),
+          // A person's or a group's QR code opened as a link.
+          GoRoute(
+            path: '${UserQrLinkScreen.path}/:code',
+            builder: (context, state) {
+              return UserQrLinkScreen(
+                key: ValueKey('user-qr-${state.pathParameters['code']}'),
+                code: state.pathParameters['code']!,
+              );
+            },
+          ),
+          GoRoute(
+            path: '${GroupQrJoinScreen.path}/:code',
+            builder: (context, state) {
+              return GroupQrJoinScreen(
+                key: ValueKey('group-qr-${state.pathParameters['code']}'),
+                code: state.pathParameters['code']!,
+              );
+            },
+          ),
           GoRoute(
             path: '${CallLinkScreen.path}/:code',
             builder: (context, state) {
@@ -382,7 +406,7 @@ class AuthRouterNotifier extends ChangeNotifier {
   }
 }
 
-/// Invite and call links opened while signed out (or before auth resolves)
+/// Invite, call and QR code links opened while signed out (or before auth resolves)
 /// ride along as `?from=` on /loading, /auth and /verify-sign-in, and are
 /// reopened after sign-in.
 String? _pendingLocation(Uri uri) {
@@ -394,7 +418,9 @@ String? _pendingLocation(Uri uri) {
       : uri.path;
   if (candidate != null &&
       (candidate.startsWith('${CircleInviteScreen.path}/') ||
-          candidate.startsWith('${CallLinkScreen.path}/'))) {
+          candidate.startsWith('${CallLinkScreen.path}/') ||
+          candidate.startsWith('${UserQrLinkScreen.path}/') ||
+          candidate.startsWith('${GroupQrJoinScreen.path}/'))) {
     return candidate;
   }
   return null;

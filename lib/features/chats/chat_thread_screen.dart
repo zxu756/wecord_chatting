@@ -101,6 +101,10 @@ import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/image_text/image_text_sheet.dart';
 import 'package:wecord/features/later/later_time.dart';
+import 'package:wecord/features/note_to_self/note_to_self.dart';
+import 'package:wecord/features/pat/pat_avatar.dart';
+import 'package:wecord/features/pat/pat_info.dart';
+import 'package:wecord/features/pat/pat_line.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/later_cards.dart' show laterPreview;
@@ -508,6 +512,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// What the conversation allows, refreshed on every build.
   var _slashContext = const SlashCommandContext();
   String? _circleId;
+
+  /// This chat is the user's note to self: no typing, no read receipts.
+  var _isNoteToSelf = false;
   var _hasCapturedReadPosition = false;
   String? _newMessageDividerId;
   var _isAtBottom = true;
@@ -932,7 +939,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         .watch(chatConversationSummaryProvider(widget.conversationId))
         .value;
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
-    final title = widget.title?.trim().isNotEmpty == true
+    final isNoteToSelf = conversationSummary?.isNoteToSelf ?? false;
+    _isNoteToSelf = isNoteToSelf;
+    final title = isNoteToSelf
+        ? noteToSelfTitle()
+        : widget.title?.trim().isNotEmpty == true
         ? widget.title!.trim()
         : conversationSummary?.title?.trim().isNotEmpty == true
         ? conversationSummary!.title!.trim()
@@ -1087,8 +1098,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       onPressed: () => _showPinnedMessages(canPinMessages),
     );
     final canCall =
-        conversationType == ConversationType.direct ||
-        conversationType == ConversationType.group;
+        !isNoteToSelf &&
+        (conversationType == ConversationType.direct ||
+            conversationType == ConversationType.group);
     // Group chats and direct messages can plan events (circles have their
     // own).
     final eventsAction = canCall
@@ -1366,7 +1378,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             : constraints.maxWidth < 380
             ? 34.0
             : 40.0;
-        final headerAvatar = isThread
+        final headerAvatar = isNoteToSelf
+            ? NoteToSelfAvatar(size: headerAvatarSize)
+            : isThread
             ? ChatAvatar(
                 name: title,
                 avatarUrl: null,
@@ -1428,7 +1442,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                         ),
                       ),
                     TextSpan(
-                      text: isThread
+                      text: isNoteToSelf
+                          ? tr('Only you can see this chat')
+                          : isThread
                           ? _threadSubtitle(conversationSummary)
                           : memberLine != null
                           ? [
@@ -1742,6 +1758,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       followUpIds.contains(newerMessage.id),
                   showReadReceipt:
                       pendingEntry == null &&
+                      !isNoteToSelf &&
                       _endsWith(
                         message,
                         latestOutgoingReadState.latestOutgoingMessageId,
@@ -2038,7 +2055,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     focusNode: _composerFocus,
                     desktop: desktop,
                     bottomGap: composerBottomGap,
-                    hint: composerHint(conversationType, title),
+                    hint: isNoteToSelf
+                        ? tr('Send something to your devices')
+                        : composerHint(conversationType, title),
                     slowmodeSeconds: slowmodeSeconds,
                     slowmodeRemainingSeconds: slowmodeRemaining,
                     controller: _composerController,
@@ -4292,7 +4311,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 
   Future<void> _setTyping(bool isTyping) async {
-    if (_isTypingShared == isTyping) {
+    // Nobody else is in the note to self to see it.
+    if (_isNoteToSelf || _isTypingShared == isTyping) {
       return;
     }
     _isTypingShared = isTyping;
@@ -5814,11 +5834,16 @@ class _MessageBubble extends StatelessWidget {
                       width: avatarSize,
                       child: hasFollowUp
                           ? null
-                          : ChatAvatar(
-                              key: ValueKey('message-avatar-${message.id}'),
+                          : PatAvatar(
+                              conversationId: message.conversationId,
+                              userId: sender.userId,
                               name: sender.name,
-                              avatarUrl: sender.avatarUrl,
-                              size: avatarSize,
+                              child: ChatAvatar(
+                                key: ValueKey('message-avatar-${message.id}'),
+                                name: sender.name,
+                                avatarUrl: sender.avatarUrl,
+                                size: avatarSize,
+                              ),
                             ),
                     ),
                     const SizedBox(width: 8),
@@ -5972,11 +5997,18 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       )
                     : null)
-              : ChatAvatar(
-                  key: lifted ? null : ValueKey('message-avatar-${message.id}'),
+              : PatAvatar(
+                  conversationId: message.conversationId,
+                  userId: sender?.userId,
                   name: sender?.name ?? '?',
-                  avatarUrl: sender?.avatarUrl,
-                  size: avatarSize,
+                  child: ChatAvatar(
+                    key: lifted
+                        ? null
+                        : ValueKey('message-avatar-${message.id}'),
+                    name: sender?.name ?? '?',
+                    avatarUrl: sender?.avatarUrl,
+                    size: avatarSize,
+                  ),
                 ),
         ),
         const SizedBox(width: 12),
@@ -6453,6 +6485,9 @@ class _SystemMessageLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PatInfo.maybeFromAttachment(message.attachment) case final pat?) {
+      return PatLine(message: message, pat: pat);
+    }
     if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
       return AutoModAlertCard(alert: alert);
     }
@@ -8170,7 +8205,8 @@ String? _firstUnreadMessageId({
     startIndex = lastReadIndex + 1;
   }
   for (final message in messages.skip(startIndex)) {
-    if (!message.isSentBy(currentUserId)) {
+    // A pat is a quiet line, never the first unread message.
+    if (!message.isSentBy(currentUserId) && !isPatMessage(message)) {
       return message.id;
     }
   }

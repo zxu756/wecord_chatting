@@ -14,7 +14,7 @@ const corsHeaders = {
 };
 
 // Each user's files sit in a folder named after them.
-const userBuckets = ["profile-avatars", "profile-banners"];
+const userBuckets = ["profile-avatars", "profile-banners", "wallpapers"];
 
 // Storage removes at most 1000 objects per request.
 const removeBatchSize = 1000;

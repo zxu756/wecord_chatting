@@ -6,6 +6,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
+import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -53,7 +54,7 @@ class DirectCallBar extends ConsumerWidget {
           ),
       };
       final alone = session.isConnected && session.participants.length < 2;
-      return Padding(
+      final card = Padding(
         key: const ValueKey('direct-call-bar-connected'),
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         child: VoiceRoomTheme(
@@ -155,6 +156,8 @@ class DirectCallBar extends ConsumerWidget {
           ),
         ),
       );
+      // Shown here, so the mini player stays away.
+      return session.isConnected ? CallSurface(child: card) : card;
     }
 
     if (call == null || call.participants.isEmpty) {

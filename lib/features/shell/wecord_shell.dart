@@ -6,6 +6,7 @@ import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/features/push/push_shell_listener.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
+import 'package:wecord/features/voice/mini_player/call_mini_player.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/layout/resizable_panels.dart';
@@ -80,8 +81,12 @@ class WeCordShell extends StatelessWidget {
       ),
     );
 
+    // The call's mini player floats over whichever page this is.
+    Widget withMiniPlayer(Widget page) =>
+        CallMiniPlayerHost(onOpen: onOpenVoice, child: page);
+
     if (!isWideLayout(MediaQuery.sizeOf(context).width)) {
-      return Scaffold(body: shellChild);
+      return withMiniPlayer(Scaffold(body: shellChild));
     }
 
     final c = context.tokens.colors;
@@ -153,17 +158,19 @@ class WeCordShell extends StatelessWidget {
         ],
       ),
     );
-    return Scaffold(
-      backgroundColor: c.rail,
-      // In the macOS app the rail keeps the traffic lights clear itself;
-      // pages beside it start near the top of the window.
-      body: drawsUnderMacosTitleBar
-          ? MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: frame,
-            )
-          : frame,
+    return withMiniPlayer(
+      Scaffold(
+        backgroundColor: c.rail,
+        // In the macOS app the rail keeps the traffic lights clear itself;
+        // pages beside it start near the top of the window.
+        body: drawsUnderMacosTitleBar
+            ? MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: frame,
+              )
+            : frame,
+      ),
     );
   }
 

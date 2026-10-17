@@ -33,4 +33,11 @@ const zhCallsMore = <String, String>{
   'Ask the person who sent it for a new one.': '请向发送者索取新的链接。',
   "This call link doesn't exist": '此通话链接不存在',
   'Check that the whole link was copied, then try again.': '请确认链接已完整复制，然后重试。',
+
+  // Mini player.
+  'Call in {name}. Tap to return.': '{name} 中的通话，点按返回。',
+  'Move to top left': '移到左上角',
+  'Move to top right': '移到右上角',
+  'Move to bottom left': '移到左下角',
+  'Move to bottom right': '移到右下角',
 };

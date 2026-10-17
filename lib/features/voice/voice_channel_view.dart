@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
+import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
@@ -189,6 +190,9 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
       );
     }
 
+    // Shown here, so the mini player stays away.
+    final shownBody = connected ? CallSurface(child: body) : body;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= voiceChatPanelBreakpoint;
@@ -295,7 +299,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                   ],
                 ),
                 controls: controls,
-                child: body,
+                child: shownBody,
               );
             },
           ),

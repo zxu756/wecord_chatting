@@ -203,6 +203,12 @@ void main() {
         owner,
         const CircleSettingsScreen(circleId: 'circle-1'),
       );
+      // The settings list is long: the switch is some way down.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('circle-ai-switch')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.byKey(const ValueKey('circle-ai-switch')), findsOneWidget);
       await owner.close(tester);
 

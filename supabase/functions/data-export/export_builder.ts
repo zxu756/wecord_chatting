@@ -105,6 +105,11 @@ export interface ExportData {
   /** Null when it could not be read (then it is in `skipped`). */
   moments: ExportMoments | null;
   extras: ExportExtras | null;
+  /**
+   * Forms I made or answered (export_my_forms, migration 202610230130); null
+   * when it could not be read, absent in older callers.
+   */
+  forms?: Json[] | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -615,6 +620,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
       value: { tags: moments.tags, starred_friends: moments.stars },
     });
   }
+  if (data.forms) {
+    out.push({ path: "data/forms.json", value: formsJson(data) });
+  }
   const extras = data.extras;
   if (extras) {
     out.push({ path: "data/chains.json", value: extras.chains });
@@ -963,6 +971,128 @@ export function buildWallpapersHtml(data: ExportData): string {
   );
 }
 
+/** The pictures I attached to answers of forms: files to link to. */
+export function formFilesToSign(
+  forms: Json[],
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const form of forms) {
+    for (const response of objects(form["my_responses"])) {
+      const answers = response["answers"];
+      if (!isObject(answers)) continue;
+      for (const value of Object.values(answers)) {
+        if (
+          isObject(value) && typeof value["bucket"] === "string" &&
+          typeof value["path"] === "string"
+        ) {
+          seen.set(`${value["bucket"]}/${value["path"]}`, {
+            bucket: value["bucket"],
+            path: value["path"],
+          });
+        }
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+/** One answer in words: the label of a choice, a date, a number. */
+function formAnswerText(question: Json, value: unknown): string {
+  const type = str(question["type"]);
+  const options = objects(question["options"]);
+  const label = (id: unknown) =>
+    str(options.find((o) => o["id"] === id)?.["label"]) ?? String(id);
+  if (value === null || value === undefined) return "";
+  if (type === "multiple_choice" && Array.isArray(value)) {
+    return value.map(label).join(", ");
+  }
+  if (type === "single_choice") return label(value);
+  if (type === "member") return "A member of the chat";
+  if (isObject(value)) return "";
+  return String(value);
+}
+
+/** My answers to the forms, readable. Other people's answers are not here. */
+function formsJson(data: ExportData): Json[] {
+  const ref = fileRefs(data);
+  return (data.forms ?? []).map((form) => {
+    const questions = objects(form["questions"]);
+    return {
+      ...form,
+      my_responses: objects(form["my_responses"]).map((response) => {
+        const answers = isObject(response["answers"]) ? response["answers"] : {};
+        return {
+          ...response,
+          readable: questions.map((question) => {
+            const value = answers[str(question["id"]) ?? ""];
+            const picture = isObject(value) && typeof value["path"] === "string"
+              ? ref(str(value["bucket"]) ?? "chat-images", value["path"])
+              : null;
+            return {
+              question: str(question["label"]),
+              answer: formAnswerText(question, value),
+              picture,
+            };
+          }),
+        };
+      }),
+    };
+  });
+}
+
+export function buildFormsHtml(data: ExportData): string {
+  const ref = fileRefs(data);
+  const forms = (data.forms ?? []).map((form) => {
+    const mine = form["created_by_me"] === true;
+    const questions = objects(form["questions"]);
+    const sheets = objects(form["my_responses"]).map((response) => {
+      const answers = isObject(response["answers"]) ? response["answers"] : {};
+      const lines = questions.map((question) => {
+        const value = answers[str(question["id"]) ?? ""];
+        const picture = isObject(value) && typeof value["path"] === "string"
+          ? fileHtml(
+            ref(str(value["bucket"]) ?? "chat-images", value["path"]),
+            "Your picture",
+            true,
+          )
+          : "";
+        const answer = formAnswerText(question, value);
+        return `<div><span class="muted">${
+          escapeHtml(str(question["label"]) ?? "")
+        }</span> ${
+          answer === "" && picture === ""
+            ? '<span class="muted">(no answer)</span>'
+            : escapeHtml(answer)
+        }${picture}</div>`;
+      }).join("");
+      return `<div class="muted">Your answers, ${
+        escapeHtml(readableTime(str(response["submitted_at"])))
+      }:</div>${lines}`;
+    }).join("");
+    return entry(
+      str(form["created_at"]),
+      `<div><strong>${escapeHtml(str(form["title"]) ?? "")}</strong> ${
+        tag(mine ? "you made it" : `made by ${personName(form["creator"])}`)
+      }</div><div class="muted">in ${
+        escapeHtml(conversationName(data, form["conversation_id"]))
+      }</div>${mine ? text(form["description"]) : ""}${
+        mine
+          ? `<div class="muted">${
+            escapeHtml(String(form["response_count"] ?? 0))
+          } answers in all (not included).</div>`
+          : ""
+      }${sheets || '<div class="muted">You did not answer this form.</div>'}`,
+    );
+  }).join("");
+  return page(
+    "Forms — your WeCord data",
+    `${backLink()}<h1>Forms</h1>
+<p class="muted">Forms you made or answered. Only your own answers are included;
+other people’s answers, and who answered a form you made, are not.</p>
+<div class="card">${forms || '<div class="row muted">No forms.</div>'}</div>`,
+  );
+}
+
 /** The HTML pages of the new sections, and the index rows that link them. */
 export function buildSectionPages(
   data: ExportData,
@@ -984,6 +1114,14 @@ export function buildSectionPages(
         moments.tags.length === 1 ? "" : "s"
       } · ${moments.stars.length} starred`,
       content: buildMomentsHtml(data),
+    });
+  }
+  if (data.forms) {
+    out.push({
+      path: "pages/forms.html",
+      label: "Forms",
+      summary: `${data.forms.length}`,
+      content: buildFormsHtml(data),
     });
   }
   const extras = data.extras;
@@ -1044,6 +1182,7 @@ data/moments.json     Your Moments posts, the comments you wrote, your likes
                       and Moments settings.
 data/friend_tags.json Your friend tags and starred friends.
 data/chains.json      Group chains you started or joined (your own line).
+data/forms.json       Forms you made or answered (your own answers).
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json

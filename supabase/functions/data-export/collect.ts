@@ -18,6 +18,7 @@ import {
   type ExportMoments,
   type ExportStage,
   exportFileZipPath,
+  formFilesToSign,
   type Json,
   type OwnedFile,
   ownedFiles,
@@ -409,11 +410,29 @@ export async function collectExportData(
     null,
   );
 
+  // Forms I made or answered: my own answers (export_my_forms).
+  const forms = await tryRead<Row[] | null>(
+    skipped,
+    "forms",
+    async () => {
+      const result = await admin.rpc("export_my_forms", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return list(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
   const byBucket = new Map<string, string[]>();
   for (const { bucket, path } of attachmentsToSign(messages)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures I attached to answers of forms are linked.
+  for (const { bucket, path } of formFilesToSign(forms ?? [])) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -462,6 +481,7 @@ export async function collectExportData(
     circles,
     moments,
     extras,
+    forms,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

@@ -18,6 +18,7 @@ import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/moments/moments_settings_screen.dart';
+import 'package:wecord/features/error_reports/error_reports_setting.dart';
 import 'package:wecord/features/privacy/devices_screen.dart';
 import 'package:wecord/features/privacy/profile_visibility.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
@@ -815,7 +816,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
       _ => null,
     };
     final blockedCount = ref.watch(blockedUsersProvider).value?.length;
-    return SettingsGroup(
+    final group = SettingsGroup(
       header: header,
       children: [
         SettingsRow.toggle(
@@ -868,6 +869,15 @@ class PrivacySettingsGroup extends ConsumerWidget {
           subtitle: tr('Get a copy of your profile, friends and messages'),
           onTap: () => openDataExport(context),
         ),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        group,
+        const SizedBox(height: 12),
+        const ErrorReportsSettingsGroup(),
       ],
     );
   }

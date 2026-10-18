@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/features/privacy/devices_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/site_url.dart';
@@ -100,6 +101,8 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    // Asked for: the signed-out event that follows is not an anomaly.
+    errorReporter.expectSignOut();
     // Live location shares end with the session: nothing keeps sending (or
     // looks as if it does) once this person is signed out.
     try {

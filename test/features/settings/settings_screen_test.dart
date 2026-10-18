@@ -101,6 +101,23 @@ void main() {
     );
   });
 
+  testWidgets('Privacy & Safety has the crash report switch, on', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(settingsRepository: FakeSettingsRepository()));
+    await tester.pump();
+
+    final toggle = find.byKey(const ValueKey('error-reports-toggle'));
+    await tester.scrollUntilVisible(
+      toggle,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Send crash and error reports'), findsOneWidget);
+    expect(switchValue(tester, toggle), isTrue);
+    expect(find.textContaining('never sends your messages'), findsOneWidget);
+  });
+
   testWidgets('switches between system, light and dark', (tester) async {
     final store = InMemoryThemeModeStore();
     await tester.pumpWidget(

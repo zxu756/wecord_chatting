@@ -23,6 +23,8 @@ import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
+import 'package:wecord/features/error_reports/redirect_tracking.dart';
 import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/moments/moment_composer_screen.dart';
@@ -64,7 +66,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             : null) ??
         HomeScreen.path,
     refreshListenable: authRouter,
-    redirect: (context, state) {
+    redirect: trackRedirects(errorReporter, (context, state) {
       final authState = authRouter.authState;
       final location = state.uri.path;
       final onAuthRoute = location == AuthScreen.path;
@@ -115,7 +117,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return HomeScreen.path;
       }
       return null;
-    },
+    }),
     routes: [
       GoRoute(
         path: LoadingScreen.path,

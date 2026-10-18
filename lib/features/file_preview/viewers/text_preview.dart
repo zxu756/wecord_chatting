@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:wecord/features/file_preview/code_highlight.dart';
+import 'package:wecord/features/file_preview/code_highlight.dart'
+    deferred as highlighter;
+import 'package:wecord/features/file_preview/code_highlight_limits.dart';
 import 'package:wecord/features/file_preview/csv_table.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/file_preview_service.dart';
@@ -303,7 +305,11 @@ class MarkdownDocument extends StatelessWidget {
 
 /// Code (or plain text) with line numbers, selectable, highlighted when
 /// [language] is known. Long lines scroll sideways unless [wrap].
-class CodeView extends StatelessWidget {
+///
+/// The highlighter (the grammars of 40 languages, most of a megabyte of
+/// the web app) is loaded the first time a code file opens; the text shows
+/// plain until it has.
+class CodeView extends StatefulWidget {
   static const _chunk = 2000;
 
   const CodeView({
@@ -318,13 +324,54 @@ class CodeView extends StatelessWidget {
   final bool wrap;
 
   @override
+  State<CodeView> createState() => _CodeViewState();
+}
+
+class _CodeViewState extends State<CodeView> {
+  var _highlighterLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadHighlighter());
+  }
+
+  @override
+  void didUpdateWidget(CodeView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    unawaited(_loadHighlighter());
+  }
+
+  Future<void> _loadHighlighter() async {
+    if (_highlighterLoaded ||
+        widget.language == null ||
+        widget.text.length > maxHighlightedChars) {
+      return;
+    }
+    await highlighter.loadLibrary();
+    if (mounted) {
+      setState(() => _highlighterLoaded = true);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final text = widget.text;
+    final language = widget.language;
+    final wrap = widget.wrap;
     final c = context.tokens.colors;
     final base = monoStyle(c.ink);
     final lineCount = '\n'.allMatches(text).length + 1;
     final numbers = monoStyle(c.faint);
     final span =
-        highlightCode(text, language: language, base: base, colors: c) ??
+        (_highlighterLoaded
+            ? highlighter.highlightCode(
+                text,
+                language: language,
+                base: base,
+                colors: c,
+              )
+            : null) ??
         TextSpan(text: text, style: base);
     final gutterWidth = (lineCount.toString().length * 8.2) + 24;
 

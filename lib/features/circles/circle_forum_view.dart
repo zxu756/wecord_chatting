@@ -15,6 +15,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// A forum channel: its posts as cards, newest activity (or newest post)
@@ -1035,8 +1036,12 @@ class _ForumThumbnailState extends ConsumerState<ForumThumbnail> {
           if (url == null) {
             return placeholder;
           }
-          return Image.network(
-            url,
+          return Image(
+            image: avatarImageFor(
+              NetworkImage(url),
+              size: size,
+              devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+            ),
             width: size,
             height: size,
             fit: BoxFit.cover,

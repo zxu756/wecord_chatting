@@ -186,7 +186,9 @@ class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame>
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (ref.watch(voiceSessionProvider) != null) ...[
+                        if (ref.watch(
+                          voiceSessionProvider.select((s) => s != null),
+                        )) ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(WeCordRadii.xl),
                             child: VoiceConnectedPanel(

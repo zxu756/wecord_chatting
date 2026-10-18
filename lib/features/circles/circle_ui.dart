@@ -5,6 +5,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Building blocks shared by the circle screens in design language "C":
@@ -197,8 +198,12 @@ class _CircleNetworkAvatarState extends ConsumerState<CircleNetworkAvatar> {
     );
   }
 
-  Widget _image(String url) => Image.network(
-    url,
+  Widget _image(String url) => Image(
+    image: avatarImageFor(
+      NetworkImage(url),
+      size: widget.size,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    ),
     fit: BoxFit.cover,
     errorBuilder: (context, error, stackTrace) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

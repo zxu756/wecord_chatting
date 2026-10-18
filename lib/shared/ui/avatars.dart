@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/motion.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/motion_safe_image.dart';
 
 /// Avatars at least this big get a play button over an animated picture
@@ -165,6 +166,13 @@ class PersonAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fill = color ?? WeCordAvatarColors.forSeed(name);
+    final image = this.image == null
+        ? null
+        : avatarImageFor(
+            this.image!,
+            size: size,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+          );
     final held = heldAvatarPicture(
       context,
       image: image,
@@ -182,7 +190,7 @@ class PersonAvatar extends StatelessWidget {
         image: image == null || held != null
             ? null
             : DecorationImage(
-                image: image!,
+                image: image,
                 fit: BoxFit.cover,
                 onError: onImageError,
               ),
@@ -280,6 +288,13 @@ class ThingAvatar extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius ?? size / 3),
     );
     final foreground = foregroundColor ?? Colors.white;
+    final image = this.image == null
+        ? null
+        : avatarImageFor(
+            this.image!,
+            size: size,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+          );
     final held = heldAvatarPicture(
       context,
       image: image,
@@ -297,7 +312,7 @@ class ThingAvatar extends StatelessWidget {
         image: image == null || held != null
             ? null
             : DecorationImage(
-                image: image!,
+                image: image,
                 fit: BoxFit.cover,
                 onError: onImageError,
               ),

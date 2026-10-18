@@ -26,6 +26,55 @@ import '../circles/circle_detail_screen_test.dart' as circle_fakes;
 import '../later/later_fakes.dart';
 
 void main() {
+  group('polling', () {
+    test(
+      'every tick reloads the list while the app is in the foreground',
+      () async {
+        final harness = NotificationCoordinatorHarness();
+        harness.seed([]);
+        await harness.start();
+        final before = harness.listCalls;
+
+        for (var tick = 0; tick < 12; tick++) {
+          await harness.poll([]);
+        }
+
+        expect(harness.listCalls - before, 12);
+      },
+    );
+
+    test('a hidden app polls one tick in six, and a change still notifies at '
+        'once', () async {
+      var foreground = false;
+      final harness = NotificationCoordinatorHarness(
+        isInForeground: () => foreground,
+      );
+      harness.seed([harness.summary(id: 'c1')]);
+      await harness.start();
+      final before = harness.listCalls;
+
+      for (var tick = 0; tick < 12; tick++) {
+        await harness.poll([harness.summary(id: 'c1')]);
+      }
+      // Two rounds of six ticks: the first tick of each asks.
+      expect(harness.listCalls - before, 2);
+
+      // Realtime does not wait for the poll.
+      await harness.emit([
+        harness.summary(id: 'c1', unreadCount: 1, body: 'hello'),
+      ]);
+      expect(harness.notifications.single.body, 'hello');
+
+      // Back in the foreground it is every tick again.
+      foreground = true;
+      final resumed = harness.listCalls;
+      for (var tick = 0; tick < 4; tick++) {
+        await harness.poll([]);
+      }
+      expect(harness.listCalls - resumed, 4);
+    });
+  });
+
   test('does not notify on initial snapshot', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1', unreadCount: 1)]);
@@ -889,6 +938,7 @@ class NotificationCoordinatorHarness {
     bool Function()? doNotDisturb,
     RemindersRepository? remindersRepository,
     void Function()? onRemindersChanged,
+    bool Function()? isInForeground,
   }) : _authRepository = _FakeAuthRepository(currentUserId),
        _chatsRepository = _FakeChatsRepository(),
        _notificationService = _ThrowingFakeLocalNotificationService(),
@@ -913,6 +963,7 @@ class NotificationCoordinatorHarness {
       doNotDisturb: doNotDisturb,
       now: now ?? () => DateTime.utc(2026, 5, 18, 12, 30),
       pollTicks: _pollTicks.stream,
+      isInForeground: isInForeground,
     );
   }
 
@@ -976,6 +1027,9 @@ class NotificationCoordinatorHarness {
   }
 
   int get maxConcurrentListCalls => _chatsRepository.maxConcurrentListCalls;
+
+  /// How many times the conversation list was asked for.
+  int get listCalls => _chatsRepository.listCalls;
 
   void failNextList() {
     _chatsRepository.failNextList = true;
@@ -1088,6 +1142,7 @@ class _FakeChatsRepository implements ChatsRepository {
   bool failNextList = false;
   int _activeListCalls = 0;
   int maxConcurrentListCalls = 0;
+  int listCalls = 0;
 
   void emitChange() {
     _changes.add(null);
@@ -1101,6 +1156,7 @@ class _FakeChatsRepository implements ChatsRepository {
 
   @override
   Future<List<ConversationSummary>> listConversations() async {
+    listCalls += 1;
     _activeListCalls += 1;
     if (_activeListCalls > maxConcurrentListCalls) {
       maxConcurrentListCalls = _activeListCalls;

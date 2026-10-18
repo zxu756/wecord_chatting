@@ -33,6 +33,11 @@ Future<void> runWeCordApp() async {
   // goes wrong from here on is counted.
   await startErrorReporting();
 
+  // The offline copy of chats (SQLite, or IndexedDB on the web) and the
+  // device's connection; without them chats work online only. It opens
+  // while Supabase reads the saved session, not after it: the first frame
+  // waits for both.
+  final chatCacheOpening = openPlatformChatCache();
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
     publishableKey: config.supabaseAnonKey,
@@ -41,9 +46,7 @@ Future<void> runWeCordApp() async {
   );
   watchAuthEvents(Supabase.instance.client.auth, errorReporter);
 
-  // The offline copy of chats (SQLite, or IndexedDB on the web) and the
-  // device's connection; without them chats work online only.
-  final chatCache = await openPlatformChatCache();
+  final chatCache = await chatCacheOpening;
   runApp(
     ProviderScope(
       retry: noProviderRetry,

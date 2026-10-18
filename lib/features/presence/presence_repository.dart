@@ -120,16 +120,29 @@ final presenceStatusesProvider =
       ref.listen(broadcastPresenceProvider, (previous, next) {
         ownStatus.value = next;
       });
-      return ref.watch(presenceRepositoryProvider).statuses(ownStatus);
+      // A presence sync that changes nothing (they come after every join,
+      // leave and re-announce) is not news to the screens watching this.
+      return ref
+          .watch(presenceRepositoryProvider)
+          .statuses(ownStatus)
+          .distinct(mapEquals);
     });
 
 /// Ids of users who have the app open right now (see
 /// [presenceStatusesProvider]).
 final onlineUserIdsProvider = StreamProvider.autoDispose<Set<String>>((ref) {
-  final statuses = ref.watch(presenceStatusesProvider).value;
-  return statuses == null
+  // Follows who is here, not how present they are: someone going Idle or
+  // back does not change this, and the screens watching it (every chat,
+  // sidebar and member list) should not rebuild for it.
+  final online = ref.watch(
+    presenceStatusesProvider.select((statuses) {
+      final value = statuses.value;
+      return value == null ? null : (value.keys.toList()..sort()).join('\n');
+    }),
+  );
+  return online == null
       ? const Stream<Set<String>>.empty()
-      : Stream.value(statuses.keys.toSet());
+      : Stream.value(online.isEmpty ? <String>{} : online.split('\n').toSet());
 });
 
 /// [userId]'s status for others to see: null while offline (or invisible),

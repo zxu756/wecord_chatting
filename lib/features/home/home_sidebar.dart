@@ -225,7 +225,7 @@ class HomeSidebar extends ConsumerWidget {
               ),
             ),
             if (wide) ...[
-              if (ref.watch(voiceSessionProvider) != null)
+              if (ref.watch(voiceSessionProvider.select((s) => s != null)))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                   child: ClipRRect(

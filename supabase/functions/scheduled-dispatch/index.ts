@@ -32,6 +32,7 @@ import {
   type TaskReminderRow,
   taskTarget,
 } from "./logic.ts";
+import { type DigestPushRow, digestPushTarget } from "./digest.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 
@@ -183,6 +184,17 @@ Deno.serve(async (request) => {
   targets.push(
     ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
   );
+
+  // "Your daily digest is ready", once the `ai` function finished a card (it
+  // wakes this function).
+  const { data: digests, error: digestsError } = await admin.rpc(
+    "claim_digest_pushes",
+  );
+  if (digestsError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_digest_pushes failed", digestsError.message);
+  }
+  targets.push(...((digests ?? []) as DigestPushRow[]).map(digestPushTarget));
 
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.

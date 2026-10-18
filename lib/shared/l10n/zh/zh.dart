@@ -8,6 +8,7 @@ import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
 import 'package:wecord/shared/l10n/zh/zh_edit_history.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_assistant.dart';
+import 'package:wecord/shared/l10n/zh/zh_digest.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
@@ -143,6 +144,7 @@ const zhAreas = <Map<String, String>>[
   zhInsights,
   zhForms,
   zhAiAssistant,
+  zhDigest,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

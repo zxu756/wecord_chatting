@@ -17,6 +17,9 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/inbox/digest/digest_card.dart';
+import 'package:wecord/features/inbox/digest/digest_models.dart';
+import 'package:wecord/features/inbox/digest/digest_repository.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/later/later_cards.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
@@ -74,6 +77,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
+  final digests = ref.watch(aiDigestsUnreadProvider);
   return unread +
       requests +
       reminders +
@@ -83,7 +87,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       invitations +
       security +
       joinAnswers +
-      readReminders;
+      readReminders +
+      digests;
 });
 
 /// Which notifications the inbox shows.
@@ -99,6 +104,9 @@ enum InboxFilter {
 
   /// Answers to requests to join circles, and requests still waiting.
   circles,
+
+  /// The daily digest of the chats the person follows.
+  digest,
 }
 
 /// Mentions of and replies to the current user and reminders that came
@@ -126,6 +134,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(securityAlertsProvider)
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
+      ..invalidate(aiDigestsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -144,6 +153,18 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       }
     }
     ref.invalidate(readReminderNoticesProvider);
+  }
+
+  Future<void> _markDigestRead(AiDigest digest) async {
+    if (!digest.isUnread) {
+      return;
+    }
+    try {
+      await ref.read(digestRepositoryProvider).markRead([digest.id]);
+    } catch (_) {
+      // Still unread: it shows again on the next refresh.
+    }
+    ref.invalidate(aiDigestsProvider);
   }
 
   Future<void> _dismissReminder(MessageReminder reminder) async {
@@ -228,7 +249,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.moments ||
       InboxFilter.friends ||
       InboxFilter.security ||
-      InboxFilter.circles => const <InboxItem>[],
+      InboxFilter.circles ||
+      InboxFilter.digest => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
@@ -236,6 +258,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         _filter == InboxFilter.all || _filter == InboxFilter.security;
     final showJoinRequests =
         _filter == InboxFilter.all || _filter == InboxFilter.circles;
+    final digests = _filter == InboxFilter.all || _filter == InboxFilter.digest
+        ? ref.watch(aiDigestsProvider).value ?? const <AiDigest>[]
+        : const <AiDigest>[];
+    final unreadDigests = ref.watch(aiDigestsUnreadProvider);
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -300,6 +326,20 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           if (showJoinRequests)
             for (final request in joinRequests)
               JoinRequestInboxCard(request: request),
+          for (final digest in digests)
+            AiDigestCard(
+              digest: digest,
+              onOpenChat: (conversationId) {
+                unawaited(_markDigestRead(digest));
+                openMessage(
+                  context,
+                  ref,
+                  conversationId: conversationId,
+                  conversation: conversations[conversationId],
+                );
+              },
+              onMarkRead: () => unawaited(_markDigestRead(digest)),
+            ),
           if (showRequests && invitations.isNotEmpty)
             Column(
               key: const ValueKey('inbox-group-invitations'),
@@ -511,6 +551,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         tr('Circles'),
                         unseenJoinAnswers,
                       ),
+                      const SizedBox(width: 6),
+                      chip(InboxFilter.digest, tr('Digest'), unreadDigests),
                     ],
                   ),
                 ),
@@ -980,6 +1022,10 @@ class _EmptyInbox extends StatelessWidget {
                     )
                   : filter == InboxFilter.circles
                   ? tr('Answers to your requests to join circles show up here.')
+                  : filter == InboxFilter.digest
+                  ? tr(
+                      'Your daily digest shows up here. Set it up in Settings, under AI.',
+                    )
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',
                     ),

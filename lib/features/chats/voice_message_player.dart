@@ -34,28 +34,41 @@ class VoiceMessagePlayer extends ConsumerStatefulWidget {
   final String? messageId;
   final String? conversationId;
 
+  /// How many audio players bubbles have made, for tests: none until a
+  /// voice message is played.
+  @visibleForTesting
+  static var debugPlayersCreated = 0;
+
   @override
   ConsumerState<VoiceMessagePlayer> createState() => _VoiceMessagePlayerState();
 }
 
 class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
-  late final AudioPlayer _player;
+  /// Made on the first play: a chat can hold hundreds of voice messages and
+  /// each player is a native audio object, but only the ones that are played
+  /// need one. The waveform and length draw without it.
+  AudioPlayer? _player;
   StreamSubscription<PlayerState>? _playerStateSubscription;
   var _isPreparing = false;
   var _isPrepared = false;
   var _hasError = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _player = AudioPlayer();
-    _playerStateSubscription = _player.playerStateStream.listen((state) {
+  AudioPlayer _ensurePlayer() {
+    final existing = _player;
+    if (existing != null) {
+      return existing;
+    }
+    final player = AudioPlayer();
+    VoiceMessagePlayer.debugPlayersCreated++;
+    _player = player;
+    _playerStateSubscription = player.playerStateStream.listen((state) {
       if (state.processingState != ProcessingState.completed) {
         return;
       }
-      unawaited(_player.seek(Duration.zero));
-      unawaited(_player.pause());
+      unawaited(player.seek(Duration.zero));
+      unawaited(player.pause());
     });
+    return player;
   }
 
   @override
@@ -65,14 +78,14 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
         oldWidget.attachment.path != widget.attachment.path) {
       _isPrepared = false;
       _hasError = false;
-      unawaited(_player.stop());
+      unawaited(_player?.stop());
     }
   }
 
   @override
   void dispose() {
     unawaited(_playerStateSubscription?.cancel());
-    unawaited(_player.dispose());
+    unawaited(_player?.dispose());
     super.dispose();
   }
 
@@ -82,7 +95,7 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
     }
 
     if (isPlaying) {
-      await _player.pause();
+      await _player?.pause();
       return;
     }
 
@@ -91,14 +104,15 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
     });
 
     try {
+      final player = _ensurePlayer();
       if (!_isPrepared) {
         final url = await ref
             .read(chatsRepositoryProvider)
             .createVoiceUrl(widget.attachment);
-        await _player.setUrl(url);
+        await player.setUrl(url);
         _isPrepared = true;
       }
-      await _player.play();
+      await player.play();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -131,8 +145,8 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
           );
 
     return StreamBuilder<PlayerState>(
-      stream: _player.playerStateStream,
-      initialData: _player.playerState,
+      stream: _player?.playerStateStream,
+      initialData: _player?.playerState ?? _idle,
       builder: (context, snapshot) {
         final isPlaying = snapshot.data?.playing ?? false;
         final tooltip = isPlaying
@@ -186,7 +200,7 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
             Flexible(
               child: isPlaying
                   ? StreamBuilder<Duration>(
-                      stream: _player.positionStream,
+                      stream: _player?.positionStream,
                       builder: (context, position) {
                         final ms = total.inMilliseconds;
                         final progress = ms <= 0
@@ -245,6 +259,9 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
     );
   }
 }
+
+/// What a bubble shows before its player exists.
+final _idle = PlayerState(false, ProcessingState.idle);
 
 /// Bars of a voice message, the first [progress] of them [played].
 class _Waveform extends StatelessWidget {

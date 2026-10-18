@@ -169,8 +169,8 @@ extension _ThreadComposerMenuState on _ChatThreadScreenState {
     if (_isSlowedDown || _isSending || _editingMessage != null) {
       return;
     }
-    final sticker = await showStickerPicker(context, circleId: _circleId);
-    if (sticker == null || !mounted) {
+    final pick = await showStickerPicker(context, circleId: _circleId);
+    if (pick == null || !mounted) {
       return;
     }
     setState(() {
@@ -178,12 +178,11 @@ extension _ThreadComposerMenuState on _ChatThreadScreenState {
       _sendError = null;
     });
     try {
-      await ref
-          .read(chatsRepositoryProvider)
-          .sendSticker(
-            conversationId: widget.conversationId,
-            stickerId: sticker.id,
-          );
+      await sendStickerPick(
+        ref,
+        conversationId: widget.conversationId,
+        pick: pick,
+      );
       _refreshThread();
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);

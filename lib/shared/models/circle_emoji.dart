@@ -177,11 +177,23 @@ class StickerAttachment {
     required this.emojiId,
     required this.name,
     required this.circleId,
+    this.personal,
   });
 
   static StickerAttachment? maybeFromJson(Object? json) {
     if (json is! Map || json['kind'] != 'sticker') {
       return null;
+    }
+    if (json['personal'] == true) {
+      final file = PersonalStickerFile.maybeFromJson(json);
+      return file == null
+          ? null
+          : StickerAttachment(
+              emojiId: '',
+              name: (json['name'] as String?) ?? '',
+              circleId: '',
+              personal: file,
+            );
     }
     final emojiId = json['emoji_id'];
     final name = json['name'];
@@ -192,9 +204,55 @@ class StickerAttachment {
     return StickerAttachment(emojiId: emojiId, name: name, circleId: circleId);
   }
 
+  /// The circle sticker's id; empty for a personal sticker.
   final String emojiId;
   final String name;
+
+  /// The sticker's circle; empty for a personal sticker.
   final String circleId;
+
+  /// Set for a sticker from the sender's own library: the copy of its image
+  /// in the chat's folder (A11).
+  final PersonalStickerFile? personal;
+
+  bool get isPersonal => personal != null;
+}
+
+/// The image of a personal sticker sent in a chat: a copy in the chat
+/// bucket, readable by the chat's members, never the sender's library file
+/// (202610220510).
+class PersonalStickerFile {
+  const PersonalStickerFile({
+    required this.bucket,
+    required this.path,
+    required this.mimeType,
+    required this.width,
+    required this.height,
+    required this.animated,
+  });
+
+  static PersonalStickerFile? maybeFromJson(Map<dynamic, dynamic> json) {
+    final bucket = json['bucket'];
+    final path = json['path'];
+    if (bucket is! String || path is! String) {
+      return null;
+    }
+    return PersonalStickerFile(
+      bucket: bucket,
+      path: path,
+      mimeType: (json['mime_type'] as String?) ?? 'image/png',
+      width: (json['width'] as num?)?.toInt(),
+      height: (json['height'] as num?)?.toInt(),
+      animated: json['animated'] == true,
+    );
+  }
+
+  final String bucket;
+  final String path;
+  final String mimeType;
+  final int? width;
+  final int? height;
+  final bool animated;
 }
 
 /// "[Sticker] name", for previews and notifications.

@@ -28,5 +28,8 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ImageTextPlugin") {
       ImageTextPlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "StickerCutoutPlugin") {
+      StickerCutoutPlugin.register(with: registrar)
+    }
   }
 }

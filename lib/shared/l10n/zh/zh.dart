@@ -59,6 +59,7 @@ import 'package:wecord/shared/l10n/zh/zh_redesign_circles.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_voice.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_settings.dart';
 import 'package:wecord/shared/l10n/zh/zh_stage.dart';
+import 'package:wecord/shared/l10n/zh/zh_stickers.dart';
 import 'package:wecord/shared/l10n/zh/zh_transcribe.dart';
 import 'package:wecord/shared/l10n/zh/zh_safety.dart';
 import 'package:wecord/shared/l10n/zh/zh_search.dart';
@@ -131,6 +132,7 @@ const zhAreas = <Map<String, String>>[
   zhReports,
   zhEditHistory,
   zhJoinRequests,
+  zhStickers,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

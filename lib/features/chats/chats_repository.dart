@@ -359,11 +359,46 @@ class _Capabilities {
     required this.canPin,
     required this.canModeratePolls,
     required this.canModerateMessages,
+    required this.canManageThread,
   });
 
   final bool canPin;
   final bool canModeratePolls;
   final bool canModerateMessages;
+  final bool canManageThread;
+}
+
+/// An optional addition to [ChatsRepository] for repositories that can
+/// answer "may I manage this thread?" together with the other questions a
+/// chat asks as it opens (`get_conversation_capabilities`), so a thread needs
+/// no request of its own. Kept apart from [ChatsRepository] so that the
+/// repositories that do not have it (fakes) need no change: see
+/// [canManageThreadOf].
+abstract interface class ThreadCapabilitySource {
+  /// Whether the current user may archive and unarchive the thread whose
+  /// conversation is [threadConversationId]; null when the server cannot
+  /// answer it that way (an older deployment).
+  Future<bool?> canManageThreadInConversation(String threadConversationId);
+}
+
+/// Whether the current user may manage the thread [threadId] whose
+/// conversation is [threadConversationId]: from the shared capabilities
+/// request when [repository] has one, else by [ChatsRepository.canManageThread].
+Future<bool> canManageThreadOf(
+  ChatsRepository repository, {
+  required String threadConversationId,
+  required String threadId,
+}) async {
+  final source = repository as Object;
+  if (source is ThreadCapabilitySource) {
+    final answer = await source.canManageThreadInConversation(
+      threadConversationId,
+    );
+    if (answer != null) {
+      return answer;
+    }
+  }
+  return repository.canManageThread(threadId);
 }
 
 class SupabaseChatsRepository
@@ -372,7 +407,8 @@ class SupabaseChatsRepository
         MessageHistorySource,
         ConversationRowsSource,
         OutboxMessageSender,
-        MediaMessageSender {
+        MediaMessageSender,
+        ThreadCapabilitySource {
   SupabaseChatsRepository(
     SupabaseClient client, {
     Future<void> Function(String messageId)? onMessageSent,
@@ -1000,6 +1036,7 @@ class SupabaseChatsRepository
           canPin: data['can_pin_messages'] == true,
           canModeratePolls: data['can_moderate_polls'] == true,
           canModerateMessages: data['can_moderate_messages'] == true,
+          canManageThread: data['can_manage_thread'] == true,
         );
       }
     } on PostgrestException catch (error) {
@@ -1346,6 +1383,13 @@ class SupabaseChatsRepository
       {'target_thread_id': threadId},
     );
     return ConversationThread.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<bool?> canManageThreadInConversation(
+    String threadConversationId,
+  ) async {
+    return (await _capabilities(threadConversationId))?.canManageThread;
   }
 
   @override

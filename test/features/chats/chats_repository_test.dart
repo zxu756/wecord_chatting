@@ -2223,6 +2223,75 @@ void main() {
       },
     );
 
+    test(
+      'a thread shares the request too and needs no question of its own',
+      () async {
+        final dataSource = FakeChatsDataSource()
+          ..rpcResults['get_conversation_capabilities'] = {
+            'can_pin_messages': false,
+            'can_moderate_polls': false,
+            'can_moderate_messages': true,
+            'can_manage_thread': true,
+          };
+        final repository = repositoryFor(dataSource);
+
+        final answers = await Future.wait([
+          canManageThreadOf(
+            repository,
+            threadConversationId: 'thread-conversation',
+            threadId: 'thread-1',
+          ),
+          repository.canPinMessages('thread-conversation'),
+          repository.canModerateMessages('thread-conversation'),
+        ]);
+
+        expect(answers, [true, false, true]);
+        expect(dataSource.rpcCalls, [
+          const RpcCall(
+            functionName: 'get_conversation_capabilities',
+            params: {'target_conversation_id': 'thread-conversation'},
+          ),
+        ]);
+      },
+    );
+
+    test('an older server is asked about the thread on its own', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcErrors['get_conversation_capabilities'] = const PostgrestException(
+          message: 'function not found',
+          code: '42883',
+        )
+        ..rpcResults['can_current_user_manage_thread'] = true;
+      final repository = repositoryFor(dataSource);
+
+      expect(
+        await canManageThreadOf(
+          repository,
+          threadConversationId: 'thread-conversation',
+          threadId: 'thread-1',
+        ),
+        isTrue,
+      );
+      expect(dataSource.rpcCalls.map((call) => call.functionName), [
+        'get_conversation_capabilities',
+        'can_current_user_manage_thread',
+      ]);
+    });
+
+    test('a repository without the capabilities request falls back', () async {
+      final fake = _ThreadFallbackRepository();
+
+      expect(
+        await canManageThreadOf(
+          fake,
+          threadConversationId: 'thread-conversation',
+          threadId: 'thread-1',
+        ),
+        isTrue,
+      );
+      expect(fake.asked, ['thread-1']);
+    });
+
     test('a later question asks the server again', () async {
       final dataSource = FakeChatsDataSource()
         ..rpcResults['get_conversation_capabilities'] = {
@@ -3208,4 +3277,18 @@ bool _listsEqual<T>(List<T> left, List<T> right) {
     }
   }
   return true;
+}
+
+/// A repository that only knows the old question about threads.
+class _ThreadFallbackRepository implements ChatsRepository {
+  final asked = <String>[];
+
+  @override
+  Future<bool> canManageThread(String threadId) async {
+    asked.add(threadId);
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

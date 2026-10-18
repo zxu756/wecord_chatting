@@ -152,11 +152,17 @@ final chatActivityProvider = StreamProvider.autoDispose
           .conversationActivity(conversationId);
     });
 
-final canManageThreadProvider = FutureProvider.autoDispose.family<bool, String>(
-  (ref, threadId) {
-    return ref.watch(chatsRepositoryProvider).canManageThread(threadId);
-  },
-);
+/// Whether the current user may archive a thread: the thread's conversation
+/// and its id. Answered with the chat's other capabilities in one request
+/// where the repository can (see [canManageThreadOf]).
+final canManageThreadProvider = FutureProvider.autoDispose
+    .family<bool, ({String conversationId, String threadId})>((ref, thread) {
+      return canManageThreadOf(
+        ref.watch(chatsRepositoryProvider),
+        threadConversationId: thread.conversationId,
+        threadId: thread.threadId,
+      );
+    });
 
 /// Whether the current user may end others' polls in a conversation.
 final canModeratePollsProvider = FutureProvider.autoDispose
@@ -979,7 +985,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final threadId = isThread ? conversationSummary?.threadId : null;
     final canManageThread =
         threadId != null &&
-        (ref.watch(canManageThreadProvider(threadId)).value ?? false);
+        (ref
+                .watch(
+                  canManageThreadProvider((
+                    conversationId: widget.conversationId,
+                    threadId: threadId,
+                  )),
+                )
+                .value ??
+            false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
     // Direct chats and groups can have messages that disappear.
     final isDirectOrGroup =

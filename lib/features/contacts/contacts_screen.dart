@@ -185,9 +185,18 @@ class _AddFriendButton extends ConsumerWidget {
       onPressed: requested
           ? null
           : () async {
-              await ref
-                  .read(contactsRepositoryProvider)
-                  .sendFriendRequest(profile.id);
+              try {
+                await ref
+                    .read(contactsRepositoryProvider)
+                    .sendFriendRequest(profile.id);
+              } on FriendRequestRefused catch (refused) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(refused.refusal.text)));
+                }
+                return;
+              }
               ref.read(sentFriendRequestIdsProvider.notifier).update((ids) {
                 return {...ids, profile.id};
               });

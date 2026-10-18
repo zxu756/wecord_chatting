@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -158,6 +161,14 @@ class _GroupCreationSheetState extends ConsumerState<GroupCreationSheet> {
       if (!mounted) {
         return;
       }
+      unawaited(
+        noticePendingInvitations(
+          ref,
+          ScaffoldMessenger.maybeOf(context),
+          conversationId,
+          memberIds,
+        ),
+      );
       Navigator.of(context).pop(
         GroupCreationResult(
           conversationId: conversationId,

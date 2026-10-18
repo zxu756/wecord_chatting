@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
+import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/later/later_cards.dart';
@@ -20,6 +21,7 @@ import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/moments/moment_notification_card.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
+import 'package:wecord/features/privacy/security_alerts.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -63,15 +65,33 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
           .length ??
       0;
   final moments = ref.watch(momentNotificationsUnreadProvider);
-  return unread + requests + reminders + tasks + events + moments;
+  final invitations = ref.watch(groupInvitationsProvider).value?.length ?? 0;
+  final security = ref.watch(securityAlertsOpenCountProvider);
+  return unread +
+      requests +
+      reminders +
+      tasks +
+      events +
+      moments +
+      invitations +
+      security;
 });
 
 /// Which notifications the inbox shows.
-enum InboxFilter { all, mentions, replies, reminders, tasks, moments, friends }
+enum InboxFilter {
+  all,
+  mentions,
+  replies,
+  reminders,
+  tasks,
+  moments,
+  friends,
+  security,
+}
 
 /// Mentions of and replies to the current user and reminders that came
 /// due, with pending friend requests on top. Chips narrow it to mentions,
-/// replies, reminders or requests.
+/// replies, reminders, requests (and group invitations) or security alerts.
 class InboxScreen extends ConsumerStatefulWidget {
   const InboxScreen({super.key});
 
@@ -90,6 +110,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(remindersProvider)
       ..invalidate(chatEventRemindersProvider)
       ..invalidate(momentNotificationsProvider)
+      ..invalidate(groupInvitationsProvider)
+      ..invalidate(securityAlertsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -127,6 +149,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
               const <CircleSummary>[])
         circle.id: circle,
     };
+    final invitations =
+        ref.watch(groupInvitationsProvider).value ?? const <GroupInvitation>[];
+    final securityAlerts =
+        ref.watch(securityAlertsProvider).value ?? const <LoginAlert>[];
+    final openSecurityAlerts = ref.watch(securityAlertsOpenCountProvider);
     final items = inbox.value ?? const <InboxItem>[];
     final firedReminders = ref.watch(firedRemindersProvider);
     final upcomingReminders = [
@@ -164,10 +191,13 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.reminders ||
       InboxFilter.tasks ||
       InboxFilter.moments ||
-      InboxFilter.friends => const <InboxItem>[],
+      InboxFilter.friends ||
+      InboxFilter.security => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
+    final showSecurity =
+        _filter == InboxFilter.all || _filter == InboxFilter.security;
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -227,6 +257,19 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ),
       data: (_) {
         final cards = <Widget>[
+          if (showSecurity)
+            for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
+          if (showRequests && invitations.isNotEmpty)
+            Column(
+              key: const ValueKey('inbox-group-invitations'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, invitation) in invitations.indexed) ...[
+                  if (index > 0) const SizedBox(height: 10),
+                  GroupInvitationCard(invitation: invitation),
+                ],
+              ],
+            ),
           if (showRequests && requests.isNotEmpty)
             Column(
               key: const ValueKey('inbox-friend-requests'),
@@ -390,7 +433,17 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                       const SizedBox(width: 6),
                       chip(InboxFilter.moments, tr('Moments'), unreadMoments),
                       const SizedBox(width: 6),
-                      chip(InboxFilter.friends, tr('Friends'), requests.length),
+                      chip(
+                        InboxFilter.friends,
+                        tr('Friends'),
+                        requests.length + invitations.length,
+                      ),
+                      const SizedBox(width: 6),
+                      chip(
+                        InboxFilter.security,
+                        tr('Security'),
+                        openSecurityAlerts,
+                      ),
                     ],
                   ),
                 ),
@@ -854,6 +907,10 @@ class _EmptyInbox extends StatelessWidget {
                     )
                   : filter == InboxFilter.moments
                   ? tr('Likes and comments on your Moments show up here.')
+                  : filter == InboxFilter.security
+                  ? tr(
+                      'Sign-ins to your account from a new device show up here.',
+                    )
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',
                     ),

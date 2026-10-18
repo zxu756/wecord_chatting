@@ -1,7 +1,7 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
-// events about to start, tasks that came due and likes and comments on
-// Moments. The same tick removes the files of expired disappearing
+// events about to start, tasks that came due, likes and comments on
+// Moments, and new-login alerts. The same tick removes the files of expired disappearing
 // messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -32,6 +32,7 @@ import {
   type TaskReminderRow,
   taskTarget,
 } from "./logic.ts";
+import { type SecurityPushRow, securityTarget } from "./security.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -157,6 +158,17 @@ Deno.serve(async (request) => {
     console.error("claim_moments_pushes failed", momentsError.message);
   }
   targets.push(...((moments ?? []) as MomentsPushRow[]).map(momentsTarget));
+
+  // New-login alerts: "New sign-in to your account", to the user's other
+  // devices (the login wakes this function through wake_scheduled_dispatch).
+  const { data: security, error: securityError } = await admin.rpc(
+    "claim_security_alert_pushes",
+  );
+  if (securityError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_security_alert_pushes failed", securityError.message);
+  }
+  targets.push(...((security ?? []) as SecurityPushRow[]).map(securityTarget));
 
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.

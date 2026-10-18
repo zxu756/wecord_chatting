@@ -10,6 +10,10 @@
 // POST {moments_post_id} → the same for the likes, comments and replies the
 //      caller just made on a Moment (see claim_moments_pushes). Moments the
 //      caller did nothing on claim nothing.
+// POST {read_reminder_message_id} → the same for the "please read this"
+//      reminder the caller just sent to the members who have not read their
+//      message (see claim_read_reminder_pushes). Quiet hours hold it back
+//      like any push; nothing breaks through for it.
 // All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -103,12 +107,14 @@ Deno.serve(async (request) => {
   let callId: unknown;
   let taskItemId: unknown;
   let momentsPostId: unknown;
+  let readReminderMessageId: unknown;
   try {
     const body = await request.json();
     messageId = body?.message_id;
     callId = body?.call_id;
     taskItemId = body?.task_item_id;
     momentsPostId = body?.moments_post_id;
+    readReminderMessageId = body?.read_reminder_message_id;
   } catch {
     return json({ error: "invalid_body" }, 400);
   }
@@ -123,9 +129,12 @@ Deno.serve(async (request) => {
     uuidPattern.test(momentsPostId);
   const isTaskPush = !isMomentsPush && typeof taskItemId === "string" &&
     uuidPattern.test(taskItemId);
+  const isReadReminderPush = !isMomentsPush && !isTaskPush &&
+    typeof readReminderMessageId === "string" &&
+    uuidPattern.test(readReminderMessageId);
   if (
-    !isMomentsPush && !isTaskPush && typeof callId === "string" &&
-    uuidPattern.test(callId)
+    !isMomentsPush && !isTaskPush && !isReadReminderPush &&
+    typeof callId === "string" && uuidPattern.test(callId)
   ) {
     // claim_push_delivery checks the notice was sent by the caller.
     const { data: call } = await admin
@@ -136,7 +145,7 @@ Deno.serve(async (request) => {
     messageId = call?.system_message_id;
   }
   if (
-    !isMomentsPush && !isTaskPush &&
+    !isMomentsPush && !isTaskPush && !isReadReminderPush &&
     (typeof messageId !== "string" || !uuidPattern.test(messageId))
   ) {
     return json({ error: "invalid_message" }, 400);
@@ -150,6 +159,11 @@ Deno.serve(async (request) => {
     : isTaskPush
     ? await admin.rpc("claim_task_assignment_push", {
       target_item_id: taskItemId,
+      caller_id: user.id,
+    })
+    : isReadReminderPush
+    ? await admin.rpc("claim_read_reminder_pushes", {
+      target_message_id: readReminderMessageId,
       caller_id: user.id,
     })
     : await admin.rpc("claim_push_delivery", {
@@ -166,7 +180,9 @@ Deno.serve(async (request) => {
     admin,
     (data ?? []) as PushTarget[],
     Math.floor(Date.now() / 1000),
-    isMomentsPush || isTaskPush ? null : (messageId as string),
+    isMomentsPush || isTaskPush || isReadReminderPush
+      ? null
+      : (messageId as string),
   );
   // Times in the text are written for each subscriber's zone and language.
   const targets = await writeTimesForTargets(

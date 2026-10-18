@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/thread/thread_layout.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
 ChatMessage message(
@@ -33,6 +34,7 @@ void main() {
           messages: messages,
           readMarkers: const [],
           currentUserId: null,
+          scope: ReadReceiptScope.direct,
         ).latestOutgoingMessageId,
         isNull,
       );
@@ -41,6 +43,7 @@ void main() {
           messages: messages,
           readMarkers: const [],
           currentUserId: 'me',
+          scope: ReadReceiptScope.direct,
         ).latestOutgoingMessageId,
         isNull,
       );
@@ -58,6 +61,7 @@ void main() {
           ConversationReadMarker(userId: 'other', lastReadMessageId: 'a'),
         ],
         currentUserId: 'me',
+        scope: ReadReceiptScope.direct,
       );
       expect(unread.latestOutgoingMessageId, 'b');
       expect(unread.isRead, isFalse);
@@ -69,6 +73,7 @@ void main() {
           ConversationReadMarker(userId: 'me', lastReadMessageId: 'a'),
         ],
         currentUserId: 'me',
+        scope: ReadReceiptScope.direct,
       );
       expect(read.isRead, isTrue);
     });
@@ -80,8 +85,146 @@ void main() {
           ConversationReadMarker(userId: 'me', lastReadMessageId: 'a'),
         ],
         currentUserId: 'me',
+        scope: ReadReceiptScope.direct,
       );
       expect(read.isRead, isFalse);
+    });
+
+    test('a group never says "Read": it counts the readers instead', () {
+      final messages = [
+        message('a', sender: 'me', at: at(0)),
+        message('b', at: at(1)),
+      ];
+      final state = latestOutgoingReadStateOf(
+        messages: messages,
+        readMarkers: const [
+          ConversationReadMarker(userId: 'one', lastReadMessageId: 'b'),
+          ConversationReadMarker(userId: 'two', lastReadMessageId: null),
+        ],
+        currentUserId: 'me',
+        scope: ReadReceiptScope.group,
+      );
+      expect(state.latestOutgoingMessageId, 'a');
+      expect(state.isRead, isFalse);
+      expect(state.groupReadCount, 1);
+    });
+
+    test('a direct chat has no group count', () {
+      final state = latestOutgoingReadStateOf(
+        messages: [
+          message('a', sender: 'me', at: at(0)),
+          message('b', at: at(1)),
+        ],
+        readMarkers: const [
+          ConversationReadMarker(userId: 'one', lastReadMessageId: 'b'),
+        ],
+        currentUserId: 'me',
+        scope: ReadReceiptScope.direct,
+      );
+      expect(state.isRead, isTrue);
+      expect(state.groupReadCount, 0);
+    });
+
+    test('a chat with no scope tells nothing', () {
+      final state = latestOutgoingReadStateOf(
+        messages: [
+          message('a', sender: 'me', at: at(0)),
+          message('b', at: at(1)),
+        ],
+        readMarkers: const [
+          ConversationReadMarker(userId: 'one', lastReadMessageId: 'b'),
+        ],
+        currentUserId: 'me',
+        scope: ReadReceiptScope.none,
+      );
+      expect(state.latestOutgoingMessageId, isNull);
+      expect(state.isRead, isFalse);
+      expect(state.groupReadCount, 0);
+    });
+  });
+
+  group('ReadReceiptScope.of', () {
+    test('direct chats say "Read", groups count, the rest tell nothing', () {
+      expect(
+        ReadReceiptScope.of(ConversationType.direct),
+        ReadReceiptScope.direct,
+      );
+      expect(
+        ReadReceiptScope.of(ConversationType.group),
+        ReadReceiptScope.group,
+      );
+      expect(
+        ReadReceiptScope.of(ConversationType.channel),
+        ReadReceiptScope.none,
+      );
+      expect(
+        ReadReceiptScope.of(ConversationType.thread),
+        ReadReceiptScope.none,
+      );
+      expect(ReadReceiptScope.of(null), ReadReceiptScope.none);
+    });
+
+    test('the note to self has none, though it is a direct chat', () {
+      expect(
+        ReadReceiptScope.of(ConversationType.direct, noteToSelf: true),
+        ReadReceiptScope.none,
+      );
+    });
+  });
+
+  group('group read counts', () {
+    final messages = [
+      message('a', sender: 'me', at: at(0)),
+      message('b', at: at(1)),
+      message('c', sender: 'me', at: at(2)),
+      message('d', at: at(3)),
+    ];
+    // Ann read to c, Bo to d, Cy only to b, Di to nothing; Zed's marker is
+    // empty (receipts off: the server sends it without a position).
+    const markers = [
+      ConversationReadMarker(userId: 'me', lastReadMessageId: 'd'),
+      ConversationReadMarker(userId: 'ann', lastReadMessageId: 'c'),
+      ConversationReadMarker(userId: 'bo', lastReadMessageId: 'd'),
+      ConversationReadMarker(userId: 'cy', lastReadMessageId: 'b'),
+      ConversationReadMarker(userId: 'di', lastReadMessageId: null),
+      ConversationReadMarker(userId: 'zed', lastReadMessageId: null),
+    ];
+
+    LatestOutgoingReadState state(
+      List<ChatMessage> messages,
+      List<ConversationReadMarker> markers,
+    ) => latestOutgoingReadStateOf(
+      messages: messages,
+      readMarkers: markers,
+      currentUserId: 'me',
+      scope: ReadReceiptScope.group,
+    );
+
+    test('counts the others whose position is at or past the newest own', () {
+      final result = state(messages, markers);
+      expect(result.latestOutgoingMessageId, 'c');
+      // Ann (exactly at c) and Bo (past it); my own marker, Cy, Di and Zed
+      // do not count.
+      expect(result.groupReadCount, 2);
+    });
+
+    test('is 0 when nobody has read it', () {
+      expect(
+        state(messages, const [
+          ConversationReadMarker(userId: 'cy', lastReadMessageId: 'b'),
+        ]).groupReadCount,
+        0,
+      );
+    });
+
+    test('a system notice from me is not "my newest message"', () {
+      final withNotice = [
+        ...messages,
+        message('n', sender: 'me', at: at(4), type: MessageType.system),
+      ];
+      final result = state(withNotice, markers);
+      expect(result.latestOutgoingMessageId, 'c');
+      expect(result.groupReadCount, 2);
     });
   });
 
@@ -247,6 +390,7 @@ void main() {
         dividerId: null,
         currentUserId: 'me',
         forumPost: true,
+        readScope: ReadReceiptScope.none,
         search: (messages, query) => messages,
       );
       expect([for (final m in layout.display) m.id], ['a', 'b']);
@@ -262,6 +406,7 @@ void main() {
         dividerId: null,
         currentUserId: 'me',
         forumPost: false,
+        readScope: ReadReceiptScope.none,
         search: (messages, query) => [
           for (final m in messages)
             if (m.body == query) m,
@@ -270,6 +415,39 @@ void main() {
       expect([for (final m in searched.display) m.id], ['b']);
       expect(searched.followUpIds, isEmpty);
       expect(searched.dayStartIds, isEmpty);
+    });
+
+    test('what the newest own message tells depends on the chat', () {
+      final messages = [
+        message('a', sender: 'me', at: at(0)),
+        message('b', at: at(1)),
+      ];
+      const markers = [
+        ConversationReadMarker(userId: 'other', lastReadMessageId: 'b'),
+      ];
+      ThreadLayout layout(ReadReceiptScope readScope) => ThreadLayout.build(
+        messages: messages,
+        readMarkers: markers,
+        pending: const [],
+        query: '',
+        dividerId: null,
+        currentUserId: 'me',
+        forumPost: false,
+        readScope: readScope,
+        search: (messages, query) => messages,
+      );
+      final direct = layout(ReadReceiptScope.direct);
+      expect(direct.latestOutgoingReadState.isRead, isTrue);
+      expect(direct.readScope, ReadReceiptScope.direct);
+      final group = layout(ReadReceiptScope.group);
+      expect(group.latestOutgoingReadState.isRead, isFalse);
+      expect(group.latestOutgoingReadState.groupReadCount, 1);
+      expect(
+        layout(
+          ReadReceiptScope.none,
+        ).latestOutgoingReadState.latestOutgoingMessageId,
+        isNull,
+      );
     });
   });
 }

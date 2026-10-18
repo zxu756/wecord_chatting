@@ -346,6 +346,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
 
   /// This chat is the user's note to self: no typing, no read receipts.
   var _isNoteToSelf = false;
+
+  /// What this chat tells about who read the newest own message: "Read" in a
+  /// direct chat, "N read" in a group (see lib/features/chats/read_status/).
+  var _readScope = ReadReceiptScope.none;
   var _hasCapturedReadPosition = false;
   String? _newMessageDividerId;
   var _isAtBottom = true;

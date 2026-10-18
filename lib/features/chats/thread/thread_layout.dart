@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/media_send/album_fold.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/pat/pat_info.dart';
 import 'package:wecord/shared/models/chat_status.dart';
+import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
 
 /// The other member of a direct conversation, from its read markers (one
@@ -90,38 +91,80 @@ DateTime? slowmodeEnd({
   return localEnd;
 }
 
+/// The newest message the current user sent, or null ([messages] are oldest
+/// first).
+ChatMessage? _latestOutgoing(List<ChatMessage> messages, String currentUserId) {
+  for (var i = messages.length - 1; i >= 0; i--) {
+    final message = messages[i];
+    if (message.isSentBy(currentUserId) && message.type != MessageType.system) {
+      return message;
+    }
+  }
+  return null;
+}
+
+/// What a chat tells the sender about who read the newest message.
+enum ReadReceiptScope {
+  /// Nothing: the note to self, circle channels, threads, chats whose kind is
+  /// not known yet.
+  none,
+
+  /// A direct chat: "Read" once the other person has read it.
+  direct,
+
+  /// A group: "N read" (the list is behind it).
+  group;
+
+  /// The scope of a chat of [type]; [noteToSelf] has none.
+  static ReadReceiptScope of(
+    ConversationType? type, {
+    bool noteToSelf = false,
+  }) {
+    if (noteToSelf) {
+      return none;
+    }
+    return switch (type) {
+      ConversationType.direct => direct,
+      ConversationType.group => group,
+      _ => none,
+    };
+  }
+}
+
+/// The newest own message and who read it.
+///
+/// In a direct chat that is "Read" once the other person has read it. In a
+/// group the same fact is a count ([LatestOutgoingReadState.groupReadCount]),
+/// never "Read": one member out of many having read it would mislead. The
+/// server leaves out of the markers the people who turned read receipts off
+/// (and everyone, for a person who turned them off), so they count for
+/// nothing.
 LatestOutgoingReadState latestOutgoingReadStateOf({
   required List<ChatMessage> messages,
   required List<ConversationReadMarker> readMarkers,
   required String? currentUserId,
+  required ReadReceiptScope scope,
 }) {
-  if (currentUserId == null) {
+  if (currentUserId == null || scope == ReadReceiptScope.none) {
     return const LatestOutgoingReadState();
   }
-
-  ChatMessage? latestOutgoing;
-  for (final message in messages) {
-    if (message.isSentBy(currentUserId) && message.type != MessageType.system) {
-      latestOutgoing = message;
-    }
-  }
+  final latestOutgoing = _latestOutgoing(messages, currentUserId);
   if (latestOutgoing == null) {
     return const LatestOutgoingReadState();
   }
-
-  final messagesById = {for (final message in messages) message.id: message};
-  final isRead = readMarkers.any((marker) {
+  final messagesById = {for (final m in messages) m.id: m};
+  final readers = readMarkers.where((marker) {
     if (marker.userId == currentUserId) {
       return false;
     }
     final readMessage = messagesById[marker.lastReadMessageId];
     return readMessage != null &&
-        !readMessage.createdAt.isBefore(latestOutgoing!.createdAt);
-  });
-
+        !readMessage.createdAt.isBefore(latestOutgoing.createdAt);
+  }).length;
   return LatestOutgoingReadState(
     latestOutgoingMessageId: latestOutgoing.id,
-    isRead: isRead,
+    isRead: scope == ReadReceiptScope.direct && readers > 0,
+    groupReadCount: scope == ReadReceiptScope.group ? readers : 0,
   );
 }
 
@@ -179,10 +222,16 @@ class LatestOutgoingReadState {
   const LatestOutgoingReadState({
     this.latestOutgoingMessageId,
     this.isRead = false,
+    this.groupReadCount = 0,
   });
 
   final String? latestOutgoingMessageId;
+
+  /// A direct chat: the other person has read it.
   final bool isRead;
+
+  /// A group: how many members have read it.
+  final int groupReadCount;
 }
 
 /// The loaded messages laid out for the list (see
@@ -206,6 +255,7 @@ class ThreadLayout {
     required this.openingPostId,
     required this.openingPostReplyCount,
     required this.latestOutgoingReadState,
+    required this.readScope,
   });
 
   factory ThreadLayout.build({
@@ -216,6 +266,7 @@ class ThreadLayout {
     required String? dividerId,
     required String? currentUserId,
     required bool forumPost,
+    required ReadReceiptScope readScope,
     required List<ChatMessage> Function(List<ChatMessage>, String) search,
   }) {
     final searching = query.trim().isNotEmpty;
@@ -316,13 +367,18 @@ class ThreadLayout {
         messages: fullOldestToNewest,
         readMarkers: readMarkers,
         currentUserId: currentUserId,
+        scope: readScope,
       ),
+      readScope: readScope,
     );
   }
 
   // What it was built from.
   final List<ChatMessage> messages;
   final List<ConversationReadMarker> readMarkers;
+
+  /// What the chat tells about who read the newest own message.
+  final ReadReceiptScope readScope;
   final List<OutboxEntry> pending;
   final String query;
   final String? dividerId;

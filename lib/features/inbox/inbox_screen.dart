@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/events/chat_event_reminder_card.dart';
 import 'package:wecord/features/chats/events/chat_events_providers.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
+import 'package:wecord/features/chats/read_status/read_reminder_notices.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/join_requests/join_request_inbox_card.dart';
 import 'package:wecord/features/circles/join_requests/join_request_models.dart';
@@ -71,6 +72,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final invitations = ref.watch(groupInvitationsProvider).value?.length ?? 0;
   final security = ref.watch(securityAlertsOpenCountProvider);
   final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
+  final readReminders =
+      ref.watch(readReminderNoticesProvider).value?.length ?? 0;
   return unread +
       requests +
       reminders +
@@ -79,7 +82,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       moments +
       invitations +
       security +
-      joinAnswers;
+      joinAnswers +
+      readReminders;
 });
 
 /// Which notifications the inbox shows.
@@ -121,9 +125,25 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(groupInvitationsProvider)
       ..invalidate(securityAlertsProvider)
       ..invalidate(myJoinRequestsProvider)
+      ..invalidate(readReminderNoticesProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
+  }
+
+  Future<void> _dismissReadReminder(ReadReminderNotice notice) async {
+    try {
+      await ref.read(readReminderNoticesRepositoryProvider).markRead([
+        notice.id,
+      ]);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(tr('Something went wrong. Try again.'))),
+        );
+      }
+    }
+    ref.invalidate(readReminderNoticesProvider);
   }
 
   Future<void> _dismissReminder(MessageReminder reminder) async {
@@ -194,6 +214,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         ? ref.watch(chatEventRemindersProvider).value ??
               const <ChatEventReminder>[]
         : const <ChatEventReminder>[];
+    final readReminders =
+        ref.watch(readReminderNoticesProvider).value ??
+        const <ReadReminderNotice>[];
     final visibleItems = switch (_filter) {
       InboxFilter.all => items,
       InboxFilter.mentions =>
@@ -327,6 +350,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             if (showFiredReminders)
               for (final reminder in firedReminders)
                 (reminder.remindAt, reminder),
+            if (showFiredReminders)
+              for (final notice in readReminders) (notice.createdAt, notice),
             if (showTasks)
               for (final notification in taskNotifications)
                 (notification.createdAt, notification),
@@ -342,6 +367,24 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
               final MessageReminder reminder => reminderCard(
                 reminder,
                 upcoming: false,
+              ),
+              final ReadReminderNotice notice => ReadReminderCard(
+                notice: notice,
+                place: conversationPlaceLabel(
+                  conversations[notice.conversationId],
+                  circles,
+                ),
+                onOpen: () {
+                  unawaited(_dismissReadReminder(notice));
+                  openMessage(
+                    context,
+                    ref,
+                    conversationId: notice.conversationId,
+                    messageId: notice.messageId,
+                    conversation: conversations[notice.conversationId],
+                  );
+                },
+                onDismiss: () => unawaited(_dismissReadReminder(notice)),
               ),
               final TaskNotification notification => TaskNotificationCard(
                 notification: notification,
@@ -445,7 +488,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                       chip(
                         InboxFilter.reminders,
                         tr('Reminders'),
-                        firedReminders.length,
+                        firedReminders.length + readReminders.length,
                       ),
                       chip(InboxFilter.tasks, tr('Tasks'), unreadTasks),
                       const SizedBox(width: 6),

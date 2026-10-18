@@ -772,6 +772,14 @@ const readStatus = BubbleFooterEntry.below(
   build: _readStatus); // Widget? _readStatus(BubbleFooterContext ctx)
 ```
 
+Read state is decided in one place, `latestOutgoingReadStateOf` in
+`thread_layout.dart`, by the chat's `ReadReceiptScope`: a direct chat says
+"Read" (`BubbleFooterContext.showReadReceipt`), a group says "N read"
+(`BubbleFooterContext.groupReadCount`, drawn by
+`lib/features/chats/read_status/`), everything else says nothing. A message
+that reads as one node for screen readers keeps its footer as plain text, so a
+tappable footer needs a menu entry too ("Message info").
+
 **Composer "+" menu** (`composer_menu*.dart`): each contribution returns one
 `GlassMenuEntry` (or null for chats it does not apply to). The context says
 whether the chat is direct or a group and whether the screen is phone width.

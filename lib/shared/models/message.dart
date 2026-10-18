@@ -97,6 +97,7 @@ class ChatMessage {
     this.crosspost,
     this.publishedAt,
     this.interaction,
+    this.aiReply,
     this.clientId,
     this.attachmentGroupId,
     this.album,
@@ -145,6 +146,7 @@ class ChatMessage {
       crosspost: MessageCrosspost.maybeFromJson(json['crosspost']),
       publishedAt: _parseOptionalTimestamp(json['published_at']),
       interaction: MessageInteraction.maybeFromJson(json['interaction']),
+      aiReply: MessageAiReply.maybeFromJson(json['ai_reply']),
       clientId: json['client_id'] as String?,
       attachmentGroupId: json['attachment_group_id'] as String?,
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
@@ -213,6 +215,10 @@ class ChatMessage {
 
   /// A bot's answer to a member's slash command.
   final MessageInteraction? interaction;
+
+  /// Set by the server on an answer from the WeCord AI assistant: who asked
+  /// and what kind of answer it is. Null on every other message.
+  final MessageAiReply? aiReply;
 
   /// The id the sender's app gave the message when it was written, so a
   /// send retried from the outbox is stored once.
@@ -441,6 +447,7 @@ class ChatMessage {
           : webhookAvatarUrl as String?,
       crosspost: crosspost,
       interaction: interaction,
+      aiReply: aiReply,
       clientId: clientId,
       attachmentGroupId: attachmentGroupId,
       album: identical(album, _sentinel)

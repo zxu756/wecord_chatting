@@ -176,6 +176,7 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `translate_batch` | `conversation_id`, `message_ids` (up to 20), `target`, optional `manual` | `{target, translations: {id: {text, source_lang}}, skipped: {id: reason}, cached, translated}` |
 | `extract_actions` | `conversation_id`, `message_ids` (1 to 50), optional `time_zone` (IANA) and `utc_offset_minutes` | `{items: [{title, assignee, due, due_has_time, due_text, kind, source_message_id}], message_count}` |
 | `assistant` | `job_id`; only the database may call it (shared secret) | `{ok, reply_id, kind}` or `{ok, skipped: reason}` |
+| `digest` | `digest_id`; only the database may call it (shared secret) | `{ok, chats}` or `{ok, skipped: reason}` / `{ok, failed: reason}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
@@ -282,6 +283,49 @@ channels `check_channel_message_send` lets a message marked `ai_reply` through
 Deploy: apply the migrations, then `supabase functions deploy ai`. Nothing else
 to set; the assistant uses the same AI secrets and Vault secrets as the guard.
 
+### The daily digest (`digest`)
+
+Settings → AI → Daily digest: a person follows up to 10 groups or circle
+channels and picks a time; every day at that time on their own clock they get
+one card in Notifications (and a push "Your daily digest is ready", which names
+no chat content) summarising what was said. Migrations 202610230500 to
+202610230540:
+
+1. `ai_digest_tick` (pg_cron `wecord-ai-digest-tick`, every minute; the older
+   `run_later_dispatch` is untouched) finds people whose clock in their zone
+   (`notification_time_zone`: what their devices report, else UTC) has reached
+   their time, at most six hours late, once per local day
+   (`ai_digests` is unique on user and date). The window is everything since
+   their last digest, at most 24 hours;
+2. **no news, no model**: before queueing, SQL counts what the person may see
+   in the window (`ai_digest_messages`). None: the day is recorded as
+   `skipped / no_news` and the `ai` function is never woken, so nothing is
+   asked of the AI and nothing counts against the daily limit. Otherwise it
+   wakes `POST /functions/v1/ai {"action": "digest", "digest_id": ...}` through
+   pg_net with `DISPATCH_SECRET` (same Vault secrets and `verify_jwt = false` as
+   the guard and the assistant; lost wake-ups are repeated up to three times by
+   the tick, runs that never return fail after four minutes);
+3. `ai_digest_claim` re-checks: digest switched off, the person turned AI off
+   (`user_ai_settings`), nothing followed, no news. Then
+   `ai_digest_context` hands over the messages: only chats the person still
+   belongs to and may read (`current_user_readable_conversation_ids`, so a
+   circle channel they lost access to or a suspended circle is out), where the
+   circle and the group owner allow AI (`conversation_ai_assistant_allowed`),
+   never recalled, expired, AI-guard-held, view-once, system, own, assistant
+   or blocked-sender messages; the newest 200 per chat;
+4. the function counts ONE request for the whole digest against
+   `AI_DAILY_LIMIT_PER_USER` (given back on failure), asks the model once for
+   an `=== N ===` section per chat (chat text and names fenced as untrusted
+   data, `DATA_RULES`), and `ai_digest_finish` stores the card and wakes
+   `scheduled-dispatch`, whose `claim_digest_pushes` sends the push (not in Do
+   Not Disturb, after quiet hours rules, never older than 15 minutes).
+
+The follow limit is a trigger on `ai_digest_subscriptions`, so it holds for every
+writer. Leaving a chat deletes the subscription (trigger), deleting the account
+or a chat cascades, and cards are removed after two weeks. Deploy: apply the
+migrations, then `supabase functions deploy ai scheduled-dispatch data-export`.
+Nothing new to set.
+
 ### Privacy and safety
 
 - **Messages are read as the caller.** A summary uses the user's own token, so
@@ -370,5 +414,5 @@ moderators), and the circle's daily request count.
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart
+flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/features/inbox
 ```

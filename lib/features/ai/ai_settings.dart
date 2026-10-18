@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/ai/translate_settings_sheets.dart';
+import 'package:wecord/features/inbox/digest/digest_settings_screen.dart';
 import 'package:wecord/features/transcribe/transcribe_controller.dart';
 import 'package:wecord/features/transcribe/voice_transcriber.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -71,6 +72,8 @@ class _AiSettingsGroupState extends ConsumerState<AiSettingsGroup> {
         // What auto-translate, Translate and Text from picture translate to.
         if (configured) const TranslateToRow(),
         if (configured) const DontTranslateRow(),
+        // A summary of the chats the person follows, once a day.
+        if (configured) const DigestSettingsRow(),
         // Voice messages turn into text on the device itself, so this does
         // not depend on the server's AI. Only where the device can do it.
         if (ref.watch(voiceTranscriberProvider).runsOnDevice)

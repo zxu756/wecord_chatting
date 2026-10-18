@@ -276,15 +276,19 @@ class _EditorCanvasState extends State<EditorCanvas> {
 
   MouseCursor _cursorFor(Offset? point) {
     if (_s.tool == EditorTool.crop && point != null) {
-      final handle = cropHandleAt(_s.cropRectInView, point, reach: _handleReach);
+      final handle = cropHandleAt(
+        _s.cropRectInView,
+        point,
+        reach: _handleReach,
+      );
       return switch (handle) {
-        CropHandle.topLeft || CropHandle.bottomRight =>
-          SystemMouseCursors.resizeUpLeftDownRight,
-        CropHandle.topRight || CropHandle.bottomLeft =>
-          SystemMouseCursors.resizeUpRightDownLeft,
+        CropHandle.topLeft ||
+        CropHandle.bottomRight => SystemMouseCursors.resizeUpLeftDownRight,
+        CropHandle.topRight ||
+        CropHandle.bottomLeft => SystemMouseCursors.resizeUpRightDownLeft,
         CropHandle.top || CropHandle.bottom => SystemMouseCursors.resizeUpDown,
-        CropHandle.left || CropHandle.right =>
-          SystemMouseCursors.resizeLeftRight,
+        CropHandle.left ||
+        CropHandle.right => SystemMouseCursors.resizeLeftRight,
         CropHandle.move => SystemMouseCursors.move,
         null => SystemMouseCursors.basic,
       };
@@ -499,11 +503,31 @@ class EditorScenePainter extends CustomPainter {
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
       ..color = Colors.white;
-    canvas.drawLine(grab + const Offset(-4, 4), grab + const Offset(4, -4), arrow);
-    canvas.drawLine(grab + const Offset(0.5, -4), grab + const Offset(4, -4), arrow);
-    canvas.drawLine(grab + const Offset(4, -0.5), grab + const Offset(4, -4), arrow);
-    canvas.drawLine(grab + const Offset(-4, 0.5), grab + const Offset(-4, 4), arrow);
-    canvas.drawLine(grab + const Offset(-0.5, 4), grab + const Offset(-4, 4), arrow);
+    canvas.drawLine(
+      grab + const Offset(-4, 4),
+      grab + const Offset(4, -4),
+      arrow,
+    );
+    canvas.drawLine(
+      grab + const Offset(0.5, -4),
+      grab + const Offset(4, -4),
+      arrow,
+    );
+    canvas.drawLine(
+      grab + const Offset(4, -0.5),
+      grab + const Offset(4, -4),
+      arrow,
+    );
+    canvas.drawLine(
+      grab + const Offset(-4, 0.5),
+      grab + const Offset(-4, 4),
+      arrow,
+    );
+    canvas.drawLine(
+      grab + const Offset(-0.5, 4),
+      grab + const Offset(-4, 4),
+      arrow,
+    );
 
     final remove = corners.first;
     canvas.drawCircle(remove, 11, Paint()..color = const Color(0xFF17171A));
@@ -515,8 +539,16 @@ class EditorScenePainter extends CustomPainter {
         ..strokeWidth = 2
         ..color = chrome,
     );
-    canvas.drawLine(remove + const Offset(-3.5, -3.5), remove + const Offset(3.5, 3.5), arrow);
-    canvas.drawLine(remove + const Offset(3.5, -3.5), remove + const Offset(-3.5, 3.5), arrow);
+    canvas.drawLine(
+      remove + const Offset(-3.5, -3.5),
+      remove + const Offset(3.5, 3.5),
+      arrow,
+    );
+    canvas.drawLine(
+      remove + const Offset(3.5, -3.5),
+      remove + const Offset(-3.5, 3.5),
+      arrow,
+    );
   }
 
   @override

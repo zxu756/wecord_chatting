@@ -100,21 +100,45 @@ class ThreadChip extends StatelessWidget {
   }
 }
 
-/// The small "edited" after a message's text.
+/// The small "edited" after a message's text. With [onTap] it is a button
+/// that opens the message's edit history.
 class EditedMarker extends StatelessWidget {
-  const EditedMarker({required this.color, super.key});
+  const EditedMarker({required this.color, this.onTap, super.key});
 
   final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    final onTap = this.onTap;
+    Text text(Color color, {bool underline = false}) => Text(
       tr('edited'),
       style: TextStyle(
         fontSize: 11.5,
         height: 1.3,
         fontWeight: FontWeight.w500,
         color: color,
+        decoration: underline ? TextDecoration.underline : null,
+        decorationColor: color,
+      ),
+    );
+    if (onTap == null) {
+      return text(color);
+    }
+    return WeCordPressable(
+      key: const ValueKey('edited-marker'),
+      onPressed: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      pressedScale: 0.96,
+      // The mark is small text inside the bubble: a larger tap area would
+      // push it away from the text. The message menu has the same entry.
+      minTapSize: Size.zero,
+      semanticLabel: tr('Edited, double tap to see history'),
+      excludeSemantics: true,
+      tooltip: tr('Edit history'),
+      builder: (context, states) => text(
+        states.contains(WidgetState.hovered) ? color.withAlpha(0xFF) : color,
+        underline: states.contains(WidgetState.hovered),
       ),
     );
   }

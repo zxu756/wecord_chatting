@@ -307,7 +307,10 @@ void _paintMosaic(
   var first = true;
   for (final stroke in strokes) {
     for (final point in stroke.points) {
-      final box = ui.Rect.fromCircle(center: point, radius: stroke.width / 2 + 2);
+      final box = ui.Rect.fromCircle(
+        center: point,
+        radius: stroke.width / 2 + 2,
+      );
       area = first ? box : area.expandToInclude(box);
       first = false;
     }
@@ -351,7 +354,9 @@ void _paintMosaic(
     ui.Rect.fromLTWH(0, 0, effect.width * scale, effect.height * scale),
     ui.Paint()
       ..blendMode = ui.BlendMode.srcIn
-      ..filterQuality = pixelate ? ui.FilterQuality.none : ui.FilterQuality.high,
+      ..filterQuality = pixelate
+          ? ui.FilterQuality.none
+          : ui.FilterQuality.high,
   );
   canvas.restore();
 }

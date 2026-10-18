@@ -180,7 +180,9 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
       });
       return;
     }
-    Navigator.of(context).pop(PhotoEditResult(document: document, photo: photo));
+    Navigator.of(
+      context,
+    ).pop(PhotoEditResult(document: document, photo: photo));
   }
 
   void _zoomBy(double factor) {
@@ -219,8 +221,12 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
           session?.undo(),
       const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
           session?.undo(),
-      const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-          () => session?.redo(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyZ,
+        meta: true,
+        shift: true,
+      ): () =>
+          session?.redo(),
       const SingleActivator(
         LogicalKeyboardKey.keyZ,
         control: true,
@@ -320,7 +326,9 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: wide ? 24 : 0),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(wide ? WeCordRadii.xl : 0),
+                  borderRadius: BorderRadius.circular(
+                    wide ? WeCordRadii.xl : 0,
+                  ),
                   child: EditorCanvas(
                     session: session,
                     onAddText: _addText,
@@ -437,7 +445,10 @@ class _Loading extends StatelessWidget {
             : Semantics(
                 label: tr('Loading photo…'),
                 liveRegion: true,
-                child: CircularProgressIndicator(color: c.ink, strokeWidth: 2.4),
+                child: CircularProgressIndicator(
+                  color: c.ink,
+                  strokeWidth: 2.4,
+                ),
               ),
       ),
     );

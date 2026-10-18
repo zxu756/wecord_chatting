@@ -2,9 +2,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Runs the behaviour checks for the data export tables (migration 202610170053): one export per day, a private ZIP bucket and own rows only against the local Supabase
-/// database when there is one (`supabase start`), inside a transaction that
-/// is rolled back. Skipped when psql or the database is not there.
+/// Runs the behaviour checks for the data export (migrations 202610170053 and
+/// 202610190023): one export per day, a private ZIP bucket, own rows only, and
+/// what the export reads from Moments, tags, chains, notes, lists, saved
+/// messages, reminders, scheduled messages and wallpapers (mine is there,
+/// other people's is not) against the local Supabase database when there is
+/// one (`supabase start`), inside a transaction that is rolled back. Skipped
+/// when psql or the database is not there.
 void main() {
   const databaseUrl = String.fromEnvironment(
     'WECORD_TEST_DATABASE_URL',

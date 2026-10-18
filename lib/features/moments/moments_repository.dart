@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -28,6 +30,44 @@ class MomentPhotoDraft {
   final Uint8List thumb;
   final int width;
   final int height;
+}
+
+/// The video of a Moment being written: the file as the device holds it
+/// (it is streamed from disk when posted, never held in memory), its length,
+/// and the poster frame the feed shows first, already a JPEG with its
+/// thumbnail.
+@immutable
+class MomentVideoDraft {
+  const MomentVideoDraft({
+    required this.file,
+    required this.mimeType,
+    required this.size,
+    required this.duration,
+    required this.poster,
+    required this.posterThumb,
+    required this.width,
+    required this.height,
+  });
+
+  final XFile file;
+
+  /// `video/mp4`, `video/quicktime` or `video/webm`.
+  final String mimeType;
+  final int size;
+  final Duration duration;
+  final Uint8List poster;
+  final Uint8List posterThumb;
+
+  /// The poster frame's size, which gives the video its shape in the feed.
+  final int width;
+  final int height;
+
+  /// The file extension the bucket stores it under.
+  String get extension => switch (mimeType) {
+    'video/quicktime' => 'mov',
+    'video/webm' => 'webm',
+    _ => 'mp4',
+  };
 }
 
 /// Everything the Moments pages need from the server. The visibility rules
@@ -57,6 +97,8 @@ abstract interface class MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   });
 
   Future<void> deletePost(String id);
@@ -76,6 +118,14 @@ abstract interface class MomentsRepository {
   Future<MomentsSettings> settings();
 
   Future<void> setRange(MomentsRange range);
+
+  /// Turns the push for likes, comments and replies on or off.
+  Future<void> setPushEnabled({required bool enabled});
+
+  /// Signals that the feed, a post or the notifications changed, as long as
+  /// someone listens; [MomentsSignalKind.resync] after every (re)connection.
+  /// They carry no content (see migration 202610190020).
+  Stream<MomentsSignal> signals();
 
   /// Uploads [jpeg] as the cover.
   Future<void> setCover(Uint8List jpeg);
@@ -103,9 +153,12 @@ abstract interface class MomentsRepository {
 }
 
 class SupabaseMomentsRepository implements MomentsRepository {
-  const SupabaseMomentsRepository(this._client);
+  const SupabaseMomentsRepository(this._client, [this._uploader]);
 
   final SupabaseClient _client;
+
+  /// The chat's streaming uploader, for the video.
+  final ChatMediaUploader? _uploader;
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
@@ -157,11 +210,50 @@ class SupabaseMomentsRepository implements MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   }) async {
     final owner = _userId;
     final uploaded = <String>[];
     final entries = <Map<String, Object?>>[];
+    Map<String, Object?>? videoEntry;
     try {
+      if (video != null) {
+        // The poster frame is stored like a photo, then the video itself
+        // is streamed from disk, as the chat does.
+        final poster = '$owner/$id-0.jpg';
+        final posterThumb = '$owner/$id-0-t.jpg';
+        final path = '$owner/$id-v.${video.extension}';
+        await Future.wait([
+          _upload(poster, video.poster),
+          _upload(posterThumb, video.posterThumb),
+        ]);
+        uploaded
+          ..add(poster)
+          ..add(posterThumb);
+        final uploader = _uploader;
+        if (uploader == null) {
+          throw StateError('Uploads are not available');
+        }
+        await uploader.upload(
+          bucket: momentsBucket,
+          path: path,
+          mimeType: video.mimeType,
+          length: video.size,
+          data: video.file.openRead(),
+          onProgress: onUploadProgress,
+        );
+        uploaded.add(path);
+        videoEntry = {
+          'path': path,
+          'poster': poster,
+          'thumb': posterThumb,
+          'w': video.width,
+          'h': video.height,
+          'duration_ms': video.duration.inMilliseconds,
+          'size': video.size,
+        };
+      }
       for (final (index, photo) in photos.indexed) {
         final path = '$owner/$id-$index.jpg';
         final thumb = '$owner/$id-$index-t.jpg';
@@ -191,6 +283,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
           'p_visibility': audience.visibility.wire,
           'p_friend_ids': audience.usesLists ? audience.friendIds.toList() : [],
           'p_tag_ids': audience.usesLists ? audience.tagIds.toList() : [],
+          'p_video': ?videoEntry,
         },
       );
     } on PostgrestException {
@@ -253,6 +346,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
             onConflict: 'post_id,user_id',
             ignoreDuplicates: true,
           );
+      unawaited(_pushFor(postId));
     } else {
       await _client
           .from('moments_likes')
@@ -274,6 +368,19 @@ class SupabaseMomentsRepository implements MomentsRepository {
       'body': body,
       'reply_to_comment_id': ?replyToCommentId,
     });
+    unawaited(_pushFor(postId));
+  }
+
+  /// Asks the push function to notify the person this like or comment is
+  /// for. It claims only what this person just did and re-checks who may
+  /// see it; never throws (the like or comment is already made, and the
+  /// scheduled dispatch sends what this misses).
+  Future<void> _pushFor(String postId) async {
+    try {
+      await _client.functions.invoke('push', body: {'moments_post_id': postId});
+    } on Object {
+      // Push is a courtesy.
+    }
   }
 
   @override
@@ -306,7 +413,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
   Future<MomentsSettings> settings() async {
     final row = await _client
         .from('moments_settings')
-        .select('visible_range,cover_path')
+        .select('visible_range,cover_path,push_enabled')
         .eq('user_id', _userId)
         .maybeSingle();
     if (row == null) {
@@ -315,7 +422,60 @@ class SupabaseMomentsRepository implements MomentsRepository {
     return MomentsSettings(
       range: MomentsRange.fromWire(row['visible_range']),
       coverPath: row['cover_path'] as String?,
+      pushEnabled: row['push_enabled'] as bool? ?? true,
     );
+  }
+
+  @override
+  Future<void> setPushEnabled({required bool enabled}) async {
+    await _client.rpc<dynamic>(
+      'set_moments_settings',
+      params: {'p_push_enabled': enabled},
+    );
+  }
+
+  @override
+  Stream<MomentsSignal> signals() {
+    RealtimeChannel? channel;
+    late StreamController<MomentsSignal> controller;
+    controller = StreamController<MomentsSignal>(
+      onListen: () {
+        // A private channel of the person's own: the database tells only
+        // them, and only about what they may see.
+        final live = _client.channel(
+          'moments:$_userId',
+          opts: const RealtimeChannelConfig(private: true),
+        );
+        channel = live;
+        for (final kind in [
+          MomentsSignalKind.post,
+          MomentsSignalKind.postRemoved,
+          MomentsSignalKind.reaction,
+        ]) {
+          live.onBroadcast(
+            event: kind.wire,
+            callback: (message) {
+              final inner = message['payload'];
+              final id = inner is Map ? inner['post_id'] : null;
+              controller.add(MomentsSignal(kind, id is String ? id : null));
+            },
+          );
+        }
+        live.subscribe((status, error) {
+          // Anything may have changed while the line was down.
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            controller.add(const MomentsSignal(MomentsSignalKind.resync));
+          }
+        });
+      },
+      onCancel: () async {
+        final live = channel;
+        if (live != null) {
+          await _client.removeChannel(live);
+        }
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -474,6 +634,8 @@ class UninitializedMomentsRepository implements MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   }) => throw _unavailable();
 
   @override
@@ -501,6 +663,12 @@ class UninitializedMomentsRepository implements MomentsRepository {
 
   @override
   Future<void> setRange(MomentsRange range) => throw _unavailable();
+
+  @override
+  Future<void> setPushEnabled({required bool enabled}) => throw _unavailable();
+
+  @override
+  Stream<MomentsSignal> signals() => const Stream.empty();
 
   @override
   Future<void> setCover(Uint8List jpeg) => throw _unavailable();
@@ -537,7 +705,10 @@ class UninitializedMomentsRepository implements MomentsRepository {
 
 final momentsRepositoryProvider = Provider<MomentsRepository>((ref) {
   try {
-    return SupabaseMomentsRepository(ref.watch(supabaseClientProvider));
+    return SupabaseMomentsRepository(
+      ref.watch(supabaseClientProvider),
+      ref.watch(chatMediaUploaderProvider),
+    );
   } on ProviderException {
     return const UninitializedMomentsRepository();
   }

@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
+import 'package:wecord/features/moments/moments_video.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/spoken.dart';
@@ -505,6 +506,10 @@ class MomentCard extends ConsumerWidget {
           if (post.photos.isNotEmpty) ...[
             const SizedBox(height: 10),
             MomentPhotoGrid(photos: post.photos, onOpen: onOpenPhoto),
+          ],
+          if (post.video != null) ...[
+            const SizedBox(height: 10),
+            MomentVideoTile(video: post.video!),
           ],
           if (post.linkUrl != null) ...[
             const SizedBox(height: 10),

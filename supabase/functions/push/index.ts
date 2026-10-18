@@ -7,6 +7,9 @@
 //      caller started, so the others' devices ring.
 // POST {task_item_id} → the same for the assignments the caller just made on
 //      a list item (see claim_task_assignment_push).
+// POST {moments_post_id} → the same for the likes, comments and replies the
+//      caller just made on a Moment (see claim_moments_pushes). Moments the
+//      caller did nothing on claim nothing.
 // All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -35,14 +38,22 @@ interface PushTarget {
   endpoint: string;
   p256dh: string;
   auth: string;
-  conversation_id: string;
+  conversation_id: string | null;
   circle_id: string | null;
   title: string;
   body: string;
+  /// Notifications with the same tag replace each other (Moments: one per
+  /// post); the conversation by default.
+  tag?: string;
+  /// Where tapping opens the app, when it is not a chat (Moments).
+  url?: string;
 }
 
 /// Where tapping the notification opens the app (hash routes on the web).
 export function targetPath(target: PushTarget): string {
+  if (target.url) {
+    return target.url;
+  }
   return target.circle_id
     ? `/#/circles/${target.circle_id}?c=${target.conversation_id}`
     : `/#/chats/${target.conversation_id}`;
@@ -90,11 +101,13 @@ Deno.serve(async (request) => {
   let messageId: unknown;
   let callId: unknown;
   let taskItemId: unknown;
+  let momentsPostId: unknown;
   try {
     const body = await request.json();
     messageId = body?.message_id;
     callId = body?.call_id;
     taskItemId = body?.task_item_id;
+    momentsPostId = body?.moments_post_id;
   } catch {
     return json({ error: "invalid_body" }, 400);
   }
@@ -105,9 +118,14 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const isTaskPush = typeof taskItemId === "string" &&
+  const isMomentsPush = typeof momentsPostId === "string" &&
+    uuidPattern.test(momentsPostId);
+  const isTaskPush = !isMomentsPush && typeof taskItemId === "string" &&
     uuidPattern.test(taskItemId);
-  if (!isTaskPush && typeof callId === "string" && uuidPattern.test(callId)) {
+  if (
+    !isMomentsPush && !isTaskPush && typeof callId === "string" &&
+    uuidPattern.test(callId)
+  ) {
     // claim_push_delivery checks the notice was sent by the caller.
     const { data: call } = await admin
       .from("direct_calls")
@@ -117,13 +135,18 @@ Deno.serve(async (request) => {
     messageId = call?.system_message_id;
   }
   if (
-    !isTaskPush &&
+    !isMomentsPush && !isTaskPush &&
     (typeof messageId !== "string" || !uuidPattern.test(messageId))
   ) {
     return json({ error: "invalid_message" }, 400);
   }
   // Checks the caller sent it and claims it, so it is pushed only once.
-  const { data, error } = isTaskPush
+  const { data, error } = isMomentsPush
+    ? await admin.rpc("claim_moments_pushes", {
+      caller_id: user.id,
+      target_post_id: momentsPostId,
+    })
+    : isTaskPush
     ? await admin.rpc("claim_task_assignment_push", {
       target_item_id: taskItemId,
       caller_id: user.id,
@@ -149,7 +172,7 @@ Deno.serve(async (request) => {
       const status = await sendWebPush(keys, target, {
         title: target.title,
         body: target.body,
-        tag: target.conversation_id,
+        tag: target.tag ?? target.conversation_id ?? undefined,
         url: targetPath(target),
       }, { nowSeconds: Math.floor(Date.now() / 1000) });
       if (status === 404 || status === 410) {

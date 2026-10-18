@@ -18,6 +18,7 @@ import 'package:wecord/shared/l10n/zh/zh_circles_core.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_extra.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_design.dart';
+import 'package:wecord/shared/l10n/zh/zh_data_export_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_discovery.dart';
 import 'package:wecord/shared/l10n/zh/zh_error_reports.dart';
 import 'package:wecord/shared/l10n/zh/zh_file_preview.dart';
@@ -28,6 +29,7 @@ import 'package:wecord/shared/l10n/zh/zh_media_send.dart';
 import 'package:wecord/shared/l10n/zh/zh_misc_features.dart';
 import 'package:wecord/shared/l10n/zh/zh_multi_select.dart';
 import 'package:wecord/shared/l10n/zh/zh_moments.dart';
+import 'package:wecord/shared/l10n/zh/zh_moments_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
@@ -105,6 +107,8 @@ const zhAreas = <Map<String, String>>[
   zhQrPat,
   zhMoments,
   zhErrorReports,
+  zhMomentsMore,
+  zhDataExportMore,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

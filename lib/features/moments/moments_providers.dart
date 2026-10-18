@@ -17,14 +17,77 @@ final momentsUserIdProvider = Provider<String?>((ref) {
   return ref.watch(authStateProvider.select((state) => state.value?.id));
 });
 
+/// Runs [action] once things have been quiet for [delay], so a burst of live
+/// signals (ten likes in a second) costs one request. Cancelled with the
+/// provider.
+class _Debouncer {
+  _Debouncer(Ref ref, this.delay) {
+    ref.onDispose(cancel);
+  }
+
+  final Duration delay;
+  Timer? _timer;
+
+  void run(void Function() action) {
+    _timer?.cancel();
+    _timer = Timer(delay, action);
+  }
+
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
+
+/// How long live signals wait for more before the app reads again.
+const momentsLiveDelay = Duration(milliseconds: 500);
+
+/// The live signals of the server ("a post, a like or a comment changed",
+/// never what; see migration 202610190020), for as long as the person is
+/// signed in and something listens. Providers that show Moments data read
+/// it again when a signal says it may be stale.
+final momentsSignalsProvider = StreamProvider<MomentsSignal>((ref) {
+  if (ref.watch(momentsUserIdProvider) == null) {
+    return const Stream.empty();
+  }
+  return ref.watch(momentsRepositoryProvider).signals();
+});
+
 /// Every Moment the app has loaded, by id, so the feed, a person's page and
 /// the post detail show the same likes and comments. Changes (a like, a
 /// comment) are sent to the server and the post is read back, so what shows
 /// is always what the visibility rules allow.
 class MomentPostsStore extends Notifier<Map<String, MomentPost>> {
+  final _pending = <String>{};
+
   @override
   Map<String, MomentPost> build() {
     ref.watch(momentsUserIdProvider);
+    _pending.clear();
+    final debounce = _Debouncer(ref, momentsLiveDelay);
+    // Likes and comments on posts that are on screen (or were) arrive live;
+    // so does a post's removal.
+    ref.listen(momentsSignalsProvider, (previous, next) {
+      final signal = next.value;
+      final id = signal?.postId;
+      if (signal == null || id == null || !state.containsKey(id)) {
+        return;
+      }
+      switch (signal.kind) {
+        case MomentsSignalKind.postRemoved:
+          remove(id);
+        case MomentsSignalKind.reaction:
+          _pending.add(id);
+          debounce.run(() {
+            final ids = [..._pending];
+            _pending.clear();
+            for (final id in ids) {
+              unawaited(refresh(id).then((_) {}, onError: (Object _) {}));
+            }
+          });
+        case MomentsSignalKind.post || MomentsSignalKind.resync:
+      }
+    });
     return {};
   }
 
@@ -122,6 +185,7 @@ class MomentsFeedState {
     this.hasMore = true,
     this.failed = false,
     this.moreFailed = false,
+    this.newIds = const [],
   });
 
   /// Post ids, newest first.
@@ -138,6 +202,9 @@ class MomentsFeedState {
   /// A later page could not be loaded.
   final bool moreFailed;
 
+  /// Posts that arrived live and are not in [ids] yet: "N new posts".
+  final List<String> newIds;
+
   MomentsFeedState copyWith({
     List<String>? ids,
     bool? loading,
@@ -145,6 +212,7 @@ class MomentsFeedState {
     bool? hasMore,
     bool? failed,
     bool? moreFailed,
+    List<String>? newIds,
   }) {
     return MomentsFeedState(
       ids: ids ?? this.ids,
@@ -153,6 +221,7 @@ class MomentsFeedState {
       hasMore: hasMore ?? this.hasMore,
       failed: failed ?? this.failed,
       moreFailed: moreFailed ?? this.moreFailed,
+      newIds: newIds ?? this.newIds,
     );
   }
 }
@@ -169,8 +238,55 @@ class MomentsFeedController extends Notifier<MomentsFeedState> {
   MomentsFeedState build() {
     ref.watch(momentsUserIdProvider);
     Future.microtask(refresh);
+    final debounce = _Debouncer(ref, momentsLiveDelay);
+    ref.listen(momentsSignalsProvider, (previous, next) {
+      final signal = next.value;
+      if (signal == null) {
+        return;
+      }
+      switch (signal.kind) {
+        case MomentsSignalKind.post || MomentsSignalKind.resync:
+          debounce.run(() => unawaited(_checkForNew()));
+        case MomentsSignalKind.postRemoved:
+          final id = signal.postId;
+          if (id != null) {
+            removeId(id);
+          }
+        case MomentsSignalKind.reaction:
+      }
+    });
     return const MomentsFeedState();
   }
+
+  /// Reads the newest page again, quietly: posts that are not in the list
+  /// become "N new posts" (the list itself does not jump under the
+  /// reader's thumb). Goes through the same function as the feed, so a
+  /// signal can never reveal a post the person may not see.
+  Future<void> _checkForNew() async {
+    if (state.loading || state.failed) {
+      return;
+    }
+    try {
+      final posts = await _repository.feed(
+        limit: momentsPageSize,
+        authorId: authorId,
+      );
+      ref.read(momentPostsStoreProvider.notifier).putAll(posts);
+      final known = state.ids.toSet();
+      final fresh = [
+        for (final post in posts)
+          if (!known.contains(post.id)) post.id,
+      ];
+      if (!listEquals(fresh, state.newIds)) {
+        state = state.copyWith(newIds: fresh);
+      }
+    } on Object {
+      // The next signal, or pulling down, tries again.
+    }
+  }
+
+  /// Shows the posts that arrived live at the top of the list.
+  Future<void> showNew() => refresh();
 
   MomentsRepository get _repository => ref.read(momentsRepositoryProvider);
 
@@ -243,6 +359,10 @@ class MomentsFeedController extends Notifier<MomentsFeedState> {
         for (final existing in state.ids)
           if (existing != id) existing,
       ],
+      newIds: [
+        for (final existing in state.newIds)
+          if (existing != id) existing,
+      ],
     );
   }
 }
@@ -270,6 +390,17 @@ final momentsUnseenProvider = FutureProvider.autoDispose<MomentsUnseen>((
       ref.invalidateSelf();
     }
   });
+  // So is a friend posting (or taking a post back): the count and the
+  // latest poster's avatar on the Moments entry follow live.
+  final debounce = _Debouncer(ref, momentsLiveDelay);
+  ref.listen(momentsSignalsProvider, (previous, next) {
+    final kind = next.value?.kind;
+    if (kind == MomentsSignalKind.post ||
+        kind == MomentsSignalKind.postRemoved ||
+        kind == MomentsSignalKind.resync) {
+      debounce.run(ref.invalidateSelf);
+    }
+  });
   try {
     return await ref.watch(momentsRepositoryProvider).unseen();
   } on Object {
@@ -281,6 +412,16 @@ final momentsUnseenProvider = FutureProvider.autoDispose<MomentsUnseen>((
 final momentNotificationsProvider =
     FutureProvider.autoDispose<List<MomentNotification>>((ref) async {
       ref.watch(momentsUserIdProvider);
+      // A like or comment on my Moment (or a reply to my comment) shows up
+      // in Notifications and its badge as it happens.
+      final debounce = _Debouncer(ref, momentsLiveDelay);
+      ref.listen(momentsSignalsProvider, (previous, next) {
+        final kind = next.value?.kind;
+        if (kind == MomentsSignalKind.reaction ||
+            kind == MomentsSignalKind.resync) {
+          debounce.run(ref.invalidateSelf);
+        }
+      });
       try {
         return await ref.watch(momentsRepositoryProvider).notifications();
       } on Object {

@@ -9,6 +9,7 @@ import 'package:wecord/features/moments/moment_composer_screen.dart';
 import 'package:wecord/features/moments/moment_photo_viewer.dart';
 import 'package:wecord/features/moments/moment_photos.dart';
 import 'package:wecord/features/moments/moments_models.dart';
+import 'package:wecord/features/moments/moments_new_pill.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
 import 'package:wecord/features/moments/moments_widgets.dart';
@@ -85,6 +86,23 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
     ref
       ..invalidate(momentsProfileProvider)
       ..invalidate(momentNotificationsProvider);
+  }
+
+  /// "N new posts": back to the top with them in.
+  Future<void> _showNew() async {
+    if (_scroll.hasClients) {
+      unawaited(
+        _scroll.animateTo(
+          0,
+          duration: WeCordMotion.smooth.durationOf(context),
+          curve: WeCordMotion.standard,
+        ),
+      );
+    }
+    await ref.read(_provider.notifier).showNew();
+    if (widget.userId == null) {
+      unawaited(_markSeen());
+    }
   }
 
   Future<void> _changeCover() async {
@@ -288,7 +306,25 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
                       ),
                   ],
                 ),
-                Expanded(child: body),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: body),
+                      if (feed.newIds.isNotEmpty)
+                        Positioned(
+                          top: 8,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: NewMomentsPill(
+                              count: feed.newIds.length,
+                              onPressed: () => unawaited(_showNew()),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

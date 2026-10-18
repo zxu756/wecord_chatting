@@ -4,7 +4,9 @@ Settings -> Privacy & Safety -> Download my data. The `data-export` Edge
 Function collects what WeCord keeps about the caller into a ZIP, stores it
 in a private bucket and hands out a signed link.
 
-Migration: `supabase/migrations/202610170053_data_export.sql`.
+Migrations: `supabase/migrations/202610170053_data_export.sql` (bucket, table,
+rate limit) and `supabase/migrations/202610190023_data_export_more.sql`
+(Moments, chains, notes and the rest, below).
 Function: `supabase/functions/data-export/` (verify_jwt = true).
 Client: `lib/features/settings/data_export.dart`.
 
@@ -28,6 +30,63 @@ the chats. Files in messages are linked with signed URLs that last as long as
 the export (7 days). A part that cannot be read (a table a deployment lacks)
 is listed under "Not included" in `index.html` instead of failing the export.
 
+### Moments, chains, notes and the rest
+
+```
+pages/moments.html           Moments, friend tags and starred friends
+pages/chains.html            group chains
+pages/notes.html             notes and task lists
+pages/saved.html             saved messages, reminders, scheduled messages
+pages/wallpapers.html        chat wallpapers
+data/moments.json            settings, friend_choices, posts, comments_you_wrote, posts_you_liked
+data/friend_tags.json        tags (with who is in them), starred_friends
+data/chains.json  data/notes.json  data/task_lists.json
+data/saved_messages.json  data/reminders.json  data/scheduled_messages.json
+data/wallpapers.json
+files/moments/…  files/wallpapers/…   your own photos, videos, cover and wallpaper photos
+```
+
+The rule for all of it: **only content you wrote or own**. Other people appear
+by name only (id, username, display name: the names the export already
+carries for friends and chats). The database functions
+`export_my_moments(user)` and `export_my_extras(user)` (SECURITY DEFINER,
+service role only, each starting from the user they are given) read it, and
+`test/supabase/data_export_behaviour.sql` proves, in a rolled-back
+transaction, that another person's Moments, chain lines, notes, lists,
+saved messages, reminders, scheduled messages and wallpapers do not come out.
+The rule per section:
+
+| Section | What is exported | What is not |
+| --- | --- | --- |
+| Moments settings | visible range, cover file you own | |
+| Per-friend choices | your hide_mine / hide_theirs, friend named | the friend's own choices |
+| Your posts | every column of posts you wrote (text, link, place, visibility, photos, a `video` if that column exists), the audience resolved to names and tag names | other people's posts, photos, tags |
+| Comments you wrote | your text, the post id, the post author's name, who you replied to by name; the post's text only if the post is yours | the rest of the thread, other people's comments, comment counts |
+| Likes | post id and time | who else liked, the post |
+| Friend tags | your tags and who is in them (names) | anyone else's tags |
+| Starred friends | your stars (names) | anyone else's stars |
+| Group chains | chains you started or joined: title, creator's name, deadline, cap, entry count, state, **your own line**; the description and example only for chains you started | other people's lines, who else joined |
+| Notes | notes you made or wrote in (not deleted): title, icon, chat name; only the blocks whose **last editor is you** | blocks last edited by others (so a note you made may be incomplete if others changed lines), notes in chats you never wrote in, deleted notes, version history |
+| Task lists | lists you made or added items to (not deleted): title, chat name; only items **you created**, with who they are assigned to by name | items others created, items assigned to you by others, deleted items |
+| Saved messages | when and where you saved; the text only if you wrote the message | the text of other people's messages |
+| Reminders | when and where; the text only if you wrote the message | the text of other people's messages |
+| Scheduled messages | everything you scheduled (text, time, status) | |
+| Wallpapers | your choice per chat or default, wallpaper photo you own | |
+
+Chat names come from the conversations list; a chat you have left shows as
+"A conversation you left". Images inside notes are not exported (only their
+text blocks).
+
+Files from Storage (`moments`, `wallpapers` buckets) are limited to your own
+folder (`<your id>/…`, checked in the function whatever the database says).
+They are put into the ZIP itself while they fit: each file up to 10 MB, 40 MB
+and 500 files in all, and up to 90 seconds of downloading (constants in
+`collect.ts`); a video of unknown size is never downloaded, it is linked. A
+file that does not fit, or cannot be read, gets a signed link in the JSON and
+pages that works as long as the export (7 days). Rows are capped per section
+inside the SQL functions (for example 5,000 posts, 10,000 comments) so one
+export stays small.
+
 ## Flow
 
 1. `POST /functions/v1/data-export` starts an export and answers `202 {id}`;
@@ -37,7 +96,7 @@ is listed under "Not included" in `index.html` instead of failing the export.
    `begin_data_export(user)`, which also inserts the `data_exports` row under
    an advisory lock.
 2. The function updates the row's `stage` and `progress` (queued, profile,
-   friends, conversations, messages, circles, attachments, packaging,
+   friends, conversations, messages, circles, moments, more, attachments, packaging,
    uploading, ready). The app polls `GET /functions/v1/data-export?id=<id>`
    every 1.5 seconds for the progress bar.
 3. The ZIP is uploaded to `data-exports/<user id>/<timestamp>.zip`. Only the
@@ -68,6 +127,11 @@ $$);
 
 ## Deploying
 
-1. Apply the migration (creates the bucket, `data_exports`, policies and
-   `begin_data_export`).
-2. `supabase functions deploy data-export`.
+1. Apply the migrations (the first creates the bucket, `data_exports`,
+   policies and `begin_data_export`; `202610190023` adds `export_my_moments`,
+   `export_my_extras` and `export_person_json`, service role only). The
+   second needs the Moments, friend tags, chains, notes, task lists, saved
+   messages, reminders, scheduled messages and wallpapers migrations before it.
+2. `supabase functions deploy data-export`. Deploy the migration first: an
+   export made before it lists "moments" and "notes, lists and more" under
+   "Not included" instead of failing.

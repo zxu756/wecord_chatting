@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/moments/moments_models.dart';
+import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_settings_screen.dart';
 
 import '../features/moments/moments_fakes.dart';
@@ -116,6 +117,60 @@ final momentsA11yScreens = <A11yScreen>[
       'Sunday hike',
     );
     await tester.tap(find.byKey(const ValueKey('moment-add-photos')));
+    await settleWithImages(tester);
+  }),
+  A11yScreen('moments-composer-video', (tester, world) async {
+    await _open(
+      tester,
+      world,
+      '/moments/compose',
+      picker: FakeMomentPhotoPicker()..video = sampleVideo(seconds: 38),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('moment-text')),
+      'Down the valley',
+    );
+    await tester.tap(find.byKey(const ValueKey('moment-add-video')));
+    await settleWithImages(tester);
+  }),
+  A11yScreen('moments-feed-video-and-new-posts', (tester, world) async {
+    final repository = _server();
+    repository.bucket['user-2/v1-0.jpg'] = samplePhotoBytes(
+      width: 480,
+      height: 270,
+    );
+    repository.posts = [
+      MomentPost(
+        id: 'v1',
+        authorId: 'user-2',
+        authorName: 'Bart Simmons',
+        body: 'Down the valley before the fog lifted.',
+        kind: MomentKind.video,
+        video: const MomentVideo(
+          path: 'user-2/v1-v.mp4',
+          poster: 'user-2/v1-0.jpg',
+          thumb: 'user-2/v1-0-t.jpg',
+          duration: Duration(seconds: 42),
+          width: 480,
+          height: 270,
+        ),
+        createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 25)),
+      ),
+      ...repository.posts,
+    ];
+    world.extraOverrides = momentsOverrides(
+      repository: repository,
+      tags: _tags(),
+    );
+    await world.open(tester, '/moments');
+    await settleWithImages(tester);
+    repository.posts = [
+      post('n1', body: 'Just landed.', minutesAgo: 0),
+      ...repository.posts,
+    ];
+    repository.emit(MomentsSignalKind.post, 'n1');
+    await tester.pump();
+    await tester.pump(momentsLiveDelay + const Duration(milliseconds: 100));
     await settleWithImages(tester);
   }),
   A11yScreen('moments-audience', (tester, world) async {

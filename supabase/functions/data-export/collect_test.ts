@@ -166,6 +166,7 @@ const emptyRpc: Record<string, unknown> = {
     scheduled_messages: [],
     wallpapers: [],
   },
+  export_my_forms: [],
 };
 
 const me = "u-1";
@@ -363,6 +364,15 @@ const momentsAnswer = {
   tags: [{ id: "t-1", name: "Family", friends: [] }],
   stars: [{ friend: { id: "u-2" } }],
 };
+const formsAnswer = [{
+  id: "f-1",
+  title: "Hike sign-up",
+  created_by_me: false,
+  questions: [{ id: "photo", type: "image", label: "A photo" }],
+  my_responses: [{
+    answers: { photo: { bucket: "chat-images", path: "g-1/forms/f-1/a.jpg" } },
+  }],
+}];
 const extrasAnswer = {
   chains: [{ id: "ch-1", title: "Dinner", my_entry: { text: "me" } }],
   notes: [{ id: "n-1", blocks: [] }],
@@ -378,6 +388,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     rpc: {
       export_my_moments: momentsAnswer,
       export_my_extras: extrasAnswer,
+      export_my_forms: formsAnswer,
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -391,7 +402,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
   assertEquals(rpcCalls, [
     { name: "export_my_moments", args: { target_user_id: me } },
     { name: "export_my_extras", args: { target_user_id: me } },
+    { name: "export_my_forms", args: { target_user_id: me } },
   ]);
+  assertEquals(data.forms?.length, 1);
+  // The picture I attached to an answer is linked, not fetched.
+  assert("chat-images/g-1/forms/f-1/a.jpg" in data.attachmentLinks);
   assertEquals(data.moments?.posts.length, 1);
   assertEquals(data.moments?.settings?.["cover_path"], "u-1/cover-1.jpg");
   assertEquals(data.moments?.friendPrefs.length, 1);
@@ -405,7 +420,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
 
 Deno.test("my photos go into the ZIP; a video of known size above the cap is linked", async () => {
   const { client, signed, downloads } = fakeClient(world, {
-    rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+    rpc: {
+      export_my_moments: momentsAnswer,
+      export_my_extras: extrasAnswer,
+      export_my_forms: formsAnswer,
+    },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
       "moments/u-1/p-1-0.jpg": new Uint8Array([2, 2]),
@@ -451,7 +470,11 @@ Deno.test("files past the total or count cap are linked, not dropped", async () 
   };
   const run = async (limits: Parameters<typeof collectExportData>[1]["fileLimits"]) => {
     const { client } = fakeClient(world, {
-      rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+      rpc: {
+      export_my_moments: momentsAnswer,
+      export_my_extras: extrasAnswer,
+      export_my_forms: [],
+    },
       objects,
     });
     return await collectExportData(client, {
@@ -487,7 +510,11 @@ Deno.test("files past the total or count cap are linked, not dropped", async () 
 
 Deno.test("a file that cannot be downloaded is linked instead", async () => {
   const { client } = fakeClient(world, {
-    rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+    rpc: {
+      export_my_moments: momentsAnswer,
+      export_my_extras: extrasAnswer,
+      export_my_forms: formsAnswer,
+    },
     objects: { "moments/u-1/cover-1.jpg": new Uint8Array([1]) },
   });
   const data = await collectExportData(client, { userId: me, now });
@@ -503,7 +530,12 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   const data = await collectExportData(client, { userId: me, now });
   assertEquals(data.moments, null);
   assertEquals(data.extras, null);
-  assertEquals(data.skipped.sort(), ["moments", "notes, lists and more"]);
+  assertEquals(data.forms, null);
+  assertEquals(data.skipped.sort(), [
+    "forms",
+    "moments",
+    "notes, lists and more",
+  ]);
   assertEquals(data.messages.length, 2);
   assertEquals(data.files, []);
 });

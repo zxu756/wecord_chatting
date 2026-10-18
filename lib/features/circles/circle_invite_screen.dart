@@ -6,6 +6,7 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
@@ -49,7 +50,7 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
               error: (error, stackTrace) => CircleEmptyState(
                 icon: Icons.error_outline_rounded,
                 title: tr('Could not load invite'),
-                message: error.toString(),
+                message: errorText(error),
                 action: WeCordButton(
                   variant: WeCordButtonVariant.onPaper,
                   onPressed: () =>
@@ -214,7 +215,9 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
         _isJoining = false;
         _errorText = '$error'.contains('Banned from this circle')
             ? tr("You're banned from this circle.")
-            : tr('Could not join this circle. {error}', {'error': error});
+            : tr('Could not join this circle. {error}', {
+                'error': errorText(error),
+              });
       });
       ref.invalidate(circleInvitePreviewProvider(widget.code));
     }

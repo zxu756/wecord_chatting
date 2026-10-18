@@ -16,6 +16,7 @@ import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/qr/qr_entries.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -762,7 +763,7 @@ class _ErrorText extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Text(
-        error.toString(),
+        errorText(error),
         style: TextStyle(color: context.tokens.colors.dangerText),
       ),
     );

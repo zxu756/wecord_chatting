@@ -43,17 +43,17 @@ const zhVoiceMore = <String, String>{
   // Voice moderation
   'Mute members': '静音成员',
   'Server mute members ranked below them in voice channels.':
-      '在语音频道中对身份组低于自己的成员进行服务器静音。',
+      '在语音频道中对角色等级低于自己的成员进行强制静音。',
   'Deafen members': '关闭成员声音',
   'Server deafen members ranked below them in voice channels.':
-      '在语音频道中为身份组低于自己的成员关闭声音。',
+      '在语音频道中为角色等级低于自己的成员强制关闭声音。',
   'Move members': '移动成员',
   'Move members ranked below them between voice channels, disconnect them, and join full channels.':
-      '在语音频道之间移动身份组低于自己的成员、断开其连接，并可加入已满的频道。',
-  'Server mute': '服务器静音',
-  'Server deafen': '服务器关闭声音',
-  'Server muted': '已被服务器静音',
-  'Server deafened': '已被服务器关闭声音',
+      '在语音频道之间移动角色等级低于自己的成员、断开其连接，并可加入已满的频道。',
+  'Server mute': '强制静音',
+  'Server deafen': '强制关闭声音',
+  'Server muted': '已被强制静音',
+  'Server deafened': '已被强制关闭声音',
   'Move to…': '移动到…',
   'Move {name} to': '将 {name} 移动到',
   'Could not change their voice state.': '无法更改对方的语音状态。',
@@ -70,10 +70,10 @@ const zhVoiceMore = <String, String>{
   '{actor} set the user limit of {target} to {limit}':
       '{actor} 将 {target} 的人数上限设为 {limit}',
   '{actor} removed the user limit of {target}': '{actor} 取消了 {target} 的人数上限',
-  '{actor} server muted {target}': '{actor} 对 {target} 进行了服务器静音',
-  '{actor} server unmuted {target}': '{actor} 取消了 {target} 的服务器静音',
-  '{actor} server deafened {target}': '{actor} 在服务器上关闭了 {target} 的声音',
-  '{actor} server undeafened {target}': '{actor} 恢复了 {target} 的服务器声音',
+  '{actor} server muted {target}': '{actor} 对 {target} 进行了强制静音',
+  '{actor} server unmuted {target}': '{actor} 取消了 {target} 的强制静音',
+  '{actor} server deafened {target}': '{actor} 对 {target} 进行了强制关闭声音',
+  '{actor} server undeafened {target}': '{actor} 取消了 {target} 的强制关闭声音',
   '{actor} disconnected {target} from voice': '{actor} 将 {target} 断开了语音连接',
   '{actor} moved {target} to {channel}': '{actor} 将 {target} 移动到 {channel}',
   '{actor} moved {target} to another voice channel':

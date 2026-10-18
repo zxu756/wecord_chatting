@@ -10,6 +10,7 @@ import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/file_preview_service.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/thumbnails.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/media_attachment.dart';
@@ -85,7 +86,7 @@ class _ChatMediaScreenState extends ConsumerState<ChatMediaScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          error.toString(),
+                          errorText(error),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: c.dangerText),
                         ),

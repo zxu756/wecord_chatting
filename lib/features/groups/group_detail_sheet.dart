@@ -10,6 +10,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -116,7 +117,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
         title: widget.title.trim().isEmpty
             ? widget.conversationId
             : widget.title.trim(),
-        errorText: error.toString(),
+        errorText: errorText(error),
       ),
       data: (detail) => _buildDetail(context, detail, controller),
     );

@@ -12,7 +12,7 @@ const zhTranscribe = <String, String>{
   "This device can't transcribe this language by itself. To go on, the audio is sent to Apple's speech service.":
       '本设备无法单独转写这种语言。继续的话，这段语音会发送给 Apple 的语音服务。',
   'Transcription is available in the iPhone and Mac apps.':
-      '转文字功能可在 iPhone 和 Mac 版 App 中使用。',
+      '转文字功能可在 iPhone 和 Mac 应用中使用。',
   "This device can't transcribe voice messages in this language yet.":
       '本设备暂时无法转写这种语言的语音消息。',
   'Turn on AI features in Settings → AI to transcribe voice messages here.':

@@ -21,11 +21,11 @@ const zhAiGuard = <String, String>{
   'Joined less than': '加入时间少于',
   'Fewer than': '消息少于',
   'Members who joined less than a day ago. Moderators and managers are never checked.':
-      '加入不满一天的成员。版主和管理员不会被检查。',
+      '加入不满一天的成员。版主和管理者不会被检查。',
   'Members who joined less than {count} days ago. Moderators and managers are never checked.':
-      '加入不满 {count} 天的成员。版主和管理员不会被检查。',
+      '加入不满 {count} 天的成员。版主和管理者不会被检查。',
   'Members who have sent fewer than {count} messages in this circle. Moderators and managers are never checked.':
-      '在此圈子发送的消息少于 {count} 条的成员。版主和管理员不会被检查。',
+      '在此圈子发送的消息少于 {count} 条的成员。版主和管理者不会被检查。',
   'When the AI flags a message': 'AI 标记了消息时',
   'Hold for review': '扣留待审',
   'Hidden from everyone but the author until a moderator approves or removes it.':

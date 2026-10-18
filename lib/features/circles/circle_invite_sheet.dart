@@ -6,6 +6,7 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -382,7 +383,7 @@ class _CircleInviteLinksSectionState
       if (!mounted) return;
       setState(() {
         _isBusy = false;
-        _errorText = '$failure $error';
+        _errorText = '$failure ${errorText(error)}';
       });
     }
   }

@@ -14,6 +14,7 @@ import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/phone_home.dart';
 import 'package:wecord/features/voice/voice_session.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -77,7 +78,7 @@ class CircleDetailScreen extends ConsumerWidget {
               body: CircleEmptyState(
                 icon: Icons.error_outline_rounded,
                 title: tr('Could not load the circle.'),
-                message: error.toString(),
+                message: errorText(error),
               ),
             ),
       data: (detail) => CircleOnboardingGate(
@@ -196,7 +197,7 @@ class _CircleFeedPage extends ConsumerWidget {
           .watch(circleDetailProvider(circleId))
           .when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, stackTrace) => Center(child: Text(error.toString())),
+            error: (error, stackTrace) => Center(child: Text(errorText(error))),
             data: (detail) => CircleFeedView(
               circleId: circleId,
               posts: detail.posts,

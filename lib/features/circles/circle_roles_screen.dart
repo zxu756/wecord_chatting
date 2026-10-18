@@ -4,6 +4,7 @@ import 'package:wecord/features/chats/role_mentions.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -113,7 +114,7 @@ class _CircleRolesScreenState extends ConsumerState<CircleRolesScreen> {
         error: (error, stackTrace) => CircleEmptyState(
           icon: Icons.error_outline,
           title: tr('Could not load the circle.'),
-          message: error.toString(),
+          message: errorText(error),
         ),
         data: _buildRoles,
       ),

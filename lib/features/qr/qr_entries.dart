@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/agenda/agenda_settings_screen.dart';
 import 'package:wecord/features/pat/pat_suffix_sheet.dart';
+import 'package:wecord/features/profile/birthday_editor.dart';
+import 'package:wecord/features/profile/support_links.dart';
+import 'package:wecord/features/profile/support_links_editor.dart';
 import 'package:wecord/features/qr/my_qr_sheet.dart';
 import 'package:wecord/features/qr/qr_link_handler.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-/// Settings, under the account card: My QR code, Scan, the pat suffix and
-/// the calendar subscription.
+/// Settings, under the account card: My QR code, Scan, the pat suffix, the
+/// calendar subscription, the birthday and the support links.
 class ProfileToolsGroup extends ConsumerWidget {
   const ProfileToolsGroup({super.key});
 
@@ -32,6 +35,9 @@ class ProfileToolsGroup extends ConsumerWidget {
         ),
         const PatSuffixRow(),
         const AgendaSettingsRow(),
+        const BirthdaySettingsRow(),
+        // Hidden on iPhone (App Store guideline 3.1.1).
+        if (supportLinksAvailable()) const SupportLinksSettingsRow(),
       ],
     );
   }

@@ -16,7 +16,11 @@ import 'package:wecord/features/circles/join_requests/join_requests_repository.d
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
+import 'package:wecord/features/profile/birthday_card.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/profile/profile_insights_blocks.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/later/later_cards.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
@@ -126,6 +130,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(securityAlertsProvider)
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
+      ..invalidate(birthdaysTodayProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -186,6 +191,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final joinRequests =
         ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
     final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
+    // Friends whose birthday is today, under the Friends chip.
+    final birthdays =
+        _filter == InboxFilter.all || _filter == InboxFilter.friends
+        ? ref.watch(birthdaysTodayProvider).value ?? const <BirthdayFriend>[]
+        : const <BirthdayFriend>[];
     final items = inbox.value ?? const <InboxItem>[];
     final firedReminders = ref.watch(firedRemindersProvider);
     final upcomingReminders = [
@@ -322,6 +332,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 ],
               ],
             ),
+          for (final friend in birthdays) BirthdayCard(friend: friend),
           for (final reminder in eventReminders)
             ChatEventReminderCard(
               reminder: reminder,
@@ -687,6 +698,7 @@ class _FriendRequestCardState extends ConsumerState<_FriendRequestCard> {
                   '@${requester.username}',
                   style: TextStyle(fontSize: 13, color: c.muted),
                 ),
+                MutualCountLine(userId: requester.id),
                 const SizedBox(height: 10),
                 Align(
                   alignment: AlignmentDirectional.centerStart,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
+import 'package:wecord/features/profile/status_visibility_picker.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -34,6 +37,7 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
   );
   late String? _emoji = widget.current?.emoji;
   var _duration = CustomStatusDuration.never;
+  StatusVisibility? _visibility;
   var _saving = false;
   String? _errorText;
 
@@ -69,6 +73,14 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
             text: clear ? null : _textController.text,
             expiresAt: clear ? null : _duration.expiresAt(DateTime.now()),
           );
+      // Who can see it, when that was changed.
+      final visibility = _visibility;
+      if (!clear && visibility != null) {
+        await ref
+            .read(profileSocialRepositoryProvider)
+            .setStatusVisibility(visibility);
+        ref.invalidate(myProfileExtrasProvider);
+      }
       if (mounted) {
         Navigator.of(context).pop(true);
       }
@@ -188,6 +200,9 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
                           : () => setState(() => _duration = duration),
                     ),
                 ],
+              ),
+              StatusVisibilityPicker(
+                onChanged: (choice) => _visibility = choice,
               ),
               if (_errorText != null) ...[
                 const SizedBox(height: 12),

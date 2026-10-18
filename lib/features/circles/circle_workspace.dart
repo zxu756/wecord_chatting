@@ -20,6 +20,7 @@ import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
@@ -1113,7 +1114,9 @@ class _MemberRow extends ConsumerWidget {
   }
 
   void _openProfile(BuildContext context) {
-    context.push('${UserProfileScreen.path}/${member.profile.id}');
+    context.push(
+      userProfileLocation(member.profile.id, source: FriendSource.circle),
+    );
   }
 
   Future<void> _showActions(BuildContext context, Offset? position) async {

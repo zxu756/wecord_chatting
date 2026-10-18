@@ -34,6 +34,7 @@ import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/moments/moment_composer_screen.dart';
 import 'package:wecord/features/moments/moment_detail_screen.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/qr_link_screens.dart';
 import 'package:wecord/features/qr/qr_links.dart';
@@ -296,7 +297,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '${UserProfileScreen.path}/:userId',
             builder: (context, state) {
-              return UserProfileScreen(userId: state.pathParameters['userId']!);
+              return UserProfileScreen(
+                userId: state.pathParameters['userId']!,
+                source: FriendSource.fromWire(
+                  state.uri.queryParameters['source'],
+                ),
+              );
             },
           ),
           GoRoute(

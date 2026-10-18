@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +12,8 @@ import 'package:wecord/features/notifications/notification_preferences_repositor
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
+import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/settings/account_deletion.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
@@ -299,6 +301,95 @@ void main() {
     expect(find.text('Set a status'), findsNothing);
     expect(find.text('Focusing'), findsOneWidget);
     expect(find.textContaining('Clears '), findsOneWidget);
+  });
+
+  testWidgets('chooses who sees the status when saving it', (tester) async {
+    final settingsRepository = FakeSettingsRepository();
+    final social = _SocialSource();
+
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: settingsRepository,
+        profileSocialDataSource: social,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Set status'));
+    await tester.pumpAndSettle();
+    expect(find.text('Who can see this'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, "What's happening?"),
+      'Reading',
+    );
+    await tester.tap(find.byKey(const ValueKey('status-visibility-starred')));
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CustomStatusSheet),
+        matching: find.widgetWithText(WeCordButton, 'Save'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(settingsRepository.statusCalls.single.text, 'Reading');
+    final saved = social.calls.where(
+      (call) => call.$1 == 'set_status_visibility',
+    );
+    expect(saved.single.$2, {'visibility': 'starred'});
+  });
+
+  testWidgets('does not touch the audience when it was not changed', (
+    tester,
+  ) async {
+    final settingsRepository = FakeSettingsRepository();
+    final social = _SocialSource();
+    await tester.pumpWidget(
+      _app(
+        settingsRepository: settingsRepository,
+        profileSocialDataSource: social,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Set status'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, "What's happening?"),
+      'Reading',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CustomStatusSheet),
+        matching: find.widgetWithText(WeCordButton, 'Save'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      social.calls.where((call) => call.$1 == 'set_status_visibility'),
+      isEmpty,
+    );
+  });
+
+  testWidgets('settings has the birthday, and support links off iPhone', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(settingsRepository: FakeSettingsRepository()));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings-birthday')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('settings-support-links')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(_app(settingsRepository: FakeSettingsRepository()));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings-birthday')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-support-links')), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('clears the current custom status', (tester) async {
@@ -734,9 +825,14 @@ Widget _app({
   LocalNotificationService? localNotificationService,
   PresenceRepository? presenceRepository,
   ProfileExtrasDataSource? profileExtrasDataSource,
+  ProfileDataSource? profileSocialDataSource,
 }) {
   return ProviderScope(
     overrides: [
+      if (profileSocialDataSource != null)
+        profileSocialRepositoryProvider.overrideWithValue(
+          ProfileSocialRepository(profileSocialDataSource),
+        ),
       profileExtrasRepositoryProvider.overrideWithValue(
         ProfileExtrasRepository(
           profileExtrasDataSource ?? FakeProfileExtrasDataSource(),
@@ -775,6 +871,23 @@ Widget _app({
     ],
     child: const MaterialApp(home: SettingsScreen()),
   );
+}
+
+class _SocialSource implements ProfileDataSource {
+  final calls = <(String, Map<String, dynamic>)>[];
+
+  @override
+  Future<Object?> rpc(String functionName, Map<String, dynamic> params) async {
+    calls.add((functionName, params));
+    return switch (functionName) {
+      'get_my_profile_extras' => {
+        'birthday': {'visibility': 'friends', 'reminders': true},
+        'status_visibility': 'everyone',
+        'links': const [],
+      },
+      _ => null,
+    };
+  }
 }
 
 class FakeSettingsRepository implements SettingsRepository {

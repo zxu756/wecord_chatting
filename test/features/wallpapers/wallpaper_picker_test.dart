@@ -454,7 +454,7 @@ void main() {
       final row = find.byKey(const ValueKey('chat-wallpaper-row'));
       await tester.drag(
         find.byKey(const ValueKey('settings-screen')),
-        const Offset(0, -400),
+        const Offset(0, -600),
       );
       await settle(tester);
       await tester.tap(row);

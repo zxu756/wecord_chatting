@@ -12,6 +12,10 @@ import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
 import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/profile/profile_insights_blocks.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -151,7 +155,12 @@ class _SearchSection extends ConsumerWidget {
                       for (final profile in profiles)
                         _PersonRow(
                           profile: profile,
-                          onTap: () => context.push('/profile/${profile.id}'),
+                          onTap: () => context.push(
+                            userProfileLocation(
+                              profile.id,
+                              source: FriendSource.search,
+                            ),
+                          ),
                           trailing: _AddFriendButton(profile: profile),
                         ),
                     ],
@@ -197,6 +206,11 @@ class _AddFriendButton extends ConsumerWidget {
                 }
                 return;
               }
+              await recordFriendRequestSource(
+                ref,
+                profile.id,
+                FriendSource.search,
+              );
               ref.read(sentFriendRequestIdsProvider.notifier).update((ids) {
                 return {...ids, profile.id};
               });
@@ -237,40 +251,53 @@ class _IncomingRequestsSection extends ConsumerWidget {
                     onTap: () {
                       context.push('/profile/${incomingRequest.requester.id}');
                     },
-                    below: Row(
+                    below: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: WeCordButton(
-                            label: tr('Accept'),
-                            size: WeCordButtonSize.small,
-                            expand: true,
-                            onPressed: () async {
-                              await ref
-                                  .read(contactsRepositoryProvider)
-                                  .acceptFriendRequest(
-                                    incomingRequest.request.id,
-                                  );
-                              ref.invalidate(incomingFriendRequestsProvider);
-                              ref.invalidate(friendsProvider);
-                            },
-                          ),
+                        MutualCountLine(
+                          userId: incomingRequest.requester.id,
+                          padding: const EdgeInsets.only(bottom: 8),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: WeCordButton(
-                            label: tr('Reject'),
-                            size: WeCordButtonSize.small,
-                            variant: WeCordButtonVariant.secondary,
-                            expand: true,
-                            onPressed: () async {
-                              await ref
-                                  .read(contactsRepositoryProvider)
-                                  .rejectFriendRequest(
-                                    incomingRequest.request.id,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: WeCordButton(
+                                label: tr('Accept'),
+                                size: WeCordButtonSize.small,
+                                expand: true,
+                                onPressed: () async {
+                                  await ref
+                                      .read(contactsRepositoryProvider)
+                                      .acceptFriendRequest(
+                                        incomingRequest.request.id,
+                                      );
+                                  ref.invalidate(
+                                    incomingFriendRequestsProvider,
                                   );
-                              ref.invalidate(incomingFriendRequestsProvider);
-                            },
-                          ),
+                                  ref.invalidate(friendsProvider);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: WeCordButton(
+                                label: tr('Reject'),
+                                size: WeCordButtonSize.small,
+                                variant: WeCordButtonVariant.secondary,
+                                expand: true,
+                                onPressed: () async {
+                                  await ref
+                                      .read(contactsRepositoryProvider)
+                                      .rejectFriendRequest(
+                                        incomingRequest.request.id,
+                                      );
+                                  ref.invalidate(
+                                    incomingFriendRequestsProvider,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

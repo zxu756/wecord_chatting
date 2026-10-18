@@ -14,6 +14,8 @@ import 'package:wecord/features/home/conversation_preview.dart';
 import 'package:wecord/features/home/phone_messages_panel.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -433,6 +435,143 @@ void main() {
     expect(find.text('Thread conversation-ada Ada Lovelace'), findsOneWidget);
   });
 
+  testWidgets('a friend\'s status shows as a bubble over their avatar', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository();
+    await tester.pumpWidget(
+      _app(
+        repository,
+        friends: [
+          _friend('user-2', 'Ada Lovelace'),
+          _friend('user-3', 'Grace'),
+        ],
+        friendStatuses: const {
+          'user-2': FriendStatus(
+            userId: 'user-2',
+            emoji: '📚',
+            text: 'Studying for the exam tomorrow',
+          ),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    // At most 12 characters of the text, cut with an ellipsis.
+    final bubble = find.byKey(const ValueKey('status-bubble-text-user-2'));
+    expect(bubble, findsOneWidget);
+    expect(tester.widget<Text>(bubble).data, '📚 Studying for…');
+    // Grace has none.
+    expect(find.byKey(const ValueKey('status-bubble-user-3')), findsNothing);
+    // The bubble sits above the avatar.
+    expect(
+      tester
+          .getBottomLeft(find.byKey(const ValueKey('status-bubble-user-2')))
+          .dy,
+      lessThanOrEqualTo(
+        tester
+                .getTopLeft(find.byKey(const ValueKey('phone-friend-user-2')))
+                .dy +
+            1,
+      ),
+    );
+  });
+
+  testWidgets('the row makes room only when a bubble is shown', (tester) async {
+    final repository = FakeChatsRepository();
+    await tester.pumpWidget(
+      _app(repository, friends: [_friend('user-2', 'Ada Lovelace')]),
+    );
+    await tester.pump();
+    await tester.pump();
+    final plain = tester.getSize(
+      find.byKey(const ValueKey('phone-friends-row')),
+    );
+    await tester.pumpWidget(const SizedBox());
+
+    await tester.pumpWidget(
+      _app(
+        repository,
+        friends: [_friend('user-2', 'Ada Lovelace')],
+        friendStatuses: const {
+          'user-2': FriendStatus(userId: 'user-2', text: 'Out for lunch'),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    final withBubble = tester.getSize(
+      find.byKey(const ValueKey('phone-friends-row')),
+    );
+    expect(withBubble.height, greaterThan(plain.height));
+  });
+
+  testWidgets('an expired status shows no bubble', (tester) async {
+    final repository = FakeChatsRepository();
+    await tester.pumpWidget(
+      _app(
+        repository,
+        friends: [_friend('user-2', 'Ada Lovelace')],
+        friendStatuses: {
+          'user-2': FriendStatus(
+            userId: 'user-2',
+            text: 'Out',
+            expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          ),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('status-bubble-user-2')), findsNothing);
+  });
+
+  testWidgets('tapping the bubble opens the chat with a reply ready', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..conversations = [
+        const ConversationSummary(
+          id: 'conversation-ada',
+          type: ConversationType.direct,
+          title: 'Ada Lovelace',
+          unreadCount: 0,
+          directUserId: 'user-2',
+        ),
+      ];
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      _app(
+        repository,
+        router: router,
+        friends: [_friend('user-2', 'Ada Lovelace')],
+        friendStatuses: const {
+          'user-2': FriendStatus(
+            userId: 'user-2',
+            emoji: '🎯',
+            text: 'Focusing',
+          ),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('status-bubble-user-2')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thread conversation-ada Ada Lovelace'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.text('Thread conversation-ada Ada Lovelace')),
+    );
+    expect(
+      container.read(composerDraftsProvider)['conversation-ada']?.text,
+      'Replying to your status: "🎯 Focusing"\n',
+    );
+  });
+
   testWidgets('tapping a conversation passes the title to the thread route', (
     tester,
   ) async {
@@ -498,6 +637,7 @@ GoRouter _router() {
 Widget _app(
   FakeChatsRepository repository, {
   GoRouter? router,
+  Map<String, FriendStatus> friendStatuses = const {},
   List<Profile> friends = const [],
   Set<String> onlineUserIds = const {},
   Map<String, PresenceStatus> statuses = const {},
@@ -515,6 +655,7 @@ Widget _app(
         (ref) => Stream.value(const AuthUser(id: 'me')),
       ),
       friendsProvider.overrideWith((ref) async => friends),
+      friendStatusesProvider.overrideWith((ref) async => friendStatuses),
       incomingFriendRequestsProvider.overrideWith((ref) async => const []),
       onlineUserIdsProvider.overrideWith((ref) => Stream.value(onlineUserIds)),
       presenceStatusesProvider.overrideWith((ref) => Stream.value(statuses)),

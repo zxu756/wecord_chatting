@@ -27,6 +27,8 @@ import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
+import 'package:wecord/features/profile/support_links.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -720,6 +722,20 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final currentMember = detail.currentMember;
     final canManageChannels = detail.canManageChannels;
     final reviewCount = _reviewCount(detail);
+    // The circle's support page, for members; hidden on iPhone.
+    String? supportUrl;
+    if (supportLinksAvailable()) {
+      try {
+        supportUrl = await ref
+            .read(circleSupportUrlProvider(detail.circle.id).future)
+            .timeout(const Duration(seconds: 2));
+      } on Object {
+        supportUrl = null;
+      }
+      if (!mounted) {
+        return;
+      }
+    }
     // What members use every day, what runs the circle, what keeps it safe;
     // a section with nothing for this member does not show.
     final everyday = <CircleMenuItem<_CircleMenuAction>>[
@@ -735,6 +751,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         icon: Icons.notifications_outlined,
         label: tr('Notification settings'),
       ),
+      if (supportUrl != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.support,
+          icon: Icons.favorite_border_rounded,
+          label: tr('Support this circle'),
+        ),
       if (currentMember != null)
         CircleMenuItem(
           value: _CircleMenuAction.emojis,
@@ -892,6 +914,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           circleId: detail.circle.id,
           circleName: detail.circle.name,
         );
+      case _CircleMenuAction.support:
+        if (supportUrl != null) {
+          openSupportLink(context, supportUrl);
+        }
       case _CircleMenuAction.transferOwnership:
         transferCircleOwnership(context, detail: detail);
       case _CircleMenuAction.leave:
@@ -1121,6 +1147,7 @@ enum _CircleMenuAction {
   onboarding,
   emojis,
   notificationSettings,
+  support,
   changeNickname,
   changeCircleAvatar,
   transferOwnership,

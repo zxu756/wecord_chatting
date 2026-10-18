@@ -69,10 +69,32 @@ class FakeQuery {
   }
 }
 
-function fakeClient(tables: Record<string, Row[] | Error>) {
+interface FakeWorld {
+  /** What export_my_moments / export_my_extras answer (or an error). */
+  rpc?: Record<string, unknown>;
+  /** Files in Storage by `bucket/path`. */
+  objects?: Record<string, Uint8Array>;
+}
+
+function fakeClient(
+  tables: Record<string, Row[] | Error>,
+  extra: FakeWorld = {},
+) {
   const calls: string[] = [];
   const signed: { bucket: string; paths: string[] }[] = [];
+  const rpcCalls: { name: string; args: Row }[] = [];
+  const downloads: string[] = [];
+  const rpcAnswers = extra.rpc ?? emptyRpc;
   const client = {
+    rpc: (name: string, args: Row) => {
+      rpcCalls.push({ name, args });
+      const answer = rpcAnswers[name];
+      return Promise.resolve(
+        answer === undefined || answer instanceof Error
+          ? { data: null, error: answer ?? new Error("no such function") }
+          : { data: answer, error: null },
+      );
+    },
     from: (table: string) =>
       new FakeQuery(tables[table] ?? new Error("no such table"), calls, table),
     auth: {
@@ -93,6 +115,15 @@ function fakeClient(tables: Record<string, Row[] | Error>) {
     },
     storage: {
       from: (bucket: string) => ({
+        download: (path: string) => {
+          downloads.push(`${bucket}/${path}`);
+          const bytes = extra.objects?.[`${bucket}/${path}`];
+          return Promise.resolve(
+            bytes
+              ? { data: new Blob([bytes as BlobPart]), error: null }
+              : { data: null, error: new Error("not found") },
+          );
+        },
         createSignedUrls: (paths: string[], _seconds: number) => {
           signed.push({ bucket, paths });
           return Promise.resolve({
@@ -107,8 +138,35 @@ function fakeClient(tables: Record<string, Row[] | Error>) {
       }),
     },
   };
-  return { client: client as unknown as SupabaseClient, calls, signed };
+  return {
+    client: client as unknown as SupabaseClient,
+    calls,
+    signed,
+    rpcCalls,
+    downloads,
+  };
 }
+
+const emptyRpc: Record<string, unknown> = {
+  export_my_moments: {
+    settings: null,
+    friend_prefs: [],
+    posts: [],
+    comments: [],
+    likes: [],
+    tags: [],
+    stars: [],
+  },
+  export_my_extras: {
+    chains: [],
+    notes: [],
+    task_lists: [],
+    saved_messages: [],
+    reminders: [],
+    scheduled_messages: [],
+    wallpapers: [],
+  },
+};
 
 const me = "u-1";
 const world: Record<string, Row[] | Error> = {
@@ -247,6 +305,8 @@ Deno.test("collects only the person's own data, with names for chats", async () 
     "conversations",
     "messages",
     "circles",
+    "moments",
+    "more",
     "attachments",
   ]);
 });
@@ -280,4 +340,170 @@ Deno.test("a table that cannot be read is skipped, not fatal", async () => {
   assertEquals(data.settings["privacy"], undefined);
   assertEquals(data.skipped.sort(), ["circles", "privacy settings"]);
   assertEquals(data.messages.length, 2);
+});
+
+// ---- Moments, chains, notes and the rest --------------------------------
+
+const momentsAnswer = {
+  settings: { visible_range: "all", cover_path: "u-1/cover-1.jpg" },
+  friend_prefs: [{ friend: { id: "u-2" }, hide_mine: true }],
+  posts: [{
+    id: "p-1",
+    body: "mine",
+    photos: [
+      { path: "u-1/p-1-0.jpg" },
+      { path: "u-1/p-1-1.jpg" },
+      // Never fetched, whatever the database says.
+      { path: "u-2/p-9-0.jpg" },
+    ],
+    video: { path: "u-1/p-1-v.mp4", size: 3 * 1024 * 1024 },
+  }],
+  comments: [{ id: "cm-1", text: "hi" }],
+  likes: [{ post_id: "p-9" }],
+  tags: [{ id: "t-1", name: "Family", friends: [] }],
+  stars: [{ friend: { id: "u-2" } }],
+};
+const extrasAnswer = {
+  chains: [{ id: "ch-1", title: "Dinner", my_entry: { text: "me" } }],
+  notes: [{ id: "n-1", blocks: [] }],
+  task_lists: [{ id: "l-1", items: [] }],
+  saved_messages: [{ id: "s-1" }],
+  reminders: [{ id: "r-1" }],
+  scheduled_messages: [{ id: "sc-1" }],
+  wallpapers: [{ kind: "photo", photo_path: "u-1/w-1.jpg" }],
+};
+
+Deno.test("Moments and the rest come from the database functions, for this person", async () => {
+  const { client, rpcCalls } = fakeClient(world, {
+    rpc: {
+      export_my_moments: momentsAnswer,
+      export_my_extras: extrasAnswer,
+    },
+    objects: {
+      "moments/u-1/cover-1.jpg": new Uint8Array([1]),
+      "moments/u-1/p-1-0.jpg": new Uint8Array([2, 2]),
+      "moments/u-1/p-1-1.jpg": new Uint8Array([3, 3, 3]),
+      "wallpapers/u-1/w-1.jpg": new Uint8Array([4]),
+      "moments/u-2/p-9-0.jpg": new Uint8Array([9]),
+    },
+  });
+  const data = await collectExportData(client, { userId: me, now });
+  assertEquals(rpcCalls, [
+    { name: "export_my_moments", args: { target_user_id: me } },
+    { name: "export_my_extras", args: { target_user_id: me } },
+  ]);
+  assertEquals(data.moments?.posts.length, 1);
+  assertEquals(data.moments?.settings?.["cover_path"], "u-1/cover-1.jpg");
+  assertEquals(data.moments?.friendPrefs.length, 1);
+  assertEquals(data.moments?.stars.length, 1);
+  assertEquals(data.extras?.chains.length, 1);
+  assertEquals(data.extras?.taskLists.length, 1);
+  assertEquals(data.extras?.savedMessages.length, 1);
+  assertEquals(data.extras?.wallpapers.length, 1);
+  assertEquals(data.skipped, []);
+});
+
+Deno.test("my photos go into the ZIP; a video of known size above the cap is linked", async () => {
+  const { client, signed, downloads } = fakeClient(world, {
+    rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+    objects: {
+      "moments/u-1/cover-1.jpg": new Uint8Array([1]),
+      "moments/u-1/p-1-0.jpg": new Uint8Array([2, 2]),
+      "moments/u-1/p-1-1.jpg": new Uint8Array([3, 3, 3]),
+      "moments/u-1/p-1-v.mp4": new Uint8Array([7, 7, 7]),
+      "wallpapers/u-1/w-1.jpg": new Uint8Array([4]),
+      "moments/u-2/p-9-0.jpg": new Uint8Array([9]),
+    },
+  });
+  const data = await collectExportData(client, {
+    userId: me,
+    now,
+    fileLimits: { maxFileBytes: 1024 * 1024 },
+  });
+  assertEquals(
+    data.files.map((f) => [f.key, f.zipPath, [...f.bytes]]),
+    [
+      ["moments/u-1/cover-1.jpg", "files/moments/cover-1.jpg", [1]],
+      ["wallpapers/u-1/w-1.jpg", "files/wallpapers/w-1.jpg", [4]],
+      ["moments/u-1/p-1-0.jpg", "files/moments/p-1-0.jpg", [2, 2]],
+      ["moments/u-1/p-1-1.jpg", "files/moments/p-1-1.jpg", [3, 3, 3]],
+    ],
+  );
+  // Somebody else's folder is never touched.
+  assert(!downloads.some((d) => d.includes("u-2")));
+  // The video is over the cap, so it was not even downloaded: it is linked.
+  assert(!downloads.includes("moments/u-1/p-1-v.mp4"));
+  const moments = signed.find((s) => s.bucket === "moments");
+  assertEquals(moments?.paths, ["u-1/p-1-v.mp4"]);
+  assertEquals(
+    data.attachmentLinks["moments/u-1/p-1-v.mp4"],
+    "https://files.example/moments/u-1/p-1-v.mp4?t=1",
+  );
+  assertEquals(data.attachmentLinks["moments/u-1/p-1-0.jpg"], undefined);
+});
+
+Deno.test("files past the total or count cap are linked, not dropped", async () => {
+  const objects = {
+    "moments/u-1/cover-1.jpg": new Uint8Array(6),
+    "moments/u-1/p-1-0.jpg": new Uint8Array(6),
+    "moments/u-1/p-1-1.jpg": new Uint8Array(2),
+    "wallpapers/u-1/w-1.jpg": new Uint8Array(1),
+  };
+  const run = async (limits: Parameters<typeof collectExportData>[1]["fileLimits"]) => {
+    const { client } = fakeClient(world, {
+      rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+      objects,
+    });
+    return await collectExportData(client, {
+      userId: me,
+      now,
+      fileLimits: { maxFileBytes: 100, ...limits },
+    });
+  };
+  // 10 bytes in all: the cover (6) and the wallpaper (1) fit, the next 6
+  // does not, the 2 after it does again.
+  const byTotal = await run({ maxTotalBytes: 10 });
+  assertEquals(byTotal.files.map((f) => f.key), [
+    "moments/u-1/cover-1.jpg",
+    "wallpapers/u-1/w-1.jpg",
+    "moments/u-1/p-1-1.jpg",
+  ]);
+  assert("moments/u-1/p-1-0.jpg" in byTotal.attachmentLinks);
+  const byCount = await run({ maxCount: 1 });
+  assertEquals(byCount.files.map((f) => f.key), ["moments/u-1/cover-1.jpg"]);
+  // (The video is above maxFileBytes in every run, so it is always linked.)
+  const own = (links: Record<string, string>) =>
+    Object.keys(links).filter((key) => !key.startsWith("chat-files/")).sort();
+  assertEquals(own(byCount.attachmentLinks), [
+    "moments/u-1/p-1-0.jpg",
+    "moments/u-1/p-1-1.jpg",
+    "moments/u-1/p-1-v.mp4",
+    "wallpapers/u-1/w-1.jpg",
+  ]);
+  const byTime = await run({ timeBudgetMs: -1 });
+  assertEquals(byTime.files, []);
+  assertEquals(own(byTime.attachmentLinks).length, 5);
+});
+
+Deno.test("a file that cannot be downloaded is linked instead", async () => {
+  const { client } = fakeClient(world, {
+    rpc: { export_my_moments: momentsAnswer, export_my_extras: extrasAnswer },
+    objects: { "moments/u-1/cover-1.jpg": new Uint8Array([1]) },
+  });
+  const data = await collectExportData(client, { userId: me, now });
+  assertEquals(data.files.map((f) => f.key), ["moments/u-1/cover-1.jpg"]);
+  assert("moments/u-1/p-1-0.jpg" in data.attachmentLinks);
+  assertEquals(data.skipped, []);
+});
+
+Deno.test("a database function that is missing is skipped, not fatal", async () => {
+  const { client } = fakeClient(world, {
+    rpc: { export_my_extras: new Error("function does not exist") },
+  });
+  const data = await collectExportData(client, { userId: me, now });
+  assertEquals(data.moments, null);
+  assertEquals(data.extras, null);
+  assertEquals(data.skipped.sort(), ["moments", "notes, lists and more"]);
+  assertEquals(data.messages.length, 2);
+  assertEquals(data.files, []);
 });

@@ -1,6 +1,9 @@
 // "Download my data". Collects the caller's profile, friends, conversations
-// (names), the messages they sent, circles and settings into a ZIP (JSON
-// files plus a readable HTML index), keeps it in the private data-exports
+// (names), the messages they sent, circles and settings, and their Moments,
+// friend tags, group chains, notes, lists, saved messages, reminders,
+// scheduled messages and wallpapers (with their own photos and videos while
+// they fit) into a ZIP (JSON files plus readable HTML pages), keeps it in the
+// private data-exports
 // bucket under <user>/<timestamp>.zip for 7 days and hands out a signed link.
 //
 // POST {}               starts an export (202 {id}); one per person per 24

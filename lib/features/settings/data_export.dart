@@ -337,6 +337,8 @@ String dataExportStageLabel(String stage) {
     'conversations' => tr('Collecting your conversations…'),
     'messages' => tr('Collecting your messages…'),
     'circles' => tr('Collecting your circles…'),
+    'moments' => tr('Collecting your Moments…'),
+    'more' => tr('Collecting your notes, lists and more…'),
     'attachments' => tr('Linking the files you sent…'),
     'packaging' => tr('Packing everything into a ZIP…'),
     'uploading' => tr('Saving your archive…'),
@@ -412,6 +414,20 @@ class DataExportScreen extends ConsumerWidget {
             SettingsRow(
               icon: Icons.hub_outlined,
               title: tr('Circles you belong to'),
+            ),
+            SettingsRow(
+              icon: Icons.photo_library_outlined,
+              title: tr('Your Moments, friend tags and starred friends'),
+            ),
+            SettingsRow(
+              icon: Icons.sticky_note_2_outlined,
+              title: tr('Group chains, notes and task lists you wrote'),
+            ),
+            SettingsRow(
+              icon: Icons.bookmark_border_rounded,
+              title: tr(
+                'Saved messages, reminders, scheduled messages and wallpapers',
+              ),
             ),
           ],
         ),

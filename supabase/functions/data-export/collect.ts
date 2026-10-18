@@ -8,19 +8,37 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   attachmentsToSign,
   EXPORT_LIFETIME_MS,
+  type ExportBlob,
   type ExportCircle,
   type ExportConversation,
   type ExportData,
+  type ExportExtras,
   type ExportFriend,
   type ExportMessage,
+  type ExportMoments,
   type ExportStage,
+  exportFileZipPath,
   type Json,
+  type OwnedFile,
+  ownedFiles,
 } from "./export_builder.ts";
 
 /** The most messages one export carries. */
 export const MAX_MESSAGES = 200_000;
 const PAGE_SIZE = 1000;
 const SIGN_BATCH = 100;
+
+/**
+ * What goes into the ZIP itself of the person's own Moments photos, videos,
+ * cover and wallpapers (the bucket for exports holds 100 MB per file): a file
+ * above MAX_FILE_BYTES, files past MAX_TOTAL_FILE_BYTES or MAX_FILE_COUNT, and
+ * files not fetched within FILE_TIME_BUDGET_MS are linked with a signed URL
+ * instead, like the files in messages.
+ */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_TOTAL_FILE_BYTES = 40 * 1024 * 1024;
+export const MAX_FILE_COUNT = 500;
+export const FILE_TIME_BUDGET_MS = 90_000;
 
 type Row = Record<string, unknown>;
 
@@ -31,6 +49,13 @@ function text(value: unknown): string | null {
 export interface CollectOptions {
   userId: string;
   now: Date;
+  /** Overrides for the caps on files put into the ZIP (tests). */
+  fileLimits?: {
+    maxFileBytes?: number;
+    maxTotalBytes?: number;
+    maxCount?: number;
+    timeBudgetMs?: number;
+  };
   /** Called as each step starts, with how far along the export is. */
   onStage?: (stage: ExportStage, detail?: string) => Promise<void> | void;
 }
@@ -345,6 +370,45 @@ export async function collectExportData(
     };
   });
 
+  // Moments, tags and stars; then chains, notes, lists and the rest. Each is
+  // one database function that reads only this person's rows.
+  await stage("moments");
+  const moments = await tryRead<ExportMoments | null>(
+    skipped,
+    "moments",
+    async () => {
+      const found = await callExport(admin, "export_my_moments", userId);
+      return {
+        settings: object(found["settings"]),
+        friendPrefs: list(found["friend_prefs"]),
+        posts: list(found["posts"]),
+        comments: list(found["comments"]),
+        likes: list(found["likes"]),
+        tags: list(found["tags"]),
+        stars: list(found["stars"]),
+      };
+    },
+    null,
+  );
+  await stage("more");
+  const extras = await tryRead<ExportExtras | null>(
+    skipped,
+    "notes, lists and more",
+    async () => {
+      const found = await callExport(admin, "export_my_extras", userId);
+      return {
+        chains: list(found["chains"]),
+        notes: list(found["notes"]),
+        taskLists: list(found["task_lists"]),
+        savedMessages: list(found["saved_messages"]),
+        reminders: list(found["reminders"]),
+        scheduledMessages: list(found["scheduled_messages"]),
+        wallpapers: list(found["wallpapers"]),
+      };
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -352,6 +416,17 @@ export async function collectExportData(
   for (const { bucket, path } of attachmentsToSign(messages)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
+  // My own photos, videos, covers and wallpapers go into the ZIP while they
+  // fit; the rest is linked.
+  let files: ExportBlob[] = [];
+  await tryRead(skipped, "photos and videos", async () => {
+    const wanted = ownedFiles(userId, moments, extras);
+    const fetched = await fetchOwnFiles(admin, wanted, options.fileLimits ?? {});
+    files = fetched.blobs;
+    for (const { bucket, path } of fetched.leftOver) {
+      byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+    }
+  }, undefined);
   await tryRead(skipped, "file links", async () => {
     for (const [bucket, paths] of byBucket) {
       for (const batch of chunk(paths, SIGN_BATCH)) {
@@ -385,10 +460,88 @@ export async function collectExportData(
     conversations,
     messages,
     circles,
+    moments,
+    extras,
+    files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),
     skipped: [...new Set(skipped)],
   };
+}
+
+function list(value: unknown): Row[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Row =>
+      typeof item === "object" && item !== null && !Array.isArray(item)
+    )
+    : [];
+}
+
+function object(value: unknown): Row | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Row
+    : null;
+}
+
+/** Calls one of the export_my_* functions, which read only [userId]'s rows. */
+async function callExport(
+  admin: SupabaseClient,
+  name: string,
+  userId: string,
+): Promise<Row> {
+  const result = await admin.rpc(name, { target_user_id: userId });
+  if (result.error) throw result.error;
+  const found = object(result.data);
+  if (!found) throw new Error(`${name} returned nothing`);
+  return found;
+}
+
+/**
+ * Downloads the person's own files into the ZIP, within the caps; returns
+ * the ones that went in and the ones left over (to be linked instead).
+ */
+async function fetchOwnFiles(
+  admin: SupabaseClient,
+  files: OwnedFile[],
+  limits: NonNullable<CollectOptions["fileLimits"]>,
+): Promise<{ blobs: ExportBlob[]; leftOver: OwnedFile[] }> {
+  const maxFile = limits.maxFileBytes ?? MAX_FILE_BYTES;
+  const maxTotal = limits.maxTotalBytes ?? MAX_TOTAL_FILE_BYTES;
+  const maxCount = limits.maxCount ?? MAX_FILE_COUNT;
+  const deadline = Date.now() + (limits.timeBudgetMs ?? FILE_TIME_BUDGET_MS);
+  const blobs: ExportBlob[] = [];
+  const leftOver: OwnedFile[] = [];
+  let total = 0;
+  for (const file of files) {
+    // A video of unknown size is only linked: it could be large.
+    const tooBig = file.size !== null
+      ? file.size > maxFile || total + file.size > maxTotal
+      : /\.(mp4|mov|m4v|webm)$/i.test(file.path);
+    if (tooBig || blobs.length >= maxCount || Date.now() > deadline) {
+      leftOver.push(file);
+      continue;
+    }
+    try {
+      const downloaded = await admin.storage.from(file.bucket).download(
+        file.path,
+      );
+      if (downloaded.error || !downloaded.data) throw downloaded.error;
+      const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+      if (bytes.length > maxFile || total + bytes.length > maxTotal) {
+        leftOver.push(file);
+        continue;
+      }
+      total += bytes.length;
+      blobs.push({
+        key: `${file.bucket}/${file.path}`,
+        zipPath: exportFileZipPath(file.bucket, file.path),
+        bytes,
+      });
+    } catch {
+      leftOver.push(file);
+    }
+  }
+  return { blobs, leftOver };
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

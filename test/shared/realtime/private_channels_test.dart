@@ -18,7 +18,7 @@ void main() {
 
   test('topics are the ones the realtime.messages policies expect', () {
     const id = '00000000-0000-4000-8000-0000000000a1';
-    expect(onlineUsersTopic, 'online-users');
+    expect(presenceUpdatesTopic(id), 'presence-updates:$id');
     expect(chatActivityTopic(id), 'chat-activity-$id');
     expect(notePresenceTopic(id), 'note-presence-$id');
     expect(liveLocationTopic(id), 'live-location:$id');
@@ -31,7 +31,25 @@ void main() {
     ).readAsStringSync();
     expect(sql, contains("'chat-activity-'"));
     expect(sql, contains("'note-presence-'"));
-    expect(sql, contains("= 'online-users'"));
+    final presence = File(
+      'supabase/migrations/202610190070_presence_visibility.sql',
+    ).readAsStringSync();
+    expect(presence, contains("'presence-updates:'"));
+    // The global channel's policies are dropped, and nothing joins it.
+    final dropped = File(
+      'supabase/migrations/202610190071_drop_online_users_policy.sql',
+    ).readAsStringSync();
+    expect(dropped, contains('drop policy if exists online_users_receive'));
+    expect(dropped, contains('drop policy if exists online_users_send'));
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is File && entity.path.endsWith('.dart')) {
+        expect(
+          entity.readAsStringSync(),
+          isNot(contains("'online-users'")),
+          reason: entity.path,
+        );
+      }
+    }
   });
 
   // Every channel that carries broadcast or presence goes through

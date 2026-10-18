@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/presence/presence_feed.dart';
 import 'package:wecord/features/presence/presence_heartbeat.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/app_visibility.dart';
@@ -106,9 +107,12 @@ final ownPresenceProvider = Provider<PresenceStatus>((ref) {
   return ref.watch(broadcastPresenceProvider) ?? settings.status;
 });
 
-/// Everyone who has the app open right now, anywhere in it, with their
-/// status. The shell keeps this joined for as long as someone is signed in
-/// (see [PresenceRepository.statuses]); everything else just reads it.
+/// The people the signed-in user may see who have the app open right now,
+/// with their status: friends, members of a shared circle, group or direct
+/// chat; never someone blocked either way or someone who hides their online
+/// status. The server decides who (see [PresenceRepository.statuses]). The
+/// shell keeps this running for as long as someone is signed in; everything
+/// else just reads it.
 final presenceStatusesProvider =
     StreamProvider.autoDispose<Map<String, PresenceStatus>>((ref) {
       final userId = ref.watch(
@@ -170,8 +174,8 @@ abstract interface class PresenceRepository {
 
   Future<void> setShowOnlineStatus(bool show);
 
-  /// Joins the app-wide presence channel and streams who is online with
-  /// their status. The current user is announced with [ownStatus], and
+  /// Streams which of the people the current user may see are online, with
+  /// their status. The current user is counted as here with [ownStatus], and
   /// again whenever it changes; null leaves them watching only, so others
   /// see them offline.
   Stream<Map<String, PresenceStatus>> statuses(
@@ -186,8 +190,9 @@ abstract interface class PresenceDataSource {
 
   Future<void> rpc(String functionName, Map<String, dynamic> params);
 
-  /// Everyone tracked on the app-wide presence channel, with their status.
-  /// Tracks [currentUserId] with [ownStatus] while it isn't null.
+  /// The people [currentUserId] may see who are online, with their status,
+  /// and [currentUserId] itself while [ownStatus] isn't null. Keeps the
+  /// user counted as here, too.
   Stream<Map<String, PresenceStatus>> presence({
     required String currentUserId,
     required ValueListenable<PresenceStatus?> ownStatus,
@@ -243,9 +248,7 @@ class SupabasePresenceRepository implements PresenceRepository {
 class SupabasePresenceDataSource implements PresenceDataSource {
   const SupabasePresenceDataSource(this._client, {this.visible});
 
-  static const channelName = onlineUsersTopic;
-
-  /// How often a visible, online client tells the server it is here.
+  /// How often a visible client tells the server it is here.
   static const heartbeatInterval = Duration(minutes: 2);
 
   final SupabaseClient _client;
@@ -273,121 +276,82 @@ class SupabasePresenceDataSource implements PresenceDataSource {
     required String currentUserId,
     required ValueListenable<PresenceStatus?> ownStatus,
   }) {
-    late RealtimeChannel channel;
-    late StreamController<Map<String, PresenceStatus>> controller;
-    var subscribed = false;
-    var tracking = false;
+    RealtimeChannel? channel;
+    late StreamController<PresenceSignal> signals;
 
-    // Discovery counts members online from these heartbeats (see
-    // touch_presence); older servers without it just fail quietly. They
-    // only run while the app can be seen.
-    void beat(bool online) {
-      unawaited(
-        _client
-            .rpc<void>('touch_presence', params: {'is_online': online})
-            .then<void>((_) {}, onError: (Object _) {}),
-      );
-    }
-
-    final heartbeat = PresenceHeartbeat(
-      beat: beat,
-      visible: visible ?? AppVisibility.instance.visible,
-      interval: heartbeatInterval,
-    );
-
-    void emit() {
-      if (controller.isClosed) {
-        return;
-      }
-      controller.add(presenceStatusesFromState(channel.presenceState()));
-    }
-
-    // Announces the current status, or stops announcing; only once the
-    // channel is up.
-    void sync() {
-      if (!subscribed) {
-        return;
-      }
-      final status = ownStatus.value;
-      if (status == null) {
-        if (tracking) {
-          tracking = false;
-          unawaited(channel.untrack());
+    // Counts the user as here for the server (who sees them, @here, circle
+    // discovery). [shown] is what the client shows for itself; the server
+    // only takes "idle" from it. A server from before 202610190070 does not
+    // know the second argument: fall back to the first alone.
+    void beat(bool online, PresenceStatus? shown) {
+      unawaited(() async {
+        try {
+          await _client.rpc<void>(
+            'touch_presence',
+            params: {'is_online': online, 'shown_status': ?shown?.value},
+          );
+        } on Object {
+          try {
+            await _client.rpc<void>(
+              'touch_presence',
+              params: {'is_online': online},
+            );
+          } on Object {
+            // Offline; the next beat tells it.
+          }
         }
-        heartbeat.wanted = false;
-        return;
-      }
-      tracking = true;
-      heartbeat.wanted = true;
-      unawaited(
-        channel.track({
-          'user_id': currentUserId,
-          'status': status.value,
-          'online_at': DateTime.now().toUtc().toIso8601String(),
-        }),
-      );
+      }());
     }
 
-    controller = StreamController<Map<String, PresenceStatus>>(
+    Future<Map<String, PresenceStatus>> fetch(List<String>? ids) async {
+      final rows = await _client.rpc<dynamic>(
+        'visible_presence',
+        params: {'target_ids': ids},
+      );
+      return presenceFromRows(rows);
+    }
+
+    signals = StreamController<PresenceSignal>(
       onListen: () {
-        // Until the first sync, only the current user is known to be here.
-        controller.add({currentUserId: ?ownStatus.value});
-        ownStatus.addListener(sync);
-        channel = _client
-            .channel(
-              channelName,
-              opts: privateChannelConfig(presenceKey: currentUserId),
-            )
-            .onPresenceSync((payload) => emit())
-            .onPresenceJoin((payload) => emit())
-            .onPresenceLeave((payload) => emit())
-            .subscribe((status, error) {
-              if (status == RealtimeSubscribeStatus.subscribed) {
-                subscribed = true;
-                sync();
-              }
-            });
+        // A private channel of the user's own: the database tells only them,
+        // and only about people they may see.
+        final live = _client.channel(
+          presenceUpdatesTopic(currentUserId),
+          opts: privateChannelConfig(),
+        );
+        channel = live;
+        for (final event in const ['changed', 'reset']) {
+          live.onBroadcast(
+            event: event,
+            callback: (message) =>
+                signals.add(presenceSignalFromBroadcast(event, message)),
+          );
+        }
+        live.subscribe((status, error) {
+          // Anything may have changed while the line was down.
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            signals.add(const PresenceSignal.reset());
+          }
+        });
       },
       onCancel: () async {
-        ownStatus.removeListener(sync);
-        heartbeat.dispose();
-        if (tracking) {
-          await channel.untrack();
+        final live = channel;
+        if (live != null) {
+          await _client.removeChannel(live);
         }
-        await _client.removeChannel(channel);
       },
     );
-    return controller.stream;
-  }
-}
 
-/// Each presence key's status. Someone with the app open in several places
-/// shows the most present one: Online, then Do Not Disturb, then Idle.
-Map<String, PresenceStatus> presenceStatusesFromState(
-  List<SinglePresenceState> state,
-) {
-  const rank = [
-    PresenceStatus.online,
-    PresenceStatus.doNotDisturb,
-    PresenceStatus.idle,
-  ];
-  final statuses = <String, PresenceStatus>{};
-  for (final entry in state) {
-    // Older clients track no status, which reads as online.
-    final shown = [
-      for (final presence in entry.presences)
-        PresenceStatus.fromJson(presence.payload['status']),
-    ].where(rank.contains);
-    if (entry.presences.isEmpty) {
-      statuses[entry.key] = PresenceStatus.online;
-    } else if (shown.isNotEmpty) {
-      statuses[entry.key] = shown.reduce(
-        (best, status) =>
-            rank.indexOf(status) < rank.indexOf(best) ? status : best,
-      );
-    }
+    return PresenceFeed(
+      currentUserId: currentUserId,
+      ownStatus: ownStatus,
+      fetch: fetch,
+      signals: signals.stream,
+      beat: beat,
+      visible: visible ?? AppVisibility.instance.visible,
+      heartbeatInterval: heartbeatInterval,
+    ).stream;
   }
-  return statuses;
 }
 
 class UninitializedPresenceRepository implements PresenceRepository {

@@ -9,9 +9,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// also what lets the project turn "Allow public access" off.
 ///
 /// The topic formats here are matched by the SQL helpers
-/// (`chat_activity_topic_conversation`, `note_presence_topic_note`); change
-/// them together.
-const onlineUsersTopic = 'online-users';
+/// (`chat_activity_topic_conversation`, `note_presence_topic_note`) and
+/// policies; change them together.
+///
+/// What a person is told about other people's online status changing: ids
+/// only, never a status (202610190070_presence_visibility.sql). Replaces the
+/// global `online-users` presence channel, which showed every online user to
+/// every signed-in account.
+String presenceUpdatesTopic(String userId) => 'presence-updates:$userId';
 
 /// Typing and who-is-here in one conversation.
 String chatActivityTopic(String conversationId) {

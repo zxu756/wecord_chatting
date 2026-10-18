@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
@@ -22,6 +23,7 @@ class CreatedMoment {
     this.linkUrl,
     this.linkTitle,
     this.location,
+    this.video,
   });
 
   final String id;
@@ -31,6 +33,7 @@ class CreatedMoment {
   final String? linkUrl;
   final String? linkTitle;
   final String? location;
+  final MomentVideoDraft? video;
 }
 
 /// The Moments server in memory. It does not apply the visibility rules (the
@@ -127,8 +130,14 @@ class FakeMomentsRepository implements MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   }) async {
     _maybeFail();
+    if (video != null) {
+      onUploadProgress?.call(0.5);
+      onUploadProgress?.call(1);
+    }
     created.add(
       CreatedMoment(
         id: id,
@@ -138,8 +147,26 @@ class FakeMomentsRepository implements MomentsRepository {
         linkUrl: linkUrl,
         linkTitle: linkTitle,
         location: location,
+        video: video,
       ),
     );
+    MomentVideo? storedVideo;
+    if (video != null) {
+      final path = '$me/$id-v.${video.extension}';
+      bucket['$me/$id-0.jpg'] = video.poster;
+      bucket['$me/$id-0-t.jpg'] = video.posterThumb;
+      bucket[path] = Uint8List(0);
+      storedVideo = MomentVideo(
+        path: path,
+        poster: '$me/$id-0.jpg',
+        thumb: '$me/$id-0-t.jpg',
+        duration: video.duration,
+        width: video.width,
+        height: video.height,
+        size: video.size,
+        mimeType: video.mimeType,
+      );
+    }
     final entries = <MomentPhoto>[];
     for (final (index, photo) in photos.indexed) {
       final path = '$me/$id-$index.jpg';
@@ -161,12 +188,15 @@ class FakeMomentsRepository implements MomentsRepository {
         authorId: me,
         authorName: myName,
         body: body,
-        kind: entries.isNotEmpty
+        kind: storedVideo != null
+            ? MomentKind.video
+            : entries.isNotEmpty
             ? MomentKind.photos
             : linkUrl != null
             ? MomentKind.link
             : MomentKind.text,
         photos: entries,
+        video: storedVideo,
         linkUrl: linkUrl,
         linkTitle: linkTitle,
         location: location,
@@ -527,6 +557,36 @@ class FakeMomentPhotoPicker implements MomentPhotoPicker {
 
   @override
   Future<Uint8List?> pickCover() async => cover;
+
+  /// What picking a video gives: a draft, nothing (cancelled), or a problem.
+  MomentVideoDraft? video;
+  MomentVideoProblem? videoProblem;
+  var videoPicks = 0;
+
+  @override
+  Future<MomentVideoDraft?> pickVideo() async {
+    videoPicks += 1;
+    final problem = videoProblem;
+    if (problem != null) {
+      throw MomentVideoException(problem);
+    }
+    return video;
+  }
+}
+
+/// A video of [seconds] with a sample poster.
+MomentVideoDraft sampleVideo({int seconds = 42, String name = 'walk.mp4'}) {
+  final poster = sampleDraft('video-poster');
+  return MomentVideoDraft(
+    file: XFile.fromData(Uint8List(8), name: name, mimeType: 'video/mp4'),
+    mimeType: 'video/mp4',
+    size: 3 * 1024 * 1024,
+    duration: Duration(seconds: seconds),
+    poster: poster.full,
+    posterThumb: poster.thumb,
+    width: poster.width,
+    height: poster.height,
+  );
 }
 
 MomentPhotoDraft sampleDraft(String id, {bool landscape = true}) {

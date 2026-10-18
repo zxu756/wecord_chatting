@@ -4,6 +4,11 @@ import 'package:wecord/shared/l10n/l10n.dart';
 /// Most photos in one Moment.
 const maxMomentPhotos = 9;
 
+/// The one video of a Moment: at most a minute (half a second of slack for
+/// the rounding of the player) and 50 MB. The server checks both too.
+const maxMomentVideoDuration = Duration(seconds: 60, milliseconds: 500);
+const maxMomentVideoBytes = 50 * 1024 * 1024;
+
 /// Longest Moment text and comment, as the server enforces them.
 const maxMomentTextLength = 2000;
 const maxMomentCommentLength = 500;
@@ -113,10 +118,59 @@ class MomentPhoto {
   double? get aspectRatio => width > 0 && height > 0 ? width / height : null;
 }
 
+/// The video of a Moment (`moments_posts.video`): the file, its poster frame
+/// and thumbnail (both pictures of the bucket), the length and the size.
+@immutable
+class MomentVideo {
+  const MomentVideo({
+    required this.path,
+    required this.poster,
+    required this.thumb,
+    required this.duration,
+    this.width = 0,
+    this.height = 0,
+    this.size = 0,
+    this.mimeType = 'video/mp4',
+  });
+
+  factory MomentVideo.fromJson(Map<String, dynamic> json) {
+    return MomentVideo(
+      path: json['path'] as String,
+      poster: json['poster'] as String? ?? json['thumb'] as String,
+      thumb: json['thumb'] as String? ?? json['poster'] as String,
+      duration: Duration(
+        milliseconds: (json['duration_ms'] as num?)?.toInt() ?? 0,
+      ),
+      width: (json['w'] as num?)?.toInt() ?? 0,
+      height: (json['h'] as num?)?.toInt() ?? 0,
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      mimeType: json['mime'] as String? ?? 'video/mp4',
+    );
+  }
+
+  final String path;
+  final String poster;
+  final String thumb;
+  final Duration duration;
+  final int width;
+  final int height;
+  final int size;
+  final String mimeType;
+
+  double? get aspectRatio => width > 0 && height > 0 ? width / height : null;
+
+  /// "0:42".
+  String get durationLabel {
+    final seconds = (duration.inMilliseconds / 1000).round();
+    return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+}
+
 enum MomentKind {
   text,
   photos,
-  link;
+  link,
+  video;
 
   static MomentKind fromWire(Object? value) {
     return MomentKind.values.firstWhere(
@@ -199,6 +253,7 @@ class MomentPost {
     this.body = '',
     this.kind = MomentKind.text,
     this.photos = const [],
+    this.video,
     this.linkUrl,
     this.linkTitle,
     this.location,
@@ -227,6 +282,11 @@ class MomentPost {
                 MomentPhoto.fromJson(Map<String, dynamic>.from(photo as Map)),
             ]
           : const [],
+      video: json['video'] is Map
+          ? MomentVideo.fromJson(
+              Map<String, dynamic>.from(json['video'] as Map),
+            )
+          : null,
       linkUrl: json['link_url'] as String?,
       linkTitle: json['link_title'] as String?,
       location: json['location'] as String?,
@@ -259,6 +319,7 @@ class MomentPost {
   final String body;
   final MomentKind kind;
   final List<MomentPhoto> photos;
+  final MomentVideo? video;
   final String? linkUrl;
   final String? linkTitle;
   final String? location;
@@ -285,6 +346,7 @@ class MomentPost {
       body: body,
       kind: kind,
       photos: photos,
+      video: video,
       linkUrl: linkUrl,
       linkTitle: linkTitle,
       location: location,

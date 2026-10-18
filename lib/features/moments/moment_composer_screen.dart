@@ -13,6 +13,7 @@ import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
+import 'package:wecord/features/moments/moments_video.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/navigation/paper_page_header.dart';
@@ -26,8 +27,8 @@ bool isMomentLink(String text) {
       uri.host.isNotEmpty;
 }
 
-/// New Moment: text, up to nine photos or a link, a place, and who can see
-/// it. The post is sent with an id made here, so trying again after a
+/// New Moment: text, up to nine photos, one video (a minute, 50 MB) or a
+/// link, a place, and who can see it. The post is sent with an id made here, so trying again after a
 /// failure never posts it twice.
 class MomentComposerScreen extends ConsumerStatefulWidget {
   const MomentComposerScreen({super.key});
@@ -46,6 +47,8 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
   final _location = TextEditingController();
   final _id = newMomentId();
   final _photos = <MomentPhotoDraft>[];
+  MomentVideoDraft? _video;
+  double? _uploadProgress;
   var _audience = MomentAudience.everyone;
   var _linkOpen = false;
   var _locationOpen = false;
@@ -71,7 +74,10 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
       !_picking &&
       _audience.isComplete &&
       _linkValid &&
-      (_text.text.trim().isNotEmpty || _photos.isNotEmpty || _hasLink);
+      (_text.text.trim().isNotEmpty ||
+          _photos.isNotEmpty ||
+          _video != null ||
+          _hasLink);
 
   Future<void> _addPhotos() async {
     setState(() {
@@ -94,6 +100,50 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
         setState(() {
           _picking = false;
           _error = tr('Could not use those pictures. Try others.');
+        });
+      }
+    }
+  }
+
+  Future<void> _addVideo() async {
+    setState(() {
+      _picking = true;
+      _error = null;
+    });
+    try {
+      final picked = await ref.read(momentPhotoPickerProvider).pickVideo();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _video = picked ?? _video;
+        _picking = false;
+      });
+    } on MomentVideoException catch (problem) {
+      if (mounted) {
+        setState(() {
+          _picking = false;
+          _error = switch (problem.problem) {
+            MomentVideoProblem.tooLong => tr(
+              'That video is longer than 1 minute. Choose a shorter one.',
+            ),
+            MomentVideoProblem.tooBig => tr(
+              'That video is bigger than 50 MB. Choose a smaller one.',
+            ),
+            MomentVideoProblem.unsupported => tr(
+              'Choose an MP4, MOV or WebM video.',
+            ),
+            MomentVideoProblem.unreadable => tr(
+              'Could not read that video. Try another.',
+            ),
+          };
+        });
+      }
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _picking = false;
+          _error = tr('Could not read that video. Try another.');
         });
       }
     }
@@ -129,6 +179,12 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
             id: _id,
             body: _text.text.trim(),
             photos: _photos,
+            video: _video,
+            onUploadProgress: (progress) {
+              if (mounted) {
+                setState(() => _uploadProgress = progress);
+              }
+            },
             linkUrl: _hasLink ? _link.text.trim() : null,
             linkTitle: _hasLink ? _linkTitle.text.trim() : null,
             location: _locationOpen ? _location.text.trim() : null,
@@ -142,6 +198,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
       if (mounted) {
         setState(() {
           _posting = false;
+          _uploadProgress = null;
           _error = tr('Could not post. Check your connection and try again.');
         });
       }
@@ -237,14 +294,24 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                             ),
                             if (!_linkOpen) ...[
                               const SizedBox(height: 14),
-                              _PhotoStrip(
-                                photos: _photos,
-                                canAdd: room > 0,
-                                busy: _picking,
-                                onAdd: _addPhotos,
-                                onRemove: (draft) =>
-                                    setState(() => _photos.remove(draft)),
-                              ),
+                              if (_video case final video?)
+                                _VideoDraftTile(
+                                  video: video,
+                                  locked: _posting,
+                                  onRemove: () => setState(() => _video = null),
+                                )
+                              else
+                                _PhotoStrip(
+                                  photos: _photos,
+                                  canAdd: room > 0,
+                                  busy: _picking,
+                                  onAdd: _addPhotos,
+                                  onAddVideo: _photos.isEmpty
+                                      ? _addVideo
+                                      : null,
+                                  onRemove: (draft) =>
+                                      setState(() => _photos.remove(draft)),
+                                ),
                             ],
                           ],
                         ),
@@ -253,7 +320,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                       SettingsGroup(
                         separatorIndent: 58,
                         children: [
-                          if (_photos.isEmpty)
+                          if (_photos.isEmpty && _video == null)
                             SettingsRow(
                               key: const ValueKey('moment-add-link'),
                               icon: Icons.link_rounded,
@@ -336,6 +403,19 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                           ],
                         ),
                       ],
+                      if (_posting && _video != null)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
+                          child: Text(
+                            _uploadProgress == null
+                                ? tr('Uploading video…')
+                                : tr('Uploading video… {percent}%', {
+                                    'percent': (_uploadProgress! * 100).round(),
+                                  }),
+                            key: const ValueKey('moment-upload-progress'),
+                            style: TextStyle(fontSize: 13.5, color: c.muted),
+                          ),
+                        ),
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
@@ -351,9 +431,8 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
                         child: Text(
-                          tr(
-                            'Photos are kept private and scaled down before they are sent.',
-                          ),
+                          '${tr('Photos are kept private and scaled down before they are sent.')} '
+                          '${tr('Or add one video of up to 1 minute and 50 MB.')}',
                           style: TextStyle(
                             fontSize: 12.5,
                             height: 1.4,
@@ -382,12 +461,16 @@ class _PhotoStrip extends StatelessWidget {
     required this.busy,
     required this.onAdd,
     required this.onRemove,
+    this.onAddVideo,
   });
 
   final List<MomentPhotoDraft> photos;
   final bool canAdd;
   final bool busy;
   final VoidCallback onAdd;
+
+  /// Offered while there are no photos: a Moment has photos or a video.
+  final VoidCallback? onAddVideo;
   final ValueChanged<MomentPhotoDraft> onRemove;
 
   static const _gap = 6.0;
@@ -471,9 +554,105 @@ class _PhotoStrip extends StatelessWidget {
                   ),
                 ),
               ),
+            if (onAddVideo != null)
+              SizedBox(
+                width: side,
+                height: side,
+                child: WeCordPressable(
+                  key: const ValueKey('moment-add-video'),
+                  onPressed: busy ? null : onAddVideo,
+                  pressedScale: 0.97,
+                  semanticLabel: tr('Add a video'),
+                  excludeSemantics: true,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                  ),
+                  builder: (context, states) => Container(
+                    decoration: BoxDecoration(
+                      color: c.raised,
+                      borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                    ),
+                    child: Icon(
+                      Icons.videocam_outlined,
+                      size: 28,
+                      color: c.muted,
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+/// The video being posted: its poster frame, the length, and a remove button.
+class _VideoDraftTile extends StatelessWidget {
+  const _VideoDraftTile({
+    required this.video,
+    required this.locked,
+    required this.onRemove,
+  });
+
+  final MomentVideoDraft video;
+  final bool locked;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = video.height == 0
+        ? 16 / 9
+        : (video.width / video.height).clamp(0.7, 1.8);
+    final length = MomentVideo(
+      path: '',
+      poster: '',
+      thumb: '',
+      duration: video.duration,
+    ).durationLabel;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        key: const ValueKey('moment-video-draft'),
+        width: 240,
+        child: AspectRatio(
+          aspectRatio: ratio,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(WeCordRadii.lg),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(
+                  video.posterThumb,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  semanticLabel: tr('Video, {length}', {'length': length}),
+                ),
+                const Center(child: MomentPlayBadge()),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: MomentLengthChip(label: length),
+                ),
+                if (!locked)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: WeCordIconButton(
+                      key: const ValueKey('moment-video-remove'),
+                      icon: Icons.close_rounded,
+                      tooltip: tr('Remove video'),
+                      size: 28,
+                      iconSize: 15,
+                      variant: WeCordButtonVariant.primary,
+                      onPressed: onRemove,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

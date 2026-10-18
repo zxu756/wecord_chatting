@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -28,6 +30,44 @@ class MomentPhotoDraft {
   final Uint8List thumb;
   final int width;
   final int height;
+}
+
+/// The video of a Moment being written: the file as the device holds it
+/// (it is streamed from disk when posted, never held in memory), its length,
+/// and the poster frame the feed shows first, already a JPEG with its
+/// thumbnail.
+@immutable
+class MomentVideoDraft {
+  const MomentVideoDraft({
+    required this.file,
+    required this.mimeType,
+    required this.size,
+    required this.duration,
+    required this.poster,
+    required this.posterThumb,
+    required this.width,
+    required this.height,
+  });
+
+  final XFile file;
+
+  /// `video/mp4`, `video/quicktime` or `video/webm`.
+  final String mimeType;
+  final int size;
+  final Duration duration;
+  final Uint8List poster;
+  final Uint8List posterThumb;
+
+  /// The poster frame's size, which gives the video its shape in the feed.
+  final int width;
+  final int height;
+
+  /// The file extension the bucket stores it under.
+  String get extension => switch (mimeType) {
+    'video/quicktime' => 'mov',
+    'video/webm' => 'webm',
+    _ => 'mp4',
+  };
 }
 
 /// Everything the Moments pages need from the server. The visibility rules
@@ -57,6 +97,8 @@ abstract interface class MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   });
 
   Future<void> deletePost(String id);
@@ -111,9 +153,12 @@ abstract interface class MomentsRepository {
 }
 
 class SupabaseMomentsRepository implements MomentsRepository {
-  const SupabaseMomentsRepository(this._client);
+  const SupabaseMomentsRepository(this._client, [this._uploader]);
 
   final SupabaseClient _client;
+
+  /// The chat's streaming uploader, for the video.
+  final ChatMediaUploader? _uploader;
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
@@ -165,11 +210,50 @@ class SupabaseMomentsRepository implements MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   }) async {
     final owner = _userId;
     final uploaded = <String>[];
     final entries = <Map<String, Object?>>[];
+    Map<String, Object?>? videoEntry;
     try {
+      if (video != null) {
+        // The poster frame is stored like a photo, then the video itself
+        // is streamed from disk, as the chat does.
+        final poster = '$owner/$id-0.jpg';
+        final posterThumb = '$owner/$id-0-t.jpg';
+        final path = '$owner/$id-v.${video.extension}';
+        await Future.wait([
+          _upload(poster, video.poster),
+          _upload(posterThumb, video.posterThumb),
+        ]);
+        uploaded
+          ..add(poster)
+          ..add(posterThumb);
+        final uploader = _uploader;
+        if (uploader == null) {
+          throw StateError('Uploads are not available');
+        }
+        await uploader.upload(
+          bucket: momentsBucket,
+          path: path,
+          mimeType: video.mimeType,
+          length: video.size,
+          data: video.file.openRead(),
+          onProgress: onUploadProgress,
+        );
+        uploaded.add(path);
+        videoEntry = {
+          'path': path,
+          'poster': poster,
+          'thumb': posterThumb,
+          'w': video.width,
+          'h': video.height,
+          'duration_ms': video.duration.inMilliseconds,
+          'size': video.size,
+        };
+      }
       for (final (index, photo) in photos.indexed) {
         final path = '$owner/$id-$index.jpg';
         final thumb = '$owner/$id-$index-t.jpg';
@@ -199,6 +283,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
           'p_visibility': audience.visibility.wire,
           'p_friend_ids': audience.usesLists ? audience.friendIds.toList() : [],
           'p_tag_ids': audience.usesLists ? audience.tagIds.toList() : [],
+          'p_video': ?videoEntry,
         },
       );
     } on PostgrestException {
@@ -549,6 +634,8 @@ class UninitializedMomentsRepository implements MomentsRepository {
     String? linkTitle,
     String? location,
     MomentAudience audience = MomentAudience.everyone,
+    MomentVideoDraft? video,
+    void Function(double? progress)? onUploadProgress,
   }) => throw _unavailable();
 
   @override
@@ -618,7 +705,10 @@ class UninitializedMomentsRepository implements MomentsRepository {
 
 final momentsRepositoryProvider = Provider<MomentsRepository>((ref) {
   try {
-    return SupabaseMomentsRepository(ref.watch(supabaseClientProvider));
+    return SupabaseMomentsRepository(
+      ref.watch(supabaseClientProvider),
+      ref.watch(chatMediaUploaderProvider),
+    );
   } on ProviderException {
     return const UninitializedMomentsRepository();
   }

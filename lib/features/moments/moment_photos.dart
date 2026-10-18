@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:wecord/features/chats/media_send/media_draft.dart';
+import 'package:wecord/features/chats/media_send/media_picker.dart';
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
+import 'package:wecord/features/file_preview/viewers/video_preview.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
 
@@ -47,6 +51,107 @@ Future<MomentPhotoDraft?> prepareMomentPhoto({
   );
 }
 
+/// Why a video cannot be a Moment's.
+enum MomentVideoProblem {
+  /// Over a minute.
+  tooLong,
+
+  /// Over 50 MB.
+  tooBig,
+
+  /// Not an MP4, MOV or WebM.
+  unsupported,
+
+  /// The device could not read its length or a frame.
+  unreadable,
+}
+
+class MomentVideoException implements Exception {
+  const MomentVideoException(this.problem);
+
+  final MomentVideoProblem problem;
+
+  @override
+  String toString() => 'MomentVideoException($problem)';
+}
+
+/// The length of a video file, or null when it cannot be read.
+typedef MomentVideoDurationReader = Future<Duration?> Function(XFile file);
+
+/// The length of a video, read with the same player the viewer uses (a
+/// blob link on the web, a file elsewhere).
+final momentVideoDurationReaderProvider = Provider<MomentVideoDurationReader>((
+  ref,
+) {
+  final factory = ref.watch(videoControllerFactoryProvider);
+  return (file) async {
+    try {
+      final controller = factory(localPath: file.path);
+      try {
+        await controller.initialize().timeout(const Duration(seconds: 20));
+        return controller.value.duration;
+      } finally {
+        unawaited(controller.dispose());
+      }
+    } on Object {
+      return null;
+    }
+  };
+});
+
+/// Checks a chosen video against the limits (50 MB, a minute, MP4, MOV or
+/// WebM) before anything is read in full, with the chat's own file code:
+/// type and size from [buildDraft], the poster frame from [videoPoster].
+/// Throws [MomentVideoException].
+Future<MomentVideoDraft> prepareMomentVideo(
+  XFile file, {
+  required VideoPosterReader videoPoster,
+  required MomentVideoDurationReader videoDuration,
+}) async {
+  final name = file.name.toLowerCase();
+  final extension = name.contains('.') ? name.split('.').last : '';
+  if (!const {'mp4', 'm4v', 'mov', 'webm'}.contains(extension)) {
+    throw const MomentVideoException(MomentVideoProblem.unsupported);
+  }
+  final draft = await buildDraft(file, videoPoster: videoPoster);
+  if (draft.size > maxMomentVideoBytes) {
+    throw const MomentVideoException(MomentVideoProblem.tooBig);
+  }
+  final duration = await videoDuration(file);
+  if (duration == null || duration <= Duration.zero) {
+    throw const MomentVideoException(MomentVideoProblem.unreadable);
+  }
+  if (duration > maxMomentVideoDuration) {
+    throw const MomentVideoException(MomentVideoProblem.tooLong);
+  }
+  final frame = draft.thumbnail;
+  if (frame == null) {
+    throw const MomentVideoException(MomentVideoProblem.unreadable);
+  }
+  final poster = await prepareMomentPhoto(
+    id: draft.id,
+    bytes: frame,
+    fileName: 'poster.jpg',
+  );
+  if (poster == null) {
+    throw const MomentVideoException(MomentVideoProblem.unreadable);
+  }
+  return MomentVideoDraft(
+    file: file,
+    mimeType: switch (extension) {
+      'mov' => 'video/quicktime',
+      'webm' => 'video/webm',
+      _ => 'video/mp4',
+    },
+    size: draft.size,
+    duration: duration,
+    poster: poster.full,
+    posterThumb: poster.thumb,
+    width: poster.width,
+    height: poster.height,
+  );
+}
+
 /// Chooses pictures for a Moment and for the cover.
 abstract interface class MomentPhotoPicker {
   /// Up to [limit] pictures from the library, prepared; empty when cancelled.
@@ -55,12 +160,22 @@ abstract interface class MomentPhotoPicker {
 
   /// One picture as a JPEG for the cover; null when cancelled.
   Future<Uint8List?> pickCover();
+
+  /// One video from the library, checked and with its poster frame; null
+  /// when cancelled. Throws [MomentVideoException].
+  Future<MomentVideoDraft?> pickVideo();
 }
 
 class SystemMomentPhotoPicker implements MomentPhotoPicker {
-  SystemMomentPhotoPicker(this._picker);
+  SystemMomentPhotoPicker(
+    this._picker, {
+    required this.videoPoster,
+    required this.videoDuration,
+  });
 
   final ImagePicker _picker;
+  final VideoPosterReader videoPoster;
+  final MomentVideoDurationReader videoDuration;
   var _counter = 0;
 
   @override
@@ -81,6 +196,19 @@ class SystemMomentPhotoPicker implements MomentPhotoPicker {
   }
 
   @override
+  Future<MomentVideoDraft?> pickVideo() async {
+    final file = await _picker.pickVideo(source: ImageSource.gallery);
+    if (file == null) {
+      return null;
+    }
+    return prepareMomentVideo(
+      file,
+      videoPoster: videoPoster,
+      videoDuration: videoDuration,
+    );
+  }
+
+  @override
   Future<Uint8List?> pickCover() async {
     final file = await _picker.pickImage(source: ImageSource.gallery);
     if (file == null) {
@@ -97,7 +225,11 @@ class SystemMomentPhotoPicker implements MomentPhotoPicker {
 }
 
 final momentPhotoPickerProvider = Provider<MomentPhotoPicker>((ref) {
-  return SystemMomentPhotoPicker(ImagePicker());
+  return SystemMomentPhotoPicker(
+    ImagePicker(),
+    videoPoster: ref.watch(videoPosterReaderProvider),
+    videoDuration: ref.watch(momentVideoDurationReaderProvider),
+  );
 });
 
 /// How many more pictures a Moment with [count] can take.

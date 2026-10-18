@@ -19,6 +19,9 @@ import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
+import 'package:wecord/features/chats/thread/message_sender.dart';
+import 'package:wecord/features/chats/thread/thread_layout.dart';
+import 'package:wecord/features/chats/thread/thread_text.dart';
 import 'package:wecord/features/chain/chain_card.dart';
 import 'package:wecord/features/chain/chain_create_sheet.dart';
 import 'package:wecord/features/chain/chain_models.dart';
@@ -138,12 +141,13 @@ import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/presence_status.dart';
-import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 export 'package:wecord/features/chats/chat_thread_controller.dart'
     show ChatThreadData, chatThreadProvider;
+export 'package:wecord/features/chats/thread/thread_text.dart'
+    show composerHint, formatSlowmodeCountdown, formatThreadActivity;
 
 final chatActivityProvider = StreamProvider.autoDispose
     .family<ConversationActivity, String>((ref, conversationId) {
@@ -574,7 +578,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _dividerPending = false;
   var _forumStartRequested = false;
   ChatThreadData? _threadData;
-  _ThreadLayout? _layout;
+  ThreadLayout? _layout;
   String? _highlightedMessageId;
   Timer? _highlightTimer;
   var _isJumpScheduled = false;
@@ -1036,7 +1040,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           : const [],
     );
     _slowmodeUntil = slowmodeSeconds > 0
-        ? _slowmodeEnd(
+        ? slowmodeEnd(
             messages: thread.value?.messages ?? const [],
             currentUserId: currentUserId,
             slowmodeSeconds: slowmodeSeconds,
@@ -1050,7 +1054,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};
     final directPeerId = conversationType == ConversationType.direct
         ? conversationSummary?.directUserId ??
-              _directPeerId(thread.value?.readMarkers, currentUserId)
+              directPeerIdFrom(thread.value?.readMarkers, currentUserId)
         : null;
     _mentionTargets = canStartThreads || isThread
         ? ref
@@ -1482,7 +1486,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       text: isNoteToSelf
                           ? tr('Only you can see this chat')
                           : isThread
-                          ? _threadSubtitle(conversationSummary)
+                          ? threadSubtitle(conversationSummary)
                           : memberLine != null
                           ? [
                               memberLine,
@@ -1706,7 +1710,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               fullOldestToNewest,
               currentUserId,
               detached: data.hasNewer,
-              nameOf: (message) => _senderFor(
+              nameOf: (message) => senderFor(
                 message,
                 membersById,
                 fallbackProfile: message.isSentBy(currentUserId)
@@ -1721,7 +1725,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               for (final message in fullOldestToNewest)
                 ?PreviewFile.fromMessage(
                   message,
-                  senderName: _senderFor(
+                  senderName: senderFor(
                     message,
                     membersById,
                     fallbackProfile: message.isSentBy(currentUserId)
@@ -1745,7 +1749,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   message: message,
                   messagesById: messagesById,
                   isCurrentUser: message.isSentBy(currentUserId),
-                  sender: _senderFor(message, membersById),
+                  sender: senderFor(message, membersById),
                   isOpeningPost: true,
                   postTitle: title,
                   replyCount: layout.openingPostReplyCount,
@@ -1782,7 +1786,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   message: message,
                   messagesById: messagesById,
                   isCurrentUser: isCurrentUser,
-                  sender: _senderFor(
+                  sender: senderFor(
                     message,
                     membersById,
                     fallbackProfile: isCurrentUser ? ownProfile : null,
@@ -1887,7 +1891,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   message,
                   senderName: message.isSentBy(currentUserId)
                       ? tr('You')
-                      : _senderFor(message, membersById).name,
+                      : senderFor(message, membersById).name,
                 ),
                 entries: () => _displayEntries,
                 child: highlightedRow,
@@ -1924,7 +1928,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
               // does not rebuild the messages already on screen.
               final sender = message.type == MessageType.system
                   ? null
-                  : _senderFor(
+                  : senderFor(
                       message,
                       membersById,
                       fallbackProfile: message.isSentBy(currentUserId)
@@ -2115,7 +2119,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     onComposerKey: _handleComposerKey,
                     replyPreviewText: _replyingTo == null
                         ? null
-                        : _replyPreviewBody(_replyingTo!, localized: true),
+                        : replyPreviewBody(_replyingTo!, localized: true),
                     isEditing: _editingMessage != null,
                     onChanged: _handleComposerChanged,
                     onSend: _sendMessage,
@@ -2206,7 +2210,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                   canModerate: canDeleteAsModerator,
                   senderName: (message) => message.isSentBy(currentUserId)
                       ? tr('You')
-                      : _senderFor(message, {
+                      : senderFor(message, {
                           for (final member
                               in groupDetail?.members ?? const <GroupMember>[])
                             member.profile.id: member,
@@ -2432,7 +2436,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       return;
     }
     _dividerPending = false;
-    _newMessageDividerId = _firstUnreadMessageId(
+    _newMessageDividerId = firstUnreadMessageId(
       messages: oldestToNewest,
       readMarkers: [marker],
       currentUserId: currentUserId,
@@ -2523,7 +2527,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// The layout of the loaded messages: sorted, searched, grouped. Worked
   /// out again only when they (or the search, the NEW divider or the
   /// outbox) change, not on every build.
-  _ThreadLayout _layoutFor(
+  ThreadLayout _layoutFor(
     ChatThreadData data, {
     required List<OutboxEntry> pending,
     required String? currentUserId,
@@ -2540,7 +2544,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         previous.currentUserId == currentUserId) {
       return previous;
     }
-    final layout = _ThreadLayout.build(
+    final layout = ThreadLayout.build(
       messages: messages,
       readMarkers: data.readMarkers,
       pending: pending,
@@ -3113,7 +3117,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     try {
       final replyPreview = replyingTo == null
           ? null
-          : _replyPreviewForMessage(replyingTo);
+          : replyPreviewForMessage(replyingTo);
       // Mentions point into the body as sent, after emoji become tokens.
       final encodedBody = _encodeCustomEmoji(messageBody);
       await ref
@@ -3169,7 +3173,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final replyingTo = _replyingTo;
     final replyPreview = replyingTo == null
         ? null
-        : _replyPreviewForMessage(replyingTo);
+        : replyPreviewForMessage(replyingTo);
     // Mentions point into the body as sent, after emoji become tokens.
     final encodedBody = _encodeCustomEmoji(messageBody);
     final entry = outbox.enqueue(
@@ -3443,7 +3447,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         replyToMessageId: replyingTo?.id,
         replyPreview: replyingTo == null
             ? null
-            : _replyPreviewForMessage(replyingTo),
+            : replyPreviewForMessage(replyingTo),
         viewOnce: tray.sendsViewOnce,
       );
       if (!mounted) {
@@ -4572,7 +4576,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final title = await showDialog<String>(
       context: context,
       builder: (context) =>
-          _ThreadTitleDialog(initialTitle: _suggestedTitleFor(message)),
+          _ThreadTitleDialog(initialTitle: suggestedTitleFor(message)),
     );
     if (title == null || !mounted) {
       return;
@@ -4850,56 +4854,6 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   }
 }
 
-/// The composer's placeholder: "Message #general" in a channel, "Message
-/// @Ada" in a direct chat and "Message Weekend crew" in a group or thread;
-/// plain "Message" while the name is unknown.
-String composerHint(ConversationType? type, String title) {
-  var name = title.trim();
-  if (type == ConversationType.channel) {
-    // Channel routes pass "# general".
-    name = name.replaceFirst(RegExp(r'^#\s*'), '');
-  }
-  if (name.isEmpty || name == tr('Conversation')) {
-    return tr('Message');
-  }
-  return switch (type) {
-    ConversationType.channel => tr('Message #{name}', {'name': name}),
-    ConversationType.direct => tr('Message @{name}', {'name': name}),
-    _ => tr('Message {name}', {'name': name}),
-  };
-}
-
-/// "in #channel" (or "in Group") under a thread's title.
-String _threadSubtitle(ConversationSummary? summary) {
-  final parentTitle = summary?.parentTitle?.trim();
-  if (parentTitle == null || parentTitle.isEmpty) {
-    return tr('Thread');
-  }
-  final archived = summary?.threadArchivedAt != null;
-  final args = {'parent': parentTitle};
-  return switch ((summary?.circleId != null, archived)) {
-    (true, true) => tr('in #{parent} · Archived', args),
-    (true, false) => tr('in #{parent}', args),
-    (false, true) => tr('in {parent} · Archived', args),
-    (false, false) => tr('in {parent}', args),
-  };
-}
-
-String _suggestedTitleFor(ChatMessage message) {
-  return switch (message.type) {
-    MessageType.text => suggestedThreadTitle(
-      plainTextFromMarkdown(message.body),
-    ),
-    MessageType.image => tr('Image'),
-    MessageType.voice => tr('Voice message'),
-    MessageType.file =>
-      message.fileAttachment?.isVideo == true ? tr('Video') : tr('File'),
-    MessageType.system => tr('Thread'),
-    MessageType.poll => suggestedThreadTitle(message.body),
-    MessageType.sticker => tr('Sticker'),
-  };
-}
-
 /// Asks for a thread title. Returns the trimmed title, or null when
 /// cancelled.
 class _ThreadTitleDialog extends StatefulWidget {
@@ -5049,134 +5003,7 @@ class _ThreadChip extends StatelessWidget {
   }
 }
 
-/// How long ago a thread was last active: "just now", "5m ago", "3h ago",
-/// then the date.
-String formatThreadActivity(DateTime value, {DateTime? now}) {
-  final current = (now ?? DateTime.now()).toUtc();
-  final difference = current.difference(value.toUtc());
-  if (difference.inMinutes < 1) {
-    return tr('just now');
-  }
-  if (difference.inHours < 1) {
-    return tr('{minutes}m ago', {'minutes': difference.inMinutes});
-  }
-  if (difference.inDays < 1) {
-    return tr('{hours}h ago', {'hours': difference.inHours});
-  }
-  final local = value.toLocal();
-  return '${local.month}/${local.day}';
-}
-
-/// The other member of a direct conversation, from its read markers (one
-/// per member).
-String? _directPeerId(
-  List<ConversationReadMarker>? readMarkers,
-  String? currentUserId,
-) {
-  for (final marker in readMarkers ?? const <ConversationReadMarker>[]) {
-    if (marker.userId != currentUserId) {
-      return marker.userId;
-    }
-  }
-  return null;
-}
-
 const _bottomScrollThreshold = 48.0;
-
-/// Messages from the same sender this close together read as one group.
-const _messageGroupWindow = Duration(minutes: 7);
-
-/// Ids of messages that continue the previous message's group: same sender,
-/// at most [_messageGroupWindow] apart, on the same day, and with no system
-/// notice or NEW divider between them.
-Set<String> _followUpMessageIds(
-  List<ChatMessage> oldestToNewest, {
-  required String? newMessageDividerId,
-}) {
-  final ids = <String>{};
-  for (var index = 1; index < oldestToNewest.length; index++) {
-    final previous = oldestToNewest[index - 1];
-    final message = oldestToNewest[index];
-    if (message.type == MessageType.system ||
-        previous.type == MessageType.system ||
-        message.authorKey != previous.authorKey ||
-        message.id == newMessageDividerId) {
-      continue;
-    }
-    final gap = message.createdAt.difference(previous.createdAt);
-    if (gap.isNegative || gap > _messageGroupWindow) {
-      continue;
-    }
-    if (!_isSameLocalDay(previous.createdAt, message.createdAt)) {
-      continue;
-    }
-    ids.add(message.id);
-  }
-  return ids;
-}
-
-bool _isSameLocalDay(DateTime left, DateTime right) {
-  final localLeft = left.toLocal();
-  final localRight = right.toLocal();
-  return localLeft.year == localRight.year &&
-      localLeft.month == localRight.month &&
-      localLeft.day == localRight.day;
-}
-
-/// Name and avatar shown above a group of incoming messages.
-_MessageSender _senderFor(
-  ChatMessage message,
-  Map<String, GroupMember> membersById, {
-  Profile? fallbackProfile,
-}) {
-  // Webhook messages show the webhook, never its creator's profile.
-  if (message.webhookName case final webhookName?) {
-    return _MessageSender(
-      name: webhookName,
-      avatarUrl: message.webhookAvatarUrl,
-      isBot: true,
-    );
-  }
-  final member = membersById[message.senderId];
-  final profile = message.sender ?? member?.profile ?? fallbackProfile;
-  final nickname = (message.senderNickname ?? member?.nickname)?.trim() ?? '';
-  final label = nickname.isNotEmpty
-      ? nickname
-      : profile?.displayLabel.trim() ?? '';
-  return _MessageSender(
-    name: label.isNotEmpty
-        ? label
-        : profile?.username.trim().isNotEmpty == true
-        ? profile!.username
-        : tr('Unknown member'),
-    avatarUrl: message.senderCircleAvatarUrl ?? profile?.avatarUrl,
-    roleColor: message.senderRoleColor,
-    userId: message.senderId,
-  );
-}
-
-class _MessageSender {
-  const _MessageSender({
-    required this.name,
-    this.avatarUrl,
-    this.roleColor,
-    this.isBot = false,
-    this.userId,
-  });
-
-  final String name;
-  final String? avatarUrl;
-
-  /// The member behind the name (not set for webhooks), whose circle tag
-  /// shows next to it.
-  final String? userId;
-
-  /// A webhook, marked with a BOT tag.
-  final bool isBot;
-
-  /// The sender's highest coloured circle role, as 0xRRGGBB.
-  final int? roleColor;
-}
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
@@ -5255,7 +5082,7 @@ class _MessageBubble extends StatelessWidget {
 
   /// Who sent the message, shown as an avatar beside incoming bubbles (and
   /// every card).
-  final _MessageSender? sender;
+  final MessageSender? sender;
 
   /// Shows [sender]'s name above the first message of a group.
   final bool showSenderName;
@@ -8068,47 +7895,6 @@ class _SlowmodeBanner extends StatelessWidget {
   }
 }
 
-/// A slowmode wait as `45s`, `2:05` or `1:00:00`.
-String formatSlowmodeCountdown(int seconds) {
-  if (seconds < 60) {
-    return '${seconds}s';
-  }
-  final hours = seconds ~/ 3600;
-  final minutes = (seconds % 3600) ~/ 60;
-  final rest = (seconds % 60).toString().padLeft(2, '0');
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:$rest';
-  }
-  return '$minutes:$rest';
-}
-
-/// When the current user's slowmode wait ends: their latest message plus
-/// [slowmodeSeconds], or the server's [retryAt] if later. Null when they
-/// have not sent anything here.
-DateTime? _slowmodeEnd({
-  required List<ChatMessage> messages,
-  required String? currentUserId,
-  required int slowmodeSeconds,
-  required DateTime? retryAt,
-}) {
-  DateTime? lastSentAt;
-  for (final message in messages) {
-    if (message.isSentBy(currentUserId) &&
-        message.type != MessageType.system &&
-        (lastSentAt == null || message.createdAt.isAfter(lastSentAt))) {
-      lastSentAt = message.createdAt;
-    }
-  }
-  final localEnd = lastSentAt?.add(Duration(seconds: slowmodeSeconds));
-  if (retryAt == null) {
-    return localEnd;
-  }
-  if (localEnd == null || retryAt.isAfter(localEnd)) {
-    return retryAt;
-  }
-  return localEnd;
-}
-
 /// Takes the composer's place where the current user may not send.
 class _ReadOnlyComposerNotice extends StatelessWidget {
   const _ReadOnlyComposerNotice({
@@ -8224,134 +8010,6 @@ class _ComposerModeBanner extends StatelessWidget {
   }
 }
 
-ReplyPreview _replyPreviewForMessage(ChatMessage message) {
-  return ReplyPreview(
-    messageId: message.id,
-    senderName: 'Message',
-    body: _replyPreviewBody(message),
-    type: message.type,
-  );
-}
-
-/// The quoted text of a reply to [message]. What is sent stays English, as
-/// every reader sees it; the composer shows it [localized].
-String _replyPreviewBody(ChatMessage message, {bool localized = false}) {
-  String label(String english) => localized ? tr(english) : english;
-  if (message.recalledAt != null) {
-    return label('Message');
-  }
-  return switch (message.type) {
-    MessageType.text =>
-      message.body.trim().isEmpty
-          ? label('Message')
-          : plainTextFromMarkdown(message.body.trim()),
-    MessageType.system =>
-      message.body.trim().isEmpty ? label('Message') : message.body.trim(),
-    MessageType.image => label('Image'),
-    MessageType.file => label('File'),
-    MessageType.voice => label('Voice message'),
-    MessageType.poll => pollPreviewText(message.body),
-    MessageType.sticker => stickerPreviewText(message.body),
-  };
-}
-
-_LatestOutgoingReadState _latestOutgoingReadState({
-  required List<ChatMessage> messages,
-  required List<ConversationReadMarker> readMarkers,
-  required String? currentUserId,
-}) {
-  if (currentUserId == null) {
-    return const _LatestOutgoingReadState();
-  }
-
-  ChatMessage? latestOutgoing;
-  for (final message in messages) {
-    if (message.isSentBy(currentUserId) && message.type != MessageType.system) {
-      latestOutgoing = message;
-    }
-  }
-  if (latestOutgoing == null) {
-    return const _LatestOutgoingReadState();
-  }
-
-  final messagesById = {for (final message in messages) message.id: message};
-  final isRead = readMarkers.any((marker) {
-    if (marker.userId == currentUserId) {
-      return false;
-    }
-    final readMessage = messagesById[marker.lastReadMessageId];
-    return readMessage != null &&
-        !readMessage.createdAt.isBefore(latestOutgoing!.createdAt);
-  });
-
-  return _LatestOutgoingReadState(
-    latestOutgoingMessageId: latestOutgoing.id,
-    isRead: isRead,
-  );
-}
-
-/// The first message from someone else after the reader's last read message,
-/// or null when everything was already read or the read position is unknown.
-String? _firstUnreadMessageId({
-  required List<ChatMessage> messages,
-  required List<ConversationReadMarker> readMarkers,
-  required String? currentUserId,
-}) {
-  if (currentUserId == null) {
-    return null;
-  }
-  ConversationReadMarker? marker;
-  for (final readMarker in readMarkers) {
-    if (readMarker.userId == currentUserId) {
-      marker = readMarker;
-      break;
-    }
-  }
-  if (marker == null) {
-    return null;
-  }
-  final lastReadMessageId = marker.lastReadMessageId;
-  var startIndex = 0;
-  if (lastReadMessageId != null) {
-    final lastReadIndex = messages.indexWhere(
-      (message) => message.id == lastReadMessageId,
-    );
-    if (lastReadIndex == -1) {
-      return null;
-    }
-    startIndex = lastReadIndex + 1;
-  }
-  for (final message in messages.skip(startIndex)) {
-    // A pat is a quiet line, never the first unread message.
-    if (!message.isSentBy(currentUserId) && !isPatMessage(message)) {
-      return message.id;
-    }
-  }
-  return null;
-}
-
-List<ChatMessage> _messagesOldestToNewest(List<ChatMessage> messages) {
-  return [...messages]..sort((left, right) {
-    final createdCompare = left.createdAt.compareTo(right.createdAt);
-    if (createdCompare != 0) {
-      return createdCompare;
-    }
-    return left.id.compareTo(right.id);
-  });
-}
-
-class _LatestOutgoingReadState {
-  const _LatestOutgoingReadState({
-    this.latestOutgoingMessageId,
-    this.isRead = false,
-  });
-
-  final String? latestOutgoingMessageId;
-  final bool isRead;
-}
-
-/// The loaded messages laid out for the list (see
-/// `_ChatThreadScreenState._layoutFor`).
 /// Pastes pictures and files from the macOS pasteboard into the tray. When
 /// the pasteboard holds none (plain text), the text field's own paste runs.
 class _PasteFilesAction extends ContextAction<PasteTextIntent> {
@@ -8381,195 +8039,3 @@ class _PasteFilesAction extends ContextAction<PasteTextIntent> {
   }
 }
 
-class _ThreadLayout {
-  _ThreadLayout._({
-    required this.messages,
-    required this.readMarkers,
-    required this.pending,
-    required this.query,
-    required this.dividerId,
-    required this.currentUserId,
-    required this.fullOldestToNewest,
-    required this.messagesById,
-    required this.display,
-    required this.displayIndex,
-    required this.pendingById,
-    required this.followUpIds,
-    required this.dayStartIds,
-    required this.openingPostId,
-    required this.openingPostReplyCount,
-    required this.latestOutgoingReadState,
-  });
-
-  factory _ThreadLayout.build({
-    required List<ChatMessage> messages,
-    required List<ConversationReadMarker> readMarkers,
-    required List<OutboxEntry> pending,
-    required String query,
-    required String? dividerId,
-    required String? currentUserId,
-    required bool forumPost,
-    required List<ChatMessage> Function(List<ChatMessage>, String) search,
-  }) {
-    final searching = query.trim().isNotEmpty;
-    final fullOldestToNewest = _isOldestFirst(messages)
-        ? messages
-        : _messagesOldestToNewest(messages);
-    final messagesById = {
-      for (final message in fullOldestToNewest) message.id: message,
-    };
-    final visible = searching
-        ? _messagesOldestToNewest(search(fullOldestToNewest, query))
-        : fullOldestToNewest;
-    // Messages still in the outbox follow the loaded ones, unless the
-    // stored copy already arrived.
-    final storedClientIds = {
-      for (final message in fullOldestToNewest) ?message.clientId,
-    };
-    final pendingById = <String, OutboxEntry>{};
-    final pendingMessages = <ChatMessage>[];
-    if (!searching && currentUserId != null) {
-      for (final entry in pending) {
-        if (storedClientIds.contains(entry.clientId)) {
-          continue;
-        }
-        pendingById[entry.pendingMessageId] = entry;
-        pendingMessages.add(entry.toPendingMessage(currentUserId));
-      }
-    }
-    final unfolded = pendingMessages.isEmpty
-        ? visible
-        : [...visible, ...pendingMessages];
-    // Pictures sent together show as one album bubble. (Not while
-    // searching: a result is a single message.)
-    final folded = searching
-        ? FoldedAlbums(messages: unfolded, headOf: const {})
-        : foldAlbums(unfolded);
-    final display = folded.messages;
-    final displayIndex = {
-      for (final (index, message) in display.indexed) message.id: index,
-    };
-    // The rest of an album is found where its first message is.
-    for (final MapEntry(key: siblingId, value: headId)
-        in folded.headOf.entries) {
-      displayIndex[siblingId] = displayIndex[headId]!;
-    }
-    // Grouping compares neighbours, which search results are not.
-    final followUpIds = !searching
-        ? _followUpMessageIds(display, newMessageDividerId: dividerId)
-        : <String>{};
-    // The first message of each day gets a day separator.
-    final dayStartIds = <String>{
-      if (!searching)
-        for (final (index, message) in display.indexed)
-          if (index == 0 ||
-              !_isSameLocalDay(display[index - 1].createdAt, message.createdAt))
-            message.id,
-    };
-    // A forum post opens with its first message; replies start their own
-    // group under it.
-    final openingPostId = forumPost
-        ? fullOldestToNewest
-              .where((message) => message.type != MessageType.system)
-              .firstOrNull
-              ?.id
-        : null;
-    var openingPostReplyCount = 0;
-    if (openingPostId != null) {
-      final index = displayIndex[openingPostId];
-      if (index != null && index + 1 < display.length) {
-        followUpIds.remove(display[index + 1].id);
-      }
-      openingPostReplyCount = fullOldestToNewest
-          .where(
-            (other) =>
-                other.id != openingPostId &&
-                other.type != MessageType.system &&
-                other.recalledAt == null,
-          )
-          .length;
-    }
-    return _ThreadLayout._(
-      messages: messages,
-      readMarkers: readMarkers,
-      pending: pending,
-      query: query,
-      dividerId: dividerId,
-      currentUserId: currentUserId,
-      fullOldestToNewest: fullOldestToNewest,
-      messagesById: messagesById,
-      display: display,
-      displayIndex: displayIndex,
-      pendingById: pendingById,
-      followUpIds: followUpIds,
-      dayStartIds: dayStartIds,
-      openingPostId: openingPostId,
-      openingPostReplyCount: openingPostReplyCount,
-      latestOutgoingReadState: _latestOutgoingReadState(
-        messages: fullOldestToNewest,
-        readMarkers: readMarkers,
-        currentUserId: currentUserId,
-      ),
-    );
-  }
-
-  // What it was built from.
-  final List<ChatMessage> messages;
-  final List<ConversationReadMarker> readMarkers;
-  final List<OutboxEntry> pending;
-  final String query;
-  final String? dividerId;
-  final String? currentUserId;
-
-  /// Every loaded message, oldest first.
-  final List<ChatMessage> fullOldestToNewest;
-  final Map<String, ChatMessage> messagesById;
-
-  /// What the list shows, oldest first: the search results, or the loaded
-  /// messages and then the ones still sending.
-  final List<ChatMessage> display;
-  final Map<String, int> displayIndex;
-
-  /// Outbox entries by the id their message shows under.
-  final Map<String, OutboxEntry> pendingById;
-
-  /// The outbox entry that [message]'s bubble shows the status of: its own,
-  /// or for an album the first of its attachments that failed, else the
-  /// first still sending.
-  OutboxEntry? pendingEntryFor(ChatMessage message) {
-    final album = message.album;
-    if (album == null) {
-      return pendingById[message.id];
-    }
-    OutboxEntry? sending;
-    for (final item in album) {
-      final entry = pendingById[item.id];
-      if (entry == null) {
-        continue;
-      }
-      if (entry.state == OutboxState.failed) {
-        return entry;
-      }
-      sending ??= entry;
-    }
-    return sending;
-  }
-
-  final Set<String> followUpIds;
-  final Set<String> dayStartIds;
-  final String? openingPostId;
-  final int openingPostReplyCount;
-  final _LatestOutgoingReadState latestOutgoingReadState;
-}
-
-bool _isOldestFirst(List<ChatMessage> messages) {
-  for (var index = 1; index < messages.length; index++) {
-    final previous = messages[index - 1];
-    final message = messages[index];
-    final byTime = previous.createdAt.compareTo(message.createdAt);
-    if (byTime > 0 || (byTime == 0 && previous.id.compareTo(message.id) > 0)) {
-      return false;
-    }
-  }
-  return true;
-}

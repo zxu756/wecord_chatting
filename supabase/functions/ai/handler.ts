@@ -17,6 +17,8 @@ import {
   translatePrompt,
 } from "./prompts.ts";
 import { complete, ProviderError } from "./provider.ts";
+import { type AssistantStore, runAssistantJob } from "./assistant.ts";
+import { type ActionStore, runExtractActions } from "./extract_actions.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
@@ -149,6 +151,13 @@ export interface AiDeps {
   /// translate_batch (see translate_batch.ts). Without it that action
   /// answers 503.
   translations?: TranslationStore;
+
+  /// The @WeCord AI assistant's jobs (see assistant.ts); service calls only.
+  /// Without it the `assistant` action answers 503.
+  assistant?: AssistantStore;
+  /// What extract_actions reads (see extract_actions.ts). Without it that
+  /// action answers 503.
+  actions?: ActionStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -191,6 +200,18 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   // token (the same DISPATCH_SECRET as scheduled-dispatch). It is the only
   // thing that secret may do here; nobody signed in can use it.
   if (isDispatchAuthorized(authorization, deps.env("DISPATCH_SECRET") ?? "")) {
+    // The same secret also wakes the @WeCord AI assistant (assistant.ts).
+    const peeked = await request.clone().json().catch(() => null) as
+      | { action?: unknown; job_id?: unknown }
+      | null;
+    if (peeked?.action === "assistant") {
+      const parsedJob = parseAiRequest(peeked);
+      if (parsedJob === null || parsedJob.action !== "assistant") {
+        return json({ error: "invalid_request" }, 400);
+      }
+      const result = await runAssistantJob(parsedJob.jobId, deps);
+      return json(result.body, result.status);
+    }
     return await handleGuardRequest(request, deps);
   }
   const userId = await deps.authenticate(authorization);
@@ -209,8 +230,9 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
     return json({ error: "invalid_request" }, 400);
   }
 
-  if (parsed.action === "guard") {
-    // Only the database (with the shared secret) may ask for a check.
+  if (parsed.action === "guard" || parsed.action === "assistant") {
+    // Only the database (with the shared secret) may ask for a check or an
+    // assistant answer.
     return json({ error: "forbidden" }, 403);
   }
   const config = readAiConfig(deps.env);
@@ -230,6 +252,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "translate_batch") {
     const result = await runTranslateBatch(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+  if (parsed.action === "extract_actions") {
+    const result = await runExtractActions(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 

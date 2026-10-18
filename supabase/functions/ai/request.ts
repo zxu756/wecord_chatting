@@ -74,6 +74,18 @@ export type AiRequest =
     /// A person asked for this message in particular: no skipping for
     /// language or content, the answer is shown even if it equals the text.
     manual: boolean;
+  }
+  /// The @WeCord AI assistant's answer to a queued job, asked by the database
+  /// with the shared secret (never by a signed-in user); see assistant.ts.
+  | { action: "assistant"; jobId: string }
+  | {
+    /// To-dos and events in the messages a person chose (extract_actions.ts).
+    action: "extract_actions";
+    conversationId: string;
+    /// Distinct, 1 to MAX_EXTRACT_MESSAGES.
+    messageIds: string[];
+    /// The person's IANA time zone for dates; null reads them as UTC.
+    timeZone: string | null;
   };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
@@ -208,6 +220,46 @@ export function parseAiRequest(body: unknown): AiRequest | null {
         messageIds,
         target: fields.target,
         manual: fields.manual === true,
+      };
+    }
+    case "assistant": {
+      const jobId = optionalId(fields.job_id);
+      if (jobId === null || jobId === "invalid") {
+        return null;
+      }
+      return { action: "assistant", jobId };
+    }
+    case "extract_actions": {
+      const conversationId = optionalId(fields.conversation_id);
+      if (
+        conversationId === null || conversationId === "invalid" ||
+        !Array.isArray(fields.message_ids) ||
+        fields.message_ids.length === 0 || fields.message_ids.length > 200
+      ) {
+        return null;
+      }
+      const messageIds: string[] = [];
+      for (const value of fields.message_ids) {
+        if (typeof value !== "string" || !UUID.test(value)) {
+          return null;
+        }
+        if (!messageIds.includes(value)) {
+          messageIds.push(value);
+        }
+      }
+      // More than 50 distinct messages is a request that is too big, not one
+      // to cut down quietly.
+      if (messageIds.length > 50) {
+        return null;
+      }
+      const zone = typeof fields.time_zone === "string"
+        ? fields.time_zone.trim()
+        : "";
+      return {
+        action: "extract_actions",
+        conversationId,
+        messageIds,
+        timeZone: /^[A-Za-z0-9_+./-]{1,64}$/.test(zone) ? zone : null,
       };
     }
     default:

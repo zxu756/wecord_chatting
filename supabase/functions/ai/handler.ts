@@ -17,6 +17,7 @@ import {
   translatePrompt,
 } from "./prompts.ts";
 import { complete, ProviderError } from "./provider.ts";
+import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
   MAX_AUDIO_BYTES,
@@ -143,6 +144,11 @@ export interface AiDeps {
     messageId: string,
     result: GuardResult,
   ) => Promise<string | null>;
+
+  /// The translation cache and the person's translation choices, for
+  /// translate_batch (see translate_batch.ts). Without it that action
+  /// answers 503.
+  translations?: TranslationStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -221,6 +227,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "transcribe") {
     return await transcribe(parsed, userId, config, deps);
+  }
+  if (parsed.action === "translate_batch") {
+    const result = await runTranslateBatch(parsed, userId, config, deps);
+    return json(result.body, result.status);
   }
 
   const conversationId = parsed.conversationId;

@@ -61,6 +61,19 @@ export type AiRequest =
     /// the function finds the audio itself, as the caller.
     action: "transcribe";
     messageId: string;
+  }
+  | {
+    /// Translations of the messages a person is looking at (auto-translate,
+    /// and the message menu's Translate), see translate_batch.ts.
+    action: "translate_batch";
+    conversationId: string;
+    /// Distinct, at most MAX_BATCH_IDS in a sound request (the handler
+    /// answers 400 too_many_messages above that).
+    messageIds: string[];
+    target: LanguageCode;
+    /// A person asked for this message in particular: no skipping for
+    /// language or content, the answer is shown even if it equals the text.
+    manual: boolean;
   };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
@@ -170,6 +183,32 @@ export function parseAiRequest(body: unknown): AiRequest | null {
         return null;
       }
       return { action: "transcribe", messageId };
+    }
+    case "translate_batch": {
+      const conversationId = optionalId(fields.conversation_id);
+      if (
+        conversationId === null || conversationId === "invalid" ||
+        !isLanguageCode(fields.target) || !Array.isArray(fields.message_ids) ||
+        fields.message_ids.length === 0 || fields.message_ids.length > 200
+      ) {
+        return null;
+      }
+      const messageIds: string[] = [];
+      for (const value of fields.message_ids) {
+        if (typeof value !== "string" || !UUID.test(value)) {
+          return null;
+        }
+        if (!messageIds.includes(value)) {
+          messageIds.push(value);
+        }
+      }
+      return {
+        action: "translate_batch",
+        conversationId,
+        messageIds,
+        target: fields.target,
+        manual: fields.manual === true,
+      };
     }
     default:
       return null;

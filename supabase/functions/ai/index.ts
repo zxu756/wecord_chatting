@@ -9,6 +9,10 @@
 //   transcribe {message_id}     -> {text}. Needs the optional secrets
 //     AI_TRANSCRIBE_BASE_URL, AI_TRANSCRIBE_API_KEY and AI_TRANSCRIBE_MODEL
 //     (503 transcribe_not_configured without them).
+//   translate_batch {conversation_id, message_ids (<= 20), target, manual?}
+//     -> {translations, skipped, cached, translated}. Translations of the
+//     messages on screen, from the cache (message_translations) first and
+//     from the model for the rest; see translate_batch.ts.
 //   guard {message_id}          -> the AI guard for new members: only the
 //     database calls it (pg_net, Authorization: Bearer <DISPATCH_SECRET>, so
 //     deploy with verify_jwt = false). It classifies the text of a message
@@ -16,11 +20,14 @@
 //     (AI_GUARD_DAILY_LIMIT_PER_CIRCLE) and releases or holds the message;
 //     when AI cannot answer it releases the message as "not checked".
 // Chat is read as the caller, so only messages they can see are used.
-// Nothing is stored beyond the day's request count (ai_usage). Answers 503
+// Nothing is stored beyond the day's request count (ai_usage) and the
+// translations of translate_batch (message_translations, which go with the
+// message). Answers 503
 // ai_not_configured until the three required secrets are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleAiRequest } from "./handler.ts";
 import { loadMessages } from "./messages.ts";
+import { createTranslationStore } from "./translations_store.ts";
 
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -171,5 +178,6 @@ Deno.serve(async (request) => {
       }
       return typeof data === "string" ? data : null;
     },
+    translations: createTranslationStore(userClient, admin),
   });
 });

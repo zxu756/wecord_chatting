@@ -20,7 +20,9 @@ void main() {
     final mean = sorted.reduce((a, b) => a + b) / sorted.length;
     final p90 =
         sorted[(sorted.length * 0.9).floor().clamp(0, sorted.length - 1)];
+    final median = sorted[sorted.length ~/ 2];
     return '$label: mean ${(mean / 1000).toStringAsFixed(2)} ms, '
+        'median ${(median / 1000).toStringAsFixed(2)} ms, '
         'p90 ${(p90 / 1000).toStringAsFixed(2)} ms, '
         'max ${(sorted.last / 1000).toStringAsFixed(2)} ms '
         '(${sorted.length} frames)';

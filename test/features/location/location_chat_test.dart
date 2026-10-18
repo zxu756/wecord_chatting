@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/location/live_location_sharer.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/location/location_service.dart';
+import 'package:wecord/features/location/map_widgets.dart';
+import 'package:wecord/features/location/static_map.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -219,7 +222,10 @@ void main() {
       expect(find.byKey(const ValueKey('location-card')), findsOneWidget);
       expect(find.text('Big Ben'), findsOneWidget);
       expect(find.text('Westminster, London'), findsOneWidget);
-      expect(find.byType(RawImage), findsWidgets);
+      // A picture of the map with the pin, not a live map.
+      expect(find.byType(StaticMap), findsOneWidget);
+      expect(find.byType(FlutterMap), findsNothing);
+      expect(find.byType(MapPin), findsOneWidget);
       // The readable line is not shown on top of the card.
       expect(find.textContaining('📍'), findsNothing);
       await world.close(tester);

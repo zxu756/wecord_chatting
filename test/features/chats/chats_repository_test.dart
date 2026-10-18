@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_history.dart';
@@ -518,6 +519,9 @@ void main() {
       'create_poll',
       'vote_poll',
       'end_poll',
+      // Asked together with the other permissions first; this fake server
+      // does not know the function, so the single question follows.
+      'get_conversation_capabilities',
       'can_current_user_moderate_polls',
       'list_poll_voters',
     ]);
@@ -1438,6 +1442,51 @@ void main() {
     ]);
   });
 
+  test(
+    'a group avatar is stored at 512 px, an animated one as it is',
+    () async {
+      final dataSource = FakeChatsDataSource();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+        storagePathSeed: () => 'seed-1',
+      );
+      final big = img.Image(width: 1600, height: 1200);
+      img.fill(big, color: img.ColorRgb8(30, 120, 200));
+      final png = Uint8List.fromList(img.encodePng(big));
+
+      final path = await repository.uploadGroupAvatar(
+        conversationId: 'conversation-1',
+        image: ChatImageUpload(
+          bytes: png,
+          fileName: 'Group.PNG',
+          mimeType: 'image/png',
+        ),
+      );
+
+      expect(path, 'group-avatars/conversation-1/seed-1-group.jpg');
+      final stored = dataSource.uploadedImages.single;
+      expect(stored.mimeType, 'image/jpeg');
+      final decoded = img.decodeJpg(stored.bytes)!;
+      expect((decoded.width, decoded.height), (512, 384));
+
+      final frames = img.Image(width: 700, height: 700)..frameDuration = 100;
+      img.fill(frames, color: img.ColorRgb8(255, 0, 0));
+      frames.addFrame(img.Image(width: 700, height: 700)..frameDuration = 100);
+      final gif = Uint8List.fromList(img.encodeGif(frames));
+      await repository.uploadGroupAvatar(
+        conversationId: 'conversation-1',
+        image: ChatImageUpload(
+          bytes: gif,
+          fileName: 'dance.gif',
+          mimeType: 'image/gif',
+        ),
+      );
+      expect(dataSource.uploadedImages.last.mimeType, 'image/gif');
+      expect(identical(dataSource.uploadedImages.last.bytes, gif), isTrue);
+    },
+  );
+
   test('group management methods call scoped RPCs and storage', () async {
     final dataSource = FakeChatsDataSource()..signedUrlResult = 'signed-avatar';
     final repository = SupabaseChatsRepository.withDataSource(
@@ -1916,6 +1965,10 @@ void main() {
 
     expect(dataSource.rpcCalls, [
       const RpcCall(
+        functionName: 'get_conversation_capabilities',
+        params: {'target_conversation_id': 'conversation-1'},
+      ),
+      const RpcCall(
         functionName: 'can_current_user_pin_messages',
         params: {'target_conversation_id': 'conversation-1'},
       ),
@@ -2131,6 +2184,189 @@ void main() {
       expect(direct.canSendMessages, isTrue);
       expect(direct.slowmodeSeconds, 0);
       expect(channel.slowmodeSeconds, 30);
+    });
+  });
+
+  group('opening a chat asks for less', () {
+    SupabaseChatsRepository repositoryFor(FakeChatsDataSource dataSource) {
+      return SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+      );
+    }
+
+    test(
+      'pin, end polls and delete others share one capabilities request',
+      () async {
+        final dataSource = FakeChatsDataSource()
+          ..rpcResults['get_conversation_capabilities'] = {
+            'can_pin_messages': true,
+            'can_moderate_polls': false,
+            'can_moderate_messages': true,
+            'can_manage_thread': false,
+          };
+        final repository = repositoryFor(dataSource);
+
+        final answers = await Future.wait([
+          repository.canPinMessages('conversation-1'),
+          repository.canModeratePolls('conversation-1'),
+          repository.canModerateMessages('conversation-1'),
+        ]);
+
+        expect(answers, [true, false, true]);
+        expect(dataSource.rpcCalls, [
+          const RpcCall(
+            functionName: 'get_conversation_capabilities',
+            params: {'target_conversation_id': 'conversation-1'},
+          ),
+        ]);
+      },
+    );
+
+    test('a later question asks the server again', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['get_conversation_capabilities'] = {
+          'can_pin_messages': true,
+        };
+      final repository = repositoryFor(dataSource);
+
+      expect(await repository.canPinMessages('conversation-1'), isTrue);
+      dataSource.rpcResults['get_conversation_capabilities'] = {
+        'can_pin_messages': false,
+      };
+      expect(await repository.canPinMessages('conversation-1'), isFalse);
+      expect(dataSource.rpcCalls, hasLength(2));
+    });
+
+    test('other conversations are asked for separately', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['get_conversation_capabilities'] = {
+          'can_pin_messages': true,
+        };
+      final repository = repositoryFor(dataSource);
+      await Future.wait([
+        repository.canPinMessages('conversation-1'),
+        repository.canPinMessages('conversation-2'),
+      ]);
+      expect(dataSource.rpcCalls, hasLength(2));
+    });
+
+    test('a server without the function is asked the old way', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcErrors['get_conversation_capabilities'] = const PostgrestException(
+          message: 'Could not find the function',
+          code: 'PGRST202',
+        )
+        ..rpcResults['can_current_user_pin_messages'] = true
+        ..rpcResults['can_current_user_moderate_polls'] = false
+        ..rpcResults['can_current_user_moderate_messages'] = true;
+      final repository = repositoryFor(dataSource);
+
+      expect(await repository.canPinMessages('conversation-1'), isTrue);
+      expect(await repository.canModeratePolls('conversation-1'), isFalse);
+      expect(await repository.canModerateMessages('conversation-1'), isTrue);
+    });
+
+    test('another failure is not hidden', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcErrors['get_conversation_capabilities'] = const PostgrestException(
+          message: 'boom',
+          code: '500',
+        );
+      final repository = repositoryFor(dataSource);
+      await expectLater(
+        repository.canPinMessages('conversation-1'),
+        throwsA(isA<PostgrestException>()),
+      );
+    });
+
+    test('a conversation summary is one row, not the list', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['get_conversation_summary'] = [
+          {
+            'id': 'conversation-1',
+            'type': 'group',
+            'title': 'Hike club',
+            'unread_count': 3,
+          },
+        ];
+      final repository = repositoryFor(dataSource);
+
+      final summary = await repository.getConversationSummary('conversation-1');
+
+      expect(summary?.title, 'Hike club');
+      expect(summary?.unreadCount, 3);
+      expect(
+        dataSource.rpcCalls.single.functionName,
+        'get_conversation_summary',
+      );
+      expect(dataSource.rpcCalls.single.params, {
+        'target_conversation_id': 'conversation-1',
+      });
+      expect(dataSource.listCalls, 0, reason: 'the list was not fetched');
+    });
+
+    test('no row means no such conversation', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcResults['get_conversation_summary'] = <Object?>[];
+      final repository = repositoryFor(dataSource);
+      expect(await repository.getConversationSummary('nowhere'), isNull);
+      expect(dataSource.listCalls, 0);
+    });
+
+    test(
+      'the header and the group details share one summary request',
+      () async {
+        final dataSource = FakeChatsDataSource()
+          ..rpcResults['get_conversation_summary'] = [
+            {
+              'id': 'conversation-1',
+              'type': 'group',
+              'title': 'Hike club',
+              'announcement': 'Bring water',
+              'unread_count': 0,
+            },
+          ];
+        final repository = repositoryFor(dataSource);
+
+        final results = await Future.wait<Object?>([
+          repository.getConversationSummary('conversation-1'),
+          repository.getGroupDetail('conversation-1'),
+        ]);
+
+        expect((results[1]! as GroupDetail).title, 'Hike club');
+        expect((results[1]! as GroupDetail).announcement, 'Bring water');
+        expect(
+          dataSource.rpcCalls.where(
+            (call) => call.functionName == 'get_conversation_summary',
+          ),
+          hasLength(1),
+        );
+        expect(dataSource.listCalls, 0);
+      },
+    );
+
+    test('a server without the function reads the list', () async {
+      final dataSource = FakeChatsDataSource()
+        ..rpcErrors['get_conversation_summary'] = const PostgrestException(
+          message: 'Could not find the function',
+          code: 'PGRST202',
+        )
+        ..conversationRows = [
+          {
+            'id': 'conversation-1',
+            'type': 'group',
+            'title': 'Old list',
+            'unread_count': 0,
+          },
+          {'id': 'conversation-2', 'type': 'direct', 'unread_count': 0},
+        ];
+      final repository = repositoryFor(dataSource);
+      expect(
+        (await repository.getConversationSummary('conversation-1'))?.title,
+        'Old list',
+      );
+      expect(await repository.getConversationSummary('conversation-9'), isNull);
     });
   });
 

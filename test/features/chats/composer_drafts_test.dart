@@ -166,6 +166,9 @@ void main() {
 
     await tester.enterText(_composer, 'half written');
     await tester.pump();
+    // The write waits for a pause in the typing.
+    expect(store.drafts['user-1']?['conversation-1'], isNull);
+    await tester.pump(ComposerDraftsController.saveDelay);
     expect(store.drafts['user-1']?['conversation-1']?.text, 'half written');
 
     await tester.tap(find.text('switch'));
@@ -177,6 +180,132 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(_composerText(tester), 'half written');
+  });
+
+  group('saving a draft while typing', () {
+    Future<void> type(WidgetTester tester, String text) async {
+      await tester.enterText(_composer, text);
+      await tester.pump();
+    }
+
+    testWidgets('twelve keystrokes make one write, after the typing pauses', (
+      tester,
+    ) async {
+      final store = _CountingStore();
+      await tester.pumpWidget(_app(chat_fakes.FakeChatsRepository(), store));
+      await tester.pump();
+
+      var text = '';
+      for (var i = 0; i < 12; i++) {
+        text += 'hello world!'[i];
+        await type(tester, text);
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // 1.2 s of typing, keys 100 ms apart: nothing was written yet.
+      expect(store.saves, 0);
+      await tester.pump(ComposerDraftsController.saveDelay);
+      expect(store.saves, 1);
+      expect(store.drafts['user-1']!['conversation-1']!.text, 'hello world!');
+      // The chat list's own copy followed every key.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      expect(
+        container.read(composerDraftsProvider)['conversation-1']!.text,
+        'hello world!',
+      );
+    });
+
+    testWidgets('the last characters survive the app going to the background '
+        'right after typing', (tester) async {
+      final store = _CountingStore();
+      await tester.pumpWidget(_app(chat_fakes.FakeChatsRepository(), store));
+      await tester.pump();
+
+      await type(tester, 'see you at nine, bring the');
+      expect(store.drafts['user-1']?['conversation-1'], isNull);
+
+      // No pause: the app is hidden straight away.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      expect(
+        store.drafts['user-1']?['conversation-1']?.text,
+        'see you at nine, bring the',
+      );
+
+      // And again for the other ways of leaving.
+      await type(tester, 'see you at nine, bring the snacks');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      expect(
+        store.drafts['user-1']!['conversation-1']!.text,
+        'see you at nine, bring the snacks',
+      );
+      await type(tester, 'see you at nine, bring the snacks!');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(
+        store.drafts['user-1']!['conversation-1']!.text,
+        'see you at nine, bring the snacks!',
+      );
+      for (final back in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(back);
+      }
+    });
+
+    testWidgets('closing the app (the screen goes away) keeps the draft', (
+      tester,
+    ) async {
+      final store = _CountingStore();
+      await tester.pumpWidget(_app(chat_fakes.FakeChatsRepository(), store));
+      await tester.pump();
+
+      await type(tester, 'typed just before closing');
+      expect(store.drafts['user-1']?['conversation-1'], isNull);
+      // The whole app is torn down within the 400 ms.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(
+        store.drafts['user-1']?['conversation-1']?.text,
+        'typed just before closing',
+      );
+    });
+
+    testWidgets('a draft that is sent is gone from the device at once', (
+      tester,
+    ) async {
+      final store = _CountingStore();
+      await tester.pumpWidget(_app(chat_fakes.FakeChatsRepository(), store));
+      await tester.pump();
+
+      await type(tester, 'about to send');
+      await tester.pump(ComposerDraftsController.saveDelay);
+      expect(store.drafts['user-1']!['conversation-1']!.text, 'about to send');
+
+      await tester.tap(find.byKey(const ValueKey('composer-send-button')));
+      await tester.pump();
+      expect(store.drafts['user-1']?['conversation-1'], isNull);
+      expect(_composerText(tester), isEmpty);
+    });
+
+    testWidgets('typing again restarts the wait', (tester) async {
+      final store = _CountingStore();
+      await tester.pumpWidget(_app(chat_fakes.FakeChatsRepository(), store));
+      await tester.pump();
+
+      await type(tester, 'a');
+      await tester.pump(const Duration(milliseconds: 300));
+      await type(tester, 'ab');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(store.saves, 0);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(store.saves, 1);
+      expect(store.drafts['user-1']!['conversation-1']!.text, 'ab');
+    });
   });
 
   testWidgets('a saved draft and its reply are restored on open', (
@@ -236,4 +365,15 @@ void main() {
     await tester.pump();
     expect(repository.markReadCalls, ['conversation-1']);
   });
+}
+
+/// Drafts in memory that count the writes.
+class _CountingStore extends InMemoryComposerDraftStore {
+  var saves = 0;
+
+  @override
+  Future<void> save(String userId, Map<String, ComposerDraft> drafts) {
+    saves += 1;
+    return super.save(userId, drafts);
+  }
 }

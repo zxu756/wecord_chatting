@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -172,14 +173,21 @@ class SupabaseSettingsRepository implements SettingsRepository {
     required Uint8List bytes,
   }) async {
     const bucket = 'profile-avatars';
+    // Avatars are shown small: scaled down and compressed before upload.
+    final image = await prepareProfileImage(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      maxEdge: avatarMaxEdge,
+    );
     final path =
-        '${_requireCurrentUserId()}/${_nextStoragePathSeed()}-${_safeFileName(fileName)}';
+        '${_requireCurrentUserId()}/${_nextStoragePathSeed()}-${_safeFileName(image.fileName)}';
     await _withStorageTimeout(
       _dataSource.uploadBinary(
         bucket: bucket,
         path: path,
-        bytes: bytes,
-        mimeType: mimeType,
+        bytes: image.bytes,
+        mimeType: image.mimeType,
       ),
     );
     return path;

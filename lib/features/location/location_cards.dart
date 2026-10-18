@@ -2,14 +2,13 @@ import 'dart:async';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/location/live_location_map_screen.dart';
 import 'package:wecord/features/location/live_location_providers.dart';
 import 'package:wecord/features/location/location_format.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/location/location_viewer_screen.dart';
-import 'package:wecord/features/location/map_widgets.dart';
+import 'package:wecord/features/location/static_map.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -61,24 +60,13 @@ class LocationMessageCard extends StatelessWidget {
                 height: width * 0.54,
                 child: ExcludeSemantics(
                   child: IgnorePointer(
-                    child: WeCordMap(
+                    // A picture of the map, not a live one: a screen of
+                    // these scrolls like text. Tapping opens the real map.
+                    child: StaticMap(
                       center: place.point,
                       zoom: 15.5,
-                      interactive: false,
-                      attributionInsets: const EdgeInsets.fromLTRB(5, 0, 5, 5),
-                      children: [
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: place.point,
-                              width: 44,
-                              height: 44,
-                              alignment: Alignment.topCenter,
-                              child: const MapPin(size: 44),
-                            ),
-                          ],
-                        ),
-                      ],
+                      width: width,
+                      height: width * 0.54,
                     ),
                   ),
                 ),

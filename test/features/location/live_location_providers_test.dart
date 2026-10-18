@@ -1,4 +1,5 @@
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,19 +7,23 @@ import 'package:wecord/features/location/live_location_providers.dart';
 import 'package:wecord/features/location/live_location_sharer.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/location/location_repository.dart';
+import 'package:wecord/shared/app_visibility.dart';
 
 import 'location_fakes.dart';
 
 void main() {
   late FakeLocationRepository repository;
   late ProviderContainer container;
+  late ValueNotifier<bool> visible;
 
   setUp(() {
     repository = FakeLocationRepository();
+    visible = ValueNotifier(true);
     container = ProviderContainer(
       overrides: [
         locationRepositoryProvider.overrideWithValue(repository),
         locationUserIdProvider.overrideWithValue('user-1'),
+        appVisibleProvider.overrideWithValue(visible),
       ],
     );
   });
@@ -95,6 +100,81 @@ void main() {
         });
       },
     );
+
+    test('the polling rests while the app is hidden and catches up when it '
+        'is back', () {
+      fakeAsync((async) {
+        container.listen(liveSharesProvider('group-1'), (_, _) {});
+        async.elapse(const Duration(seconds: 1));
+        expect(repository.listSharesCalls, 1);
+
+        // Visible: one check every 45 s.
+        async.elapse(liveSharesRefresh * 2);
+        expect(repository.listSharesCalls, 3);
+
+        // Hidden for ten minutes: no checks at all.
+        visible.value = false;
+        async.elapse(const Duration(minutes: 10));
+        expect(repository.listSharesCalls, 3);
+
+        // Someone started sharing meanwhile (and no message told us): the
+        // list is read the moment the app is back, and polling starts again.
+        repository.shares.add(otherShare('s-late', 'user-2', 'Late'));
+        visible.value = true;
+        async.elapse(const Duration(milliseconds: 10));
+        expect(repository.listSharesCalls, 4);
+        expect(
+          container
+              .read(liveSharesProvider('group-1'))
+              .value!
+              .map((s) => s.name),
+          ['Late'],
+        );
+        async.elapse(liveSharesRefresh);
+        expect(repository.listSharesCalls, 5);
+      });
+    });
+
+    test('a share still ends on time while the app is hidden', () {
+      fakeAsync((async) {
+        repository.addShare(
+          otherShare(
+            's-ada',
+            'user-2',
+            'Ada',
+            left: const Duration(minutes: 2),
+          ),
+        );
+        final seen = <int>[];
+        container.listen(liveSharesProvider('group-1'), (_, next) {
+          if (next.hasValue) {
+            seen.add(next.value!.length);
+          }
+        });
+        async.elapse(const Duration(seconds: 1));
+        expect(seen.last, 1);
+
+        visible.value = false;
+        async.elapse(const Duration(minutes: 2, seconds: 5));
+        expect(seen.last, 0, reason: 'the expiry does not wait for polling');
+        expect(repository.listSharesCalls, 1);
+      });
+    });
+
+    test('hiding and showing the app quickly does not start two polls', () {
+      fakeAsync((async) {
+        container.listen(liveSharesProvider('group-1'), (_, _) {});
+        async.elapse(const Duration(seconds: 1));
+        for (var i = 0; i < 5; i++) {
+          visible.value = false;
+          visible.value = true;
+        }
+        async.elapse(const Duration(milliseconds: 10));
+        final before = repository.listSharesCalls;
+        async.elapse(liveSharesRefresh);
+        expect(repository.listSharesCalls, before + 1);
+      });
+    });
 
     test('equal lists are not announced twice', () {
       fakeAsync((async) {

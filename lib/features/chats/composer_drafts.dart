@@ -185,10 +185,20 @@ final composerDraftsProvider =
     );
 
 class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
+  /// How long typing has to pause before the drafts are written to the
+  /// device. The list in memory (and so the chat list's "[Draft]") follows
+  /// every key; only the write waits, since each one stores every draft.
+  static const saveDelay = Duration(milliseconds: 400);
+
   String? _userId;
   final _loaded = Completer<void>();
   var _saving = false;
   var _dirty = false;
+  Timer? _saveTimer;
+
+  /// Drafts changed since they were last handed to the store.
+  var _unsaved = false;
+  late ComposerDraftStore _store;
 
   /// Completes once the saved drafts have loaded (or failed to).
   Future<void> get loaded => _loaded.future;
@@ -213,6 +223,23 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
       // No sign-in available (Supabase not set up): drafts stay in memory.
       userId = null;
     }
+    final store = ref.read(composerDraftStoreProvider);
+    _store = store;
+    // Nothing typed is lost when the app goes to the background, is closed
+    // or this is rebuilt for another person.
+    final lifecycle = _FlushOnLifecycle(() => unawaited(flush()));
+    WidgetsBinding.instance.addObserver(lifecycle);
+    ref.onDispose(() {
+      WidgetsBinding.instance.removeObserver(lifecycle);
+      _saveTimer?.cancel();
+      _saveTimer = null;
+      final owner = _userId;
+      final drafts = _current;
+      if (_unsaved && owner != null && drafts != null) {
+        _unsaved = false;
+        unawaited(store.save(owner, drafts).catchError((Object _) {}));
+      }
+    });
     if (_current case final current? when userId == _userId) {
       return current;
     }
@@ -222,8 +249,7 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
       _complete();
       return const {};
     }
-    ref
-        .read(composerDraftStoreProvider)
+    store
         .load(userId)
         .then(
           (drafts) {
@@ -249,6 +275,10 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
   ComposerDraft? draftFor(String conversationId) => state[conversationId];
 
   /// Keeps [draft] for [conversationId]; an empty or null draft removes it.
+  ///
+  /// Typing is written to the device after a short pause ([saveDelay]); a
+  /// draft that goes away (it was sent, or cleared) is written at once, so a
+  /// message that left is never offered again after a restart.
   void set(String conversationId, ComposerDraft? draft) {
     final current = state[conversationId];
     if (draft == null || draft.isEmpty) {
@@ -256,19 +286,38 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
         return;
       }
       state = {...state}..remove(conversationId);
+      _unsaved = true;
+      unawaited(flush());
     } else {
       if (current == draft) {
         return;
       }
       state = {...state, conversationId: draft};
+      _unsaved = true;
+      _saveTimer?.cancel();
+      _saveTimer = Timer(saveDelay, () {
+        _saveTimer = null;
+        unawaited(_persist());
+      });
     }
-    unawaited(_persist());
+  }
+
+  /// Writes the drafts now if a write is waiting (leaving the chat, the app
+  /// going to the background, a message being sent).
+  Future<void> flush() {
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    if (!_unsaved) {
+      return Future.value();
+    }
+    return _persist();
   }
 
   /// Writes the latest drafts, one write at a time.
   Future<void> _persist() async {
     final userId = _userId;
     if (userId == null) {
+      _unsaved = false;
       return;
     }
     if (_saving) {
@@ -279,12 +328,28 @@ class ComposerDraftsController extends Notifier<Map<String, ComposerDraft>> {
     try {
       do {
         _dirty = false;
-        await ref.read(composerDraftStoreProvider).save(userId, state);
+        _unsaved = false;
+        await _store.save(userId, state);
       } while (_dirty);
     } on Object {
       // Drafts still live for this session.
     } finally {
       _saving = false;
+    }
+  }
+}
+
+/// Calls [flush] when the app is no longer in front: the last characters
+/// typed are on the device before the system may stop the app.
+class _FlushOnLifecycle with WidgetsBindingObserver {
+  _FlushOnLifecycle(this.flush);
+
+  final void Function() flush;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      flush();
     }
   }
 }

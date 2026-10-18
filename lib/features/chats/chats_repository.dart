@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -352,6 +353,19 @@ abstract interface class ChatsDataSource {
   });
 }
 
+/// The answers of `get_conversation_capabilities`.
+class _Capabilities {
+  const _Capabilities({
+    required this.canPin,
+    required this.canModeratePolls,
+    required this.canModerateMessages,
+  });
+
+  final bool canPin;
+  final bool canModeratePolls;
+  final bool canModerateMessages;
+}
+
 class SupabaseChatsRepository
     implements
         ChatsRepository,
@@ -546,10 +560,55 @@ class SupabaseChatsRepository
     await _onMessageSent?.call(messageId);
   }
 
+  /// One conversation's summary, from `get_conversation_summary`: the same
+  /// row the list has for it, without running the list. Asked for twice at
+  /// once (the chat's header and a group's details), it is one request.
+  /// An older server without the function gets the list.
   @override
   Future<ConversationSummary?> getConversationSummary(
     String conversationId,
   ) async {
+    final shared = _summariesThisTurn[_dataSource] ??= {};
+    final asked = shared[conversationId];
+    if (asked != null) {
+      return asked;
+    }
+    final request = _fetchConversationSummary(conversationId);
+    shared[conversationId] = request;
+    // Whoever asks while it is under way shares it; afterwards, a fresh one.
+    unawaited(
+      request.then<void>(
+        (_) {
+          shared.remove(conversationId);
+        },
+        onError: (Object _) {
+          shared.remove(conversationId);
+        },
+      ),
+    );
+    return request;
+  }
+
+  static final _summariesThisTurn =
+      Expando<Map<String, Future<ConversationSummary?>>>('summaries');
+
+  Future<ConversationSummary?> _fetchConversationSummary(
+    String conversationId,
+  ) async {
+    try {
+      final rows = await _dataSource.rpc('get_conversation_summary', {
+        'target_conversation_id': conversationId,
+      });
+      if (rows is List) {
+        return rows.isEmpty
+            ? null
+            : ConversationSummary.fromJson(rows.first as Map<String, dynamic>);
+      }
+    } on PostgrestException catch (error) {
+      if (!_functionMissing(error)) {
+        rethrow;
+      }
+    }
     final conversations = await listConversations();
     for (final conversation in conversations) {
       if (conversation.id == conversationId) {
@@ -558,6 +617,10 @@ class SupabaseChatsRepository
     }
     return null;
   }
+
+  /// The server does not have the function yet (an older deployment).
+  static bool _functionMissing(PostgrestException error) =>
+      error.code == 'PGRST202' || error.code == '42883';
 
   @override
   Future<List<ChatMessage>> listMessages(String conversationId) async {
@@ -584,15 +647,10 @@ class SupabaseChatsRepository
 
   @override
   Future<GroupDetail> getGroupDetail(String conversationId) async {
-    final conversations = await listConversations();
-    ConversationSummary? conversation;
-    for (final item in conversations) {
-      if (item.id == conversationId) {
-        conversation = item;
-        break;
-      }
-    }
-    final memberRows = await _dataSource.listGroupMembers(conversationId);
+    final (conversation, memberRows) = await (
+      getConversationSummary(conversationId),
+      _dataSource.listGroupMembers(conversationId),
+    ).wait;
     return GroupDetail(
       conversationId: conversationId,
       title: conversation?.title ?? conversationId,
@@ -892,10 +950,64 @@ class SupabaseChatsRepository
 
   @override
   Future<bool> canModeratePolls(String conversationId) async {
+    final capabilities = await _capabilities(conversationId);
+    if (capabilities != null) {
+      return capabilities.canModeratePolls;
+    }
     final allowed = await _dataSource.rpc('can_current_user_moderate_polls', {
       'target_conversation_id': conversationId,
     });
     return allowed == true;
+  }
+
+  /// What the person may do in a conversation, from one request
+  /// (`get_conversation_capabilities`) for the several questions the chat
+  /// asks as it opens (pin, end polls, delete others' messages). Null when
+  /// the server cannot answer them together (an older deployment): each is
+  /// then asked on its own.
+  Future<_Capabilities?> _capabilities(String conversationId) {
+    final shared = _capabilitiesThisTurn[_dataSource] ??= {};
+    final asked = shared[conversationId];
+    if (asked != null) {
+      return asked;
+    }
+    final request = _fetchCapabilities(conversationId);
+    shared[conversationId] = request;
+    // Whoever asks while it is under way shares it; afterwards, a fresh one.
+    unawaited(
+      request.then<void>(
+        (_) {
+          shared.remove(conversationId);
+        },
+        onError: (Object _) {
+          shared.remove(conversationId);
+        },
+      ),
+    );
+    return request;
+  }
+
+  static final _capabilitiesThisTurn =
+      Expando<Map<String, Future<_Capabilities?>>>('capabilities');
+
+  Future<_Capabilities?> _fetchCapabilities(String conversationId) async {
+    try {
+      final data = await _dataSource.rpc('get_conversation_capabilities', {
+        'target_conversation_id': conversationId,
+      });
+      if (data is Map) {
+        return _Capabilities(
+          canPin: data['can_pin_messages'] == true,
+          canModeratePolls: data['can_moderate_polls'] == true,
+          canModerateMessages: data['can_moderate_messages'] == true,
+        );
+      }
+    } on PostgrestException catch (error) {
+      if (!_functionMissing(error)) {
+        rethrow;
+      }
+    }
+    return null;
   }
 
   @override
@@ -996,14 +1108,20 @@ class SupabaseChatsRepository
     required ChatImageUpload image,
   }) async {
     const bucket = 'group-avatars';
+    final prepared = await prepareProfileImage(
+      bytes: image.bytes,
+      fileName: image.fileName,
+      mimeType: image.mimeType,
+      maxEdge: avatarMaxEdge,
+    );
     final path =
-        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(image.fileName)}';
+        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(prepared.fileName)}';
     await _withStorageTimeout(
       _dataSource.uploadBinary(
         bucket: bucket,
         path: path,
-        bytes: image.bytes,
-        mimeType: image.mimeType,
+        bytes: prepared.bytes,
+        mimeType: prepared.mimeType,
       ),
     );
     return '$bucket/$path';
@@ -1075,6 +1193,10 @@ class SupabaseChatsRepository
 
   @override
   Future<bool> canModerateMessages(String conversationId) async {
+    final capabilities = await _capabilities(conversationId);
+    if (capabilities != null) {
+      return capabilities.canModerateMessages;
+    }
     final allowed = await _dataSource.rpc(
       'can_current_user_moderate_messages',
       {'target_conversation_id': conversationId},
@@ -1125,6 +1247,10 @@ class SupabaseChatsRepository
 
   @override
   Future<bool> canPinMessages(String conversationId) async {
+    final capabilities = await _capabilities(conversationId);
+    if (capabilities != null) {
+      return capabilities.canPin;
+    }
     final allowed = await _dataSource.rpc('can_current_user_pin_messages', {
       'target_conversation_id': conversationId,
     });

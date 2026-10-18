@@ -508,3 +508,103 @@ Future<Uint8List?> makeThumbnail(Uint8List bytes, {int maxEdge = 480}) async {
     codec?.dispose();
   }
 }
+
+/// The longest side of a profile, group or circle avatar that is stored.
+const avatarMaxEdge = 512;
+
+/// The longest side of a profile banner that is stored.
+const bannerMaxEdge = 1600;
+
+/// Pictures of other kinds that are already this small are left alone
+/// (a little PNG with see-through corners stays a PNG).
+const _smallProfileImageBytes = 120 * 1024;
+
+/// A picture ready to be stored as an avatar or a banner.
+class ProfileImage {
+  const ProfileImage({
+    required this.bytes,
+    required this.mimeType,
+    required this.fileName,
+  });
+
+  final Uint8List bytes;
+  final String mimeType;
+  final String fileName;
+}
+
+bool _isGif(Uint8List bytes, String mimeType) =>
+    mimeType.toLowerCase() == 'image/gif' ||
+    (bytes.length > 6 &&
+        bytes[0] == 0x47 && // G
+        bytes[1] == 0x49 && // I
+        bytes[2] == 0x46 && // F
+        bytes[3] == 0x38); // 8
+
+/// A WebP with frames (a RIFF/WEBP file whose header says ANIM).
+bool _isAnimatedWebp(Uint8List bytes) {
+  if (bytes.length < 30 ||
+      String.fromCharCodes(bytes.sublist(0, 4)) != 'RIFF' ||
+      String.fromCharCodes(bytes.sublist(8, 12)) != 'WEBP') {
+    return false;
+  }
+  final head = bytes.sublist(12, bytes.length < 64 ? bytes.length : 64);
+  return String.fromCharCodes(head).contains('ANIM');
+}
+
+/// Makes a picture chosen as an avatar or a banner small before it is
+/// uploaded: scaled down so its longer side is at most [maxEdge]
+/// ([avatarMaxEdge], [bannerMaxEdge]) and stored as a JPEG, which also drops
+/// its metadata (camera, GPS position). Animated pictures (GIF, animated
+/// WebP) are kept as they are, since the app plays animated avatars; so are
+/// small pictures of other kinds, and anything that cannot be decoded (the
+/// server decides about those).
+Future<ProfileImage> prepareProfileImage({
+  required Uint8List bytes,
+  required String fileName,
+  required String mimeType,
+  required int maxEdge,
+  int quality = photoJpegQuality,
+}) async {
+  final original = ProfileImage(
+    bytes: bytes,
+    mimeType: mimeType,
+    fileName: fileName,
+  );
+  if (_isGif(bytes, mimeType) || _isAnimatedWebp(bytes)) {
+    return original;
+  }
+  final size = await readPhotoSize(bytes);
+  if (size == null || size.$1 <= 0 || size.$2 <= 0) {
+    return original;
+  }
+  final within = math.max(size.$1, size.$2) <= maxEdge;
+  final jpeg = _isJpegType(mimeType.toLowerCase());
+  if (within && !jpeg && bytes.length <= _smallProfileImageBytes) {
+    return original;
+  }
+  if (within && jpeg && bytes.length <= 2 * _smallProfileImageBytes) {
+    // Small enough: only the metadata goes, not a pixel changes.
+    final cleaned = stripJpegMetadata(bytes);
+    if (cleaned != null) {
+      return ProfileImage(
+        bytes: cleaned,
+        mimeType: 'image/jpeg',
+        fileName: fileName,
+      );
+    }
+  }
+  final prepared = await prepareJpegPhoto(
+    bytes: bytes,
+    fileName: fileName,
+    maxEdge: maxEdge,
+    quality: quality,
+  );
+  if (prepared == null || (within && prepared.bytes.length >= bytes.length)) {
+    return original;
+  }
+  return ProfileImage(
+    bytes: prepared.bytes,
+    mimeType: prepared.mimeType,
+    fileName: prepared.fileName,
+  );
+}

@@ -18,7 +18,11 @@ import 'a11y_screens.dart';
 /// The group "Weekend Hiking" with the user's announcement as the newest
 /// message; Bart and Grace have read it, three others have not, one turned
 /// receipts off.
-void readStatusWorld(PhoneWorld world, {bool reminded = false}) {
+void readStatusWorld(
+  PhoneWorld world, {
+  bool reminded = false,
+  ReadStatusProblem? listProblem,
+}) {
   world.chats
     ..messages = [
       phoneMessage(
@@ -62,6 +66,9 @@ void readStatusWorld(PhoneWorld world, {bool reminded = false}) {
   if (reminded) {
     repository.reminded.add('g1');
   }
+  if (listProblem != null) {
+    repository.listError = ReadStatusException(listProblem);
+  }
   world.extraOverrides = [
     readStatusOverride(repository),
     readReceiptsOverride(FakeReadReceiptsRepository()),
@@ -73,8 +80,9 @@ Future<void> _openGroup(
   PhoneWorld world, {
   bool openSheet = false,
   bool reminded = false,
+  ReadStatusProblem? listProblem,
 }) async {
-  readStatusWorld(world, reminded: reminded);
+  readStatusWorld(world, reminded: reminded, listProblem: listProblem);
   await world.open(
     tester,
     '${ChatsScreen.path}/group-1',
@@ -133,6 +141,15 @@ final readStatusA11yScreens = <A11yScreen>[
     'read-status-sheet-reminded',
     (tester, world) =>
         _openGroup(tester, world, openSheet: true, reminded: true),
+  ),
+  A11yScreen(
+    'read-status-sheet-receipts-off',
+    (tester, world) => _openGroup(
+      tester,
+      world,
+      openSheet: true,
+      listProblem: ReadStatusProblem.receiptsOff,
+    ),
   ),
   A11yScreen(
     'read-status-sheet-desktop',

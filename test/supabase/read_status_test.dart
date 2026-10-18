@@ -93,7 +93,7 @@ void main() {
 
   behaviourTest(
     'sender only, the 200 cap, receipts both ways, blocking, remind once, '
-    'the push and quiet hours',
+        'the push and quiet hours',
     'test/supabase/read_status_behaviour.sql',
   );
 }

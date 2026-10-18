@@ -7,6 +7,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:wecord/features/chats/disappearing_messages.dart';
+import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
 import 'package:wecord/features/chats/link_preview_card.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/message_review_mark.dart';
@@ -63,7 +64,12 @@ Iterable<Widget> _taskChip(BubbleFooterContext ctx) => [
 Iterable<Widget> _edited(BubbleFooterContext ctx) => [
   if (ctx.message.editedAt != null) ...[
     const SizedBox(height: 2),
-    EditedMarker(color: ctx.textColor.withValues(alpha: 0.55)),
+    EditedMarker(
+      color: ctx.textColor.withValues(alpha: 0.55),
+      onTap: hasEditHistory(ctx.message)
+          ? () => openEditHistoryFor(ctx.context, ctx.message)
+          : null,
+    ),
   ],
 ];
 

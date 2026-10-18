@@ -522,6 +522,7 @@ enabled = true
 # as the caller before doing anything with the service role.
 verify_jwt = true
 entrypoint = "./functions/admin/index.ts"
+
 [functions.calendar-feed]
 enabled = true
 # Apple Calendar and Google Calendar subscribe with a plain URL and cannot

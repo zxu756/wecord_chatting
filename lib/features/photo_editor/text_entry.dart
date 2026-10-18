@@ -117,10 +117,7 @@ class _EditorTextEntryState extends State<EditorTextEntry> {
                                   maxLines: 4,
                                   textInputAction: TextInputAction.newline,
                                   onChanged: (value) => _changed(text: value),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: c.ink,
-                                  ),
+                                  style: TextStyle(fontSize: 16, color: c.ink),
                                   decoration: InputDecoration(
                                     isCollapsed: true,
                                     border: InputBorder.none,

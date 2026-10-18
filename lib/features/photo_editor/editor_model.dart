@@ -35,11 +35,8 @@ class PenStroke extends EditorItem {
   /// The line's thickness in source pixels.
   final double width;
 
-  PenStroke withPoint(Offset point) => PenStroke(
-    points: [...points, point],
-    color: color,
-    width: width,
-  );
+  PenStroke withPoint(Offset point) =>
+      PenStroke(points: [...points, point], color: color, width: width);
 }
 
 /// How a mosaic brush hides what it paints over.
@@ -169,8 +166,7 @@ class EditorDocument {
     );
   }
 
-  EditorDocument withItem(EditorItem item) =>
-      copyWith(items: [...items, item]);
+  EditorDocument withItem(EditorItem item) => copyWith(items: [...items, item]);
 
   EditorDocument withoutItem(EditorItem item) =>
       copyWith(items: [...items.where((other) => other != item)]);

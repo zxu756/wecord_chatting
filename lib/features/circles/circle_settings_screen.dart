@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
+import 'package:wecord/features/chats/edit_history/circle_edit_window.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_ai_guard_screen.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
@@ -58,6 +59,7 @@ class CircleSettingsScreen extends ConsumerWidget {
             _ManageGroup(detail: detail),
             if (detail.canManageCircle) ...[
               CircleAiSwitch(circleId: circleId),
+              CircleEditWindowSection(circleId: circleId),
               CircleTemplateSection(
                 key: ValueKey('circle-template-$circleId'),
                 circleId: circleId,

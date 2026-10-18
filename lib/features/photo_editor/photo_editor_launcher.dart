@@ -50,9 +50,5 @@ Future<void> editTrayPhoto(
     }
     return;
   }
-  await controller.applyEdit(
-    draft.id,
-    photo: photo,
-    document: result.document,
-  );
+  await controller.applyEdit(draft.id, photo: photo, document: result.document);
 }

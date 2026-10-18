@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/assistant/assistant_command.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
@@ -61,7 +62,6 @@ class _AskAssistantSheetState extends ConsumerState<AskAssistantSheet> {
   @override
   void initState() {
     super.initState();
-    // Asking about a message usually wants more than itself.
     _question.addListener(() => setState(() {}));
   }
 
@@ -168,7 +168,7 @@ class _AskAssistantSheetState extends ConsumerState<AskAssistantSheet> {
           ),
           minLines: 2,
           maxLines: 5,
-          maxLength: 600,
+          inputFormatters: [LengthLimitingTextInputFormatter(600)],
           autofocus: true,
         ),
         const SizedBox(height: 8),

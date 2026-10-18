@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/actions/apply_extracted_actions.dart';
 import 'package:wecord/features/ai/actions/extract_actions_repository.dart';
@@ -508,10 +509,10 @@ class _ItemCard extends StatelessWidget {
                 WeCordTextField(
                   key: ValueKey('extract-item-title-$index'),
                   controller: row.title,
-                  label: tr('Title'),
+                  hint: tr('Title'),
                   minLines: 1,
                   maxLines: 3,
-                  maxLength: 300,
+                  inputFormatters: [LengthLimitingTextInputFormatter(300)],
                   onChanged: (_) => onChanged(),
                 ),
                 const SizedBox(height: 10),
@@ -520,22 +521,22 @@ class _ItemCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    WeCordChip(
+                    _ValueChip(
                       key: ValueKey('extract-item-assignee-$index'),
                       icon: Icons.person_outline_rounded,
                       label: _assigneeLabel(),
-                      selected: action.assignees.isNotEmpty,
+                      isSet: action.assignees.isNotEmpty,
                       onPressed: members.isEmpty
                           ? null
                           : () => unawaited(_pickAssignees(context)),
                     ),
-                    WeCordChip(
+                    _ValueChip(
                       key: ValueKey('extract-item-due-$index'),
                       icon: Icons.event_outlined,
                       label: due == null
                           ? tr('Due date')
                           : formatDue(context, due, hasTime: action.dueHasTime),
-                      selected: due != null,
+                      isSet: due != null,
                       onPressed: () => unawaited(_pickDue(context)),
                     ),
                     WeCordSegmented<ExtractedKind>(
@@ -573,6 +574,61 @@ class _ItemCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A field of an item (who, when) as a pill: quiet when empty, tinted once it
+/// holds a value. A long name or date shortens instead of overflowing.
+class _ValueChip extends StatelessWidget {
+  const _ValueChip({
+    required this.icon,
+    required this.label,
+    required this.isSet,
+    required this.onPressed,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isSet;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final foreground = isSet ? c.accentText : c.ink;
+    return WeCordPressable(
+      onPressed: onPressed,
+      semanticLabel: label,
+      excludeSemantics: true,
+      builder: (context, states) => Container(
+        constraints: const BoxConstraints(minHeight: 34),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: ShapeDecoration(
+          color: isSet ? c.accentSoft : c.well,
+          shape: const StadiumBorder(),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: foreground),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: foreground,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

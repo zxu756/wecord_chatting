@@ -481,7 +481,7 @@ as $$
             'username', p.username,
             'display_name', p.display_name,
             'avatar_url', p.avatar_url,
-            'bio', p.bio,
+            'bio', public.visible_profile_bio(p.id, p.bio),
             'created_at', p.created_at,
             'updated_at', p.updated_at,
             'custom_status', public.custom_status(p)
@@ -580,7 +580,7 @@ as $$
             'username', author.username,
             'display_name', author.display_name,
             'avatar_url', author.avatar_url,
-            'bio', author.bio,
+            'bio', public.visible_profile_bio(author.id, author.bio),
             'created_at', author.created_at,
             'updated_at', author.updated_at
           ),
@@ -626,7 +626,7 @@ as $$
                   'username', comment_author.username,
                   'display_name', comment_author.display_name,
                   'avatar_url', comment_author.avatar_url,
-                  'bio', comment_author.bio,
+                  'bio', public.visible_profile_bio(comment_author.id, comment_author.bio),
                   'created_at', comment_author.created_at,
                   'updated_at', comment_author.updated_at
                 )

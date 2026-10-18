@@ -46,6 +46,17 @@ class ChatFileTooLargeException implements Exception {
   String toString() => tr('Files can be up to 50 MB.');
 }
 
+/// A voice message over what the voice-messages bucket takes (the same
+/// 50 MB as [maxChatFileBytes]), by its size or as the server refused it.
+class VoiceMessageTooLargeException implements Exception {
+  const VoiceMessageTooLargeException();
+
+  @override
+  String toString() => tr(
+    'This voice message is too long to send. Voice messages can be up to 9 minutes.',
+  );
+}
+
 abstract interface class ChatsRepository {
   Future<List<ConversationSummary>> listConversations();
 
@@ -359,11 +370,46 @@ class _Capabilities {
     required this.canPin,
     required this.canModeratePolls,
     required this.canModerateMessages,
+    required this.canManageThread,
   });
 
   final bool canPin;
   final bool canModeratePolls;
   final bool canModerateMessages;
+  final bool canManageThread;
+}
+
+/// An optional addition to [ChatsRepository] for repositories that can
+/// answer "may I manage this thread?" together with the other questions a
+/// chat asks as it opens (`get_conversation_capabilities`), so a thread needs
+/// no request of its own. Kept apart from [ChatsRepository] so that the
+/// repositories that do not have it (fakes) need no change: see
+/// [canManageThreadOf].
+abstract interface class ThreadCapabilitySource {
+  /// Whether the current user may archive and unarchive the thread whose
+  /// conversation is [threadConversationId]; null when the server cannot
+  /// answer it that way (an older deployment).
+  Future<bool?> canManageThreadInConversation(String threadConversationId);
+}
+
+/// Whether the current user may manage the thread [threadId] whose
+/// conversation is [threadConversationId]: from the shared capabilities
+/// request when [repository] has one, else by [ChatsRepository.canManageThread].
+Future<bool> canManageThreadOf(
+  ChatsRepository repository, {
+  required String threadConversationId,
+  required String threadId,
+}) async {
+  final source = repository as Object;
+  if (source is ThreadCapabilitySource) {
+    final answer = await source.canManageThreadInConversation(
+      threadConversationId,
+    );
+    if (answer != null) {
+      return answer;
+    }
+  }
+  return repository.canManageThread(threadId);
 }
 
 class SupabaseChatsRepository
@@ -372,7 +418,8 @@ class SupabaseChatsRepository
         MessageHistorySource,
         ConversationRowsSource,
         OutboxMessageSender,
-        MediaMessageSender {
+        MediaMessageSender,
+        ThreadCapabilitySource {
   SupabaseChatsRepository(
     SupabaseClient client, {
     Future<void> Function(String messageId)? onMessageSent,
@@ -782,16 +829,27 @@ class SupabaseChatsRepository
     required int durationMs,
   }) async {
     const bucket = 'voice-messages';
+    if (bytes.length > maxChatFileBytes) {
+      throw const VoiceMessageTooLargeException();
+    }
     final extension = _voiceStorageExtension(mimeType);
     final path = '$conversationId/${_nextStoragePathSeed()}.$extension';
-    await _withStorageTimeout(
-      _dataSource.uploadBinary(
-        bucket: bucket,
-        path: path,
-        bytes: bytes,
-        mimeType: mimeType,
-      ),
-    );
+    try {
+      await _withStorageTimeout(
+        _dataSource.uploadBinary(
+          bucket: bucket,
+          path: path,
+          bytes: bytes,
+          mimeType: mimeType,
+        ),
+      );
+    } on StorageException catch (error) {
+      // Storage answers 413 for an upload over the bucket's size limit.
+      if ('${error.statusCode}' == '413') {
+        throw const VoiceMessageTooLargeException();
+      }
+      rethrow;
+    }
     final attachment = VoiceAttachment(
       bucket: bucket,
       path: path,
@@ -1000,6 +1058,7 @@ class SupabaseChatsRepository
           canPin: data['can_pin_messages'] == true,
           canModeratePolls: data['can_moderate_polls'] == true,
           canModerateMessages: data['can_moderate_messages'] == true,
+          canManageThread: data['can_manage_thread'] == true,
         );
       }
     } on PostgrestException catch (error) {
@@ -1346,6 +1405,13 @@ class SupabaseChatsRepository
       {'target_thread_id': threadId},
     );
     return ConversationThread.fromJson(payload as Map<String, dynamic>);
+  }
+
+  @override
+  Future<bool?> canManageThreadInConversation(
+    String threadConversationId,
+  ) async {
+    return (await _capabilities(threadConversationId))?.canManageThread;
   }
 
   @override

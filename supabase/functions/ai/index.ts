@@ -163,6 +163,7 @@ Deno.serve(async (request) => {
         p_message_id: messageId,
         p_verdict: result.verdict?.category ?? "not_checked",
         p_reason: result.verdict?.reason ?? null,
+        p_reason_zh: result.verdict?.reasonZh ?? null,
         p_unchecked_reason: result.unchecked ?? null,
       });
       if (error) {

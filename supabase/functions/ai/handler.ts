@@ -484,7 +484,7 @@ export async function handleGuardRequest(
       const text = guardText(claim.body);
       const answer = await complete(config, {
         messages: guardPrompt({ text, domains: extractLinkDomains(text) }),
-        maxTokens: 160,
+        maxTokens: 320,
         temperature: 0,
         timeoutMs: GUARD_TIMEOUT_MS,
         conversationKey: claim.circleId,

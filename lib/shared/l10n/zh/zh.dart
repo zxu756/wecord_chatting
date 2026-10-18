@@ -35,6 +35,7 @@ import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers2.dart';
+import 'package:wecord/shared/l10n/zh/zh_leftovers3.dart';
 import 'package:wecord/shared/l10n/zh/zh_notes_lists.dart';
 import 'package:wecord/shared/l10n/zh/zh_offline.dart';
 import 'package:wecord/shared/l10n/zh/zh_phone_home.dart';
@@ -94,6 +95,7 @@ const zhAreas = <Map<String, String>>[
   zhA11y,
   zhNoise,
   zhLeftovers2,
+  zhLeftovers3,
   zhAi,
   zhLater,
   zhNotesLists,

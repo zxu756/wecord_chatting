@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart' show XFile;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -152,11 +152,17 @@ final chatActivityProvider = StreamProvider.autoDispose
           .conversationActivity(conversationId);
     });
 
-final canManageThreadProvider = FutureProvider.autoDispose.family<bool, String>(
-  (ref, threadId) {
-    return ref.watch(chatsRepositoryProvider).canManageThread(threadId);
-  },
-);
+/// Whether the current user may archive a thread: the thread's conversation
+/// and its id. Answered with the chat's other capabilities in one request
+/// where the repository can (see [canManageThreadOf]).
+final canManageThreadProvider = FutureProvider.autoDispose
+    .family<bool, ({String conversationId, String threadId})>((ref, thread) {
+      return canManageThreadOf(
+        ref.watch(chatsRepositoryProvider),
+        threadConversationId: thread.conversationId,
+        threadId: thread.threadId,
+      );
+    });
 
 /// Whether the current user may end others' polls in a conversation.
 final canModeratePollsProvider = FutureProvider.autoDispose
@@ -491,6 +497,17 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   StreamSubscription<List<XFile>>? _pasteSubscription;
   var _isRecordingVoice = false;
   var _isSendingVoice = false;
+
+  /// Ticks once a second while recording; stops the recording at
+  /// [maxVoiceRecordingSeconds].
+  Timer? _voiceTimer;
+  var _voiceTicks = 0;
+  DateTime? _voiceStartedAt;
+
+  /// Seconds left of the recording once they are down to
+  /// [voiceCountdownSeconds]; null before. Only the countdown listens, so
+  /// the screen does not rebuild every second.
+  final _voiceSecondsLeft = ValueNotifier<int?>(null);
   var _isTypingShared = false;
   String? _sendError;
   String? _lastMarkedMessageId;
@@ -704,6 +721,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     ComposerFocusRegistry.detach(_composerFocus);
     _composerFocus.dispose();
     unawaited(_pasteSubscription?.cancel());
+    _voiceTimer?.cancel();
+    _voiceSecondsLeft.dispose();
     _typingTimer?.cancel();
     _expiryTimer?.cancel();
     _highlightTimer?.cancel();
@@ -979,7 +998,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     final threadId = isThread ? conversationSummary?.threadId : null;
     final canManageThread =
         threadId != null &&
-        (ref.watch(canManageThreadProvider(threadId)).value ?? false);
+        (ref
+                .watch(
+                  canManageThreadProvider((
+                    conversationId: widget.conversationId,
+                    threadId: threadId,
+                  )),
+                )
+                .value ??
+            false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
     // Direct chats and groups can have messages that disappear.
     final isDirectOrGroup =
@@ -2153,6 +2180,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     gifAvailable:
                         ref.watch(gifSearchAvailableProvider) != false,
                     isRecordingVoice: _isRecordingVoice,
+                    voiceSecondsLeft: _voiceSecondsLeft,
                     isSendingVoice: _isSendingVoice,
                     onStartVoiceRecording: _startVoiceRecording,
                     onCancelVoiceRecording: _cancelVoiceRecording,
@@ -3628,6 +3656,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
       setState(() {
         _isRecordingVoice = true;
       });
+      _startVoiceTimer();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -3639,11 +3668,48 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  /// Counts the recording down: the last [voiceCountdownSeconds] show the
+  /// seconds left, and at [maxVoiceRecordingSeconds] it stops and sends
+  /// what was recorded. Time is the larger of the ticks and the clock, so a
+  /// timer that was held up in the background cannot let it run over.
+  void _startVoiceTimer() {
+    _voiceTimer?.cancel();
+    _voiceTicks = 0;
+    _voiceStartedAt = DateTime.now();
+    _voiceSecondsLeft.value = null;
+    _voiceTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _voiceTicks += 1;
+      final startedAt = _voiceStartedAt;
+      final clock = startedAt == null
+          ? 0
+          : DateTime.now().difference(startedAt).inSeconds;
+      final elapsed = clock > _voiceTicks ? clock : _voiceTicks;
+      final left = maxVoiceRecordingSeconds - elapsed;
+      if (left > voiceCountdownSeconds) {
+        return;
+      }
+      if (left > 0) {
+        _voiceSecondsLeft.value = left;
+        return;
+      }
+      timer.cancel();
+      unawaited(_sendVoiceRecording(reachedLimit: true));
+    });
+  }
+
+  void _stopVoiceTimer() {
+    _voiceTimer?.cancel();
+    _voiceTimer = null;
+    _voiceStartedAt = null;
+    _voiceSecondsLeft.value = null;
+  }
+
   Future<void> _cancelVoiceRecording() async {
     if (!_isRecordingVoice || _isSendingVoice) {
       return;
     }
 
+    _stopVoiceTimer();
     try {
       await _voiceRecorder.cancel();
     } finally {
@@ -3655,11 +3721,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
-  Future<void> _sendVoiceRecording() async {
+  Future<void> _sendVoiceRecording({bool reachedLimit = false}) async {
     if (!_isRecordingVoice || _isSendingVoice) {
       return;
     }
 
+    _stopVoiceTimer();
     setState(() {
       _isSendingVoice = true;
       _sendError = null;
@@ -3679,10 +3746,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             durationMs: recording.durationMs,
           );
       _refreshThread();
+      if (reachedLimit) {
+        _showSnackBar(
+          tr('Reached the 9 minute limit. Your voice message was sent.'),
+        );
+      }
     } on SlowmodeException catch (error) {
       _waitOutSlowmode(error);
     } on SendRefusedException catch (error) {
       _showSendRefusal(error);
+    } on VoiceMessageTooLargeException catch (error) {
+      if (mounted) {
+        setState(() {
+          _sendError = error.toString();
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -7178,6 +7256,7 @@ class _Composer extends StatelessWidget {
     required this.onInsertEmoji,
     required this.gifAvailable,
     required this.isRecordingVoice,
+    required this.voiceSecondsLeft,
     required this.isSendingVoice,
     required this.onStartVoiceRecording,
     required this.onCancelVoiceRecording,
@@ -7280,6 +7359,9 @@ class _Composer extends StatelessWidget {
   /// False once the server said GIF search isn't set up.
   final bool gifAvailable;
   final bool isRecordingVoice;
+
+  /// Seconds left of the recording in its last stretch; null before.
+  final ValueListenable<int?> voiceSecondsLeft;
   final bool isSendingVoice;
   final Future<void> Function() onStartVoiceRecording;
   final Future<void> Function() onCancelVoiceRecording;
@@ -7428,6 +7510,25 @@ class _Composer extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: c.ink,
                     ),
+                  ),
+                ),
+                // Not read out every second: it is a quiet visual cue.
+                ExcludeSemantics(
+                  child: ValueListenableBuilder<int?>(
+                    valueListenable: voiceSecondsLeft,
+                    builder: (context, left, _) => left == null
+                        ? const SizedBox.shrink()
+                        : Text(
+                            key: const ValueKey('voice-seconds-left'),
+                            tr('{seconds}s left', {'seconds': left}),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: c.muted,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
                   ),
                 ),
               ],

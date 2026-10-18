@@ -242,7 +242,7 @@ class _ReviewCardState extends ConsumerState<ReviewCard> {
                           color: c.dangerText,
                         ),
                       ),
-                      if (review.reason case final reason?
+                      if (review.localizedReason case final reason?
                           when reason.isNotEmpty)
                         TextSpan(
                           text: ' · $reason',

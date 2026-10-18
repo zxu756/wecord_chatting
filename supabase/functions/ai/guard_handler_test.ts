@@ -65,7 +65,8 @@ function setup(
             JSON.stringify({
               choices: [{
                 message: {
-                  content: '{"category":"spam","reason":"Sells pills"}',
+                  content:
+                    '{"category":"spam","reason":"Sells pills","reason_zh":"推销药品"}',
                 },
               }],
             }),
@@ -149,7 +150,13 @@ Deno.test("a flagged message is handed in with its category and reason", async (
   assertEquals(calls.claimed, [messageId]);
   assertEquals(calls.finished, [{
     messageId,
-    result: { verdict: { category: "spam", reason: "Sells pills" } },
+    result: {
+      verdict: {
+        category: "spam",
+        reason: "Sells pills",
+        reasonZh: "推销药品",
+      },
+    },
   }]);
   assertEquals(calls.refunded, []);
 });

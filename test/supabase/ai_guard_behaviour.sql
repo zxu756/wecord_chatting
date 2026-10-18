@@ -21,6 +21,7 @@ do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 \i supabase/migrations/202610170021_view_once_media.sql
 \i supabase/migrations/202610170090_ai_guard.sql
 \i supabase/migrations/202610170091_ai_guard_hidden.sql
+\i supabase/migrations/202610200020_ai_guard_reason_zh.sql
 
 create temp table ids (name text primary key, id uuid not null);
 grant all on ids to public;
@@ -372,7 +373,9 @@ select pg_temp.check('a refund gives one back',
 -- The AI says spam: the message stays held.
 select pg_temp.check(
   'a flagged message in hold mode is held',
-  public.finish_message_review((select id from ids where name = 'spam'), 'spam', 'Looks like a pills advert') = 'held'
+  public.finish_message_review(
+    (select id from ids where name = 'spam'), 'spam', 'Looks like a pills advert', null, '看起来是药品广告'
+  ) = 'held'
 );
 select pg_temp.check(
   'a second answer changes nothing',
@@ -381,7 +384,8 @@ select pg_temp.check(
 select pg_temp.check(
   'the message is held for the moderators',
   (select m.review_state = 'held' from public.messages m where m.id = (select id from ids where name = 'spam'))
-  and (select r.state = 'held' and r.verdict = 'spam' and r.reason = 'Looks like a pills advert' and not r.push_pending
+  and (select r.state = 'held' and r.verdict = 'spam' and r.reason = 'Looks like a pills advert'
+       and r.reason_zh = '看起来是药品广告' and not r.push_pending
        from public.message_reviews r where r.message_id = (select id from ids where name = 'spam'))
 );
 select pg_temp.check(
@@ -406,6 +410,7 @@ select pg_temp.check(
   'the moderator''s queue shows the message with the AI''s category and reason',
   (select count(*) = 1
      and bool_and(q.state = 'held' and q.verdict = 'spam' and q.reason = 'Looks like a pills advert'
+                  and q.reason_zh = '看起来是药品广告'
                   and q.body = 'Win cheap pills now http://evil.example' and q.sender_name = 'Newt'
                   and q.channel_name = 'general')
    from public.list_message_reviews((select id from ids where name = 'circle')) q)
@@ -681,6 +686,16 @@ select pg_temp.check('an error releases the message, not checked',
   public.finish_message_review((select id from ids where name = 'err'), 'not_checked', null, 'error') = 'released');
 select pg_temp.check('and the message is visible',
   (select review_state is null from public.messages where id = (select id from ids where name = 'err')));
+-- Without a Chinese reason (an older answer) the column stays empty, and an
+-- allow keeps neither reason.
+insert into ids select 'noZh', pg_temp.say('c', 'Another thing the AI flags in English only');
+select public.finish_message_review((select id from ids where name = 'noZh'), 'spam', 'Advert');
+select pg_temp.check('a flag without a Chinese reason keeps only the English one',
+  (select r.reason = 'Advert' and r.reason_zh is null from public.message_reviews r where r.message_id = (select id from ids where name = 'noZh')));
+insert into ids select 'okZh', pg_temp.say('c', 'A perfectly ordinary message here');
+select public.finish_message_review((select id from ids where name = 'okZh'), 'allow', 'fine', null, '正常');
+select pg_temp.check('an allow keeps no reason in either language',
+  (select r.reason is null and r.reason_zh is null from public.message_reviews r where r.message_id = (select id from ids where name = 'okZh')));
 select pg_temp.refused('an unknown verdict is refused',
   format('select public.finish_message_review(%L, ''maybe'')', (select id from ids where name = 'err')), '22023');
 

@@ -59,6 +59,7 @@ Map<String, dynamic> reviewJson({
   String state = 'held',
   String verdict = 'spam',
   String? reason = 'Sells pills',
+  String? reasonZh,
   String body = 'Cheap pills at pills.example',
 }) => {
   'message_id': id,
@@ -72,6 +73,7 @@ Map<String, dynamic> reviewJson({
   'state': state,
   'verdict': verdict,
   'reason': reason,
+  'reason_zh': reasonZh,
   'sent_at': DateTime.utc(2026, 5, 18, 4, 0).toIso8601String(),
   'checked_at': DateTime.utc(2026, 5, 18, 4, 0, 2).toIso8601String(),
 };

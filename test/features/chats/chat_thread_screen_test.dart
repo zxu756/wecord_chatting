@@ -1850,6 +1850,120 @@ void main() {
     expect(recorder.cancelCalls, 1);
   });
 
+  group('voice recording length', () {
+    RecordedVoiceMessage recording() => RecordedVoiceMessage(
+      bytes: Uint8List.fromList([4, 5, 6]),
+      mimeType: 'audio/wav',
+      durationMs: 540000,
+    );
+
+    Future<void> startRecording(
+      WidgetTester tester,
+      FakeChatsRepository repository,
+      FakeVoiceMessageRecorder recorder,
+    ) async {
+      await tester.pumpWidget(_app(repository, voiceMessageRecorder: recorder));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Record voice message'));
+      await tester.pump();
+      expect(find.text('Recording...'), findsOneWidget);
+    }
+
+    testWidgets('counts down the last 30 seconds, then stops and sends', (
+      tester,
+    ) async {
+      final repository = FakeChatsRepository();
+      final recorder = FakeVoiceMessageRecorder()..nextRecording = recording();
+      await startRecording(tester, repository, recorder);
+
+      // Nothing to see for most of the nine minutes.
+      await tester.pump(const Duration(seconds: 509));
+      expect(find.byKey(const ValueKey('voice-seconds-left')), findsNothing);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('30s left'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 20));
+      expect(find.text('10s left'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 9));
+      expect(find.text('1s left'), findsOneWidget);
+      expect(recorder.stopCalls, 0);
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(recorder.stopCalls, 1);
+      expect(repository.sentVoiceMessages, hasLength(1));
+      expect(find.text('Recording...'), findsNothing);
+      expect(
+        find.text('Reached the 9 minute limit. Your voice message was sent.'),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+
+    testWidgets('sending before the limit ends the countdown', (tester) async {
+      final repository = FakeChatsRepository();
+      final recorder = FakeVoiceMessageRecorder()..nextRecording = recording();
+      await startRecording(tester, repository, recorder);
+
+      await tester.pump(const Duration(seconds: 520));
+      expect(find.text('20s left'), findsOneWidget);
+      await tester.tap(find.byTooltip('Send voice message'));
+      await tester.pumpAndSettle();
+      expect(recorder.stopCalls, 1);
+
+      await tester.pump(const Duration(seconds: 100));
+      expect(recorder.stopCalls, 1);
+      expect(repository.sentVoiceMessages, hasLength(1));
+      expect(find.textContaining('9 minute limit'), findsNothing);
+    });
+
+    testWidgets('cancelling ends the countdown too', (tester) async {
+      final repository = FakeChatsRepository();
+      final recorder = FakeVoiceMessageRecorder()..nextRecording = recording();
+      await startRecording(tester, repository, recorder);
+
+      await tester.pump(const Duration(seconds: 525));
+      await tester.tap(find.byTooltip('Cancel voice message'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 100));
+
+      expect(recorder.cancelCalls, 1);
+      expect(recorder.stopCalls, 0);
+      expect(repository.sentVoiceMessages, isEmpty);
+    });
+
+    testWidgets('a recording the server finds too big says so', (tester) async {
+      final repository = FakeChatsRepository()
+        ..sendError = const VoiceMessageTooLargeException();
+      final recorder = FakeVoiceMessageRecorder()..nextRecording = recording();
+      await startRecording(tester, repository, recorder);
+
+      await tester.tap(find.byTooltip('Send voice message'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'This voice message is too long to send. '
+          'Voice messages can be up to 9 minutes.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Could not send voice message. Try again.'),
+        findsNothing,
+      );
+    });
+
+    test('nine minutes of WAV fit the 50 MB bucket', () {
+      const bytesPerSecond = 44100 * 2;
+      expect(
+        maxVoiceRecordingSeconds * bytesPerSecond + 44,
+        lessThan(maxChatFileBytes),
+      );
+      expect(voiceCountdownSeconds, lessThan(maxVoiceRecordingSeconds));
+    });
+  });
+
   testWidgets('voice messages render a playback control', (tester) async {
     final repository = FakeChatsRepository()
       ..messages = [

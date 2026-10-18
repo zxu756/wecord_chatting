@@ -46,6 +46,17 @@ class ChatFileTooLargeException implements Exception {
   String toString() => tr('Files can be up to 50 MB.');
 }
 
+/// A voice message over what the voice-messages bucket takes (the same
+/// 50 MB as [maxChatFileBytes]), by its size or as the server refused it.
+class VoiceMessageTooLargeException implements Exception {
+  const VoiceMessageTooLargeException();
+
+  @override
+  String toString() => tr(
+    'This voice message is too long to send. Voice messages can be up to 9 minutes.',
+  );
+}
+
 abstract interface class ChatsRepository {
   Future<List<ConversationSummary>> listConversations();
 
@@ -818,16 +829,27 @@ class SupabaseChatsRepository
     required int durationMs,
   }) async {
     const bucket = 'voice-messages';
+    if (bytes.length > maxChatFileBytes) {
+      throw const VoiceMessageTooLargeException();
+    }
     final extension = _voiceStorageExtension(mimeType);
     final path = '$conversationId/${_nextStoragePathSeed()}.$extension';
-    await _withStorageTimeout(
-      _dataSource.uploadBinary(
-        bucket: bucket,
-        path: path,
-        bytes: bytes,
-        mimeType: mimeType,
-      ),
-    );
+    try {
+      await _withStorageTimeout(
+        _dataSource.uploadBinary(
+          bucket: bucket,
+          path: path,
+          bytes: bytes,
+          mimeType: mimeType,
+        ),
+      );
+    } on StorageException catch (error) {
+      // Storage answers 413 for an upload over the bucket's size limit.
+      if ('${error.statusCode}' == '413') {
+        throw const VoiceMessageTooLargeException();
+      }
+      rethrow;
+    }
     final attachment = VoiceAttachment(
       bucket: bucket,
       path: path,

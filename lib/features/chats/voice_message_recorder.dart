@@ -8,6 +8,15 @@ const _voiceSampleRate = 44100;
 const _voiceNumChannels = 1;
 const _voiceBitsPerSample = 16;
 
+/// A recording stops by itself after this long. The recorder writes WAV
+/// (16-bit mono 44.1 kHz: 88,200 bytes a second, about 5.3 MB a minute) and
+/// the voice-messages bucket takes up to 50 MB (migration 202610190051), so
+/// 9 minutes (about 47.6 MB) fits with room to spare.
+const maxVoiceRecordingSeconds = 9 * 60;
+
+/// The last seconds of a recording show a countdown.
+const voiceCountdownSeconds = 30;
+
 final voiceMessageRecorderProvider = Provider.autoDispose<VoiceMessageRecorder>(
   (ref) {
     final recorder = AudioVoiceMessageRecorder();

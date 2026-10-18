@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/realtime/private_channels.dart';
 
 /// A share the server just started (`start_live_location`).
 class StartedShare {
@@ -209,10 +210,7 @@ class SupabaseLocationRepository implements LocationRepository {
 class _SupabasePositionChannel implements LivePositionChannel {
   _SupabasePositionChannel(this._client, String shareId) {
     _channel = _client
-        .channel(
-          'live-location:$shareId',
-          opts: const RealtimeChannelConfig(private: true),
-        )
+        .channel(liveLocationTopic(shareId), opts: privateChannelConfig())
         .onBroadcast(
           event: 'pos',
           callback: (payload) {

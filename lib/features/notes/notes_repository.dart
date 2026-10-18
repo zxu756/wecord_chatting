@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/notes/note_models.dart';
 import 'package:wecord/features/notes/note_sync.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/realtime/private_channels.dart';
 
 /// Somebody else in a note, from the presence channel.
 @immutable
@@ -484,8 +485,8 @@ class _SupabaseNotePresence implements NotePresence {
   }) : _client = client {
     _channel = client
         .channel(
-          'note-presence-$noteId',
-          opts: RealtimeChannelConfig(key: userId),
+          notePresenceTopic(noteId),
+          opts: privateChannelConfig(presenceKey: userId),
         )
         .onPresenceSync((_) => _emit())
         .onPresenceJoin((_) => _emit())

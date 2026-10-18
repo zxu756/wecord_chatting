@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/realtime/private_channels.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
@@ -2225,8 +2226,8 @@ class SupabaseChatsDataSource implements ChatsDataSource {
       onListen: () {
         channel = _client
             .channel(
-              'chat-activity-$conversationId',
-              opts: RealtimeChannelConfig(key: currentUserId),
+              chatActivityTopic(conversationId),
+              opts: privateChannelConfig(presenceKey: currentUserId),
             )
             .onPresenceSync((payload) {
               emit();
@@ -2286,7 +2287,10 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     required String currentUserId,
     required bool isTyping,
   }) async {
-    final channel = _client.channel('chat-activity-$conversationId');
+    final channel = _client.channel(
+      chatActivityTopic(conversationId),
+      opts: privateChannelConfig(),
+    );
     try {
       await channel.sendBroadcastMessage(
         event: 'typing',

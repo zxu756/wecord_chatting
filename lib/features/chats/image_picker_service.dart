@@ -49,7 +49,7 @@ class SystemImagePickerService implements ImagePickerService {
     return ChatImageUpload(
       bytes: await _readBytes(file),
       fileName: file.name,
-      mimeType: file.mimeType ?? _mimeTypeFromName(file.name),
+      mimeType: _imageMimeType(file.mimeType) ?? _mimeTypeFromName(file.name),
     );
   }
 
@@ -115,6 +115,14 @@ class ImagePickerException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// The reported type when it names a picture; a browser's generic "binary"
+/// or a missing type is guessed from the name instead (the picture buckets
+/// only take image types).
+String? _imageMimeType(String? reported) {
+  final mime = reported?.trim().toLowerCase();
+  return mime != null && mime.startsWith('image/') ? reported!.trim() : null;
 }
 
 String _mimeTypeFromName(String fileName) {

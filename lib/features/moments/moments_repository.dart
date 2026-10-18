@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/realtime/private_channels.dart';
 
 /// The private bucket with the pictures and covers.
 const momentsBucket = 'moments';
@@ -443,8 +444,8 @@ class SupabaseMomentsRepository implements MomentsRepository {
         // A private channel of the person's own: the database tells only
         // them, and only about what they may see.
         final live = _client.channel(
-          'moments:$_userId',
-          opts: const RealtimeChannelConfig(private: true),
+          momentsTopic(_userId),
+          opts: privateChannelConfig(),
         );
         channel = live;
         for (final kind in [

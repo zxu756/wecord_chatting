@@ -46,5 +46,15 @@ void main() {
     );
     expect(chatFileMimeType(name: 'clip.mp4'), 'video/mp4');
     expect(chatFileMimeType(name: 'mystery'), 'application/octet-stream');
+    // A browser's generic report does not hide what the name says.
+    expect(
+      chatFileMimeType(name: 'photo.png', reported: 'application/octet-stream'),
+      'image/png',
+    );
+    // A browser's generic report does not hide what the name says.
+    expect(
+      chatFileMimeType(name: 'photo.png', reported: 'application/octet-stream'),
+      'image/png',
+    );
   });
 }

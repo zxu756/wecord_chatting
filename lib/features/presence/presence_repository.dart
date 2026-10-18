@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/presence_status.dart';
+import 'package:wecord/shared/realtime/private_channels.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>((ref) {
   try {
@@ -227,7 +228,7 @@ class SupabasePresenceRepository implements PresenceRepository {
 class SupabasePresenceDataSource implements PresenceDataSource {
   const SupabasePresenceDataSource(this._client);
 
-  static const channelName = 'online-users';
+  static const channelName = onlineUsersTopic;
 
   /// How often a visible, online client tells the server it is here.
   static const heartbeatInterval = Duration(minutes: 2);
@@ -321,7 +322,7 @@ class SupabasePresenceDataSource implements PresenceDataSource {
         channel = _client
             .channel(
               channelName,
-              opts: RealtimeChannelConfig(key: currentUserId),
+              opts: privateChannelConfig(presenceKey: currentUserId),
             )
             .onPresenceSync((payload) => emit())
             .onPresenceJoin((payload) => emit())

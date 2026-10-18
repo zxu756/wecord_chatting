@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chain/chain_models.dart';
+import 'package:wecord/features/chain/chain_sync.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
 /// Group chains (接龙) on the server: the `*_chain*` functions of migration
@@ -33,9 +34,25 @@ abstract interface class ChainRepository {
 }
 
 class SupabaseChainRepository implements ChainRepository {
-  const SupabaseChainRepository(this._client);
+  SupabaseChainRepository(this._client) {
+    _reads = ChainReadBatcher<ChainSnapshot>(_readMany);
+    _hub = ChainChangeHub(_openChannel);
+  }
 
   final SupabaseClient _client;
+
+  /// Chains asked for in the same moment (every card on screen) are read
+  /// with one request.
+  late final ChainReadBatcher<ChainSnapshot> _reads;
+
+  /// One Realtime channel per conversation for all its chain cards.
+  late final ChainChangeHub _hub;
+
+  /// Set once a server turns out not to have `get_chains` yet (older
+  /// deployment): chains are then read one by one.
+  var _batchMissing = false;
+
+  void dispose() => _hub.dispose();
 
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {
@@ -80,12 +97,57 @@ class SupabaseChainRepository implements ChainRepository {
   @override
   Future<ChainSnapshot> get(String chainId) {
     return _guard(() async {
-      final data = await _client.rpc<Object?>(
-        'get_chain',
-        params: {'target_chain_id': chainId},
-      );
-      return ChainSnapshot.fromJson(_object(data));
+      try {
+        return await _reads.read(chainId);
+      } on ChainNotAvailable {
+        throw const ChainException(ChainFailureKind.gone);
+      }
     });
+  }
+
+  Future<Map<String, ChainSnapshot>> _readMany(List<String> chainIds) async {
+    if (!_batchMissing) {
+      try {
+        final data = await _client.rpc<Object?>(
+          'get_chains',
+          params: {'target_chain_ids': chainIds},
+        );
+        final snapshots = <String, ChainSnapshot>{
+          for (final item in data! as List)
+            if (item is Map)
+              (item['id'] as String): ChainSnapshot.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+        };
+        snapshots.forEach(
+          (id, snapshot) => _hub.learn(id, snapshot.conversationId),
+        );
+        return snapshots;
+      } on PostgrestException catch (error) {
+        // PGRST202: the function is not on this server yet.
+        if (error.code != 'PGRST202' && error.code != '42883') {
+          rethrow;
+        }
+        _batchMissing = true;
+      }
+    }
+    final snapshots = <String, ChainSnapshot>{};
+    for (final id in chainIds) {
+      try {
+        final data = await _client.rpc<Object?>(
+          'get_chain',
+          params: {'target_chain_id': id},
+        );
+        final snapshot = ChainSnapshot.fromJson(_object(data));
+        _hub.learn(id, snapshot.conversationId);
+        snapshots[id] = snapshot;
+      } on PostgrestException catch (error) {
+        if (ChainException.fromPostgrest(error).kind != ChainFailureKind.gone) {
+          rethrow;
+        }
+      }
+    }
+    return snapshots;
   }
 
   ChainWriteResult _result(Object? data) {
@@ -145,31 +207,34 @@ class SupabaseChainRepository implements ChainRepository {
   }
 
   @override
-  Stream<void> changes(String chainId) {
-    late RealtimeChannel channel;
-    late StreamController<void> controller;
-    controller = StreamController<void>(
-      onListen: () {
-        channel = _client
-            .channel('chain-$chainId')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'chains',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'id',
-                value: chainId,
-              ),
-              callback: (_) => controller.add(null),
-            )
-            .subscribe();
-      },
-      onCancel: () async {
-        await _client.removeChannel(channel);
-      },
-    );
-    return controller.stream;
+  Stream<void> changes(String chainId) => _hub.changes(chainId);
+
+  /// The conversation's channel (`chains:<conversation id>`), with the
+  /// changes of its chains.
+  FutureOr<void> Function() _openChannel(
+    String conversationId,
+    void Function(String? chainId) onChange,
+  ) {
+    final channel = _client
+        .channel(ChainChangeHub.topicFor(conversationId))
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'chains',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: conversationId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord.isNotEmpty
+                ? payload.newRecord
+                : payload.oldRecord;
+            onChange(record['id'] as String?);
+          },
+        )
+        .subscribe();
+    return () => _client.removeChannel(channel);
   }
 }
 
@@ -206,7 +271,11 @@ class _UninitializedChainRepository implements ChainRepository {
 
 final chainRepositoryProvider = Provider<ChainRepository>((ref) {
   try {
-    return SupabaseChainRepository(ref.watch(supabaseClientProvider));
+    final repository = SupabaseChainRepository(
+      ref.watch(supabaseClientProvider),
+    );
+    ref.onDispose(repository.dispose);
+    return repository;
   } on ProviderException {
     return const _UninitializedChainRepository();
   }

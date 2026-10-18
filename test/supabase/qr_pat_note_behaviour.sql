@@ -497,7 +497,8 @@ select pg_temp.refused('nor through the group function',
 insert into ids select 'note_text', public.send_text_message((select id from ids where name = 'ada_note'), 'link for my laptop');
 insert into public.messages (conversation_id, sender_id, type, body, attachment)
 values ((select id from ids where name = 'ada_note'), auth.uid(), 'file', 'report.pdf',
-  jsonb_build_object('kind', 'file', 'name', 'report.pdf', 'path', 'x/report.pdf', 'size', 10, 'mime_type', 'application/pdf'));
+  jsonb_build_object('kind', 'file', 'name', 'report.pdf',
+    'path', (select id from ids where name = 'ada_note')::text || '/report.pdf', 'size', 10, 'mime_type', 'application/pdf'));
 select pg_temp.check('Ada reads her notes',
   (select count(*) = 2 from public.messages m where m.conversation_id = (select id from ids where name = 'ada_note')));
 select pg_temp.check('the blocked-check does not trip on a chat with nobody else',

@@ -638,7 +638,8 @@ select pg_temp.check('a new moderator is not held',
 select pg_temp.act_as('c');
 insert into public.messages (conversation_id, sender_id, type, body, attachment)
 values ((select id from ids where name = 'channel'), '00000000-0000-4000-8000-0000000000c1', 'image', '',
-        '{"kind":"image","bucket":"chat-images","path":"c/x.png"}'::jsonb);
+        jsonb_build_object('kind', 'image', 'bucket', 'chat-images',
+          'path', (select id from ids where name = 'channel')::text || '/x.png'));
 select pg_temp.act_as(null);
 select pg_temp.check('pictures are not sent to the AI',
   (select review_state is null from public.messages where type = 'image' and sender_id = '00000000-0000-4000-8000-0000000000c1'));

@@ -1,0 +1,8 @@
+# Read by Cloudflare's static assets (not served). The service workers and the
+# manifest are always revalidated, so a new deploy is noticed on the next load.
+/wecord_sw.js
+  Cache-Control: no-cache
+/push_sw.js
+  Cache-Control: no-cache
+/manifest.json
+  Cache-Control: no-cache

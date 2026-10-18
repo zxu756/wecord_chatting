@@ -1,18 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
     This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    the `--base-href` argument provided to `flutter build`. Serving from a
+    path other than the root needs a base path that starts and ends with "/".
   -->
   <base href="$FLUTTER_BASE_HREF">
 
@@ -21,16 +13,23 @@
   <!-- Phone-width layout before Flutter starts; Flutter then installs the
        same viewport settings itself. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <meta name="description" content="WeCord: chat with friends, groups and circles in real time.">
-  <!-- Browser toolbar colour, matching WeCordTheme's background. -->
-  <meta name="theme-color" content="#F7F8FA">
+  <meta name="description" content="WeCord: chat with friends, groups and circles in real time. 与朋友、群组和圈子实时聊天。">
+  <meta name="color-scheme" content="light dark">
+  <!-- Browser toolbar and installed-window title bar colours: warm paper
+       (WeCordPalette.paper) in light, graphite in dark. -->
+  <meta name="theme-color" content="#F5F4F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
 
-  <!-- iOS meta tags & icons. The default status bar style keeps the page
-       below the status bar, so the app needs no extra top inset on web. -->
+  <!-- Installed-app meta tags. iOS "Add to Home Screen" and Safari's "Add to
+       Dock" open WeCord without browser chrome. The default status bar
+       style keeps the page below the iOS status bar, so the app needs no
+       extra top inset on web (black-translucent would draw under it). -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="WeCord">
+  <meta name="application-name" content="WeCord">
+  <meta name="format-detection" content="telephone=no">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 
   <!-- Favicons, drawn by tool/generate_web_icons.py. -->
@@ -52,15 +51,171 @@
   <title>WeCord - chat with friends, groups and circles</title>
   <link rel="manifest" href="manifest.json">
   <style>
+    /* Design language "C": warm paper and ink, one blue accent (the values
+       are WeCordPalette's paper, panel, ink, muted, track and accent). */
+    :root {
+      --wc-paper: #F5F4F1;
+      --wc-ink: #17171A;
+      --wc-muted: #5F5E66;
+      --wc-track: #D6D3CC;
+      --wc-accent: #2F6BF6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --wc-paper: #111113;
+        --wc-ink: #F3F2EF;
+        --wc-muted: #A3A1AA;
+        --wc-track: #3A3A40;
+        --wc-accent: #6E95FF;
+      }
+    }
     /* Avoids a white flash and rubber-band gaps around the app on phones. */
-    html, body { background-color: #F7F8FA; overscroll-behavior: none; }
+    html, body { background-color: var(--wc-paper); overscroll-behavior: none; }
+
+    /* The loading screen: shown while main.dart.js (about 9 MB) downloads,
+       removed on Flutter's first frame (see the script below). */
+    #wc-splash {
+      position: fixed; inset: 0; z-index: 2147483000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; background: var(--wc-paper); color: var(--wc-ink);
+      font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, sans-serif;
+      opacity: 1; transition: opacity 220ms ease-out;
+    }
+    #wc-splash.wc-out { opacity: 0; pointer-events: none; }
+    #wc-splash .wc-mark {
+      width: 88px; height: 88px; display: block;
+      animation: wc-breathe 2.4s ease-in-out infinite;
+    }
+    #wc-splash .wc-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+    #wc-splash .wc-bar {
+      width: 132px; height: 3px; border-radius: 3px; overflow: hidden;
+      background: var(--wc-track);
+    }
+    #wc-splash .wc-fill {
+      width: 100%; height: 100%; border-radius: 3px; background: var(--wc-accent);
+      transform-origin: left center; transform: scaleX(0.04);
+      transition: transform 300ms ease-out;
+    }
+    @keyframes wc-breathe {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.97); opacity: 0.88; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #wc-splash { transition: none; }
+      #wc-splash .wc-mark { animation: none; }
+      #wc-splash .wc-fill { transition: none; }
+    }
   </style>
+  <script>
+    // Runs before Flutter exists, because the browser fires some of these
+    // events long before the app is up.
+    (function () {
+      // The loading screen's progress. flutter_bootstrap.js reports stages;
+      // between them the bar creeps forward, since the 9 MB download has no
+      // progress events of its own.
+      var shown = 0.04;
+      var fill = null;
+      function paint() {
+        fill = fill || document.querySelector('#wc-splash .wc-fill');
+        if (fill) fill.style.transform = 'scaleX(' + shown.toFixed(3) + ')';
+      }
+      var creep = setInterval(function () {
+        shown += (0.95 - shown) * 0.012;
+        paint();
+      }, 120);
+      var removed = false;
+      function done() {
+        if (removed) return;
+        removed = true;
+        clearInterval(creep);
+        shown = 1;
+        paint();
+        var node = document.getElementById('wc-splash');
+        if (!node) return;
+        var reduced = window.matchMedia &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) {
+          node.remove();
+          return;
+        }
+        node.classList.add('wc-out');
+        setTimeout(function () { node.remove(); }, 300);
+      }
+      window.wecordSplash = {
+        stage: function (progress) {
+          if (progress > shown) shown = progress;
+          paint();
+        },
+        done: done,
+      };
+      // Flutter's first frame is on screen: nothing left to cover.
+      window.addEventListener('flutter-first-frame', done, { once: true });
+      // If that never comes, do not hide the app forever behind the splash.
+      window.addEventListener('load', function () { setTimeout(done, 30000); });
+
+      // Chrome and Edge offer "Install" through beforeinstallprompt, often
+      // before the app is up. Keep the event for the Settings entry
+      // (lib/features/pwa/pwa_gateway_web.dart).
+      var pwa = window.__wecordPwa = { installPrompt: null };
+      window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault();
+        pwa.installPrompt = event;
+        window.dispatchEvent(new Event('wecord-install-available'));
+      });
+      window.addEventListener('appinstalled', function () {
+        pwa.installPrompt = null;
+        window.dispatchEvent(new Event('wecord-installed'));
+      });
+
+      // The app-shell service worker (offline start, updates; see
+      // wecord_sw.js). Registered once the app is on screen so the 9 MB it
+      // caches never competes with the first load. Not on localhost, where
+      // a cache-first worker would hide hot reloads (add ?sw=1 to test it).
+      if (!('serviceWorker' in navigator)) return;
+      var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) &&
+        !/[?&]sw=1(&|$)/.test(location.search);
+      if (local) return;
+      var registered = false;
+      function register() {
+        if (registered) return;
+        registered = true;
+        navigator.serviceWorker.register('wecord_sw.js', { scope: './' })
+          .then(function () { return navigator.serviceWorker.ready; })
+          .then(function (registration) {
+            // On the very first visit the worker missed the files the page
+            // already loaded: hand it the list so they are kept too.
+            var worker = registration.active;
+            if (!worker || !window.performance) return;
+            var urls = performance.getEntriesByType('resource')
+              .map(function (entry) { return entry.name; })
+              .filter(function (name) { return name.indexOf(location.origin) === 0; });
+            worker.postMessage({ type: 'wecord-cache-urls', urls: urls });
+          })
+          .catch(function () {});
+      }
+      window.addEventListener('flutter-first-frame', register, { once: true });
+      window.addEventListener('load', function () { setTimeout(register, 20000); });
+    })();
+  </script>
 </head>
 <body>
+  <!-- The loading screen: a lightweight stand-in for the blank page while the
+       app downloads. Hidden from assistive tech once removed. -->
+  <div id="wc-splash" role="status" aria-live="polite" aria-label="Loading WeCord">
+    <svg class="wc-mark" viewBox="0 0 88 88" aria-hidden="true">
+      <!-- The app icon (tool/generate_web_icons.py) at 88 px. -->
+      <rect width="88" height="88" rx="19" fill="#2F6BF6"/>
+      <rect x="16.7" y="14.5" width="54.6" height="42.6" rx="14.2" fill="#fff"/>
+      <polygon points="27.6,48.4 40.7,54.9 24.4,68" fill="#fff"/>
+      <polyline points="28.2,26.5 36.1,45.1 44,30.4 51.9,45.1 59.8,26.5" fill="none" stroke="#2F6BF6" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="wc-name">WeCord</div>
+    <div class="wc-bar" aria-hidden="true"><div class="wc-fill"></div></div>
+  </div>
   <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+    flutter_bootstrap.js is customised (see web/flutter_bootstrap.js): it
+    starts Flutter and reports progress to the loading screen above.
 
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization

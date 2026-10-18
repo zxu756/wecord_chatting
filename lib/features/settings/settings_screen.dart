@@ -6,6 +6,7 @@ import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
+import 'package:wecord/features/legal/about_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/pwa/install_app_tile.dart';
 import 'package:wecord/features/qr/qr_entries.dart';
@@ -180,6 +181,7 @@ class SettingsPhonePage extends ConsumerWidget {
           const NotificationSettingsGroups(),
           PrivacySettingsGroup(header: tr('Privacy & Safety')),
           const AdminConsoleEntry(),
+          const AboutSettingsEntry(),
           AccountActionsGroup(username: value.username, header: tr('Account')),
         ],
         AsyncError(:final error) => [SettingsErrorText(error)],

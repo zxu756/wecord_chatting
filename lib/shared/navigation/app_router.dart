@@ -25,6 +25,8 @@ import 'package:wecord/features/discovery/discovery_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/legal/legal_document.dart';
+import 'package:wecord/features/legal/legal_screen.dart';
 import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/features/error_reports/redirect_tracking.dart';
 import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
@@ -74,6 +76,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final onAuthRoute = location == AuthScreen.path;
       final onLoadingRoute = location == LoadingScreen.path;
       final pendingLocation = _pendingLocation(state.uri);
+
+      // The policy pages are open to everybody, signed in or not (sign-up
+      // links to them).
+      if (location.startsWith('${LegalRoutes.prefix}/')) {
+        return null;
+      }
 
       if (authState.isLoading) {
         return onLoadingRoute
@@ -383,6 +391,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const AgendaScreen(),
           ),
         ],
+      ),
+      // Terms, privacy policy and community guidelines, outside the app
+      // shell so they open before sign-in too.
+      GoRoute(
+        path: '${LegalRoutes.prefix}/:slug',
+        redirect: (context, state) =>
+            LegalDocument.fromSlug(state.pathParameters['slug']) == null
+            ? HomeScreen.path
+            : null,
+        builder: (context, state) => LegalDocumentScreen(
+          key: ValueKey('legal-route-${state.pathParameters['slug']}'),
+          document: LegalDocument.fromSlug(state.pathParameters['slug'])!,
+        ),
       ),
     ],
   );

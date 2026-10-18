@@ -69,6 +69,10 @@ void main() {
       find.widgetWithText(WeCordTextField, 'Password'),
       'password123',
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('terms-checkbox')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('terms-checkbox')));
+    await tester.pump();
     await tester.ensureVisible(
       find.widgetWithText(WeCordButton, 'Create account'),
     );
@@ -108,6 +112,67 @@ void main() {
     await tester.pump();
 
     expect(find.text('Username is required.'), findsOneWidget);
+    expect(repository.signUpCalls, isEmpty);
+  });
+
+  testWidgets('creating an account needs the age and terms box', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: AuthScreen()),
+      ),
+    );
+
+    // Signing in has no such box.
+    expect(find.byKey(const ValueKey('auth-accept-terms')), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('auth-toggle-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('auth-toggle-mode')));
+    await tester.pump();
+
+    expect(
+      find.textContaining(
+        'I am at least 13 and agree to the',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(WeCordTextField, 'Username'),
+      'ada',
+    );
+    await tester.enterText(
+      find.widgetWithText(WeCordTextField, 'Display name'),
+      'Ada Lovelace',
+    );
+    await tester.enterText(
+      find.widgetWithText(WeCordTextField, 'Email'),
+      'ada@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(WeCordTextField, 'Password'),
+      'password123',
+    );
+    await tester.ensureVisible(
+      find.widgetWithText(WeCordButton, 'Create account'),
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(WeCordButton, 'Create account'));
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Please confirm your age and agree to the Terms and Community '
+        'Guidelines.',
+      ),
+      findsOneWidget,
+    );
     expect(repository.signUpCalls, isEmpty);
   });
 }

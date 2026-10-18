@@ -46,6 +46,7 @@ import 'moments_a11y_screens.dart';
 import 'quiet_hours_a11y_screens.dart';
 import 'chat_folders_a11y_screens.dart';
 import 'privacy2_a11y_screens.dart';
+import 'reports_legal_a11y_screens.dart';
 import 'admin_a11y_screens.dart';
 import 'agenda_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
@@ -772,4 +773,5 @@ final allA11yScreens = <A11yScreen>[
   ...privacy2A11yScreens,
   ...adminA11yScreens,
   ...agendaA11yScreens,
+  ...reportsLegalA11yScreens,
 ];

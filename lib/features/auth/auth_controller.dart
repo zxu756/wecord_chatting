@@ -5,7 +5,10 @@ import 'package:wecord/shared/l10n/l10n.dart';
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AuthActionState>((ref) {
-      return AuthController(ref.watch(authRepositoryProvider));
+      return AuthController(
+        ref.watch(authRepositoryProvider),
+        consent: ref.watch(signUpConsentProvider),
+      );
     });
 
 class AuthActionState {
@@ -23,9 +26,11 @@ class AuthActionState {
 }
 
 class AuthController extends StateNotifier<AuthActionState> {
-  AuthController(this._repository) : super(const AuthActionState());
+  AuthController(this._repository, {this._consent})
+    : super(const AuthActionState());
 
   final AuthRepository _repository;
+  final SignUpConsent? _consent;
 
   Future<void> signIn(String email, String password) async {
     await _run(() {
@@ -37,13 +42,15 @@ class AuthController extends StateNotifier<AuthActionState> {
     String username,
     String displayName,
     String email,
-    String password,
-  ) async {
+    String password, {
+    bool acceptedTerms = false,
+  }) async {
     final validationError = _validateSignUp(
       username: username,
       displayName: displayName,
       email: email,
       password: password,
+      acceptedTerms: acceptedTerms,
     );
 
     if (validationError != null) {
@@ -53,6 +60,7 @@ class AuthController extends StateNotifier<AuthActionState> {
 
     final normalizedUsername = username.trim().toLowerCase();
 
+    _consent?.given = true;
     await _run(() {
       return _repository.signUp(
         email.trim(),
@@ -89,6 +97,7 @@ String? _validateSignUp({
   required String displayName,
   required String email,
   required String password,
+  required bool acceptedTerms,
 }) {
   if (username.trim().isEmpty) {
     return tr('Username is required.');
@@ -108,6 +117,12 @@ String? _validateSignUp({
   }
   if (password.isEmpty) {
     return tr('Password is required.');
+  }
+  if (!acceptedTerms) {
+    return tr(
+      'Please confirm your age and agree to the Terms and Community '
+      'Guidelines.',
+    );
   }
   return null;
 }

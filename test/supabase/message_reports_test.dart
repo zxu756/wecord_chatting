@@ -31,7 +31,9 @@ void main() {
     test('is closed to the API except plain columns for the people involved', () {
       expect(
         reports,
-        contains('alter table public.message_reports enable row level security'),
+        contains(
+          'alter table public.message_reports enable row level security',
+        ),
       );
       expect(
         reports,
@@ -44,7 +46,12 @@ void main() {
         reports.indexOf('grant select ('),
         reports.indexOf('on public.message_reports to authenticated'),
       );
-      for (final column in ['snapshot', 'context', 'details', 'reported_user_id']) {
+      for (final column in [
+        'snapshot',
+        'context',
+        'details',
+        'reported_user_id',
+      ]) {
         expect(grant, isNot(contains(column)), reason: column);
       }
       expect(reports, isNot(contains('grant insert')));
@@ -54,15 +61,15 @@ void main() {
 
     test('the reported person is left out of every handler policy', () {
       expect(
-        RegExp('reported_user_id is distinct from auth.uid\\(\\)')
-            .allMatches(reports)
-            .length,
+        RegExp(
+          'reported_user_id is distinct from auth.uid\\(\\)',
+        ).allMatches(reports).length,
         greaterThanOrEqualTo(3),
       );
       expect(
-        RegExp('reported_user_id is distinct from auth.uid\\(\\)')
-            .allMatches(admin)
-            .length,
+        RegExp(
+          'reported_user_id is distinct from auth.uid\\(\\)',
+        ).allMatches(admin).length,
         greaterThanOrEqualTo(3),
       );
     });
@@ -89,7 +96,10 @@ void main() {
 
     test('the retention rides on the existing daily job', () {
       expect(reports, contains('interval \'90 days\''));
-      expect(reports, contains('perform public.purge_old_message_report_data()'));
+      expect(
+        reports,
+        contains('perform public.purge_old_message_report_data()'),
+      );
       expect(reports, isNot(contains('cron.schedule')));
     });
 
@@ -99,9 +109,14 @@ void main() {
         'list_circle_message_reports',
         'resolve_message_report',
       ]) {
-        final start = reports.indexOf('create or replace function public.$name(');
+        final start = reports.indexOf(
+          'create or replace function public.$name(',
+        );
         expect(start, isNonNegative, reason: name);
-        final text = reports.substring(start, reports.indexOf('\n\$\$;', start));
+        final text = reports.substring(
+          start,
+          reports.indexOf('\n\$\$;', start),
+        );
         expect(text, contains('security definer'), reason: name);
         expect(text, contains('set search_path = public'), reason: name);
       }
@@ -141,22 +156,34 @@ void main() {
         admin,
         contains('revoke execute on function public.admin_erase_message(uuid)'),
       );
-      expect(admin, isNot(contains('grant execute on function public.admin_erase_message')));
+      expect(
+        admin,
+        isNot(contains('grant execute on function public.admin_erase_message')),
+      );
     });
 
-    test('moderator actions reuse the circle functions that check permissions', () {
-      expect(reports, contains('public.recall_message('));
-      expect(reports, contains('public.timeout_circle_member('));
-      expect(reports, contains('public.ban_circle_member('));
-      expect(reports, contains('public.write_circle_audit('));
-    });
+    test(
+      'moderator actions reuse the circle functions that check permissions',
+      () {
+        expect(reports, contains('public.recall_message('));
+        expect(reports, contains('public.timeout_circle_member('));
+        expect(reports, contains('public.ban_circle_member('));
+        expect(reports, contains('public.write_circle_audit('));
+      },
+    );
   });
 
   group('the admin side', () {
-    test('writes the admin audit log and handles only direct chats and groups', () {
-      expect(admin, contains("admin_write_audit(\n    'resolve_message_report'"));
-      expect(admin, contains('circle_id is null'));
-    });
+    test(
+      'writes the admin audit log and handles only direct chats and groups',
+      () {
+        expect(
+          admin,
+          contains("admin_write_audit(\n    'resolve_message_report'"),
+        );
+        expect(admin, contains('circle_id is null'));
+      },
+    );
   });
 
   group('terms acceptance', () {
@@ -172,7 +199,5 @@ void main() {
   behaviourTest(
     'message reports: attacks, circle moderation, admin queue, retention, terms',
     'test/supabase/message_reports_behaviour.sql',
-    // The script drops and rebuilds the schema from every migration.
-    rebuildsSchema: true,
   );
 }

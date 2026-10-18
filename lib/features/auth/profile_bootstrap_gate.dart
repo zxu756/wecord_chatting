@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/legal/terms_acceptance.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 class ProfileBootstrapGate extends ConsumerWidget {
@@ -19,7 +20,9 @@ class ProfileBootstrapGate extends ConsumerWidget {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, stackTrace) => _ProfileBootstrapError(error: error),
-      data: (_) => child,
+      // People who signed up before the terms existed are asked once, with
+      // a banner that blocks nothing.
+      data: (_) => TermsPromptHost(child: child),
     );
   }
 }

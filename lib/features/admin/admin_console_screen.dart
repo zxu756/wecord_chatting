@@ -30,8 +30,14 @@ class AdminConsoleScreen extends ConsumerStatefulWidget {
 
 enum _Tab { reports, audit }
 
-/// The kinds the queue can filter by (messages join with A1).
-const _queueKinds = [ReportKind.user, ReportKind.circle, ReportKind.post];
+/// The kinds the queue can filter by. Messages are the reports of direct
+/// chats and groups; a circle's message reports go to its moderators.
+const _queueKinds = [
+  ReportKind.user,
+  ReportKind.circle,
+  ReportKind.post,
+  ReportKind.message,
+];
 
 class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
   final _scrollController = ScrollController();
@@ -132,7 +138,10 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
   Future<void> _open(AdminReport report) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => AdminReportScreen(reportId: report.id),
+        builder: (context) => AdminReportScreen(
+          reportId: report.id,
+          message: report.kind == ReportKind.message,
+        ),
       ),
     );
     // What was done there changes the queue.

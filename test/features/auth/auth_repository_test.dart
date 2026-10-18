@@ -95,6 +95,102 @@ void main() {
     );
   });
 
+  test('a sign-up carries the ticked age and terms box', () async {
+    final httpClient = _RecordingHttpClient(
+      responses: [
+        http.Response(
+          jsonEncode({
+            'id': 'user-1',
+            'aud': 'authenticated',
+            'email': 'ada@example.com',
+            'app_metadata': <String, dynamic>{},
+            'user_metadata': <String, dynamic>{},
+            'created_at': '2026-10-16T00:00:00Z',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      ],
+    );
+    var ticked = true;
+    final repository = SupabaseAuthRepository(
+      SupabaseClient(
+        'https://example.supabase.co',
+        'test-anon-key',
+        httpClient: httpClient,
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      ),
+      consent: () => ticked,
+    );
+
+    await repository.signUp('ada@example.com', 'secret123', 'ada', 'Ada');
+
+    var body =
+        jsonDecode((httpClient.requests.single as http.Request).body)
+            as Map<String, dynamic>;
+    expect((body['data'] as Map)['accepted_terms'], isTrue);
+
+    ticked = false;
+    await repository.signUp('ada@example.com', 'secret123', 'ada', 'Ada');
+    body =
+        jsonDecode((httpClient.requests.last as http.Request).body)
+            as Map<String, dynamic>;
+    expect((body['data'] as Map).containsKey('accepted_terms'), isFalse);
+  });
+
+  test('the profile made after sign-up records the agreement', () async {
+    final httpClient = _RecordingHttpClient(
+      responses: [
+        http.Response('[]', 200, headers: {'content-type': 'application/json'}),
+        http.Response('', 201),
+      ],
+    );
+    final repository = SupabaseAuthRepository(
+      await _clientWithSession(
+        metadata: {
+          'username': 'ada',
+          'display_name': 'Ada Lovelace',
+          'accepted_terms': true,
+        },
+        httpClient: httpClient,
+      ),
+    );
+
+    await repository.ensureCurrentUserProfile();
+
+    final insert =
+        jsonDecode((httpClient.requests.last as http.Request).body)
+            as Map<String, dynamic>;
+    expect(httpClient.requests.last.method, 'POST');
+    expect(insert['accepted_terms_at'], isA<String>());
+    expect(insert['age_confirmed_at'], isA<String>());
+  });
+
+  test('a profile without the box ticked records nothing', () async {
+    final httpClient = _RecordingHttpClient(
+      responses: [
+        http.Response('[]', 200, headers: {'content-type': 'application/json'}),
+        http.Response('', 201),
+      ],
+    );
+    final repository = SupabaseAuthRepository(
+      await _clientWithSession(
+        metadata: {'username': 'ada', 'display_name': 'Ada Lovelace'},
+        httpClient: httpClient,
+      ),
+    );
+
+    await repository.ensureCurrentUserProfile();
+
+    final insert =
+        jsonDecode((httpClient.requests.last as http.Request).body)
+            as Map<String, dynamic>;
+    expect(insert.containsKey('accepted_terms_at'), isFalse);
+    expect(insert.containsKey('age_confirmed_at'), isFalse);
+  });
+
   test('sign-up confirmation emails link back to the web app', () async {
     final httpClient = _RecordingHttpClient(
       responses: [

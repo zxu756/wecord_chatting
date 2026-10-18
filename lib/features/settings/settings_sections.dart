@@ -20,6 +20,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/moments/moments_settings_screen.dart';
 import 'package:wecord/features/error_reports/error_reports_setting.dart';
 import 'package:wecord/features/privacy/devices_screen.dart';
+import 'package:wecord/features/privacy/privacy_permissions.dart';
 import 'package:wecord/features/privacy/profile_visibility.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
@@ -877,6 +878,8 @@ class PrivacySettingsGroup extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         group,
+        const SizedBox(height: 12),
+        const PrivacyPermissionsGroups(),
         const SizedBox(height: 12),
         const ErrorReportsSettingsGroup(),
       ],

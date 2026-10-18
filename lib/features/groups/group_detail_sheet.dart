@@ -8,6 +8,7 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
+import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
@@ -480,6 +481,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     if (selected.isEmpty || !mounted) {
       return;
     }
+    final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       await ref
           .read(chatsRepositoryProvider)
@@ -488,6 +490,14 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             memberIds: selected.toList(growable: false),
           );
       ref.invalidate(groupDetailProvider(detail.conversationId));
+      unawaited(
+        noticePendingInvitations(
+          ref,
+          messenger,
+          detail.conversationId,
+          selected,
+        ),
+      );
     } catch (_) {
       if (mounted) {
         setState(() {

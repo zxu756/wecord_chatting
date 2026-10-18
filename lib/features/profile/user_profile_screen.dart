@@ -144,13 +144,17 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
       if (mounted) {
         setState(_reload);
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(tr('Could not update profile action. Try again.')),
+          content: Text(
+            error is FriendRequestRefused
+                ? error.refusal.text
+                : tr('Could not update profile action. Try again.'),
+          ),
         ),
       );
     }

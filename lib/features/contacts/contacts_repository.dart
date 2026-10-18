@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/friend_request.dart';
 import 'package:wecord/shared/models/profile.dart';
 
@@ -25,6 +26,47 @@ abstract interface class ContactsRepository {
     required String friendId,
     required String? alias,
   });
+}
+
+/// Why a person cannot be sent a friend request: they chose who may send
+/// one (Settings → Privacy & Safety → Adding me) and this is not you.
+enum FriendRequestRefusal {
+  notAccepting,
+  friendsOfFriendsOnly,
+  sharedCircleOnly;
+
+  /// The refusal in a server error message, or null for any other error.
+  static FriendRequestRefusal? fromServerMessage(String message) {
+    if (message.contains('not accepting friend requests')) {
+      return notAccepting;
+    }
+    if (message.contains('friends of friends')) {
+      return friendsOfFriendsOnly;
+    }
+    if (message.contains('shared circle')) {
+      return sharedCircleOnly;
+    }
+    return null;
+  }
+
+  String get text => switch (this) {
+    notAccepting => tr('This person is not accepting friend requests.'),
+    friendsOfFriendsOnly => tr(
+      'This person only accepts friend requests from friends of friends.',
+    ),
+    sharedCircleOnly => tr(
+      'This person only accepts friend requests from people in a shared circle.',
+    ),
+  };
+}
+
+class FriendRequestRefused implements Exception {
+  const FriendRequestRefused(this.refusal);
+
+  final FriendRequestRefusal refusal;
+
+  @override
+  String toString() => refusal.text;
 }
 
 class IncomingFriendRequest {
@@ -115,9 +157,17 @@ class SupabaseContactsRepository implements ContactsRepository {
   @override
   Future<void> sendFriendRequest(String receiverId) async {
     _requireCurrentUserId();
-    await _dataSource.rpc('send_friend_request', {
-      'target_user_id': receiverId,
-    });
+    try {
+      await _dataSource.rpc('send_friend_request', {
+        'target_user_id': receiverId,
+      });
+    } on PostgrestException catch (error) {
+      final refusal = FriendRequestRefusal.fromServerMessage(error.message);
+      if (refusal != null) {
+        throw FriendRequestRefused(refusal);
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -167,16 +217,13 @@ class SupabaseContactsDataSource implements ContactsDataSource {
     String query,
     String excludedUserId,
   ) async {
-    final rows = await _client
-        .from('profiles')
-        .select(_profileColumns)
-        .ilike('username', '%$query%')
-        .neq('id', excludedUserId)
-        // Deleted accounts and bots can't be found or befriended.
-        .isFilter('deleted_at', null)
-        .eq('is_bot', false)
-        .order('username')
-        .limit(20);
+    // The server leaves out the caller, bots, deleted accounts, blocked
+    // people and anyone who turned off "find me by username" (unless they
+    // are a friend): see search_users_by_username.
+    final rows = await _client.rpc<List<dynamic>>(
+      'search_users_by_username',
+      params: {'search_query': query},
+    );
     return rows.cast<Map<String, dynamic>>();
   }
 

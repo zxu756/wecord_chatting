@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/agenda/agenda_repository.dart';
+import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -122,7 +124,7 @@ class PhoneMessagesPanel extends ConsumerWidget {
               key: const ValueKey('phone-friends-row'),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-              itemCount: sortedFriends.length + 3,
+              itemCount: sortedFriends.length + 4,
               separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -132,9 +134,12 @@ class PhoneMessagesPanel extends ConsumerWidget {
                   return const _SavedTile();
                 }
                 if (index == 2) {
+                  return const _AgendaTile();
+                }
+                if (index == 3) {
                   return const _MomentsTile();
                 }
-                final friend = sortedFriends[index - 3];
+                final friend = sortedFriends[index - 4];
                 return _FriendTile(
                   friend: friend,
                   presence: presence(friend.id),
@@ -372,7 +377,58 @@ class _SavedTile extends StatelessWidget {
   }
 }
 
-/// "Moments", third in the friends row: friends' posts, with the latest
+/// "Agenda", third in the friends row: events, tasks, reminders and scheduled
+/// messages from every chat, with a red badge for what is overdue.
+class _AgendaTile extends ConsumerWidget {
+  const _AgendaTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
+    final overdue = ref.watch(agendaOverdueCountProvider);
+    Widget icon = Container(
+      width: 58,
+      height: 58,
+      decoration: ShapeDecoration(
+        color: c.raised,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      child: Icon(Icons.event_note_outlined, size: 22, color: c.muted),
+    );
+    if (overdue > 0) {
+      icon = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          icon,
+          Positioned(
+            right: -5,
+            top: -5,
+            child: CountBadge(
+              key: const ValueKey('phone-agenda-badge'),
+              count: overdue,
+              size: 18,
+              tone: BadgeTone.mention,
+              ringColor: c.panel,
+            ),
+          ),
+        ],
+      );
+    }
+    return _QuickFriendTile(
+      key: const ValueKey('phone-home-agenda'),
+      label: tr('Agenda'),
+      tooltip: overdue > 0
+          ? tr('Agenda · {count} overdue', {'count': overdue})
+          : null,
+      onPressed: () => openPage(context, AgendaScreen.path),
+      leading: icon,
+    );
+  }
+}
+
+/// "Moments", fourth in the friends row: friends' posts, with the latest
 /// poster's avatar on its corner when something is new.
 class _MomentsTile extends StatelessWidget {
   const _MomentsTile();

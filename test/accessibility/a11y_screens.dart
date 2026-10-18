@@ -43,6 +43,7 @@ import 'photo_editor_a11y_screens.dart';
 import 'location_a11y_screens.dart';
 import 'qr_pat_a11y_screens.dart';
 import 'moments_a11y_screens.dart';
+import 'agenda_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -762,4 +763,5 @@ final allA11yScreens = <A11yScreen>[
   ...locationA11yScreens,
   ...qrPatA11yScreens,
   ...momentsA11yScreens,
+  ...agendaA11yScreens,
 ];

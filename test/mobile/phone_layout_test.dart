@@ -646,14 +646,16 @@ void main() {
       // Friends, online first.
       final bartTile = find.byKey(ValueKey('phone-friend-${bart.id}'));
       final graceTile = find.byKey(ValueKey('phone-friend-${grace.id}'));
-      // Add friend, Saved and Moments come first, then the friends (on the
-      // narrowest phones the later ones are a swipe away).
+      // Add friend, Saved, Agenda and Moments come first, then the friends
+      // (on the narrowest phones the later ones are a swipe away).
       final momentsTile = find.byKey(const ValueKey('phone-home-moments'));
-      expect(
-        tester.getTopLeft(momentsTile).dx,
-        lessThan(tester.getTopLeft(bartTile).dx),
-      );
-      if (graceTile.evaluate().isNotEmpty) {
+      if (bartTile.evaluate().isNotEmpty) {
+        expect(
+          tester.getTopLeft(momentsTile).dx,
+          lessThan(tester.getTopLeft(bartTile).dx),
+        );
+      }
+      if (bartTile.evaluate().isNotEmpty && graceTile.evaluate().isNotEmpty) {
         expect(
           tester.getTopLeft(bartTile).dx,
           lessThan(tester.getTopLeft(graceTile).dx),

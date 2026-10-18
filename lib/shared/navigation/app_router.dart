@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
@@ -370,6 +371,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               );
             },
           ),
+          GoRoute(
+            path: AgendaScreen.path,
+            builder: (context, state) => const AgendaScreen(),
+          ),
         ],
       ),
     ],
@@ -518,6 +523,11 @@ ShellPlacement _placementFor(GoRouterState state) {
       return const ShellPlacement(
         homeSelected: true,
         homeSection: HomeSection.moments,
+      );
+    case AgendaScreen.path:
+      return const ShellPlacement(
+        homeSelected: true,
+        homeSection: HomeSection.agenda,
       );
     case FriendTagsScreen.path:
       return const ShellPlacement(

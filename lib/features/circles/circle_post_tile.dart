@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
@@ -13,6 +14,7 @@ import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/report_reason.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 enum _PostAction { delete, report }
@@ -311,16 +313,51 @@ class _PostActionPill extends StatelessWidget {
   }
 }
 
-class _PostImagePreview extends ConsumerWidget {
+class _PostImagePreview extends ConsumerStatefulWidget {
   const _PostImagePreview({required this.attachment});
 
   final ImageAttachment attachment;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final url = ref.watch(circlesRepositoryProvider).createImageUrl(attachment);
+  ConsumerState<_PostImagePreview> createState() => _PostImagePreviewState();
+}
+
+class _PostImagePreviewState extends ConsumerState<_PostImagePreview> {
+  /// Signed once per picture: building the post again (a like, a comment)
+  /// must not sign it again and flash the spinner.
+  late Future<String> _url;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = _sign();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostImagePreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attachment.path != widget.attachment.path ||
+        oldWidget.attachment.bucket != widget.attachment.bucket) {
+      _url = _sign();
+    }
+  }
+
+  Future<String> _sign() {
+    final attachment = widget.attachment;
+    return ref
+        .read(chatSignedUrlCacheProvider)
+        .get(
+          SignedUrlCache.keyFor(attachment.bucket, attachment.path),
+          () => ref.read(circlesRepositoryProvider).createImageUrl(attachment),
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = widget.attachment;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     return FutureBuilder<String>(
-      future: url,
+      future: _url,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox(
@@ -342,11 +379,22 @@ class _PostImagePreview extends ConsumerWidget {
           ),
           builder: (context, states) => ClipRRect(
             borderRadius: BorderRadius.circular(WeCordRadii.lg),
-            child: Image.network(
-              snapshot.data!,
-              height: 220,
-              width: double.infinity,
-              fit: BoxFit.cover,
+            child: LayoutBuilder(
+              builder: (context, constraints) => Image(
+                image: imageDecodedFor(
+                  NetworkImage(snapshot.data!),
+                  box: Size(
+                    constraints.hasBoundedWidth ? constraints.maxWidth : 400,
+                    220,
+                  ),
+                  devicePixelRatio: dpr,
+                  sourceWidth: attachment.width,
+                  sourceHeight: attachment.height,
+                ),
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
         );

@@ -20,6 +20,7 @@ import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/thumbnails.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// How a signed picture URL becomes an image to draw. The network in the
@@ -404,27 +405,38 @@ class _MediaTileState extends ConsumerState<MediaTile> {
           if (url == null) {
             return layered(null);
           }
-          return layered(
-            // A GIF holds its first frame under reduced motion, with a play
-            // button.
-            MotionSafeImage(
-              image: ref.read(chatImageProviderFactoryProvider)(url),
-              animated: isAnimatedImage(url: url, mimeType: image.mimeType),
-              playButton: !widget.compact,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-              frameBuilder: (context, child, frame, synchronous) =>
-                  _fadeIn(child, synchronous || frame != null),
-              errorBuilder: (context, error, stackTrace) {
-                _resignAfterError();
-                return Center(
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: context.tokens.colors.faint,
-                    size: 28,
-                  ),
-                );
-              },
+          // Decoded at the size of the tile (times the screen's pixel
+          // density), not at the size of the photo that was sent.
+          final dpr = MediaQuery.devicePixelRatioOf(context);
+          return LayoutBuilder(
+            builder: (context, constraints) => layered(
+              // A GIF holds its first frame under reduced motion, with a
+              // play button.
+              MotionSafeImage(
+                image: imageDecodedFor(
+                  ref.read(chatImageProviderFactoryProvider)(url),
+                  box: constraints.biggest,
+                  devicePixelRatio: dpr,
+                  sourceWidth: image.width,
+                  sourceHeight: image.height,
+                ),
+                animated: isAnimatedImage(url: url, mimeType: image.mimeType),
+                playButton: !widget.compact,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                frameBuilder: (context, child, frame, synchronous) =>
+                    _fadeIn(child, synchronous || frame != null),
+                errorBuilder: (context, error, stackTrace) {
+                  _resignAfterError();
+                  return Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: context.tokens.colors.faint,
+                      size: 28,
+                    ),
+                  );
+                },
+              ),
             ),
           );
         },

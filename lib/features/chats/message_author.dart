@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 
 /// A round avatar for [avatarUrl] (an http(s) URL or a stored avatar path)
 /// that shows [title]'s initials when there is no image or it fails to load.
@@ -32,7 +33,11 @@ class _FallbackAvatarState extends ConsumerState<FallbackAvatar> {
         .value;
     final image = displayUrl == null || displayUrl == _failedUrl
         ? null
-        : NetworkImage(displayUrl);
+        : avatarImageFor(
+            NetworkImage(displayUrl),
+            size: (widget.radius ?? 20) * 2,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+          );
     return CircleAvatar(
       radius: widget.radius,
       backgroundImage: image,

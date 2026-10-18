@@ -7,6 +7,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 // Small pieces of the chat thread in design language C: avatars, day and
@@ -85,8 +86,12 @@ class _ChatAvatarState extends ConsumerState<ChatAvatar> {
         : PersonAvatar(name: widget.name, size: size);
     Widget avatar = base;
     if (url != null) {
-      final image = Image.network(
-        url,
+      final image = Image(
+        image: avatarImageFor(
+          NetworkImage(url),
+          size: size,
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        ),
         width: size,
         height: size,
         fit: BoxFit.cover,

@@ -76,7 +76,12 @@ void main() {
     expect(indicator.color, WeCordTokens.light.colors.danger);
     final images = [
       for (final avatar in tester.widgetList<Image>(find.byType(Image)))
-        if (avatar.image case final NetworkImage image) image.url,
+        // Avatars are decoded at their own size, in a ResizeImage.
+        if ((avatar.image is ResizeImage
+                ? (avatar.image as ResizeImage).imageProvider
+                : avatar.image)
+            case final NetworkImage image)
+          image.url,
     ];
     expect(images, contains('https://example.com/circle.png'));
   });

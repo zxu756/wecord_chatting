@@ -137,6 +137,7 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile.dart';
+import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 export 'package:wecord/features/chats/chat_thread_controller.dart'
@@ -7086,8 +7087,14 @@ class _ImageMessageContentState extends ConsumerState<_ImageMessageContent> {
               ),
               child: ClipRRect(
                 borderRadius: radius,
-                child: MotionSafeImage.network(
-                  url,
+                child: MotionSafeImage(
+                  image: imageDecodedFor(
+                    NetworkImage(url),
+                    box: Size(width, height),
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                    sourceWidth: widget.attachment.width,
+                    sourceHeight: widget.attachment.height,
+                  ),
                   animated: isAnimatedImage(
                     mimeType: widget.attachment.mimeType,
                   ),

@@ -6,7 +6,7 @@ const zhAgenda = <String, String>{
   'Month': '月历',
   'Needs you': '需要你处理',
   'This week': '本周',
-  'Later': '以后',
+  'agenda-bucket|Later': '以后',
   'All day': '全天',
   'Scheduled message': '定时消息',
   'Nothing planned': '没有安排',

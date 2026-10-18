@@ -544,7 +544,7 @@ String _iconName(String key) {
   return switch (key) {
     'work' => tr('Work'),
     'home' => tr('House'),
-    'people' => tr('People'),
+    'people' => trIn('folder-icon', 'People'),
     'chat' => tr('Chat'),
     'star' => tr('Star'),
     'heart' => tr('Heart'),

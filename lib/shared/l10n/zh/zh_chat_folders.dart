@@ -53,7 +53,7 @@ const zhChatFolders = <String, String>{
   'Folder': '分组',
   'Work': '工作',
   'House': '家',
-  'People': '人群',
+  'folder-icon|People': '人群',
   'Heart': '爱心',
   'School': '学校',
   'Games': '游戏',

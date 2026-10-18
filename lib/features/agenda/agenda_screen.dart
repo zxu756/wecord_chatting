@@ -119,7 +119,7 @@ String _bucketTitle(AgendaBucket bucket) => switch (bucket) {
   AgendaBucket.today => tr('Today'),
   AgendaBucket.tomorrow => tr('Tomorrow'),
   AgendaBucket.thisWeek => tr('This week'),
-  AgendaBucket.later => tr('Later'),
+  AgendaBucket.later => trIn('agenda-bucket', 'Later'),
 };
 
 class _AgendaList extends ConsumerWidget {

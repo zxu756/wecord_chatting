@@ -33,9 +33,9 @@ const zhQuietHours = <String, String>{
       '选择免打扰开始的日子。跨过午夜的时段会在次日早晨结束。',
   'Uses the time zone of your devices: {zone}.': '按你设备所在的时区计算：{zone}。',
   'Still notify me about': '以下情况仍然提醒我',
-  'Starred friends': '星标朋友',
+  'Starred friends': '星标好友',
   'Mentions of me': '提到我的消息',
-  'Calls': '来电',
+  'Calls': '通话',
   'Important contacts': '重要联系人',
   'Friends you always hear from': '始终会收到其消息的朋友',
   'Messages still arrive in Notifications. Do Not Disturb and muted chats stay quiet, even for these.':

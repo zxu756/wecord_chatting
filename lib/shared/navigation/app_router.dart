@@ -377,6 +377,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AdminConsoleScreen.path,
             builder: (context, state) => const AdminConsoleScreen(),
+          ),
           GoRoute(
             path: AgendaScreen.path,
             builder: (context, state) => const AgendaScreen(),

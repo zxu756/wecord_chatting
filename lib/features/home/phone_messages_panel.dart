@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chat_folders/chat_folder_rules.dart';
+import 'package:wecord/features/chat_folders/chat_folder_strip.dart';
+import 'package:wecord/features/chat_folders/chat_folders_repository.dart';
+import 'package:wecord/features/chat_folders/folded_folder_row.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
@@ -65,6 +69,16 @@ class PhoneMessagesPanel extends ConsumerWidget {
       ...friends.where((friend) => onlineIds.contains(friend.id)),
       ...friends.where((friend) => !onlineIds.contains(friend.id)),
     ];
+    // The folder strip filters the list; under All, the folded folder's
+    // chats show as one row.
+    final folders = ref.watch(chatFoldersProvider).value ?? const [];
+    final selectedFolder = ref.watch(effectiveChatFolderSelectionProvider);
+    final entries = chatListEntries(
+      chats: chats,
+      folders: folders,
+      selected: selectedFolder,
+      userId: currentUserId,
+    );
 
     return CustomScrollView(
       key: const ValueKey('phone-messages-list'),
@@ -112,6 +126,7 @@ class PhoneMessagesPanel extends ConsumerWidget {
             ),
           ),
         ),
+        const SliverToBoxAdapter(child: ChatFolderStrip()),
         SliverToBoxAdapter(
           child: SizedBox(
             // 58 tile + the label, which grows with the text size.
@@ -146,13 +161,22 @@ class PhoneMessagesPanel extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           sliver: SliverList.separated(
-            itemCount: chats.length,
+            itemCount: entries.length,
             separatorBuilder: (context, index) => const SizedBox(height: 2),
-            itemBuilder: (context, index) => PhoneConversationRow(
-              conversation: chats[index],
-              currentUserId: currentUserId,
-              presence: presence(chats[index].directUserId),
-            ),
+            itemBuilder: (context, index) => switch (entries[index]) {
+              ConversationEntry(:final conversation) => PhoneConversationRow(
+                conversation: conversation,
+                currentUserId: currentUserId,
+                presence: presence(conversation.directUserId),
+              ),
+              final FoldedEntry folded => FoldedFolderRow(
+                entry: folded,
+                currentUserId: currentUserId,
+                onOpen: () => ref
+                    .read(chatFolderSelectionProvider.notifier)
+                    .select(folded.folder.id),
+              ),
+            },
           ),
         ),
         if (conversations.isLoading && directChats.isEmpty)
@@ -170,6 +194,13 @@ class PhoneMessagesPanel extends ConsumerWidget {
                 tr('No conversations yet'),
                 style: theme.textTheme.bodyMedium?.copyWith(color: c.muted),
               ),
+            ),
+          )
+        else if (entries.isEmpty)
+          SliverToBoxAdapter(
+            child: ChatFolderEmptyNote(
+              selected: selectedFolder,
+              folders: folders,
             ),
           ),
         SliverToBoxAdapter(child: SizedBox(height: bottomInset + 8)),

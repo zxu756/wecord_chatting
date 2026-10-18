@@ -15,6 +15,10 @@ class WeCordChip extends StatelessWidget {
     this.count,
     this.onPaper = false,
     this.height = 34,
+    this.onLongPress,
+    this.trailing,
+    this.semanticLabel,
+    this.hint,
     super.key,
   });
 
@@ -26,6 +30,19 @@ class WeCordChip extends StatelessWidget {
   final bool onPaper;
   final double height;
 
+  /// Held (or right-clicked) for more, like editing a folder.
+  final VoidCallback? onLongPress;
+
+  /// Shown after the label (a gray count pill, a red dot).
+  final Widget? trailing;
+
+  /// What a screen reader says instead of the label and the visible count;
+  /// use it when [trailing] carries meaning.
+  final String? semanticLabel;
+
+  /// What the chip does, read after its label.
+  final String? hint;
+
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
@@ -34,6 +51,15 @@ class WeCordChip extends StatelessWidget {
     final count = this.count;
     return WeCordPressable(
       selected: selected,
+      semanticLabel: semanticLabel,
+      excludeSemantics: semanticLabel != null,
+      hint: hint,
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              WeCordHaptics.light();
+              onLongPress!();
+            },
       onPressed: onPressed == null
           ? null
           : () {
@@ -70,6 +96,7 @@ class WeCordChip extends StatelessWidget {
                   color: foreground,
                 ),
               ),
+              if (trailing != null) ...[const SizedBox(width: 6), trailing!],
             ],
           ),
         );

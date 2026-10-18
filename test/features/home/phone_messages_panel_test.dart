@@ -240,6 +240,10 @@ void main() {
   testWidgets('labels voice messages, images, videos, files and calls', (
     tester,
   ) async {
+    // Tall enough for every row under the folder strip.
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     ConversationSummary chat(String id, MessageType type, String body) {
       return ConversationSummary(
         id: id,

@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/presence/presence_heartbeat.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/app_visibility.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>((ref) {
@@ -238,7 +240,7 @@ class SupabasePresenceRepository implements PresenceRepository {
 }
 
 class SupabasePresenceDataSource implements PresenceDataSource {
-  const SupabasePresenceDataSource(this._client);
+  const SupabasePresenceDataSource(this._client, {this.visible});
 
   static const channelName = 'online-users';
 
@@ -246,6 +248,10 @@ class SupabasePresenceDataSource implements PresenceDataSource {
   static const heartbeatInterval = Duration(minutes: 2);
 
   final SupabaseClient _client;
+
+  /// Whether the app can be seen; the heartbeat only runs while it can
+  /// (see [PresenceHeartbeat]). The app's own lifecycle when null.
+  final ValueListenable<bool>? visible;
 
   @override
   Future<Map<String, dynamic>?> settings(String userId) {
@@ -270,10 +276,10 @@ class SupabasePresenceDataSource implements PresenceDataSource {
     late StreamController<Map<String, PresenceStatus>> controller;
     var subscribed = false;
     var tracking = false;
-    Timer? heartbeat;
 
     // Discovery counts members online from these heartbeats (see
-    // touch_presence); older servers without it just fail quietly.
+    // touch_presence); older servers without it just fail quietly. They
+    // only run while the app can be seen.
     void beat(bool online) {
       unawaited(
         _client
@@ -282,13 +288,11 @@ class SupabasePresenceDataSource implements PresenceDataSource {
       );
     }
 
-    void stopBeating() {
-      if (heartbeat != null) {
-        heartbeat?.cancel();
-        heartbeat = null;
-        beat(false);
-      }
-    }
+    final heartbeat = PresenceHeartbeat(
+      beat: beat,
+      visible: visible ?? AppVisibility.instance.visible,
+      interval: heartbeatInterval,
+    );
 
     void emit() {
       if (controller.isClosed) {
@@ -309,14 +313,11 @@ class SupabasePresenceDataSource implements PresenceDataSource {
           tracking = false;
           unawaited(channel.untrack());
         }
-        stopBeating();
+        heartbeat.wanted = false;
         return;
       }
       tracking = true;
-      if (heartbeat == null) {
-        beat(true);
-        heartbeat = Timer.periodic(heartbeatInterval, (_) => beat(true));
-      }
+      heartbeat.wanted = true;
       unawaited(
         channel.track({
           'user_id': currentUserId,
@@ -348,7 +349,7 @@ class SupabasePresenceDataSource implements PresenceDataSource {
       },
       onCancel: () async {
         ownStatus.removeListener(sync);
-        stopBeating();
+        heartbeat.dispose();
         if (tracking) {
           await channel.untrack();
         }

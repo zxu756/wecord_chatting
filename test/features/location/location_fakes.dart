@@ -265,8 +265,12 @@ class FakeLocationRepository implements LocationRepository {
     return 'location-message-${sentLocations.length}';
   }
 
+  /// How many times the list of shares was read.
+  var listSharesCalls = 0;
+
   @override
   Future<List<LiveShare>> listShares(String conversationId) async {
+    listSharesCalls += 1;
     final now = clock.now().toUtc();
     return [
       for (final share in shares)

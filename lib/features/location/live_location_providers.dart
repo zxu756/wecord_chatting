@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/location/live_location_sharer.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/location/location_repository.dart';
+import 'package:wecord/shared/app_visibility.dart';
 
 /// How often the list of shares is checked again with the server while a
 /// chat is open: someone blocked, a card taken down or a share ended without
-/// a message all show up here at the latest.
+/// a message all show up here at the latest. The check rests while the app
+/// is hidden and runs at once when it can be seen again.
 const liveSharesRefresh = Duration(seconds: 45);
 
 /// The shares running in a chat that this person may see, kept up to date:
@@ -62,8 +64,39 @@ final liveSharesProvider = StreamProvider.autoDispose
         }
       }
 
+      final visible = ref.watch(appVisibleProvider);
+
+      void startPolling() {
+        poll?.cancel();
+        poll = Timer.periodic(liveSharesRefresh, (_) => unawaited(load()));
+      }
+
+      // Nobody is looking while the app is hidden: no polling then. A share
+      // still ends on time (the expiry timer is not paused, and the list is
+      // worked out again with the clock when the app is back) and anything
+      // missed is read at once.
+      var wasVisible = visible.value;
+      void visibilityChanged() {
+        final nowVisible = visible.value;
+        if (nowVisible == wasVisible) {
+          return;
+        }
+        wasVisible = nowVisible;
+        if (nowVisible) {
+          emit();
+          unawaited(load());
+          startPolling();
+        } else {
+          poll?.cancel();
+          poll = null;
+        }
+      }
+
       unawaited(load());
-      poll = Timer.periodic(liveSharesRefresh, (_) => unawaited(load()));
+      if (wasVisible) {
+        startPolling();
+      }
+      visible.addListener(visibilityChanged);
       final changes = repository.sharesChanged(conversationId).listen((_) {
         debounce?.cancel();
         debounce = Timer(
@@ -74,6 +107,7 @@ final liveSharesProvider = StreamProvider.autoDispose
 
       ref.onDispose(() {
         closed = true;
+        visible.removeListener(visibilityChanged);
         expiry?.cancel();
         poll?.cancel();
         debounce?.cancel();

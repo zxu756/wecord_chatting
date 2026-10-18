@@ -185,6 +185,53 @@ void main() {
       );
     });
 
+    test('screens hear about who is online, not about repeated syncs or '
+        'status changes', () async {
+      var statusNotifications = 0;
+      var onlineNotifications = 0;
+      final statuses = container.listen(
+        presenceStatusesProvider,
+        (previous, next) => statusNotifications++,
+      );
+      final online = container.listen(
+        onlineUserIdsProvider,
+        (previous, next) => onlineNotifications++,
+      );
+      addTearDown(statuses.close);
+      addTearDown(online.close);
+      authState.add(const AuthUser(id: 'user-1'));
+      await pumpEventQueue();
+
+      final here = {
+        'user-1': PresenceStatus.online,
+        'user-2': PresenceStatus.online,
+      };
+      presence.online.add(here);
+      await pumpEventQueue(times: 50);
+      final afterFirst = (statusNotifications, onlineNotifications);
+
+      // Every join, leave and re-announce is followed by a sync, most of
+      // them with nothing new.
+      for (var i = 0; i < 5; i++) {
+        presence.online.add({...here});
+        await pumpEventQueue(times: 50);
+      }
+      expect((statusNotifications, onlineNotifications), afterFirst);
+
+      // Someone going Idle changes the statuses, not who is online.
+      presence.online.add({...here, 'user-2': PresenceStatus.idle});
+      await pumpEventQueue(times: 50);
+      expect(statusNotifications, afterFirst.$1 + 1);
+      expect(onlineNotifications, afterFirst.$2);
+      expect(container.read(onlineUserIdsProvider).value, {'user-1', 'user-2'});
+
+      // Someone leaving does.
+      presence.online.add({'user-1': PresenceStatus.online});
+      await pumpEventQueue(times: 50);
+      expect(onlineNotifications, greaterThan(afterFirst.$2));
+      expect(container.read(onlineUserIdsProvider).value, {'user-1'});
+    });
+
     test('the broadcast status follows the settings and idleness', () async {
       presence.settings = const PresenceSettings();
       final subscription = container.listen(

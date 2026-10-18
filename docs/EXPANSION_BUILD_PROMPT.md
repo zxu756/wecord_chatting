@@ -22,8 +22,8 @@
 ### 第一步：读懂计划（不要跳过）
 
 0. 先确认 `docs/EXPANSION_ROADMAP.md` 已经在 `wecord-foundation` 上。如果不在：
-   - 路线图是在分支 `worktree-expansion-roadmap` 上写的，已推送到 GitHub。
-   - 先执行 `git fetch origin && git merge --no-ff origin/worktree-expansion-roadmap -m "Merge expansion roadmap"`，再 `git push origin wecord-foundation`。
+   - 路线图写在本地分支 `worktree-expansion-roadmap` 上，没有推送到 GitHub。
+   - 在 `/Users/xelieee/wecord_chatting` 执行 `git merge --no-ff worktree-expansion-roadmap -m "Merge expansion roadmap"`，再 `git push origin wecord-foundation`。
    - 这一步之后，subagent `git reset --hard wecord-foundation` 才能拿到路线图。
 1. 读 `docs/EXPANSION_ROADMAP.md`：
    - 第 1 节：文档和代码的不一致；

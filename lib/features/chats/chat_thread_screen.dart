@@ -480,6 +480,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   ChatsRepository? _typingRepository;
   VoiceMessageRecorder? _voiceMessageRecorder;
   late final StateController<String?> _activeConversationController;
+
+  /// Writes the drafts to the device when this screen goes away (they are
+  /// otherwise written a moment after the typing stops).
+  late final ComposerDraftsController _draftsController;
   var _isSending = false;
   var _isPickingImage = false;
   StreamSubscription<List<XFile>>? _pasteSubscription;
@@ -596,6 +600,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
         _showWorkspace(request);
       }
     });
+    _draftsController = ref.read(composerDraftsProvider.notifier);
     unawaited(_restoreDraft());
     // Browsers hand pasted pictures and files over as events; macOS asks the
     // pasteboard when the text field is pasted into (see _pasteFilesAction).
@@ -653,6 +658,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (oldWidget.conversationId != widget.conversationId) {
       _scheduleActiveConversationUpdate(widget.conversationId);
       // Each conversation keeps its own draft (saved as it was typed).
+      unawaited(_draftsController.flush());
       _composerController.clear();
       _mentionDraft.clear();
       _emojiDraft.clear();
@@ -699,6 +705,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _typingTimer?.cancel();
     _expiryTimer?.cancel();
     _highlightTimer?.cancel();
+    unawaited(_draftsController.flush());
     if (_isTypingShared) {
       unawaited(
         _typingRepository

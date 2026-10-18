@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/notifications/quiet_hours_indicator.dart';
+import 'package:wecord/features/agenda/agenda_repository.dart';
+import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chat_folders/chat_folder_rules.dart';
 import 'package:wecord/features/chat_folders/chat_folder_strip.dart';
@@ -34,7 +36,7 @@ import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// What Home shows beside its sidebar.
-enum HomeSection { friends, inbox, saved, moments, conversation }
+enum HomeSection { friends, inbox, saved, agenda, moments, conversation }
 
 /// Home's sidebar on wide layouts: the "Messages" title with a compose
 /// button, a search field that jumps anywhere (⌘K), Friends and
@@ -178,6 +180,15 @@ class HomeSidebar extends ConsumerWidget {
                       label: tr('Saved'),
                       selected: section == HomeSection.saved,
                       onTap: () => openPage(context, SavedMessagesScreen.path),
+                    ),
+                  if (wide)
+                    SidebarNavRow(
+                      key: const ValueKey('home-agenda'),
+                      icon: Icons.event_note_outlined,
+                      label: tr('Agenda'),
+                      selected: section == HomeSection.agenda,
+                      onTap: () => openPage(context, AgendaScreen.path),
+                      badgeCount: ref.watch(agendaOverdueCountProvider),
                     ),
                   if (wide)
                     SidebarNavRow(

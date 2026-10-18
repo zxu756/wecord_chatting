@@ -522,6 +522,14 @@ enabled = true
 # as the caller before doing anything with the service role.
 verify_jwt = true
 entrypoint = "./functions/admin/index.ts"
+[functions.calendar-feed]
+enabled = true
+# Apple Calendar and Google Calendar subscribe with a plain URL and cannot
+# send a login token. The secret in the URL (192 random bits, stored only as a
+# hash, resettable in Settings) is checked inside the function, which also
+# rate-limits it. Deploy with: supabase functions deploy calendar-feed
+verify_jwt = false
+entrypoint = "./functions/calendar-feed/index.ts"
 
 [analytics]
 enabled = true

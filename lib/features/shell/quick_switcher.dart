@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
@@ -15,7 +16,7 @@ import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 /// What a quick switcher entry opens.
-enum QuickSwitchKind { direct, group, channel, circle, note }
+enum QuickSwitchKind { direct, group, channel, circle, note, agenda }
 
 /// A place the quick switcher can jump to.
 class QuickSwitchItem {
@@ -62,6 +63,29 @@ class QuickSwitchItem {
   final ConversationSummary? conversation;
   final DateTime? lastActivityAt;
   final bool unread;
+}
+
+/// The shortcut to My agenda, when [query] asks for it: at least two
+/// letters that start "Agenda" (or the same word in the interface language),
+/// or start a word in it. Not offered without a query (the list then shows
+/// recent places), for one letter, or for the `@`, `#` and `*` filters.
+QuickSwitchItem? agendaQuickSwitchItem(String query) {
+  final text = query.trim();
+  if (text.runes.length < 2 || '@#*'.contains(text[0])) {
+    return null;
+  }
+  final title = tr('Agenda');
+  final score = [
+    quickSwitchScore(text, title),
+    quickSwitchScore(text, 'Agenda'),
+  ].nonNulls.fold<int>(0, (best, score) => score > best ? score : best);
+  return score >= 700
+      ? QuickSwitchItem(
+          kind: QuickSwitchKind.agenda,
+          id: 'agenda',
+          title: title,
+        )
+      : null;
 }
 
 /// Every direct message, group, channel and circle the user can open.
@@ -217,6 +241,10 @@ Future<void> showQuickSwitcher(BuildContext context) async {
 }
 
 void openQuickSwitchItem(BuildContext context, QuickSwitchItem item) {
+  if (item.kind == QuickSwitchKind.agenda) {
+    openPage(context, AgendaScreen.path);
+    return;
+  }
   final note = item.note;
   if (note != null) {
     _openNote(context, note);
@@ -283,7 +311,10 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
       circles:
           ref.watch(circleSummariesProvider).value ?? const <CircleSummary>[],
     );
-    final found = searchQuickSwitchItems(items, _controller.text);
+    final found = [
+      ?agendaQuickSwitchItem(_controller.text),
+      ...searchQuickSwitchItems(items, _controller.text),
+    ];
     // Notes whose title matches, after the places.
     final query = _controller.text.trim();
     if (query.length >= 2 && !'@#*'.contains(query[0])) {
@@ -445,6 +476,12 @@ class _QuickSwitchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final leading = switch (item.kind) {
+      QuickSwitchKind.agenda => ThingAvatar(
+        size: 32,
+        icon: Icons.event_note_outlined,
+        color: c.raised,
+        foregroundColor: c.muted,
+      ),
       QuickSwitchKind.note => ThingAvatar(
         size: 32,
         label: item.note?.icon ?? '',
@@ -475,6 +512,7 @@ class _QuickSwitchTile extends StatelessWidget {
       QuickSwitchKind.group => tr('Group'),
       QuickSwitchKind.channel => item.subtitle ?? tr('Channel'),
       QuickSwitchKind.circle => tr('Circle'),
+      QuickSwitchKind.agenda => tr('Events, tasks and reminders'),
       QuickSwitchKind.note =>
         item.subtitle == null || item.subtitle!.trim().isEmpty
             ? tr('Note')

@@ -2,13 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/agenda/agenda_settings_screen.dart';
 import 'package:wecord/features/pat/pat_suffix_sheet.dart';
 import 'package:wecord/features/qr/my_qr_sheet.dart';
 import 'package:wecord/features/qr/qr_link_handler.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-/// Settings, under the account card: My QR code, Scan and the pat suffix.
+/// Settings, under the account card: My QR code, Scan, the pat suffix and
+/// the calendar subscription.
 class ProfileToolsGroup extends ConsumerWidget {
   const ProfileToolsGroup({super.key});
 
@@ -29,6 +31,7 @@ class ProfileToolsGroup extends ConsumerWidget {
           onTap: () => unawaited(openQrScanner(context, ref)),
         ),
         const PatSuffixRow(),
+        const AgendaSettingsRow(),
       ],
     );
   }

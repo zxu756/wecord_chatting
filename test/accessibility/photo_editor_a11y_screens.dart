@@ -11,7 +11,8 @@ import 'package:wecord/features/chats/media_send/media_tray.dart';
 import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/image_text/image_text_sheet.dart';
 import 'package:wecord/features/photo_editor/editor_model.dart';
-import 'package:wecord/features/photo_editor/editor_session.dart' show EditorTool;
+import 'package:wecord/features/photo_editor/editor_session.dart'
+    show EditorTool;
 import 'package:wecord/features/photo_editor/photo_editor_screen.dart';
 
 import '../features/chats/media_send/media_fakes.dart';
@@ -99,9 +100,10 @@ Future<void> _tray(WidgetTester tester, PhoneWorld world) async {
     ),
   );
   await tester.runAsync(
-    () => container
-        .read(mediaTrayProvider('dm-1').notifier)
-        .add([testPhoto('a.jpg'), testPhoto('b.jpg')]),
+    () => container.read(mediaTrayProvider('dm-1').notifier).add([
+      testPhoto('a.jpg'),
+      testPhoto('b.jpg'),
+    ]),
   );
   await settle(tester);
 }
@@ -121,8 +123,7 @@ Future<void> _textSheet(
         builder: (context) => Center(
           child: TextButton(
             key: const ValueKey('open-image-text'),
-            onPressed: () =>
-                showImageTextSheet(context, file: testPicture()),
+            onPressed: () => showImageTextSheet(context, file: testPicture()),
             child: const Text('open'),
           ),
         ),

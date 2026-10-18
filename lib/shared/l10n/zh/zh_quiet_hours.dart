@@ -1,0 +1,48 @@
+// Chinese for quiet hours (免打扰时段) and important contacts: the
+// Settings -> Notifications -> Quiet hours page, the moon on the bell, and
+// the "Important contact" switch on a friend's profile. 'Done', 'Off', 'None',
+// '1 person' and '{count} people' are already translated elsewhere.
+const zhQuietHours = <String, String>{
+  'Quiet hours': '免打扰时段',
+  'No push notifications in this window': '这段时间内不推送通知',
+  'Quiet hours are on': '免打扰时段已开启',
+  'Schedule': '时间安排',
+  'Quiet hours start': '开始时间',
+  'Quiet hours end': '结束时间',
+  'The next morning': '次日早晨',
+  'Repeat': '重复',
+  'Days quiet hours start': '免打扰开始的日子',
+  'Every day': '每天',
+  'Weekdays': '工作日',
+  'Weekends': '周末',
+  'Mon': '周一',
+  'Tue': '周二',
+  'Wed': '周三',
+  'Thu': '周四',
+  'Fri': '周五',
+  'Sat': '周六',
+  'Sun': '周日',
+  'Monday': '星期一',
+  'Tuesday': '星期二',
+  'Wednesday': '星期三',
+  'Thursday': '星期四',
+  'Friday': '星期五',
+  'Saturday': '星期六',
+  'Sunday': '星期日',
+  'Pick the days quiet hours start. A window that goes past midnight ends the next morning.':
+      '选择免打扰开始的日子。跨过午夜的时段会在次日早晨结束。',
+  'Uses the time zone of your devices: {zone}.': '按你设备所在的时区计算：{zone}。',
+  'Still notify me about': '以下情况仍然提醒我',
+  'Starred friends': '星标朋友',
+  'Mentions of me': '提到我的消息',
+  'Calls': '来电',
+  'Important contacts': '重要联系人',
+  'Friends you always hear from': '始终会收到其消息的朋友',
+  'Messages still arrive in Notifications. Do Not Disturb and muted chats stay quiet, even for these.':
+      '消息仍会出现在通知页。“请勿打扰”和已静音的聊天依然保持安静，对以上情况也一样。',
+  'You hear from these friends even in quiet hours. Only you can see this list.':
+      '即使在免打扰时段，也会收到这些朋友的消息。只有你能看到这份名单。',
+  'Add friends first to choose important contacts.': '先添加好友，才能选择重要联系人。',
+  'Important contact': '重要联系人',
+  'Notify me even in quiet hours.': '免打扰时段也提醒我。',
+};

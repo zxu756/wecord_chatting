@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/notifications/quiet_hours_indicator.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
@@ -154,6 +155,7 @@ class HomeSidebar extends ConsumerWidget {
                       selected: section == HomeSection.inbox,
                       onTap: () => openPage(context, InboxScreen.path),
                       badgeCount: unreadInbox,
+                      trailing: const QuietHoursMoon(size: 18),
                     ),
                   if (wide)
                     SidebarNavRow(

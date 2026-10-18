@@ -45,6 +45,7 @@ import 'package:wecord/shared/l10n/zh/zh_polish.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 import 'package:wecord/shared/l10n/zh/zh_pwa.dart';
 import 'package:wecord/shared/l10n/zh/zh_qr_pat.dart';
+import 'package:wecord/shared/l10n/zh/zh_quiet_hours.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_chat.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_circles.dart';
@@ -115,6 +116,7 @@ const zhAreas = <Map<String, String>>[
   zhDataExportMore,
   zhAudit,
   zhPwa,
+  zhQuietHours,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

@@ -11,7 +11,10 @@ import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
+import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/notifications/notification_settings.dart';
+import 'package:wecord/features/notifications/notification_settings_controller.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -39,6 +42,14 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
     doNotDisturb: () =>
         ref.read(presenceSettingsProvider).value?.status ==
         PresenceStatus.doNotDisturb,
+    quietSettings: () => ref.read(notificationSettingsProvider).value,
+    starredFriendIds: () async {
+      try {
+        return (await ref.read(friendTagsRepositoryProvider).load()).starred;
+      } catch (_) {
+        return const <String>{};
+      }
+    },
   );
   ref.onDispose(coordinator.dispose);
   return coordinator;
@@ -48,7 +59,9 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
 /// conversation list), and reminds the current user of events they are
 /// interested in [CircleEvent.reminderLead] before they start, and when a
 /// message reminder (see "Remind me") comes due. Nothing is shown while
-/// the user is in Do Not Disturb.
+/// the user is in Do Not Disturb, and in quiet hours only what the person
+/// lets through (calls, @mentions of them, starred friends and important
+/// contacts) is.
 class NotificationCoordinator {
   NotificationCoordinator({
     required this._authRepository,
@@ -60,6 +73,8 @@ class NotificationCoordinator {
     this._remindersRepository,
     this._onRemindersChanged,
     bool Function()? doNotDisturb,
+    this._quietSettings,
+    this._starredFriendIds,
     DateTime Function()? now,
     Stream<void>? pollTicks,
     bool Function()? isInForeground,
@@ -80,6 +95,12 @@ class NotificationCoordinator {
   final LocalNotificationService _notificationService;
   final String? Function() _activeConversationId;
   final bool Function() _doNotDisturb;
+
+  /// The person's quiet hours, when there are any to follow.
+  final NotificationSettings? Function()? _quietSettings;
+  final Future<Set<String>> Function()? _starredFriendIds;
+  Set<String> _starredCache = const {};
+  DateTime? _starredFetchedAt;
   final DateTime Function() _now;
   final Stream<void> _pollTicks;
   final bool Function() _isInForeground;
@@ -176,7 +197,10 @@ class NotificationCoordinator {
         return;
       }
       // Silenced, not postponed: the reminder waits in Notifications.
-      if (_disposed || !preferences.enabled || _doNotDisturb()) {
+      if (_disposed ||
+          !preferences.enabled ||
+          _doNotDisturb() ||
+          _inQuietHours()) {
         return;
       }
       for (final reminder in due) {
@@ -284,6 +308,7 @@ class NotificationCoordinator {
         _remindedEventKeys.add(_reminderKey(reminder));
         // Silenced, not postponed: it doesn't pop up once DND ends.
         if (_doNotDisturb() ||
+            _inQuietHours() ||
             reminder.notificationLevel == CircleNotificationLevel.none ||
             isCircleMutedAt(reminder.mutedUntil, now.toUtc())) {
           continue;
@@ -304,6 +329,52 @@ class NotificationCoordinator {
     } finally {
       _checkingEventReminders = false;
     }
+  }
+
+  /// Whether quiet hours are on right now.
+  bool _inQuietHours() {
+    final settings = _quietSettings?.call();
+    return settings != null && settings.isQuietAt(_now().toLocal());
+  }
+
+  /// Whether quiet hours hold back the notification for the latest message
+  /// of [conversation]: they are on and the message is not one the person
+  /// lets through. Like Do Not Disturb, it is silenced, not postponed.
+  Future<bool> _heldByQuietHours(ConversationSummary conversation) async {
+    final settings = _quietSettings?.call();
+    if (settings == null || !settings.isQuietAt(_now().toLocal())) {
+      return false;
+    }
+    final sender = conversation.lastMessageSenderId;
+    final starred =
+        settings.allowStarred &&
+            sender != null &&
+            !settings.vipUserIds.contains(sender)
+        ? await _starredFriends()
+        : const <String>{};
+    return !settings.breaksThrough(
+      QuietMessage(
+        senderId: sender,
+        mentionsMe: _mentionsCurrentUser(conversation),
+      ),
+      starredFriendIds: starred,
+    );
+  }
+
+  /// The friends the person starred, asked again at most every 5 minutes.
+  Future<Set<String>> _starredFriends() async {
+    final fetch = _starredFriendIds;
+    if (fetch == null) {
+      return const {};
+    }
+    final now = _now();
+    final fetchedAt = _starredFetchedAt;
+    if (fetchedAt == null ||
+        now.difference(fetchedAt) >= const Duration(minutes: 5)) {
+      _starredCache = await fetch();
+      _starredFetchedAt = now;
+    }
+    return _starredCache;
   }
 
   String _reminderKey(CircleEventReminder reminder) {
@@ -428,6 +499,12 @@ class NotificationCoordinator {
         startupNotificationCutoff: startupNotificationCutoff,
       )) {
         continue;
+      }
+      if (await _heldByQuietHours(conversation)) {
+        continue;
+      }
+      if (_disposed) {
+        return;
       }
       try {
         await _notificationService.showMessageNotification(

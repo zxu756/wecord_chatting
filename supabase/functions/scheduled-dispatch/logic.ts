@@ -14,6 +14,9 @@ export interface PushTarget {
   tag?: string;
   /// Where tapping opens the app, when it is not a chat (Moments).
   url?: string;
+  /// The message a push is about, when it is one: quiet hours let calls,
+  /// @mentions and starred or important senders through.
+  message_id?: string;
 }
 
 /// A row of claim_moments_pushes.

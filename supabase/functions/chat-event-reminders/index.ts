@@ -9,6 +9,7 @@
 // Answers {created, pushed, removed}. See docs/chat-events.md.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
+import { dropQuietPushes } from "../push/quiet_hours.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import {
   isSchedulerToken,
@@ -53,10 +54,16 @@ Deno.serve(async (request) => {
   });
   if (claimed.error) return json({ error: "claim_failed" }, 500);
 
+  // Quiet hours hold back the pushes (the reminders are in the inbox).
+  const audible = await dropQuietPushes(
+    admin,
+    (claimed.data ?? []) as ReminderTarget[],
+    Math.floor(Date.now() / 1000),
+  );
   // Times in an event's title are written for each subscriber's zone.
   const targets = await writeTimesForTargets(
     admin,
-    (claimed.data ?? []) as ReminderTarget[],
+    audible,
     Math.floor(Date.now() / 1000),
   );
   const gone: string[] = [];

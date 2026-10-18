@@ -17,6 +17,7 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { dropQuietPushes } from "../push/quiet_hours.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import { cleanUpExpired } from "../expire-messages/cleanup.ts";
@@ -80,7 +81,12 @@ Deno.serve(async (request) => {
       target_message_id: row.message_id,
       caller_id: row.sender_id,
     });
-    targets.push(...((data ?? []) as PushTarget[]));
+    targets.push(
+      ...((data ?? []) as PushTarget[]).map((target) => ({
+        ...target,
+        message_id: row.message_id,
+      })),
+    );
   }
 
   // Messages the AI guard released (allowed, not checked, flagged in flag
@@ -104,7 +110,12 @@ Deno.serve(async (request) => {
       target_message_id: row.message_id,
       caller_id: row.sender_id,
     });
-    targets.push(...((data ?? []) as PushTarget[]));
+    targets.push(
+      ...((data ?? []) as PushTarget[]).map((target) => ({
+        ...target,
+        message_id: row.message_id,
+      })),
+    );
   }
 
   // Reminders that came due: "Reminder" / "{sender}: {text}".
@@ -155,10 +166,17 @@ Deno.serve(async (request) => {
     // Tried again on the next tick.
   }
 
+  // Quiet hours hold back what is not for the recipient's exceptions (the
+  // inbox entries were written above and do not depend on this).
+  const audible = await dropQuietPushes(
+    admin,
+    targets,
+    Math.floor(Date.now() / 1000),
+  );
   // Times in the text are written for each subscriber's zone and language.
   const ready = await writeTimesForTargets(
     admin,
-    targets,
+    audible,
     Math.floor(Date.now() / 1000),
   );
   const gone: string[] = [];

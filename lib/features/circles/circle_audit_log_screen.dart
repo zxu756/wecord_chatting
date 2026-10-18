@@ -445,6 +445,7 @@ IconData circleAuditGroupIcon(CircleAuditActionGroup group) {
     CircleAuditActionGroup.event => Icons.event_outlined,
     CircleAuditActionGroup.webhook => Icons.smart_toy_outlined,
     CircleAuditActionGroup.discovery => Icons.explore_outlined,
+    CircleAuditActionGroup.join => Icons.how_to_reg_outlined,
     _ => Icons.history,
   };
 }
@@ -520,6 +521,10 @@ IconData circleAuditIcon(String action) {
     'guard_approve' => Icons.check_circle_outline,
     'guard_remove' => Icons.delete_outline,
     'onboarding_update' => Icons.rule,
+    'join_request_approve' => Icons.how_to_reg_outlined,
+    'join_request_deny' => Icons.person_off_outlined,
+    'join_settings_update' => Icons.how_to_reg_outlined,
+    'invite_skip_review' => Icons.add_link,
     'discovery_update' => Icons.explore_outlined,
     'edit_window_update' => Icons.history_toggle_off,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
@@ -810,6 +815,24 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       ),
       _ => (tr('{actor} removed the edit time limit'), {}),
     },
+    'join_request_approve' => (
+      tr('{actor} approved the request of {target} to join'),
+      {},
+    ),
+    'join_request_deny' => (
+      tr('{actor} turned down the request of {target} to join'),
+      {},
+    ),
+    'join_settings_update' => switch (_newValue(changes['join_mode'])) {
+      'apply' => (tr('{actor} made the circle apply to join'), {}),
+      'invite_only' => (tr('{actor} made the circle invite only'), {}),
+      'open' => (tr('{actor} opened the circle to everyone'), {}),
+      _ => (tr('{actor} updated the join questions'), {}),
+    },
+    'invite_skip_review' => (
+      tr('{actor} made invite {target} skip review'),
+      {},
+    ),
     'discovery_update' => switch (_newValue(changes['is_public'])) {
       true => (tr('{actor} made the circle public'), {}),
       false => (tr('{actor} made the circle private'), {}),

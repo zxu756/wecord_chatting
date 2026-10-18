@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,9 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/features/circles/join_requests/join_gate.dart';
+import 'package:wecord/features/circles/join_requests/join_request_models.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_invite.dart';
@@ -30,7 +35,11 @@ class CircleInviteScreen extends ConsumerStatefulWidget {
 
 class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
   var _isJoining = false;
+  var _isCancelling = false;
   String? _errorText;
+
+  /// Answers to the circle's questions, by question id.
+  var _answers = <String, String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +69,20 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
               ),
               data: (preview) {
                 final circle = preview.circle;
+                final joinKey = (
+                  circleId: circle?.id ?? '',
+                  inviteCode: widget.code,
+                );
+                // Where the person stands: null while unknown, then the
+                // button joins the way it always did.
+                final joinState = circle == null || preview.alreadyMember
+                    ? null
+                    : ref.watch(circleJoinStateProvider(joinKey)).value;
+                final plan = planJoinButton(
+                  joinState,
+                  viaInvite: true,
+                  now: DateTime.now().toUtc(),
+                );
                 if (circle == null || !preview.canJoin) {
                   return CircleEmptyState(
                     icon: Icons.link_off_rounded,
@@ -154,6 +177,10 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                                 ),
                               ],
                             ),
+                            if (joinState != null) ...[
+                              const SizedBox(height: 16),
+                              _joinPanel(joinState, joinKey),
+                            ],
                             if (_errorText != null) ...[
                               const SizedBox(height: 12),
                               Text(
@@ -178,11 +205,27 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                                 : WeCordButton(
                                     expand: true,
                                     size: WeCordButtonSize.large,
-                                    variant: WeCordButtonVariant.accent,
-                                    onPressed: _isJoining ? null : _join,
+                                    variant: plan.enabled
+                                        ? WeCordButtonVariant.accent
+                                        : WeCordButtonVariant.secondary,
+                                    onPressed:
+                                        _isJoining ||
+                                            !plan.enabled ||
+                                            (plan.kind ==
+                                                    JoinButtonKind
+                                                        .sendRequest &&
+                                                !joinAnswersComplete(
+                                                  joinState!.questions,
+                                                  _answers,
+                                                ))
+                                        ? null
+                                        : () => _join(joinKey, joinState),
                                     label: _isJoining
-                                        ? tr('Joining…')
-                                        : tr('Join circle'),
+                                        ? (plan.kind ==
+                                                  JoinButtonKind.sendRequest
+                                              ? tr('Sending…')
+                                              : tr('Joining…'))
+                                        : plan.label,
                                   ),
                           ],
                         ),
@@ -198,28 +241,104 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
     );
   }
 
-  Future<void> _join() async {
+  /// The questions to answer, a request already waiting, or a refusal.
+  Widget _joinPanel(CircleJoinState state, JoinStateKey key) {
+    if (state.isPending || state.isDenied || state.closed) {
+      return JoinStatusPanel(
+        state: state,
+        viaInvite: true,
+        cancelling: _isCancelling,
+        onCancel: () => unawaited(_cancelRequest(key)),
+      );
+    }
+    if (!state.needsReview) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          state.questions.isEmpty
+              ? tr('The moderators of this circle approve everyone who joins.')
+              : tr(
+                  'The moderators of this circle approve everyone who joins. '
+                  'Answer their questions to send your request.',
+                ),
+          style: TextStyle(
+            fontSize: 13.5,
+            height: 1.4,
+            color: context.tokens.colors.muted,
+          ),
+        ),
+        if (state.questions.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          JoinQuestionsForm(
+            questions: state.questions,
+            enabled: !_isJoining,
+            onChanged: (answers) => setState(() => _answers = answers),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _cancelRequest(JoinStateKey key) async {
+    setState(() => _isCancelling = true);
+    try {
+      await ref.read(joinRequestsRepositoryProvider).cancel(key.circleId);
+    } on Object {
+      // The next look at the state shows where it stands.
+    }
+    ref
+      ..invalidate(circleJoinStateProvider(key))
+      ..invalidate(myJoinRequestsProvider);
+    if (mounted) {
+      setState(() => _isCancelling = false);
+    }
+  }
+
+  Future<void> _join(JoinStateKey key, CircleJoinState? state) async {
     setState(() {
       _isJoining = true;
       _errorText = null;
     });
     try {
-      final circleId = await ref
-          .read(circlesRepositoryProvider)
-          .acceptInvite(widget.code);
-      ref.invalidate(circleSummariesProvider);
+      final reviewed = state?.needsReview ?? false;
+      final circleId = reviewed
+          ? await ref
+                .read(joinRequestsRepositoryProvider)
+                .acceptInvite(widget.code, answers: _answers)
+          : await ref.read(circlesRepositoryProvider).acceptInvite(widget.code);
+      ref
+        ..invalidate(circleSummariesProvider)
+        ..invalidate(myJoinRequestsProvider);
+      if (reviewed) {
+        // A request was made, not a membership: show it waiting (unless the
+        // server let the person straight in).
+        ref.invalidate(circleJoinStateProvider(key));
+        final after = await ref.read(circleJoinStateProvider(key).future);
+        if (!mounted) return;
+        if (after?.isMember ?? false) {
+          context.go('${CircleRoutes.path}/$circleId');
+          return;
+        }
+        setState(() => _isJoining = false);
+        return;
+      }
       if (mounted) context.go('${CircleRoutes.path}/$circleId');
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _isJoining = false;
-        _errorText = '$error'.contains('Banned from this circle')
-            ? tr("You're banned from this circle.")
-            : tr('Could not join this circle. {error}', {
-                'error': errorText(error),
-              });
+        _errorText =
+            joinErrorMessage(error) ??
+            tr('Could not join this circle. {error}', {
+              'error': errorText(error),
+            });
       });
-      ref.invalidate(circleInvitePreviewProvider(widget.code));
+      ref
+        ..invalidate(circleInvitePreviewProvider(widget.code))
+        ..invalidate(circleJoinStateProvider(key));
     }
   }
 }

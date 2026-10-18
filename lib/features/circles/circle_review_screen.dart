@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/reports/circle_message_reports_section.dart';
 import 'package:wecord/features/reports/message_reports.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -39,84 +40,90 @@ class CircleReviewScreen extends ConsumerWidget {
         const <CircleMessageReport>[];
     return CirclePageScaffold(
       title: tr('Review'),
-      body: reviews.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => CircleEmptyState(
-          icon: Icons.fact_check_outlined,
-          title: tr('Could not load the review queue.'),
-          action: WeCordButton(
-            label: tr('Try again'),
-            onPressed: () {
-              ref.invalidate(messageReviewsProvider(circleId));
-              ref.invalidate(circleMessageReportsProvider(circleId));
-            },
+      // The circle's join requests sit above the reports and the AI guard's
+      // queue.
+      body: JoinRequestsHost(
+        circleId: circleId,
+        now: now,
+        child: reviews.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => CircleEmptyState(
+            icon: Icons.fact_check_outlined,
+            title: tr('Could not load the review queue.'),
+            action: WeCordButton(
+              label: tr('Try again'),
+              onPressed: () {
+                ref.invalidate(messageReviewsProvider(circleId));
+                ref.invalidate(circleMessageReportsProvider(circleId));
+              },
+            ),
           ),
-        ),
-        data: (items) => items.isEmpty && reports.isEmpty
-            ? CircleEmptyState(
-                key: const ValueKey('review-empty'),
-                icon: Icons.verified_user_outlined,
-                title: tr('Nothing to review'),
-                message: tr(
-                  'Messages the AI guard holds back or flags, and messages '
-                  'people report, show up here.',
-                ),
-              )
-            : ListView(
-                padding: circlePagePadding(context),
-                children: [
-                  if (reports.isNotEmpty) ...[
-                    ReviewSectionHeader(
-                      key: const ValueKey('review-reports-header'),
-                      title: tr('User reports'),
-                      count: reports.length,
-                    ),
-                    const SizedBox(height: 4),
-                    for (final report in reports) ...[
-                      const SizedBox(height: 8),
-                      MessageReportCard(
-                        key: ValueKey('report-${report.id}'),
-                        report: report,
-                        circleId: circleId,
-                        now: now,
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                  ],
-                  if (items.isNotEmpty) ...[
-                    if (reports.isNotEmpty)
+          data: (items) => items.isEmpty && reports.isEmpty
+              ? CircleEmptyState(
+                  key: const ValueKey('review-empty'),
+                  icon: Icons.verified_user_outlined,
+                  title: tr('Nothing to review'),
+                  message: tr(
+                    'Messages the AI guard holds back or flags, and messages '
+                    'people report, show up here.',
+                  ),
+                )
+              : ListView(
+                  padding: circlePagePadding(context),
+                  children: [
+                    if (reports.isNotEmpty) ...[
                       ReviewSectionHeader(
-                        key: const ValueKey('review-guard-header'),
-                        title: tr('Held or flagged by the AI guard'),
-                        count: items.length,
+                        key: const ValueKey('review-reports-header'),
+                        title: tr('User reports'),
+                        count: reports.length,
                       ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
-                      child: Text(
-                        tr(
-                          'Held messages are hidden from everyone but their '
-                          'author until you approve them. Flagged messages '
-                          'are already visible.',
+                      const SizedBox(height: 4),
+                      for (final report in reports) ...[
+                        const SizedBox(height: 8),
+                        MessageReportCard(
+                          key: ValueKey('report-${report.id}'),
+                          report: report,
+                          circleId: circleId,
+                          now: now,
                         ),
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          color: context.tokens.colors.muted,
-                          height: 1.4,
+                      ],
+                      const SizedBox(height: 16),
+                    ],
+                    if (items.isNotEmpty) ...[
+                      if (reports.isNotEmpty)
+                        ReviewSectionHeader(
+                          key: const ValueKey('review-guard-header'),
+                          title: tr('Held or flagged by the AI guard'),
+                          count: items.length,
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+                        child: Text(
+                          tr(
+                            'Held messages are hidden from everyone but their '
+                            'author until you approve them. Flagged messages '
+                            'are already visible.',
+                          ),
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: context.tokens.colors.muted,
+                            height: 1.4,
+                          ),
                         ),
                       ),
-                    ),
-                    for (final item in items) ...[
-                      const SizedBox(height: 12),
-                      ReviewCard(
-                        key: ValueKey('review-${item.messageId}'),
-                        review: item,
-                        circleId: circleId,
-                        now: now,
-                      ),
+                      for (final item in items) ...[
+                        const SizedBox(height: 12),
+                        ReviewCard(
+                          key: ValueKey('review-${item.messageId}'),
+                          review: item,
+                          circleId: circleId,
+                          now: now,
+                        ),
+                      ],
                     ],
                   ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }

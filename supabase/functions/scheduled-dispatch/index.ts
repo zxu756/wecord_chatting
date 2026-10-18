@@ -1,8 +1,8 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
 // events about to start, tasks that came due, likes and comments on
-// Moments, and new-login alerts. The same tick removes the files of expired disappearing
-// messages.
+// Moments, new-login alerts, and answers to circle join requests. The same
+// tick removes the files of expired disappearing messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
 // is due and, when pushes are waiting, wakes this function through pg_net:
@@ -32,6 +32,7 @@ import {
   type TaskReminderRow,
   taskTarget,
 } from "./logic.ts";
+import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -169,6 +170,19 @@ Deno.serve(async (request) => {
     console.error("claim_security_alert_pushes failed", securityError.message);
   }
   targets.push(...((security ?? []) as SecurityPushRow[]).map(securityTarget));
+
+  // Answers to circle join requests ("approved" / "declined"), to the
+  // applicant's devices (decide_join_request wakes this function).
+  const { data: joinAnswers, error: joinAnswersError } = await admin.rpc(
+    "claim_join_request_pushes",
+  );
+  if (joinAnswersError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_join_request_pushes failed", joinAnswersError.message);
+  }
+  targets.push(
+    ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
+  );
 
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.

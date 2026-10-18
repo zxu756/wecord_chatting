@@ -16,10 +16,11 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/join_requests/join_settings_screen.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
-import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the circle's settings: its template, tag and bots.
@@ -139,7 +140,10 @@ class _ManageGroup extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final circleId = detail.circle.id;
-    final canReview = detail.can(CirclePermission.manageMessages);
+    final canReview = detail.canOpenReview;
+    final joinMode = detail.canManageCircle
+        ? ref.watch(circleJoinSettingsProvider(circleId)).value?.mode
+        : null;
     final waiting = canReview
         ? ref.watch(messageReviewCountProvider(circleId)).value ?? 0
         : 0;
@@ -183,6 +187,15 @@ class _ManageGroup extends ConsumerWidget {
           tone: SettingsTone.success,
           title: tr('Onboarding'),
           onTap: () => openCircleOnboardingSettings(context, detail),
+        ),
+        SettingsRow(
+          key: const ValueKey('circle-settings-join-mode'),
+          icon: Icons.how_to_reg_outlined,
+          tone: SettingsTone.warning,
+          title: tr('Join mode'),
+          subtitle: tr('Open, apply to join, or invite only'),
+          value: joinMode?.label,
+          onTap: () => openCircleJoinSettings(context, detail),
         ),
         SettingsRow(
           key: const ValueKey('circle-settings-discovery'),

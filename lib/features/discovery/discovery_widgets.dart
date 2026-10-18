@@ -7,6 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/join_requests/join_gate.dart';
+import 'package:wecord/features/circles/join_requests/join_request_models.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/discovery/circle_discovery_repository.dart';
 import 'package:wecord/features/profile/report_user_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -452,11 +455,17 @@ class DiscoverableCirclePreviewView extends ConsumerStatefulWidget {
 class _DiscoverableCirclePreviewViewState
     extends ConsumerState<DiscoverableCirclePreviewView> {
   var _joining = false;
+  var _cancelling = false;
   String? _error;
+
+  /// Answers to the circle's questions, by question id.
+  var _answers = <String, String>{};
 
   String get _circleId => widget.circle.id;
 
-  Future<void> _join() async {
+  JoinStateKey get _joinKey => (circleId: _circleId, inviteCode: null);
+
+  Future<void> _join(CircleJoinState? state) async {
     setState(() {
       _joining = true;
       _error = null;
@@ -465,25 +474,102 @@ class _DiscoverableCirclePreviewViewState
     try {
       circleId = await ref
           .read(circleDiscoveryRepositoryProvider)
-          .join(_circleId);
+          .join(
+            _circleId,
+            answers: (state?.needsReview ?? false) ? _answers : null,
+          );
     } on DiscoveryJoinException catch (error) {
       if (mounted) {
         setState(() {
           _joining = false;
           _error = error.message;
         });
-        ref.invalidate(discoverableCirclePreviewProvider(_circleId));
+        ref
+          ..invalidate(discoverableCirclePreviewProvider(_circleId))
+          ..invalidate(circleJoinStateProvider(_joinKey));
       }
       return;
     }
     WeCordHaptics.medium();
     ref.invalidate(circleSummariesProvider);
     ref.invalidate(discoverableCirclePreviewProvider(_circleId));
+    if (state?.needsReview ?? false) {
+      // A request was made, not a membership: show it waiting (unless the
+      // server let the person straight in).
+      ref
+        ..invalidate(circleJoinStateProvider(_joinKey))
+        ..invalidate(myJoinRequestsProvider);
+      final after = await ref.read(circleJoinStateProvider(_joinKey).future);
+      if (!mounted) {
+        return;
+      }
+      if (!(after?.isMember ?? false)) {
+        setState(() => _joining = false);
+        return;
+      }
+    }
     widget.onJoined?.call(circleId);
     if (!mounted) {
       return;
     }
     _openCircle(circleId);
+  }
+
+  Future<void> _cancelRequest() async {
+    setState(() => _cancelling = true);
+    try {
+      await ref.read(joinRequestsRepositoryProvider).cancel(_circleId);
+    } on Object {
+      // The next look at the state shows where it stands.
+    }
+    ref
+      ..invalidate(circleJoinStateProvider(_joinKey))
+      ..invalidate(myJoinRequestsProvider);
+    if (mounted) {
+      setState(() => _cancelling = false);
+    }
+  }
+
+  /// The questions to answer, or where the request stands.
+  Widget _joinPanel(CircleJoinState state) {
+    final c = context.tokens.colors;
+    if (state.isPending ||
+        state.isDenied ||
+        state.closed ||
+        (state.mode == CircleJoinMode.inviteOnly)) {
+      return JoinStatusPanel(
+        state: state,
+        viaInvite: false,
+        cancelling: _cancelling,
+        onCancel: () => unawaited(_cancelRequest()),
+      );
+    }
+    if (!state.needsReview) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      key: const ValueKey('discovery-join-questions'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          state.questions.isEmpty
+              ? tr('The moderators of this circle approve everyone who joins.')
+              : tr(
+                  'The moderators of this circle approve everyone who joins. '
+                  'Answer their questions to send your request.',
+                ),
+          style: TextStyle(fontSize: 13.5, height: 1.4, color: c.muted),
+        ),
+        if (state.questions.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          JoinQuestionsForm(
+            questions: state.questions,
+            enabled: !_joining,
+            onChanged: (answers) => setState(() => _answers = answers),
+          ),
+        ],
+      ],
+    );
   }
 
   void _openCircle(String circleId) {
@@ -513,6 +599,11 @@ class _DiscoverableCirclePreviewViewState
     final preview = ref.watch(discoverableCirclePreviewProvider(_circleId));
     final loaded = preview.value;
     final circle = loaded?.circle ?? widget.circle;
+    // Where the person stands in joining: null while unknown, then Join
+    // works the way it always did and the server decides.
+    final joinState = circle.isMember
+        ? null
+        : ref.watch(circleJoinStateProvider(_joinKey)).value;
     final description = circle.description?.trim() ?? '';
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
@@ -622,6 +713,11 @@ class _DiscoverableCirclePreviewViewState
           ),
         ],
       },
+      if (joinState != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: _joinPanel(joinState),
+        ),
       const SizedBox(height: 16),
     ];
 
@@ -652,7 +748,7 @@ class _DiscoverableCirclePreviewViewState
             ),
             const SizedBox(height: 10),
           ],
-          _primaryAction(loaded, circle),
+          _primaryAction(loaded, circle, joinState),
         ],
       ),
     );
@@ -681,6 +777,7 @@ class _DiscoverableCirclePreviewViewState
   Widget _primaryAction(
     DiscoverableCirclePreview? preview,
     DiscoverableCircle circle,
+    CircleJoinState? joinState,
   ) {
     if (preview?.isBanned ?? false) {
       return WeCordButton(
@@ -701,15 +798,31 @@ class _DiscoverableCirclePreviewViewState
         onPressed: () => _openCircle(circle.id),
       );
     }
+    final plan = planJoinButton(
+      joinState,
+      viaInvite: false,
+      now: DateTime.now().toUtc(),
+    );
+    final needsAnswers =
+        plan.kind == JoinButtonKind.sendRequest &&
+        !joinAnswersComplete(joinState!.questions, _answers);
     return WeCordButton(
       key: const ValueKey('discovery-join'),
-      label: _joining ? tr('Joining…') : tr('Join circle'),
-      icon: Icons.add_rounded,
-      variant: WeCordButtonVariant.accent,
+      label: _joining
+          ? (plan.kind == JoinButtonKind.sendRequest
+                ? tr('Sending…')
+                : tr('Joining…'))
+          : plan.label,
+      icon: plan.enabled ? Icons.add_rounded : null,
+      variant: plan.enabled
+          ? WeCordButtonVariant.accent
+          : WeCordButtonVariant.secondary,
       size: WeCordButtonSize.large,
       expand: true,
       loading: _joining,
-      onPressed: _joining || preview == null ? null : _join,
+      onPressed: _joining || preview == null || !plan.enabled || needsAnswers
+          ? null
+          : () => unawaited(_join(joinState)),
     );
   }
 

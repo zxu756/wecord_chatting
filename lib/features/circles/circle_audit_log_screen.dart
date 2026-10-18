@@ -521,6 +521,7 @@ IconData circleAuditIcon(String action) {
     'guard_approve' => Icons.check_circle_outline,
     'guard_remove' => Icons.delete_outline,
     'onboarding_update' => Icons.rule,
+    'onboarding_roles' => Icons.badge_outlined,
     'join_request_approve' => Icons.how_to_reg_outlined,
     'join_request_deny' => Icons.person_off_outlined,
     'join_settings_update' => Icons.how_to_reg_outlined,
@@ -808,6 +809,7 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       {},
     ),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
+    'onboarding_roles' => (tr('{target} chose roles through onboarding'), {}),
     'edit_window_update' => switch (_newValue(changes['edit_window_seconds'])) {
       final int seconds when seconds > 0 => (
         tr('{actor} set the edit time limit to {time}'),

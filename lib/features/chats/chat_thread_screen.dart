@@ -88,6 +88,8 @@ import 'package:wecord/features/chats/selection/chat_selection.dart';
 import 'package:wecord/features/contact_cards/contact_cards.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
+import 'package:wecord/features/circles/onboarding/guide_models.dart';
+import 'package:wecord/features/circles/onboarding/newcomer_card.dart';
 import 'package:wecord/features/circles/announcement_repository.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
 import 'package:wecord/features/circles/circle_bot_repository.dart';

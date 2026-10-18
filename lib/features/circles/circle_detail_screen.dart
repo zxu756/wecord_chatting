@@ -85,6 +85,7 @@ class CircleDetailScreen extends ConsumerWidget {
         key: ValueKey('onboarding-${detail.circle.id}'),
         circleId: detail.circle.id,
         circleName: detail.circle.name,
+        channels: detail.channels,
         child: isWideLayout(MediaQuery.sizeOf(context).width)
             ? CircleWorkspace(
                 key: ValueKey(detail.circle.id),

@@ -96,8 +96,6 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                   conversationId: widget.conversationId,
                   onOpen: _openScheduledMessages,
                 ),
-                onPickImage: _pickPhotosAndVideos,
-                onPickFile: _pickFilesForTray,
                 aiButton: AiComposerButton(
                   circleId: circleId,
                   size: desktop ? 36 : 40,
@@ -113,7 +111,6 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                   onSend: _sendTray,
                   onAddMore: _showAddMoreMenu,
                 ),
-                onCreatePoll: _openPollComposer,
                 voiceButton: ref.watch(voiceInputAvailableProvider)
                     ? VoiceInputButton(
                         owner: widget.conversationId,
@@ -129,24 +126,37 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                 voicePanel: ref.watch(voiceInputAvailableProvider)
                     ? VoiceInputPanel(owner: widget.conversationId)
                     : null,
-                onCreateChain: conversationType == ConversationType.direct
-                    ? null
-                    : _openChainComposer,
-                onContactCard: _openContactCardPicker,
-                onSendLocation: _sendLocation,
-                onShareLiveLocation:
-                    conversationType == ConversationType.direct ||
-                        conversationType == ConversationType.group
-                    ? _shareLiveLocation
-                    : null,
-                onChangeWallpaper: openWallpaper,
-                onInsertTime: _insertTime,
-                onShowEvents:
-                    conversationType == ConversationType.direct ||
-                        conversationType == ConversationType.group
-                    ? _showEvents
-                    : null,
-                onPickSticker: _pickAndSendSticker,
+                menuEntries:
+                    (
+                      buttonContext, {
+                      required compact,
+                      required gifAvailable,
+                    }) => ref
+                        .read(composerMenuRegistryProvider)
+                        .entriesFor(
+                          ComposerMenuContext(
+                            context: buttonContext,
+                            conversationId: widget.conversationId,
+                            conversationType: conversationType,
+                            compact: compact,
+                            gifAvailable: gifAvailable,
+                            actions: ComposerMenuActions(
+                              pickPhotosAndVideos: _pickPhotosAndVideos,
+                              pickFiles: _pickFilesForTray,
+                              createPoll: _openPollComposer,
+                              createChain: _openChainComposer,
+                              sendContactCard: _openContactCardPicker,
+                              sendLocation: _sendLocation,
+                              shareLiveLocation: _shareLiveLocation,
+                              scheduleMessage: _scheduleMessage,
+                              insertTime: _insertTime,
+                              showEvents: _showEvents,
+                              changeWallpaper: openWallpaper,
+                              pickSticker: _pickAndSendSticker,
+                              pickGif: _pickAndSendGif,
+                            ),
+                          ),
+                        ),
                 onPickGif: _pickAndSendGif,
                 onInsertEmoji: _pickAndInsertEmoji,
                 gifAvailable: ref.watch(gifSearchAvailableProvider) != false,
@@ -168,26 +178,7 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
           ),
       ],
     );
-    final composerArea = selecting
-        ? ChatSelectionBar(
-            environment: SelectionEnvironment(
-              conversationId: widget.conversationId,
-              conversationTitle: title,
-              currentUserId: currentUserId,
-              canModerate: canDeleteAsModerator,
-              senderName: (message) => message.isSentBy(currentUserId)
-                  ? tr('You')
-                  : senderFor(message, {
-                      for (final member
-                          in groupDetail?.members ?? const <GroupMember>[])
-                        member.profile.id: member,
-                    }).name,
-              onChanged: _refreshThread,
-            ),
-            desktop: desktop,
-            bottomGap: composerBottomGap,
-          )
-        : composerColumn;
+    final composerArea = selecting ? _selectionBar(f) : composerColumn;
     return composerArea;
   }
 }

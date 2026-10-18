@@ -21,6 +21,10 @@ import 'package:wecord/features/chats/thread/footer_widgets.dart';
 import 'package:wecord/features/chats/thread/message_sender.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer_registrations.dart';
+import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
+import 'package:wecord/features/chats/thread/registry/composer_menu_registrations.dart';
+import 'package:wecord/features/chats/thread/registry/header_actions.dart';
+import 'package:wecord/features/chats/thread/registry/header_actions_registrations.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions_registrations.dart';
 import 'package:wecord/features/chats/thread/thread_layout.dart';
@@ -32,7 +36,6 @@ import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
-import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chat_thread_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -91,7 +94,6 @@ import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_moderation.dart';
 import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
-import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice_input/voice_input_button.dart';
 import 'package:wecord/features/voice_input/voice_input_panel.dart';
 import 'package:wecord/features/voice_input/voice_input_settings.dart';
@@ -126,7 +128,6 @@ import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
-import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/features/wallpapers/wallpaper_picker.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
@@ -150,6 +151,8 @@ export 'package:wecord/features/chats/chat_thread_controller.dart'
     show ChatThreadData, chatThreadProvider;
 export 'package:wecord/features/chats/thread/thread_text.dart'
     show composerHint, formatSlowmodeCountdown, formatThreadActivity;
+export 'package:wecord/features/chats/thread/registry/header_actions.dart'
+    show ChatThreadAction;
 
 part 'thread/banners.dart';
 part 'thread/build_composer.dart';
@@ -157,8 +160,10 @@ part 'thread/build_header.dart';
 part 'thread/build_messages.dart';
 part 'thread/composer.dart';
 part 'thread/composer_notices.dart';
+part 'thread/drop_zone.dart';
 part 'thread/message_bubble.dart';
 part 'thread/message_content.dart';
+part 'thread/selection_mode.dart';
 part 'thread/state_attachments.dart';
 part 'thread/state_composer.dart';
 part 'thread/state_composer_menu.dart';
@@ -210,47 +215,6 @@ final chatConversationSummaryProvider = FutureProvider.autoDispose
           .watch(chatsRepositoryProvider)
           .getConversationSummary(conversationId);
     });
-
-/// A chat thread app bar action: an icon button when there is room, and a
-/// labelled entry in the More menu on phones.
-class ChatThreadAction {
-  const ChatThreadAction({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.selectedIcon,
-    this.isSelected,
-    this.menuOnly = false,
-    this.primary = false,
-  });
-
-  /// Stays a button in the wide header; every other action moves into its
-  /// More menu, so the title keeps the room (see the design language's
-  /// header rule). Phones ignore it: they keep search, one primary action
-  /// of their own choosing and More.
-  final bool primary;
-
-  /// Only in the More menu: wide headers have no room for another button
-  /// (the title would be squeezed out) and reach it another way.
-  final bool menuOnly;
-
-  /// Also the label in the More menu.
-  final String tooltip;
-  final IconData icon;
-  final IconData? selectedIcon;
-  final bool? isSelected;
-  final VoidCallback? onPressed;
-
-  IconButton toIconButton() {
-    return IconButton(
-      tooltip: tooltip,
-      isSelected: isSelected,
-      icon: Icon(icon),
-      selectedIcon: selectedIcon == null ? null : Icon(selectedIcon),
-      onPressed: onPressed,
-    );
-  }
-}
 
 class ChatThreadScreen extends ConsumerStatefulWidget {
   const ChatThreadScreen({
@@ -683,14 +647,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
           child: child,
         );
 
-        // Files dropped anywhere on the chat go to the tray (macOS and the
-        // web), unless the reader cannot send here or something sits over
-        // the chat.
-        Widget dropZone(Widget child) => ChatDropZone(
-          enabled: canSend && ModalRoute.of(context)?.isCurrent != false,
-          onFiles: (files) => unawaited(_addToTray(files)),
-          child: child,
-        );
+        Widget dropZone(Widget child) => _dropZone(context, canSend, child);
 
         if (desktop) {
           final chatColumn = Column(

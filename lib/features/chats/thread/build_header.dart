@@ -178,12 +178,7 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
             )
           : null,
     );
-    final header = selecting
-        ? ChatSelectionHeader(
-            conversationId: widget.conversationId,
-            desktop: desktop,
-          )
-        : threadHeader;
+    final header = selecting ? _selectionHeader(f) : threadHeader;
     return header;
   }
 

@@ -104,7 +104,6 @@ class _HeaderActions {
   const _HeaderActions({
     required this.searchAction,
     required this.pinnedAction,
-    required this.eventsAction,
     required this.appBarActions,
     required this.primaryAction,
     required this.openDisappearing,
@@ -113,7 +112,6 @@ class _HeaderActions {
 
   final ChatThreadAction searchAction;
   final ChatThreadAction pinnedAction;
-  final ChatThreadAction? eventsAction;
   final List<ChatThreadAction> appBarActions;
   final ChatThreadAction primaryAction;
   final VoidCallback openDisappearing;
@@ -420,10 +418,11 @@ extension _ThreadFactsState on _ChatThreadScreenState {
     );
   }
 
-  /// The header buttons, in More menu order.
+  /// The header buttons, in More menu order: what the header action registry
+  /// collects (see `registry/header_actions.dart`), with the parent's extra
+  /// actions after the built-in ones.
   _HeaderActions _headerActionsFor(BuildContext context, _ThreadFacts f) {
     final _ThreadFacts(
-      :thread,
       :title,
       :conversationType,
       :groupDetail,
@@ -436,60 +435,8 @@ extension _ThreadFactsState on _ChatThreadScreenState {
       :circleId,
       :canPinMessages,
       :canCall,
-      :desktop,
+      :isNoteToSelf,
     ) = f;
-    final searchAction = ChatThreadAction(
-      tooltip: tr('Search messages'),
-      icon: Icons.search,
-      onPressed: _toggleMessageSearch,
-    );
-    final pinnedAction = ChatThreadAction(
-      tooltip: tr('Pinned messages'),
-      icon: Icons.push_pin_outlined,
-      // Pins are what a channel's header is for; elsewhere they are in More.
-      primary: conversationType == ConversationType.channel,
-      onPressed: () => _showPinnedMessages(canPinMessages),
-    );
-    // Group chats and direct messages can plan events (circles have their
-    // own).
-    final eventsAction = canCall
-        ? ChatThreadAction(
-            tooltip: tr('Events'),
-            icon: Icons.event_outlined,
-            onPressed: () => showChatEventsList(
-              context,
-              conversationId: widget.conversationId,
-              canCreate: canSend,
-            ),
-          )
-        : null;
-    final callAction = canCall
-        ? ChatThreadAction(
-            tooltip: tr('Start voice call'),
-            icon: Icons.call_outlined,
-            primary: true,
-            onPressed: () => startDirectCall(
-              context,
-              ref,
-              conversationId: widget.conversationId,
-              name: title,
-            ),
-          )
-        : null;
-    final videoCallAction = canCall
-        ? ChatThreadAction(
-            tooltip: tr('Start video call'),
-            icon: Icons.videocam_outlined,
-            primary: true,
-            onPressed: () => startDirectCall(
-              context,
-              ref,
-              conversationId: widget.conversationId,
-              name: title,
-              video: true,
-            ),
-          )
-        : null;
     void openDisappearing() => unawaited(
       showDisappearingSheet(
         context,
@@ -500,122 +447,61 @@ extension _ThreadFactsState on _ChatThreadScreenState {
             (groupDetail?.canManageGroup ?? false),
       ),
     );
-    final disappearingAction = isDirectOrGroup
-        ? ChatThreadAction(
-            tooltip: tr('Disappearing messages'),
-            icon: Icons.timer_outlined,
-            selectedIcon: Icons.timer_rounded,
-            isSelected: disappearingSeconds != null,
-            menuOnly: true,
-            onPressed: openDisappearing,
-          )
-        : null;
     void openWallpaper() => unawaited(
       showWallpaperPicker(context, conversationId: widget.conversationId),
     );
-    // Wallpapers are personal: this one is only for this chat, only for you.
-    final wallpaperAction = ChatThreadAction(
-      tooltip: tr('Wallpaper'),
-      icon: Icons.wallpaper_outlined,
-      selectedIcon: Icons.wallpaper_rounded,
-      isSelected: ref.watch(
-        wallpapersProvider.select(
-          (state) => state.settings.hasOwn(widget.conversationId),
-        ),
-      ),
-      menuOnly: true,
-      onPressed: openWallpaper,
-    );
-    final groupDetailsAction = conversationType == ConversationType.group
-        ? ChatThreadAction(
-            tooltip: tr('Group details'),
-            icon: Icons.group_outlined,
-            primary: true,
-            onPressed: () => _showGroupDetails(title),
-          )
-        : null;
-    final archiveAction = canManageThread
-        ? ChatThreadAction(
-            tooltip: switch ((threadArchived, widget.forumPost)) {
-              (true, true) => tr('Unarchive post'),
-              (true, false) => tr('Unarchive thread'),
-              (false, true) => tr('Archive post'),
-              (false, false) => tr('Archive thread'),
-            },
-            icon: threadArchived
-                ? Icons.unarchive_outlined
-                : Icons.archive_outlined,
-            onPressed: () => _setThreadArchived(threadId!, !threadArchived),
-          )
-        : null;
-    final summarizeAction = ref.watch(aiAvailableProvider(circleId))
-        ? ChatThreadAction(
-            tooltip: tr('Summarize'),
-            icon: Icons.auto_awesome_outlined,
-            onPressed: _catchUpController.requestSummary,
-          )
-        : null;
-    final notesAction = ChatThreadAction(
-      tooltip: chatUsesDesktopChrome(context)
-          ? tr('Notes and lists')
-          : tr('Notes'),
-      icon: Icons.description_outlined,
-      selectedIcon: Icons.description_rounded,
-      isSelected: _workspaceOpen,
-      onPressed: () => openWorkspace(
-        context,
-        conversationId: widget.conversationId,
-        tab: _workspaceRequest?.tab ?? WorkspaceTab.notes,
-        title: title,
-      ),
-    );
-    // The desktop panel has both tabs, so it needs only the one button.
-    final listsAction = ChatThreadAction(
-      tooltip: tr('Lists'),
-      icon: Icons.checklist_rounded,
-      isSelected:
-          _workspaceOpen && _workspaceRequest?.tab == WorkspaceTab.lists,
-      onPressed: () => openWorkspace(
-        context,
-        conversationId: widget.conversationId,
-        tab: WorkspaceTab.lists,
-        title: title,
-      ),
-    );
-    // Search comes first: phones keep it next to the primary action.
-    final appBarActions = [
-      searchAction,
-      ?callAction,
-      ?videoCallAction,
-      pinnedAction,
-      notesAction,
-      if (!chatUsesDesktopChrome(context)) listsAction,
-      ?disappearingAction,
-      wallpaperAction,
-      ChatThreadAction(
-        tooltip: tr('Media'),
-        icon: Icons.photo_library_outlined,
-        onPressed: () {
-          context.push(ChatMediaScreen.pathFor(widget.conversationId));
-        },
-      ),
-      ?groupDetailsAction,
-      ?archiveAction,
-      ?summarizeAction,
-      ...widget.extraActions,
-    ];
+    final appBarActions = ref
+        .read(headerActionRegistryProvider)
+        .actionsFor(
+          HeaderActionContext(
+            context: context,
+            ref: ref,
+            host: HeaderActionHost(
+              toggleMessageSearch: _toggleMessageSearch,
+              showPinnedMessages: _showPinnedMessages,
+              showGroupDetails: _showGroupDetails,
+              setThreadArchived: _setThreadArchived,
+              requestSummary: _catchUpController.requestSummary,
+              openDisappearing: openDisappearing,
+              openWallpaper: openWallpaper,
+            ),
+            conversationId: widget.conversationId,
+            title: title,
+            conversationType: conversationType,
+            circleId: circleId,
+            isNoteToSelf: isNoteToSelf,
+            isDirectOrGroup: isDirectOrGroup,
+            canCall: canCall,
+            canSend: canSend,
+            canPinMessages: canPinMessages,
+            groupDetail: groupDetail,
+            disappearingSeconds: disappearingSeconds,
+            threadId: threadId,
+            canManageThread: canManageThread,
+            threadArchived: threadArchived,
+            forumPost: widget.forumPost,
+            workspaceOpen: _workspaceOpen,
+            workspaceRequest: _workspaceRequest,
+            desktopChrome: chatUsesDesktopChrome(context),
+          ),
+          extras: widget.extraActions,
+        );
+    ChatThreadAction? byId(String id) =>
+        appBarActions.where((action) => action.id == id).firstOrNull;
+    // Search and Pinned messages are built in and always registered.
+    final searchAction = byId('search')!;
+    final pinnedAction = byId('pinned')!;
     // Next to search on phones: the circle's member list, a direct call,
     // the group's details, or a managed thread's archive toggle.
     final primaryAction =
         widget.extraActions.firstOrNull ??
-        (conversationType == ConversationType.direct ? callAction : null) ??
-        groupDetailsAction ??
-        archiveAction ??
+        (conversationType == ConversationType.direct ? byId('call') : null) ??
+        byId('group-details') ??
+        byId('archive') ??
         pinnedAction;
     return _HeaderActions(
       searchAction: searchAction,
       pinnedAction: pinnedAction,
-      eventsAction: eventsAction,
       appBarActions: appBarActions,
       primaryAction: primaryAction,
       openDisappearing: openDisappearing,
@@ -639,7 +525,7 @@ extension _ThreadFactsState on _ChatThreadScreenState {
       :directPeerId,
       :desktop,
     ) = f;
-    final _HeaderActions(:searchAction, :eventsAction, :appBarActions) = h;
+    final _HeaderActions(:searchAction, :appBarActions) = h;
     // The notes and lists panel takes the profile's place when open.
     final docsPlacement = resolveSidePanel(
       ResizablePanel.docs,
@@ -705,7 +591,6 @@ extension _ThreadFactsState on _ChatThreadScreenState {
     final headerActions = [
       for (final action in appBarActions)
         if (!inlineSearch || !identical(action, searchAction)) action,
-      ?eventsAction,
       ?profileAction,
     ];
     final searchResultCount = _messageSearchQuery.trim().isEmpty

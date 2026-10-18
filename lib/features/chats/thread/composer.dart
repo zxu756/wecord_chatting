@@ -31,20 +31,10 @@ class _Composer extends StatelessWidget {
     required this.onChanged,
     required this.onSend,
     required this.onSchedule,
-    required this.onPickImage,
-    required this.onPickFile,
-    required this.onCreatePoll,
     this.voiceButton,
     this.voicePanel,
-    this.onCreateChain,
-    this.onContactCard,
-    this.onSendLocation,
-    this.onShareLiveLocation,
-    required this.onInsertTime,
-    required this.onChangeWallpaper,
-    this.onShowEvents,
-    required this.onPickSticker,
     required this.onPickGif,
+    required this.menuEntries,
     required this.onInsertEmoji,
     required this.gifAvailable,
     required this.isRecordingVoice,
@@ -115,9 +105,6 @@ class _Composer extends StatelessWidget {
   /// Schedules the text in the field for later (long-press or right-click
   /// on the send button).
   final Future<void> Function() onSchedule;
-  final Future<void> Function() onPickImage;
-  final Future<void> Function() onPickFile;
-  final Future<void> Function() onCreatePoll;
 
   /// Voice input (speak to type): the button next to the emoji button, and
   /// the panel above the composer while it listens. Null where the platform
@@ -125,27 +112,15 @@ class _Composer extends StatelessWidget {
   final Widget? voiceButton;
   final Widget? voicePanel;
 
-  /// Starts a group chain (接龙); null in direct chats.
-  final Future<void> Function()? onCreateChain;
-
-  /// Sends a contact card (a friend or a circle); null leaves it out.
-  final Future<void> Function()? onContactCard;
-
-  /// Sends a place from the map; live location only where the chat can
-  /// share it (direct chats and groups).
-  final Future<void> Function()? onSendLocation;
-  final Future<void> Function()? onShareLiveLocation;
-  final Future<void> Function() onInsertTime;
-
-  /// Opens this chat's wallpaper picker (in the + menu of wide screens, whose
-  /// header has no More menu).
-  final VoidCallback onChangeWallpaper;
-
-  /// Lists this chat's events and plans new ones; null where chats take
-  /// no events.
-  final Future<void> Function()? onShowEvents;
-  final Future<void> Function() onPickSticker;
   final Future<void> Function() onPickGif;
+
+  /// The "+" menu's entries (see the composer menu registry).
+  final List<GlassMenuEntry> Function(
+    BuildContext buttonContext, {
+    required bool compact,
+    required bool gifAvailable,
+  })
+  menuEntries;
   final Future<void> Function() onInsertEmoji;
 
   /// False once the server said GIF search isn't set up.
@@ -198,89 +173,11 @@ class _Composer extends StatelessWidget {
                 buttonContext,
                 anchor: globalRectOf(buttonContext),
                 width: 232,
-                entries: [
-                  GlassMenuEntry(
-                    icon: Icons.image_outlined,
-                    label: tr('Photos and videos'),
-                    onSelected: () => unawaited(onPickImage()),
-                  ),
-                  GlassMenuEntry(
-                    icon: Icons.attach_file_rounded,
-                    label: tr('Files'),
-                    onSelected: () => unawaited(onPickFile()),
-                  ),
-                  GlassMenuEntry(
-                    icon: Icons.poll_outlined,
-                    label: tr('Create poll'),
-                    onSelected: () => unawaited(onCreatePoll()),
-                  ),
-                  if (onCreateChain != null)
-                    GlassMenuEntry(
-                      key: const ValueKey('composer-chain-entry'),
-                      icon: Icons.format_list_numbered_rounded,
-                      label: tr('Chain'),
-                      onSelected: () => unawaited(onCreateChain!()),
-                    ),
-                  if (onContactCard != null)
-                    GlassMenuEntry(
-                      key: const ValueKey('composer-contact-card-entry'),
-                      icon: Icons.contact_page_outlined,
-                      label: tr('Contact card'),
-                      onSelected: () => unawaited(onContactCard!()),
-                    ),
-                  if (onSendLocation != null)
-                    GlassMenuEntry(
-                      key: const ValueKey('composer-location-entry'),
-                      icon: Icons.location_on_outlined,
-                      label: tr('Location'),
-                      onSelected: () => unawaited(onSendLocation!()),
-                    ),
-                  if (onShareLiveLocation != null)
-                    GlassMenuEntry(
-                      key: const ValueKey('composer-live-location-entry'),
-                      icon: Icons.near_me_outlined,
-                      label: tr('Share live location'),
-                      onSelected: () => unawaited(onShareLiveLocation!()),
-                    ),
-                  GlassMenuEntry(
-                    key: const ValueKey('composer-schedule-entry'),
-                    icon: Icons.schedule_send_outlined,
-                    label: tr('Schedule message'),
-                    onSelected: () => unawaited(onSchedule()),
-                  ),
-                  GlassMenuEntry(
-                    icon: Icons.schedule_rounded,
-                    label: tr('Insert time'),
-                    onSelected: () => unawaited(onInsertTime()),
-                  ),
-                  if (onShowEvents != null)
-                    GlassMenuEntry(
-                      icon: Icons.event_outlined,
-                      label: tr('Events'),
-                      onSelected: () => unawaited(onShowEvents!()),
-                    ),
-                  if (!compact)
-                    GlassMenuEntry(
-                      key: const ValueKey('composer-wallpaper-entry'),
-                      icon: Icons.wallpaper_outlined,
-                      label: tr('Wallpaper'),
-                      onSelected: onChangeWallpaper,
-                    ),
-                  GlassMenuEntry(
-                    icon: Icons.sticky_note_2_outlined,
-                    label: tr('Send sticker'),
-                    onSelected: () => unawaited(onPickSticker()),
-                  ),
-                  // Wider screens have a GIF button of their own.
-                  if (compact)
-                    GlassMenuEntry(
-                      icon: Icons.gif_box_outlined,
-                      label: tr('Send GIF'),
-                      onSelected: gifAvailable
-                          ? () => unawaited(onPickGif())
-                          : null,
-                    ),
-                ],
+                entries: menuEntries(
+                  buttonContext,
+                  compact: compact,
+                  gifAvailable: gifAvailable,
+                ),
               )
             : null,
       ),

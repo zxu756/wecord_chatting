@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show Presence, SinglePresenceState;
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/shared/models/presence_status.dart';
@@ -95,34 +93,6 @@ void main() {
     ]);
     expect(dataSource.joins, isEmpty);
     expect(await repository.loadSettings(), const PresenceSettings());
-  });
-
-  test('a channel key shows its most present status', () {
-    Presence presence(Object? status) => Presence(
-      presenceRef: 'ref',
-      payload: {'user_id': 'x', 'status': ?status},
-    );
-
-    final statuses = presenceStatusesFromState([
-      SinglePresenceState(
-        key: 'two-tabs',
-        presences: [presence('idle'), presence('online')],
-      ),
-      SinglePresenceState(
-        key: 'busy',
-        presences: [presence('idle'), presence('dnd')],
-      ),
-      SinglePresenceState(key: 'away', presences: [presence('idle')]),
-      SinglePresenceState(key: 'old-client', presences: [presence(null)]),
-      SinglePresenceState(key: 'hidden', presences: [presence('invisible')]),
-    ]);
-
-    expect(statuses, {
-      'two-tabs': PresenceStatus.online,
-      'busy': PresenceStatus.doNotDisturb,
-      'away': PresenceStatus.idle,
-      'old-client': PresenceStatus.online,
-    });
   });
 
   test('presenceOf needs someone online and defaults to Online', () {
@@ -230,6 +200,68 @@ void main() {
       await pumpEventQueue(times: 50);
       expect(onlineNotifications, greaterThan(afterFirst.$2));
       expect(container.read(onlineUserIdsProvider).value, {'user-1'});
+    });
+
+    test('only the people the server lets the user see are online, '
+        'and a blocked or hidden person drops out', () async {
+      final subscription = container.listen(
+        onlineUserIdsProvider,
+        (previous, next) {},
+      );
+      addTearDown(subscription.close);
+      authState.add(const AuthUser(id: 'user-1'));
+      await pumpEventQueue();
+
+      presence.online.add({
+        'user-1': PresenceStatus.online,
+        'friend': PresenceStatus.doNotDisturb,
+        'circle-mate': PresenceStatus.idle,
+      });
+      await pumpEventQueue(times: 50);
+      final statuses = container.read(presenceStatusesProvider).value!;
+      final online = container.read(onlineUserIdsProvider).value!;
+      expect(online, {'user-1', 'friend', 'circle-mate'});
+      expect(
+        presenceOf('friend', onlineUserIds: online, statuses: statuses),
+        PresenceStatus.doNotDisturb,
+      );
+      // A stranger, a blocked user and someone hiding are simply not in the
+      // list the server sends.
+      expect(
+        presenceOf('stranger', onlineUserIds: online, statuses: statuses),
+        isNull,
+      );
+
+      // The friend blocks the user: the server stops sending them.
+      presence.online.add({
+        'user-1': PresenceStatus.online,
+        'circle-mate': PresenceStatus.idle,
+      });
+      await pumpEventQueue(times: 50);
+      expect(container.read(onlineUserIdsProvider).value, {
+        'user-1',
+        'circle-mate',
+      });
+    });
+
+    test('signing out stops the feed and shows nobody', () async {
+      final subscription = container.listen(
+        onlineUserIdsProvider,
+        (previous, next) {},
+      );
+      addTearDown(subscription.close);
+      authState.add(const AuthUser(id: 'user-1'));
+      await pumpEventQueue();
+      presence.online.add({
+        'user-1': PresenceStatus.online,
+        'a': PresenceStatus.online,
+      });
+      await pumpEventQueue(times: 50);
+      expect(container.read(onlineUserIdsProvider).value, {'user-1', 'a'});
+
+      authState.add(null);
+      await pumpEventQueue(times: 100);
+      expect(container.read(onlineUserIdsProvider).value, <String>{});
     });
 
     test('the broadcast status follows the settings and idleness', () async {

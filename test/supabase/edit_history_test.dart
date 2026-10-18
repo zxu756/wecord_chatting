@@ -9,6 +9,7 @@ import 'behaviour_runner.dart';
 void main() {
   late String history;
   late String review;
+  late String window;
 
   setUpAll(() {
     history = File(
@@ -17,6 +18,23 @@ void main() {
     review = File(
       'supabase/migrations/202610220220_edit_review.sql',
     ).readAsStringSync();
+    window = File(
+      'supabase/migrations/202610220230_circle_edit_window.sql',
+    ).readAsStringSync();
+  });
+
+  test('the edit time limit is a trigger and a managers-only setter', () {
+    expect(window, contains('edit_window_seconds in (900, 3600, 86400)'));
+    expect(window, isNot(contains('function public.edit_message')));
+    expect(window, contains('create trigger messages_enforce_edit_window'));
+    expect(window, contains("'manage_circle'"));
+    expect(
+      window,
+      contains(
+        'revoke execute on function public.set_circle_edit_window(uuid, integer) from public, anon;',
+      ),
+    );
+    expect(window, contains("'edit_window_update'"));
   });
 
   test('the history is read-only for clients and follows the message', () {

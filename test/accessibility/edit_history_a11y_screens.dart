@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 import '../features/chats/edit_history/edit_history_fakes.dart';
@@ -56,6 +57,31 @@ Future<void> _openEditedThread(
   }
 }
 
+Future<void> _openEditWindow(
+  WidgetTester tester,
+  PhoneWorld world, {
+  bool openPicker = false,
+}) async {
+  await pumpStandalone(
+    tester,
+    world,
+    const CircleSettingsScreen(circleId: 'circle-1'),
+    extraOverrides: [editWindowOverride(FakeEditWindowRepository(3600))],
+  );
+  final row = find.byKey(const ValueKey('circle-edit-window'));
+  await tester.dragUntilVisible(
+    row,
+    find.byType(Scrollable).first,
+    const Offset(0, -150),
+  );
+  await tester.ensureVisible(row);
+  await settle(tester);
+  if (openPicker) {
+    await tester.tap(row);
+    await settle(tester);
+  }
+}
+
 final editHistoryA11yScreens = <A11yScreen>[
   A11yScreen(
     'edited-message-thread',
@@ -71,5 +97,10 @@ final editHistoryA11yScreens = <A11yScreen>[
     _openEditedThread,
     viewport: desktopViewport,
     desktop: true,
+  ),
+  A11yScreen('circle-settings-edit-window', _openEditWindow),
+  A11yScreen(
+    'circle-edit-window-picker',
+    (tester, world) => _openEditWindow(tester, world, openPicker: true),
   ),
 ];

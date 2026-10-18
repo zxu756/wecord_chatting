@@ -7,7 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/chats/edit_history/circle_edit_window.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
+import 'package:wecord/features/circles/circle_audit_log_screen.dart';
+import 'package:wecord/features/circles/circle_settings_screen.dart';
+import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_sheet.dart';
 import 'package:wecord/features/chats/edit_history/edit_version.dart';
 import 'package:wecord/features/chats/thread/footer_widgets.dart';
@@ -309,6 +313,133 @@ void main() {
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
+    });
+  });
+
+  group('the circle edit time limit', () {
+    Future<PhoneWorld> openSettings(
+      WidgetTester tester,
+      FakeEditWindowRepository repository, {
+      bool manager = true,
+    }) async {
+      usePhoneViewport(tester, notchedPhone);
+      final world = PhoneWorld();
+      if (!manager) {
+        world.circles.detail = circleDetailWith(
+          channelId: 'ch-general',
+          permissions: 1,
+        );
+      }
+      await pumpStandalone(
+        tester,
+        world,
+        const CircleSettingsScreen(circleId: 'circle-1'),
+        extraOverrides: [editWindowOverride(repository)],
+      );
+      return world;
+    }
+
+    testWidgets('managers pick a limit in circle settings', (tester) async {
+      final repository = FakeEditWindowRepository();
+      final world = await openSettings(tester, repository);
+      final row = find.byKey(const ValueKey('circle-edit-window'));
+      await tester.dragUntilVisible(
+        row,
+        find.byType(Scrollable).first,
+        const Offset(0, -150),
+      );
+      await tester.ensureVisible(row);
+      await settle(tester);
+      expect(find.text('Edit time limit'), findsOneWidget);
+      expect(find.text('No limit'), findsOneWidget);
+
+      await tester.tap(row);
+      await settle(tester);
+      for (final label in ['No limit', '15 minutes', '1 hour', '24 hours']) {
+        expect(find.text(label), findsWidgets);
+      }
+      await tester.tap(find.text('15 minutes'));
+      await settle(tester);
+
+      expect(repository.saved, [('circle-1', 900)]);
+      expect(find.text('15 minutes'), findsOneWidget);
+      await world.close(tester);
+    });
+
+    testWidgets('says so when saving fails and keeps the old limit', (
+      tester,
+    ) async {
+      final repository = FakeEditWindowRepository(3600)
+        ..saveError = Exception('no');
+      final world = await openSettings(tester, repository);
+      final row = find.byKey(const ValueKey('circle-edit-window'));
+      await tester.dragUntilVisible(
+        row,
+        find.byType(Scrollable).first,
+        const Offset(0, -150),
+      );
+      await tester.ensureVisible(row);
+      await settle(tester);
+      await tester.tap(row);
+      await settle(tester);
+      await tester.tap(find.text('24 hours'));
+      await settle(tester);
+      expect(
+        find.text("Couldn't save the time limit. Try again."),
+        findsOneWidget,
+      );
+      expect(find.text('1 hour'), findsOneWidget);
+      await world.close(tester);
+    });
+
+    testWidgets('members who do not manage the circle do not see it', (
+      tester,
+    ) async {
+      final world = await openSettings(
+        tester,
+        FakeEditWindowRepository(),
+        manager: false,
+      );
+      expect(find.byKey(const ValueKey('circle-edit-window')), findsNothing);
+      await world.close(tester);
+    });
+
+    test('the audit log reads a change of the limit', () {
+      String summary(Map<String, dynamic> changes) => circleAuditSummary(
+        CircleAuditEntry(
+          id: 'a',
+          circleId: 'circle-1',
+          action: 'edit_window_update',
+          targetType: 'circle',
+          targetLabel: 'Hikers',
+          changes: changes,
+          createdAt: DateTime.utc(2026, 10, 22),
+          actor: const CircleAuditActor(
+            id: 'user-1',
+            username: 'ada',
+            displayName: 'Ada',
+          ),
+        ),
+        null,
+      ).toPlainText();
+      expect(
+        summary({
+          'edit_window_seconds': {'old': null, 'new': 3600},
+        }),
+        'Ada set the edit time limit to 1 hour',
+      );
+      expect(
+        summary({
+          'edit_window_seconds': {'old': 3600, 'new': null},
+        }),
+        'Ada removed the edit time limit',
+      );
+    });
+
+    test('has a label for each limit', () {
+      expect(editWindowChoices, [0, 900, 3600, 86400]);
+      expect(editWindowLabel(0), 'No limit');
+      expect(editWindowLabel(86400), '24 hours');
     });
   });
 

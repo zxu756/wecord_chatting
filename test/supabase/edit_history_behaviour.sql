@@ -132,6 +132,7 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610210520_calendar_feed_items.sql
 \i supabase/migrations/202610220210_message_edit_history.sql
 \i supabase/migrations/202610220220_edit_review.sql
+\i supabase/migrations/202610220230_circle_edit_window.sql
 
 create temp table ids (name text primary key, id uuid not null);
 grant all on ids to public;
@@ -655,6 +656,59 @@ select pg_temp.act_as(null);
 select pg_temp.edit('c', 'n4', 'edit while the guard is off');
 select pg_temp.check('with the guard off an edit is not checked',
   (select review_state is null from public.messages where id = pg_temp.mid('n4')));
+
+-- ------------------------------------------------------------ the edit window
+
+insert into ids select 'w1', pg_temp.say('d', 'channel', 'window message');
+select pg_temp.act_as('d');
+select pg_temp.refused('a member cannot set the edit time limit',
+  format('select public.set_circle_edit_window(%L, 900)', pg_temp.mid('circle')), '42501');
+select pg_temp.act_as('a');
+select pg_temp.refused('only the listed limits are accepted',
+  format('select public.set_circle_edit_window(%L, 123)', pg_temp.mid('circle')), '22023');
+select public.set_circle_edit_window(pg_temp.mid('circle'), 900);
+select pg_temp.act_as(null);
+select pg_temp.check('setting the limit is audited',
+  exists (select 1 from public.circle_audit_log
+          where action = 'edit_window_update' and actor_id = '00000000-0000-4000-8000-0000000000a1'
+            and changes->'edit_window_seconds'->>'new' = '900'));
+select pg_temp.check('the circle shows it to its members',
+  (select edit_window_seconds = 900 from public.circles where id = pg_temp.mid('circle')));
+
+select pg_temp.edit('d', 'w1', 'edited inside the window');
+select pg_temp.check('an edit inside the window works',
+  (select body = 'edited inside the window' from public.messages where id = pg_temp.mid('w1')));
+update public.messages set created_at = now() - interval '20 minutes' where id = pg_temp.mid('w1');
+select pg_temp.act_as('d');
+select pg_temp.refused('a late edit is refused',
+  format('select public.edit_message(%L, ''too late'')', pg_temp.mid('w1')), '42501');
+select pg_temp.act_as(null);
+select pg_temp.check('and changes nothing, history included',
+  (select body = 'edited inside the window' from public.messages where id = pg_temp.mid('w1'))
+  and (select count(*) = 1 from public.message_edits where message_id = pg_temp.mid('w1')));
+select pg_temp.act_as('d');
+select public.recall_message(pg_temp.mid('w1'));
+select pg_temp.act_as(null);
+select pg_temp.check('deleting a late message is still possible',
+  (select recalled_at is not null from public.messages where id = pg_temp.mid('w1')));
+select pg_temp.act_as('a');
+select public.set_circle_edit_window(pg_temp.mid('circle'), 3600);
+select pg_temp.act_as(null);
+insert into ids select 'w2', pg_temp.say('d', 'channel', 'a longer window');
+update public.messages set created_at = now() - interval '20 minutes' where id = pg_temp.mid('w2');
+select pg_temp.edit('d', 'w2', 'still inside one hour');
+select pg_temp.check('a longer limit allows it', 
+  (select body = 'still inside one hour' from public.messages where id = pg_temp.mid('w2')));
+select pg_temp.edit('a', 'm1', 'the group has no limit');
+select pg_temp.check('groups are not limited',
+  (select body = 'the group has no limit' from public.messages where id = pg_temp.mid('m1')));
+select pg_temp.act_as('a');
+select public.set_circle_edit_window(pg_temp.mid('circle'), null);
+select pg_temp.act_as(null);
+update public.messages set created_at = now() - interval '3 days' where id = pg_temp.mid('w2');
+select pg_temp.edit('d', 'w2', 'no limit any more');
+select pg_temp.check('with no limit any old message can be edited',
+  (select body = 'no limit any more' from public.messages where id = pg_temp.mid('w2')));
 
 -- ------------------------------------------- the message-count rule at its edge
 

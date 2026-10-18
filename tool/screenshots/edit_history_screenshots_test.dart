@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
 
 import '../../test/features/chats/edit_history/edit_history_fakes.dart';
@@ -172,4 +173,35 @@ void main() {
     }
     await settle(tester);
   });
+
+  Future<void> openWindow(
+    WidgetTester tester,
+    PhoneWorld world, {
+    bool picker = false,
+  }) async {
+    await pumpStandalone(
+      tester,
+      world,
+      const CircleSettingsScreen(circleId: 'circle-1'),
+      extraOverrides: [editWindowOverride(FakeEditWindowRepository(3600))],
+    );
+    final row = find.byKey(const ValueKey('circle-edit-window'));
+    await tester.dragUntilVisible(
+      row,
+      find.byType(Scrollable).first,
+      const Offset(0, -150),
+    );
+    await tester.ensureVisible(row);
+    await settle(tester);
+    if (picker) {
+      await tester.tap(row);
+      await settle(tester);
+    }
+  }
+
+  screen('circle-edit-window', (tester, world) => openWindow(tester, world));
+  screen(
+    'circle-edit-window-picker',
+    (tester, world) => openWindow(tester, world, picker: true),
+  );
 }

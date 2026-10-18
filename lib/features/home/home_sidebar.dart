@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/notifications/quiet_hours_indicator.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chat_folders/chat_folder_rules.dart';
+import 'package:wecord/features/chat_folders/chat_folder_strip.dart';
+import 'package:wecord/features/chat_folders/chat_folders_repository.dart';
+import 'package:wecord/features/chat_folders/folded_folder_row.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
@@ -94,6 +98,16 @@ class HomeSidebar extends ConsumerWidget {
         if (conversation.isNoteToSelf) conversation,
       ...directMessages,
     ]);
+    // The folder strip filters the list; under All, the folded folder's
+    // chats show as one row.
+    final folders = ref.watch(chatFoldersProvider).value ?? const [];
+    final selectedFolder = ref.watch(effectiveChatFolderSelectionProvider);
+    final entries = chatListEntries(
+      chats: listed,
+      folders: folders,
+      selected: selectedFolder,
+      userId: currentUserId,
+    );
 
     return Material(
       type: MaterialType.transparency,
@@ -197,19 +211,33 @@ class HomeSidebar extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  for (final conversation in listed)
-                    _DirectMessageRow(
-                      conversation: conversation,
-                      currentUserId: currentUserId,
-                      selected:
-                          section == HomeSection.conversation &&
-                          conversation.id == selectedConversationId,
-                      presence: presenceOf(
-                        conversation.directUserId,
-                        onlineUserIds: onlineUserIds,
-                        statuses: presenceStatuses,
+                  const ChatFolderStrip(
+                    padding: EdgeInsets.fromLTRB(4, 2, 4, 6),
+                  ),
+                  for (final entry in entries)
+                    switch (entry) {
+                      ConversationEntry(:final conversation) =>
+                        _DirectMessageRow(
+                          conversation: conversation,
+                          currentUserId: currentUserId,
+                          selected:
+                              section == HomeSection.conversation &&
+                              conversation.id == selectedConversationId,
+                          presence: presenceOf(
+                            conversation.directUserId,
+                            onlineUserIds: onlineUserIds,
+                            statuses: presenceStatuses,
+                          ),
+                        ),
+                      final FoldedEntry folded => FoldedFolderRow(
+                        entry: folded,
+                        dense: true,
+                        currentUserId: currentUserId,
+                        onOpen: () => ref
+                            .read(chatFolderSelectionProvider.notifier)
+                            .select(folded.folder.id),
                       ),
-                    ),
+                    },
                   if (conversations.isLoading && directMessages.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(16),
@@ -222,6 +250,11 @@ class HomeSidebar extends ConsumerWidget {
                         tr('No conversations yet'),
                         style: theme.textTheme.bodySmall,
                       ),
+                    )
+                  else if (entries.isEmpty)
+                    ChatFolderEmptyNote(
+                      selected: selectedFolder,
+                      folders: folders,
                     ),
                 ],
               ),

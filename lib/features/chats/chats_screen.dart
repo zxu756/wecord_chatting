@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chat_folders/add_to_folder_sheet.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
@@ -141,7 +142,7 @@ abstract final class ChatsScreen {
   static const path = '/chats';
 }
 
-enum _ConversationAction { pin, mute, markReadState, hide }
+enum _ConversationAction { pin, mute, markReadState, folders, hide }
 
 Map<_ConversationAction, String> _conversationActionLabels(
   ConversationSummary conversation,
@@ -155,6 +156,7 @@ Map<_ConversationAction, String> _conversationActionLabels(
         conversation.unreadCount > 0 || conversation.isMarkedUnread
         ? tr('Mark read')
         : tr('Mark unread'),
+    _ConversationAction.folders: tr('Add to folder…'),
     _ConversationAction.hide: tr('Delete conversation'),
   };
 }
@@ -203,6 +205,7 @@ Future<void> showConversationActions(
                       Icons.notifications_off_outlined,
                     _ConversationAction.markReadState =>
                       Icons.mark_chat_read_outlined,
+                    _ConversationAction.folders => Icons.folder_outlined,
                     _ConversationAction.hide => Icons.delete_outline,
                   }),
                   title: Text(label),
@@ -214,6 +217,10 @@ Future<void> showConversationActions(
       );
     },
   );
+  if (action == _ConversationAction.folders && context.mounted) {
+    await showAddToFolderSheet(context, conversation);
+    return;
+  }
   if (action != null && context.mounted) {
     _handleConversationAction(context, ref, conversation, action);
   }
@@ -239,6 +246,8 @@ void _handleConversationAction(
       conversation.unreadCount > 0 || conversation.isMarkedUnread
           ? repository.markConversationRead(conversation.id)
           : repository.markConversationUnread(conversation.id),
+    // Handled by the caller: it opens a sheet of its own.
+    _ConversationAction.folders => Future<void>.value(),
     _ConversationAction.hide => repository.hideConversation(conversation.id),
   };
 

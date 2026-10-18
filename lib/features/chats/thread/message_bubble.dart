@@ -325,7 +325,7 @@ class _MessageBubble extends StatelessWidget {
         ],
         if (message.editedAt != null) ...[
           const SizedBox(height: 4),
-          _EditedMarker(color: c.muted),
+          EditedMarker(color: c.muted),
         ],
         if (previewUrl != null) ...[
           const SizedBox(height: 10),
@@ -470,7 +470,7 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _content(BuildContext context, Color textColor) {
     final isRecalled = _isRecalled;
-    final content = _messageContent(isRecalled, textColor);
+    final content = _messageContent(context, isRecalled, textColor);
     if (isRecalled || message.type != MessageType.text) {
       return content;
     }
@@ -490,8 +490,35 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _messageContent(bool isRecalled, Color textColor) {
+  BubbleFooterRegistry _footerRegistry(BuildContext context) =>
+      ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(bubbleFooterRegistryProvider);
+
+  BubbleFooterContext _footerContext(BuildContext context, Color textColor) {
+    return BubbleFooterContext(
+      context: context,
+      message: message,
+      isCurrentUser: isCurrentUser,
+      cards: cards,
+      desktop: desktop,
+      textColor: textColor,
+      previewUrl: _previewUrl,
+      showReadReceipt: showReadReceipt,
+      onToggleReaction: onToggleReaction,
+      onShowReactors: onShowReactors,
+      onOpenThread: onOpenThread,
+    );
+  }
+
+  Widget _messageContent(
+    BuildContext context,
+    bool isRecalled,
+    Color textColor,
+  ) {
     return _MessageContent(
+      footer: _footerContext(context, textColor),
       message: message,
       messagesById: messagesById,
       voiceAttachment: isRecalled ? null : message.voiceAttachment,
@@ -564,10 +591,9 @@ class _MessageBubble extends StatelessWidget {
     final outgoing = isCurrentUser;
     final sender = this.sender;
     final stickerAttachment = _isRecalled ? null : message.stickerAttachment;
-    final reactions = _isRecalled
-        ? const <MessageReaction>[]
-        : message.reactions;
-    final previewUrl = _previewUrl;
+    final footerItems = _footerRegistry(
+      context,
+    ).below(_footerContext(context, outgoing ? c.onInk : c.ink));
     final canShowActions = !_isRecalled && !_isPending;
     final avatarSize = desktop ? 32.0 : 30.0;
     final showAvatar = sender != null && !outgoing;
@@ -646,54 +672,26 @@ class _MessageBubble extends StatelessWidget {
           ),
         );
         final afterBubble = [
-          if (previewUrl != null)
-            extra(MessageLinkPreviewCard(url: previewUrl, bottomGap: 0), 0),
-          if (message.threadSummary case final thread?
-              when onOpenThread != null)
-            extra(
-              _ThreadChip(
-                messageId: message.id,
-                summary: thread,
-                onTap: () => unawaited(onOpenThread!(message)),
+          for (final item in footerItems)
+            switch (item.entry.wrap) {
+              BubbleFooterWrap.plain => extra(item.child, 0),
+              BubbleFooterWrap.pill => extra(
+                Align(
+                  alignment: outgoing
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: WallpaperPill(child: item.child),
+                ),
+                0,
               ),
-              0,
-            ),
-          if (reactions.isNotEmpty) extra(_reactionChips(), 0),
-          if (message.expiresAt case final expiresAt? when !_isRecalled)
-            extra(
-              Align(
-                alignment: outgoing
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: WallpaperPill(
-                  child: DisappearingMark(expiresAt: expiresAt),
+              BubbleFooterWrap.receipt => Padding(
+                padding: const EdgeInsets.only(right: 2, top: 2),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: WallpaperPill(child: item.child),
                 ),
               ),
-              0,
-            ),
-          if (message.reviewState case final reviewState?)
-            extra(
-              Align(
-                alignment: outgoing
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: WallpaperPill(
-                  child: MessageReviewMark(
-                    state: reviewState,
-                    isOwn: isCurrentUser,
-                  ),
-                ),
-              ),
-              0,
-            ),
-          if (showReadReceipt)
-            Padding(
-              padding: const EdgeInsets.only(right: 2, top: 2),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: const WallpaperPill(child: ChatReadReceipt()),
-              ),
-            ),
+            },
         ];
         return Padding(
           padding: EdgeInsets.only(bottom: gap),
@@ -788,10 +786,9 @@ class _MessageBubble extends StatelessWidget {
     final c = context.tokens.colors;
     final sender = this.sender;
     final stickerAttachment = _isRecalled ? null : message.stickerAttachment;
-    final reactions = _isRecalled
-        ? const <MessageReaction>[]
-        : message.reactions;
-    final previewUrl = _previewUrl;
+    final footerItems = _footerRegistry(
+      context,
+    ).below(_footerContext(context, c.ink));
     final canShowActions = !_isRecalled && !_isPending;
     final density = context.density;
     final avatarSize = density.avatar(desktop ? 40 : 36);
@@ -855,41 +852,25 @@ class _MessageBubble extends StatelessWidget {
             ),
             child: _content(context, c.ink),
           ),
-        if (previewUrl != null) ...[
-          const SizedBox(height: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: MessageLinkPreviewCard(url: previewUrl, bottomGap: 0),
-          ),
-        ],
-        if (message.threadSummary case final thread?
-            when onOpenThread != null) ...[
-          const SizedBox(height: 6),
-          _ThreadChip(
-            messageId: message.id,
-            summary: thread,
-            onTap: () => unawaited(onOpenThread!(message)),
-          ),
-        ],
-        if (reactions.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          _reactionChips(),
-        ],
-        if (message.expiresAt case final expiresAt? when !_isRecalled)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: DisappearingMark(expiresAt: expiresAt),
-          ),
-        if (message.reviewState case final reviewState?)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: MessageReviewMark(state: reviewState, isOwn: isCurrentUser),
-          ),
-        if (showReadReceipt)
-          const Padding(
-            padding: EdgeInsets.only(top: 4),
-            child: ChatReadReceipt(),
-          ),
+        for (final item in footerItems)
+          ...switch (item.entry.wrap) {
+            BubbleFooterWrap.plain => [
+              SizedBox(height: item.entry.cardGap),
+              if (item.entry.cardMaxWidth case final maxWidth?)
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: item.child,
+                )
+              else
+                item.child,
+            ],
+            BubbleFooterWrap.pill || BubbleFooterWrap.receipt => [
+              Padding(
+                padding: EdgeInsets.only(top: item.entry.cardGap),
+                child: item.child,
+              ),
+            ],
+          },
       ],
     );
 
@@ -1060,230 +1041,33 @@ class _MessageBubble extends StatelessWidget {
     }
   }
 
-  bool _hasVisiblePreview(BuildContext context) {
-    final url = _previewUrl;
-    if (url == null) {
-      return false;
-    }
-    return ProviderScope.containerOf(
-          context,
-          listen: false,
-        ).read(linkPreviewProvider(url)).value !=
-        null;
-  }
-
-  /// Whether the menu offers Translate: a text message, and AI available.
-  bool _canTranslate(BuildContext context) {
-    return !_isRecalled &&
-        message.type == MessageType.text &&
-        message.body.trim().isNotEmpty &&
-        !_isPending &&
-        ProviderScope.containerOf(
-          context,
-          listen: false,
-        ).read(aiAvailableProvider(circleId));
-  }
-
-  /// Translate to the app's language, or hide the translation again.
-  MessageAction _translateAction(BuildContext context) {
-    final translations = ProviderScope.containerOf(
-      context,
-      listen: false,
-    ).read(aiTranslationsProvider.notifier);
-    final shown = translations.isShown(message.id);
-    return MessageAction(
-      key: const ValueKey('message-translate'),
-      icon: Icons.translate_rounded,
-      label: shown ? tr('Show original') : tr('Translate'),
-      onSelected: () => shown
-          ? translations.hide(message.id)
-          : unawaited(
-              translations.translate(
-                message.id,
-                message.body,
-                conversationId: message.conversationId,
-              ),
-            ),
-    );
-  }
-
-  /// Whether the menu offers Transcribe: a sent voice message.
-  bool get _canTranscribe =>
-      !_isRecalled &&
-      !_isPending &&
-      !message.isViewOnce &&
-      message.type == MessageType.voice &&
-      message.voiceAttachment != null;
-
-  /// Shows the voice message as text under its waveform, or hides it again.
-  MessageAction _transcribeAction(BuildContext context) {
-    final transcripts = ProviderScope.containerOf(
-      context,
-      listen: false,
-    ).read(transcriptsProvider.notifier);
-    final shown = transcripts.isShown(message.id);
-    final attachment = message.voiceAttachment!;
-    return MessageAction(
-      key: const ValueKey('message-transcribe'),
-      icon: Icons.subtitles_outlined,
-      label: shown ? tr('Hide transcript') : tr('Transcribe'),
-      onSelected: () => shown
-          ? transcripts.hide(message.id)
-          : unawaited(
-              transcripts.show(
-                TranscribeRequest.forMessage(
-                  messageId: message.id,
-                  conversationId: message.conversationId,
-                  attachment: attachment,
-                ),
-              ),
-            ),
-    );
-  }
-
-  /// What can be done with this message, in menu order.
+  /// What can be done with this message, in menu order: whatever the
+  /// message action registry collects (see `registry/message_actions.dart`).
   List<MessageAction> _actions(BuildContext context) {
-    // View-once media is neither previewed nor forwarded.
-    final imageAttachment = _isRecalled || message.isViewOnce
-        ? null
-        : message.imageAttachment;
-    return [
-      if (canCompose)
-        MessageAction(
-          slot: MessageActionSlot.reply,
-          icon: Icons.reply_rounded,
-          label: tr('Reply'),
-          onSelected: () => onReply(message),
-        ),
-      if (message.type == MessageType.text)
-        MessageAction(
-          slot: MessageActionSlot.copy,
-          icon: Icons.copy_rounded,
-          label: tr('Copy'),
-          onSelected: () =>
-              unawaited(Clipboard.setData(ClipboardData(text: message.body))),
-        ),
-      // A poll's votes belong to the original, so polls are not
-      // forwarded; stickers belong to circles the recipients may not be
-      // in.
-      if (message.type != MessageType.poll &&
-          message.type != MessageType.sticker &&
-          message.liveLocationCard == null &&
-          !message.isViewOnce)
-        MessageAction(
-          slot: MessageActionSlot.forward,
-          icon: Icons.shortcut_rounded,
-          label: tr('Forward'),
-          onSelected: () => onForward(message),
-        ),
-      if (_canTranslate(context)) _translateAction(context),
-      if (_canTranscribe) _transcribeAction(context),
-      if (canCompose &&
-          isCurrentUser &&
-          message.type == MessageType.text &&
-          message.locationCard == null &&
-          message.liveLocationCard == null)
-        MessageAction(
-          icon: Icons.edit_outlined,
-          label: tr('Edit'),
-          onSelected: () => onEdit(message),
-        ),
-      if (canCompose && !_isRecalled && message.type != MessageType.system)
-        MessageAction(
-          key: const ValueKey('message-create-task'),
-          icon: Icons.add_task_rounded,
-          label: tr('Create task'),
-          onSelected: () =>
-              unawaited(showCreateTaskFromMessage(context, message)),
-        ),
-      if (canPin)
-        MessageAction(
-          icon: message.isPinned
-              ? Icons.push_pin_rounded
-              : Icons.push_pin_outlined,
-          label: message.isPinned ? tr('Unpin') : tr('Pin'),
-          onSelected: () => unawaited(onTogglePin(message)),
-        ),
-      if (onOpenThread != null &&
-          (message.threadSummary != null ||
-              (canStartThread && message.type != MessageType.system)))
-        MessageAction(
-          icon: Icons.forum_outlined,
-          label: message.threadSummary == null
-              ? tr('Create thread')
-              : tr('Open thread'),
-          onSelected: () => unawaited(onOpenThread!(message)),
-        ),
-      if (onRemind case final remind? when !_isPending && !_isRecalled)
-        MessageAction(
-          key: const ValueKey('message-remind'),
-          icon: Icons.alarm_add_outlined,
-          label: tr('Remind me'),
-          onSelected: () => unawaited(remind(message)),
-        ),
-      if (onToggleSaved case final toggle? when !_isPending && !_isRecalled)
-        MessageAction(
-          key: const ValueKey('message-save'),
-          icon: isSaved
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          label: isSaved ? tr('Remove from Saved') : tr('Save for later'),
-          onSelected: () => unawaited(toggle(message)),
-        ),
-      if (!_isPending && !_isRecalled && message.type != MessageType.system)
-        selectMessageAction(context, message),
-      if (imageAttachment != null)
-        MessageAction(
-          icon: Icons.visibility_outlined,
-          label: tr('Preview'),
-          onSelected: () => unawaited(onPreviewImage(imageAttachment)),
-        ),
-      if (imageAttachment != null && !_isPending)
-        MessageAction(
-          key: const ValueKey('message-copy-image-text'),
-          icon: Icons.document_scanner_outlined,
-          label: tr('Copy text from picture'),
-          onSelected: () => unawaited(
-            showImageTextSheet(
-              context,
-              circleId: circleId,
-              file: PreviewFile.fromImageAttachment(
-                imageAttachment,
-                messageId: message.id,
-                conversationId: message.conversationId,
-              ),
-            ),
-          ),
-        ),
-      if (onPublish case final publish?)
-        MessageAction(
-          key: const ValueKey('message-publish'),
-          icon: Icons.campaign_outlined,
-          label: tr('Publish'),
-          onSelected: () => unawaited(publish(message)),
-        ),
-      if (canCompose && isCurrentUser && _hasVisiblePreview(context))
-        MessageAction(
-          icon: Icons.link_off_rounded,
-          label: tr('Remove embed'),
-          onSelected: () => unawaited(onRemoveEmbed(message)),
-        ),
-      if (isCurrentUser)
-        MessageAction(
-          icon: Icons.delete_outline_rounded,
-          label: tr('Delete'),
-          destructive: true,
-          onSelected: () => unawaited(onDelete(message)),
-        )
-      else if (canModerate)
-        MessageAction(
-          key: const ValueKey('message-moderator-delete'),
-          icon: Icons.delete_outline_rounded,
-          label: tr('Delete message'),
-          destructive: true,
-          onSelected: () => unawaited(onDelete(message)),
-        ),
-    ];
+    final ctx = MessageActionContext(
+      context: context,
+      message: message,
+      isCurrentUser: isCurrentUser,
+      canCompose: canCompose,
+      canPin: canPin,
+      canStartThread: canStartThread,
+      canModerate: canModerate,
+      isSaved: isSaved,
+      circleId: circleId,
+      previewUrl: _previewUrl,
+      onReply: onReply,
+      onEdit: onEdit,
+      onForward: onForward,
+      onDelete: onDelete,
+      onPreviewImage: onPreviewImage,
+      onTogglePin: onTogglePin,
+      onRemoveEmbed: onRemoveEmbed,
+      onOpenThread: onOpenThread,
+      onRemind: onRemind,
+      onToggleSaved: onToggleSaved,
+      onPublish: onPublish,
+    );
+    return ctx.container.read(messageActionRegistryProvider).actionsFor(ctx);
   }
 
   QuickReactionBar _quickReactions(
@@ -1362,26 +1146,6 @@ class _MessageHoverState extends State<_MessageHover> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: widget.builder(context, _hovered),
-    );
-  }
-}
-
-/// The small "edited" after a message's text.
-class _EditedMarker extends StatelessWidget {
-  const _EditedMarker({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      tr('edited'),
-      style: TextStyle(
-        fontSize: 11.5,
-        height: 1.3,
-        fontWeight: FontWeight.w500,
-        color: color,
-      ),
     );
   }
 }

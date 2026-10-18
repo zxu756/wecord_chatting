@@ -89,6 +89,7 @@ class _SystemMessageLine extends StatelessWidget {
 
 class _MessageContent extends StatelessWidget {
   const _MessageContent({
+    required this.footer,
     required this.message,
     required this.messagesById,
     required this.voiceAttachment,
@@ -100,6 +101,8 @@ class _MessageContent extends StatelessWidget {
     this.cards = false,
   });
 
+  /// What the footer slot's entries inside the bubble need.
+  final BubbleFooterContext footer;
   final ChatMessage message;
   final Map<String, ChatMessage> messagesById;
   final VoiceAttachment? voiceAttachment;
@@ -300,16 +303,12 @@ class _MessageContent extends StatelessWidget {
       );
     }
 
-    content.add(MessageTaskChip(message: message));
-
-    if (message.editedAt != null) {
-      content.add(const SizedBox(height: 2));
-      content.add(_EditedMarker(color: textColor.withValues(alpha: 0.55)));
-    }
-
-    if (message.isPublished) {
-      content.add(PublishedMarker(foregroundColor: textColor));
-    }
+    content.addAll(
+      ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(bubbleFooterRegistryProvider).inside(footer),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

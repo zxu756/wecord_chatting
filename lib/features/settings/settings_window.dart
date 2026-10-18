@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:wecord/features/admin/admin_entry.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
@@ -470,6 +471,7 @@ class _SectionPage extends ConsumerWidget {
             (profile) => [
               const SizedBox(height: 16),
               const PrivacySettingsGroup(),
+              const AdminConsoleEntry(),
               AccountActionsGroup(
                 username: profile.username,
                 header: tr('Account'),

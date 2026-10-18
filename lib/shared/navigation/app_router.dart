@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/admin/admin_console_screen.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/auth_screen.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
@@ -369,6 +370,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 code: state.pathParameters['code']!,
               );
             },
+          ),
+          // The admin console. Hidden: Settings lists it for admins only,
+          // and the page shows nothing to anybody else.
+          GoRoute(
+            path: AdminConsoleScreen.path,
+            builder: (context, state) => const AdminConsoleScreen(),
           ),
         ],
       ),

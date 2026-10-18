@@ -354,13 +354,15 @@ List<Override> formOverrides(
   FakeImagePicker? picker,
   List<Profile>? members,
   String conversationId = 'group-1',
+  bool withImagePicker = true,
 }) {
   final list =
       members ?? [formProfile('user-3', 'Bob'), formProfile('user-4', 'Cy')];
   return [
     formRepositoryProvider.overrideWithValue(repository),
     if (exporter != null) formFileExporterProvider.overrideWithValue(exporter),
-    imagePickerServiceProvider.overrideWithValue(picker ?? FakeImagePicker()),
+    if (withImagePicker)
+      imagePickerServiceProvider.overrideWithValue(picker ?? FakeImagePicker()),
     chatImageProviderFactoryProvider.overrideWithValue(
       (url) => MemoryImage(samplePhotoPng(width: 120, height: 80)),
     ),

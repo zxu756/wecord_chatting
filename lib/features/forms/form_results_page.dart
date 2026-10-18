@@ -338,12 +338,16 @@ class _PersonChip extends StatelessWidget {
             image: url == null ? null : NetworkImage(url),
           ),
           const SizedBox(width: 8),
-          Text(
-            person.displayName,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-              color: c.ink,
+          Flexible(
+            child: Text(
+              person.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: c.ink,
+              ),
             ),
           ),
         ],
@@ -594,7 +598,8 @@ class _BarLine extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 5),
-              FormBar(fraction: bar.fraction),
+              // The bar is the share of the people who answered, like the number.
+              FormBar(fraction: percentOf == 0 ? 0 : bar.count / percentOf),
             ],
           ),
         ),

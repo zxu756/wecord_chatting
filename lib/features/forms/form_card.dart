@@ -121,22 +121,22 @@ class FormCardView extends ConsumerWidget {
             FormBar(fraction: max == 0 ? 0 : form.responseCount / max),
             const SizedBox(height: 8),
           ],
-          Row(
+          Text(
+            '${formCountText(form)} · ${tr('{count} questions', {'count': form.fields.length})}',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: c.muted,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
             children: [
-              Expanded(
-                child: Text(
-                  '${formCountText(form)} · ${tr('{count} questions', {'count': form.fields.length})}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: c.muted,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (form.canViewResults) ...[
+              if (form.canViewResults)
                 WeCordButton(
                   key: ValueKey('form-results-${card.formId}'),
                   label: tr('Results'),
@@ -145,8 +145,6 @@ class FormCardView extends ConsumerWidget {
                   onPressed: () =>
                       unawaited(openFormResults(context, formId: card.formId)),
                 ),
-                const SizedBox(width: 4),
-              ],
               action,
             ],
           ),

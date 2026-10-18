@@ -174,6 +174,8 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `translate` | `text`, `target` (`en`/`zh`/`ja`/`ko`/`es`/`fr`), optional `conversation_id` | `{text}` |
 | `transcribe` | `message_id` of a voice message | `{text}` (empty when no speech was found) |
 | `translate_batch` | `conversation_id`, `message_ids` (up to 20), `target`, optional `manual` | `{target, translations: {id: {text, source_lang}}, skipped: {id: reason}, cached, translated}` |
+| `extract_actions` | `conversation_id`, `message_ids` (1 to 50), optional `time_zone` (IANA) and `utc_offset_minutes` | `{items: [{title, assignee, due, due_has_time, due_text, kind, source_message_id}], message_count}` |
+| `assistant` | `job_id`; only the database may call it (shared secret) | `{ok, reply_id, kind}` or `{ok, skipped: reason}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
@@ -213,6 +215,72 @@ writes it, through `store_message_translations`, which refuses text that has
 changed since it was translated. The function must be redeployed
 (`supabase functions deploy ai`) after migrations 202610220400 and
 202610220410.
+
+### Extracting to-dos (`extract_actions`)
+
+"Extract to-dos" in the selection bar sends the chosen messages (at most 50) and
+gets items back that the person confirms in a sheet; nothing is created by the
+function. Rules (`supabase/functions/ai/extract_actions.ts`):
+
+- circle switch (`ai_disabled_in_circle`) and the person's switch
+  (`ai_disabled_for_user`) are checked before anything is read; recalled,
+  expired, AI-guard-held and non-text messages are never read, even if their ids
+  are sent; the call counts once against `AI_DAILY_LIMIT_PER_USER` and is given
+  back when the model fails or answers badly;
+- the model sees a numbered member list and answers with a number; a number out
+  of range, a name nobody has, a name two members share or an id that is not a
+  member's all become `assignee: null`, so only conversation members can be
+  assigned;
+- `due` is a wall-clock date the model writes in the requester's time zone (the
+  function tells it today's date there) and the function turns it into a UTC
+  instant. The zone is the app's IANA name, else its UTC offset, else UTC. A
+  date more than a day in the past is dropped; an event with no time of day
+  becomes a task. The app re-reads `due_text` with its own time phrase parser
+  (the one behind time tokens) and prefers that result.
+
+### The @WeCord AI assistant (`assistant`)
+
+Anybody can write `@WeCord AI <request>` in a chat; `/20` or `/100` right after
+the mention lets it read the last 20 or 100 messages the requester can see (no
+suffix: only the message and the one it replies to). The app's "Ask WeCord AI"
+sheet writes that text. Flow (migrations 202610230400 to 202610230430):
+
+1. a trigger on `messages` notices the mention and queues a row in `ai_jobs`
+   (one per message; held messages queue when the AI guard releases them, edits
+   and bots never queue; 5 per person per minute), then wakes `POST
+   /functions/v1/ai {"action": "assistant", "job_id": ...}` through pg_net with
+   `DISPATCH_SECRET`, exactly like the AI guard (same Vault secrets, same
+   `verify_jwt = false`). `run_ai_assistant_sweep` (pg_cron, every minute) wakes
+   lost jobs up to three times and fails stuck ones;
+2. `ai_assistant_claim` takes the job and refuses, in SQL, when the message is
+   gone or older than 6 hours, the requester left, the circle turned AI off, the
+   group owner turned WeCord AI off (`group_ai_settings`, "WeCord AI in this
+   group" in the group's details, owner only), or the requester turned AI off
+   (`user_ai_settings.ai_enabled`). Nothing is sent to the model then;
+3. the requester's daily limit is counted (`AI_DAILY_LIMIT_PER_USER`); at the
+   limit the job is `limited` and nothing is posted;
+4. `ai_assistant_context` returns what the model may read, with the requester's
+   visibility (`current_user_readable_conversation_ids`), never recalled, expired
+   or held messages, plus the member list; the replied-to message and the chat
+   log are fenced as untrusted data, the request is the one thing it follows;
+5. the answer (JSON: kind answer / summary / translation / rewrite / todos, the
+   text, and for todos the items with the same member-only assignees) is posted
+   as a reply by the WeCord AI account and marked in `messages.ai_reply`
+   (clients cannot write it). Replies can be reported like any message.
+
+**The WeCord AI account.** `system_bots` holds the app's own bot accounts by key;
+no user id is written in any migration. SQL cannot create `auth.users` rows on
+hosted projects, so the `ai` function creates the login the first time it needs
+it, the way the `bots` function does: Auth admin API, banned, random password,
+`app_metadata.provider = 'bot'`; then `register_ai_assistant` (service role)
+turns it into the profile "WeCord AI" (`is_bot`, username `wecord_ai`, or
+`wecord_ai_xxxxxx` if taken). It is idempotent: a racing call keeps one account
+and deletes the surplus login. The account is a member of no chat; in circle
+channels `check_channel_message_send` lets a message marked `ai_reply` through
+(202610230430).
+
+Deploy: apply the migrations, then `supabase functions deploy ai`. Nothing else
+to set; the assistant uses the same AI secrets and Vault secrets as the guard.
 
 ### Privacy and safety
 
@@ -302,5 +370,5 @@ moderators), and the circle's daily request count.
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart
+flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart
 ```

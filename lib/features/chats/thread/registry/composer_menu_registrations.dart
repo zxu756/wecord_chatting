@@ -7,6 +7,7 @@
 // `order` between two of them to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/forms/forms_chat.dart';
+import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu_builtin.dart';
 
@@ -14,6 +15,7 @@ import 'package:wecord/features/chats/thread/registry/composer_menu_builtin.dart
 final List<ComposerMenuContribution> composerMenuExtensions = [
   // myFeatureComposerEntry,
   formComposerEntry,
+  askAssistantEntry,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

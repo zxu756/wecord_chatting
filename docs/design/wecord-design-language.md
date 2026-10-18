@@ -806,6 +806,14 @@ final formsAction = HeaderActionContribution(id: 'forms', order: 950,
       icon: Icons.assignment_outlined, onPressed: () => showForms(ctx.context)) : null);
 ```
 
+**Selection bar** (`chats/selection/selection_registry.dart`,
+`selection_registrations.dart`): the bar that replaces the composer in
+selection mode has its built-in buttons; a feature adds a
+`SelectionBarContribution` (`id`, `order`, `build(SelectionBarContext)` returning
+a `SelectionBarEntry` or null) and one line in `selectionBarExtensions`. The
+context carries the selected messages and `leaveSelection`. "Extract to-dos"
+(`features/ai/actions/extract_actions_chat.dart`) is the first.
+
 Behaviour that does not change when a registry grows: entries appear in
 `order`, then in the order they were listed for equal orders; built-in orders
 are never renumbered, so a feature's number stays valid.

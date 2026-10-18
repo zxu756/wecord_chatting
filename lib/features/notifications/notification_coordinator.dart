@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
@@ -60,7 +61,9 @@ class NotificationCoordinator {
     bool Function()? doNotDisturb,
     DateTime Function()? now,
     Stream<void>? pollTicks,
+    bool Function()? isInForeground,
   }) : _doNotDisturb = doNotDisturb ?? _never,
+       _isInForeground = isInForeground ?? _appIsInForeground,
        _now = now ?? DateTime.now,
        _pollTicks =
            pollTicks ?? Stream<void>.periodic(const Duration(seconds: 5));
@@ -78,6 +81,8 @@ class NotificationCoordinator {
   final bool Function() _doNotDisturb;
   final DateTime Function() _now;
   final Stream<void> _pollTicks;
+  final bool Function() _isInForeground;
+  var _backgroundTicks = 0;
 
   StreamSubscription<void>? _subscription;
   StreamSubscription<void>? _pollSubscription;
@@ -98,6 +103,10 @@ class NotificationCoordinator {
 
   /// Message reminders are asked about every this many poll ticks.
   static const reminderTickInterval = 6;
+
+  /// While the app is not in the foreground only every this many ticks
+  /// does anything (30 seconds with the default 5 second tick).
+  static const backgroundTickInterval = 6;
 
   var _reminderTicks = 0;
   var _checkingMessageReminders = false;
@@ -122,6 +131,14 @@ class NotificationCoordinator {
       _queueReload();
     });
     _pollSubscription = _pollTicks.listen((_) {
+      // Realtime changes reload the list at once; this poll only catches
+      // what it missed. A hidden tab or an app in the background polls
+      // every [backgroundTickInterval] ticks, not every one: the list is
+      // the server's heaviest query.
+      if (!_isInForeground() &&
+          _backgroundTicks++ % backgroundTickInterval != 0) {
+        return;
+      }
       _queueReload();
       unawaited(_checkEventReminders());
       if (_reminderTicks++ % reminderTickInterval == 0) {
@@ -562,3 +579,22 @@ class NotificationCoordinator {
 }
 
 bool _never() => false;
+
+/// Whether the app can be seen: not a hidden browser tab, a minimized
+/// window or an app in the background (an unfocused but visible window
+/// counts as seen).
+bool _appIsInForeground() {
+  final AppLifecycleState? state;
+  try {
+    state = WidgetsBinding.instance.lifecycleState;
+  } on FlutterError {
+    // No Flutter binding (a plain Dart test): nothing is hidden.
+    return true;
+  }
+  return switch (state) {
+    null || AppLifecycleState.resumed || AppLifecycleState.inactive => true,
+    AppLifecycleState.hidden ||
+    AppLifecycleState.paused ||
+    AppLifecycleState.detached => false,
+  };
+}

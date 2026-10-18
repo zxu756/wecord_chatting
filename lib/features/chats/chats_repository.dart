@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/push/push_repository.dart';
+import 'package:wecord/shared/api/shared_signal.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_status.dart';
@@ -1557,14 +1558,33 @@ class MessageSearchResult {
 }
 
 class SupabaseChatsDataSource implements ChatsDataSource {
-  const SupabaseChatsDataSource(this._client);
+  SupabaseChatsDataSource(this._client);
 
   static const _conversationListChannel = 'conversation-list-changes';
 
   final SupabaseClient _client;
 
+  /// The conversation list request made in this turn of the event loop.
+  /// Opening a chat asks for the list from several places at once (the
+  /// sidebar, the chat's summary, a group's members), and one change in
+  /// the list wakes up several listeners together; they share one request
+  /// instead of each running the server's heaviest query.
+  Future<List<Map<String, dynamic>>>? _conversationListThisTurn;
+
   @override
-  Future<List<Map<String, dynamic>>> listConversationSummaries() async {
+  Future<List<Map<String, dynamic>>> listConversationSummaries() {
+    final shared = _conversationListThisTurn;
+    if (shared != null) {
+      return shared;
+    }
+    final request = _fetchConversationSummaries();
+    _conversationListThisTurn = request;
+    // Anything asking after this turn gets a fresh answer.
+    Timer.run(() => _conversationListThisTurn = null);
+    return request;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchConversationSummaries() async {
     final rows = await _client.rpc<List<dynamic>>(
       'list_conversation_summaries',
     );
@@ -2001,67 +2021,64 @@ class SupabaseChatsDataSource implements ChatsDataSource {
     return response.data;
   }
 
-  @override
-  Stream<void> conversationChanges() {
-    late RealtimeChannel channel;
-    late StreamController<void> controller;
-    controller = StreamController<void>(
-      onListen: () {
-        void emit(PostgresChangePayload payload) {
-          controller.add(null);
-        }
+  /// One Realtime channel for every listener (the list, group details, the
+  /// notification coordinator), with bursts of changes merged.
+  late final _conversationChanges = SharedSignal(_openConversationChanges);
 
-        channel = _client
-            .channel(_conversationListChannel)
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'conversations',
-              callback: emit,
-            )
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'messages',
-              callback: emit,
-            )
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'conversation_members',
-              callback: emit,
-            )
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'conversation_threads',
-              callback: emit,
-            )
-            .subscribe((status, error) {
-              switch (status) {
-                case RealtimeSubscribeStatus.subscribed:
-                  realtimeStatusTracker.report(
-                    _conversationListChannel,
-                    RealtimeChannelState.joined,
-                  );
-                case RealtimeSubscribeStatus.channelError:
-                case RealtimeSubscribeStatus.timedOut:
-                  realtimeStatusTracker.report(
-                    _conversationListChannel,
-                    RealtimeChannelState.failed,
-                  );
-                case RealtimeSubscribeStatus.closed:
-                  realtimeStatusTracker.forget(_conversationListChannel);
-              }
-            });
-      },
-      onCancel: () async {
-        realtimeStatusTracker.forget(_conversationListChannel);
-        await _client.removeChannel(channel);
-      },
-    );
-    return controller.stream;
+  FutureOr<void> Function() _openConversationChanges(void Function() notify) {
+    void emit(PostgresChangePayload payload) => notify();
+
+    final channel = _client
+        .channel(_conversationListChannel)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversations',
+          callback: emit,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'messages',
+          callback: emit,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversation_members',
+          callback: emit,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversation_threads',
+          callback: emit,
+        )
+        .subscribe((status, error) {
+          switch (status) {
+            case RealtimeSubscribeStatus.subscribed:
+              realtimeStatusTracker.report(
+                _conversationListChannel,
+                RealtimeChannelState.joined,
+              );
+            case RealtimeSubscribeStatus.channelError:
+            case RealtimeSubscribeStatus.timedOut:
+              realtimeStatusTracker.report(
+                _conversationListChannel,
+                RealtimeChannelState.failed,
+              );
+            case RealtimeSubscribeStatus.closed:
+              realtimeStatusTracker.forget(_conversationListChannel);
+          }
+        });
+    return () async {
+      realtimeStatusTracker.forget(_conversationListChannel);
+      await _client.removeChannel(channel);
+    };
   }
+
+  @override
+  Stream<void> conversationChanges() => _conversationChanges.stream;
 
   @override
   Stream<void> messageChanges(String conversationId) {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -31,57 +32,62 @@ class CircleReviewScreen extends ConsumerWidget {
     final reviews = ref.watch(messageReviewsProvider(circleId));
     return CirclePageScaffold(
       title: tr('Review'),
-      body: reviews.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => CircleEmptyState(
-          icon: Icons.fact_check_outlined,
-          title: tr('Could not load the review queue.'),
-          action: WeCordButton(
-            label: tr('Try again'),
-            onPressed: () => ref.invalidate(messageReviewsProvider(circleId)),
+      // The circle's join requests sit above the AI guard's queue.
+      body: JoinRequestsHost(
+        circleId: circleId,
+        now: now,
+        child: reviews.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => CircleEmptyState(
+            icon: Icons.fact_check_outlined,
+            title: tr('Could not load the review queue.'),
+            action: WeCordButton(
+              label: tr('Try again'),
+              onPressed: () => ref.invalidate(messageReviewsProvider(circleId)),
+            ),
           ),
-        ),
-        data: (items) => items.isEmpty
-            ? CircleEmptyState(
-                key: const ValueKey('review-empty'),
-                icon: Icons.verified_user_outlined,
-                title: tr('Nothing to review'),
-                message: tr(
-                  'Messages the AI guard holds back or flags show up here.',
-                ),
-              )
-            : ListView.separated(
-                padding: circlePagePadding(context),
-                itemCount: items.length + 1,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
-                      child: Text(
-                        tr(
-                          'Held messages are hidden from everyone but their '
-                          'author until you approve them. Flagged messages '
-                          'are already visible.',
+          data: (items) => items.isEmpty
+              ? CircleEmptyState(
+                  key: const ValueKey('review-empty'),
+                  icon: Icons.verified_user_outlined,
+                  title: tr('Nothing to review'),
+                  message: tr(
+                    'Messages the AI guard holds back or flags show up here.',
+                  ),
+                )
+              : ListView.separated(
+                  padding: circlePagePadding(context),
+                  itemCount: items.length + 1,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                        child: Text(
+                          tr(
+                            'Held messages are hidden from everyone but their '
+                            'author until you approve them. Flagged messages '
+                            'are already visible.',
+                          ),
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: context.tokens.colors.muted,
+                            height: 1.4,
+                          ),
                         ),
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          color: context.tokens.colors.muted,
-                          height: 1.4,
-                        ),
-                      ),
+                      );
+                    }
+                    final item = items[index - 1];
+                    return ReviewCard(
+                      key: ValueKey('review-${item.messageId}'),
+                      review: item,
+                      circleId: circleId,
+                      now: now,
                     );
-                  }
-                  final item = items[index - 1];
-                  return ReviewCard(
-                    key: ValueKey('review-${item.messageId}'),
-                    review: item,
-                    circleId: circleId,
-                    now: now,
-                  );
-                },
-              ),
+                  },
+                ),
+        ),
       ),
     );
   }

@@ -116,6 +116,7 @@ enum CircleAuditActionGroup {
   automod('automod', 'AutoMod'),
   guard('guard', 'AI guard'),
   onboarding('onboarding', 'Onboarding'),
+  join('join', 'Join requests'),
   discovery('discovery', 'Discovery'),
   other('', 'Other');
 
@@ -156,6 +157,7 @@ enum CircleAuditActionGroup {
     automod,
     guard,
     onboarding,
+    join,
     discovery,
   ];
 }

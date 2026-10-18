@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/circles/circle_automod_repository.dart'
     show RpcDataSource, SupabaseRpcDataSource, UninitializedRpcDataSource;
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
@@ -322,14 +323,19 @@ final messageReviewsProvider = FutureProvider.autoDispose
       return repository.listReviews(circleId);
     });
 
-/// How many messages wait for review in a circle, for the badge on its
-/// moderation tools. 0 while loading and when it cannot be read.
+/// How many things wait for review in a circle, for the badge on its
+/// moderation tools: held and flagged messages, and join requests. 0 while
+/// loading and when it cannot be read.
 final messageReviewCountProvider = FutureProvider.autoDispose
-    .family<int, String>((ref, circleId) {
+    .family<int, String>((ref, circleId) async {
       final repository = ref.watch(circleAiGuardRepositoryProvider);
       final subscription = repository
           .changes(circleId)
           .listen((_) => ref.invalidateSelf());
       ref.onDispose(subscription.cancel);
-      return repository.countReviews(circleId);
+      final messages = await repository.countReviews(circleId);
+      final joinRequests = await ref.watch(
+        joinRequestCountProvider(circleId).future,
+      );
+      return messages + joinRequests;
     });

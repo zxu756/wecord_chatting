@@ -9,6 +9,9 @@ import 'package:wecord/features/chats/events/chat_events_providers.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/pinned_messages_sheet.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
+import 'package:wecord/features/circles/join_requests/join_request_inbox_card.dart';
+import 'package:wecord/features/circles/join_requests/join_request_models.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
@@ -67,6 +70,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final moments = ref.watch(momentNotificationsUnreadProvider);
   final invitations = ref.watch(groupInvitationsProvider).value?.length ?? 0;
   final security = ref.watch(securityAlertsOpenCountProvider);
+  final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
   return unread +
       requests +
       reminders +
@@ -74,7 +78,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       events +
       moments +
       invitations +
-      security;
+      security +
+      joinAnswers;
 });
 
 /// Which notifications the inbox shows.
@@ -87,6 +92,9 @@ enum InboxFilter {
   moments,
   friends,
   security,
+
+  /// Answers to requests to join circles, and requests still waiting.
+  circles,
 }
 
 /// Mentions of and replies to the current user and reminders that came
@@ -112,6 +120,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(momentNotificationsProvider)
       ..invalidate(groupInvitationsProvider)
       ..invalidate(securityAlertsProvider)
+      ..invalidate(myJoinRequestsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -154,6 +163,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final securityAlerts =
         ref.watch(securityAlertsProvider).value ?? const <LoginAlert>[];
     final openSecurityAlerts = ref.watch(securityAlertsOpenCountProvider);
+    final joinRequests =
+        ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
+    final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
     final items = inbox.value ?? const <InboxItem>[];
     final firedReminders = ref.watch(firedRemindersProvider);
     final upcomingReminders = [
@@ -192,12 +204,15 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.tasks ||
       InboxFilter.moments ||
       InboxFilter.friends ||
-      InboxFilter.security => const <InboxItem>[],
+      InboxFilter.security ||
+      InboxFilter.circles => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
     final showSecurity =
         _filter == InboxFilter.all || _filter == InboxFilter.security;
+    final showJoinRequests =
+        _filter == InboxFilter.all || _filter == InboxFilter.circles;
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -259,6 +274,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         final cards = <Widget>[
           if (showSecurity)
             for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
+          if (showJoinRequests)
+            for (final request in joinRequests)
+              JoinRequestInboxCard(request: request),
           if (showRequests && invitations.isNotEmpty)
             Column(
               key: const ValueKey('inbox-group-invitations'),
@@ -443,6 +461,12 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         InboxFilter.security,
                         tr('Security'),
                         openSecurityAlerts,
+                      ),
+                      const SizedBox(width: 6),
+                      chip(
+                        InboxFilter.circles,
+                        tr('Circles'),
+                        unseenJoinAnswers,
                       ),
                     ],
                   ),
@@ -911,6 +935,8 @@ class _EmptyInbox extends StatelessWidget {
                   ? tr(
                       'Sign-ins to your account from a new device show up here.',
                     )
+                  : filter == InboxFilter.circles
+                  ? tr('Answers to your requests to join circles show up here.')
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',
                     ),

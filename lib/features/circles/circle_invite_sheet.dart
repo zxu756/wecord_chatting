@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
@@ -130,7 +131,10 @@ class _CircleInviteSheetState extends ConsumerState<CircleInviteSheet> {
                   ),
                 ],
                 const SizedBox(height: 8),
-                CircleInviteLinksSection(circleId: widget.detail.circle.id),
+                CircleInviteLinksSection(
+                  circleId: widget.detail.circle.id,
+                  canSkipReview: widget.detail.canSkipJoinReview,
+                ),
               ],
             );
           },
@@ -180,9 +184,17 @@ const _maxUsesOptions = <int?>[null, 1, 10, 100];
 
 /// Create, copy, list and revoke shareable invite links for a circle.
 class CircleInviteLinksSection extends ConsumerStatefulWidget {
-  const CircleInviteLinksSection({required this.circleId, super.key});
+  const CircleInviteLinksSection({
+    required this.circleId,
+    this.canSkipReview = false,
+    super.key,
+  });
 
   final String circleId;
+
+  /// The member may make links that skip review (create_invites and
+  /// kick_members).
+  final bool canSkipReview;
 
   @override
   ConsumerState<CircleInviteLinksSection> createState() =>
@@ -194,6 +206,11 @@ class _CircleInviteLinksSectionState
   late Future<List<CircleInvite>> _invites;
   var _expiry = _InviteExpiry.sevenDays;
   int? _maxUses;
+  var _skipReview = false;
+
+  /// The codes of the links that skip review (only read for members who
+  /// may make such links).
+  var _skipping = <String>{};
   var _isBusy = false;
   String? _copiedCode;
   String? _errorText;
@@ -204,8 +221,20 @@ class _CircleInviteLinksSectionState
     _invites = _loadInvites();
   }
 
-  Future<List<CircleInvite>> _loadInvites() {
-    return ref.read(circlesRepositoryProvider).listInvites(widget.circleId);
+  Future<List<CircleInvite>> _loadInvites() async {
+    final invites = await ref
+        .read(circlesRepositoryProvider)
+        .listInvites(widget.circleId);
+    if (widget.canSkipReview) {
+      try {
+        _skipping = await ref
+            .read(joinRequestsRepositoryProvider)
+            .invitesSkippingReview(widget.circleId);
+      } on Object {
+        // The links still show; only their "skips review" mark is missing.
+      }
+    }
+    return invites;
   }
 
   @override
@@ -256,6 +285,49 @@ class _CircleInviteLinksSectionState
                     ),
                 ],
               ),
+              if (widget.canSkipReview) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr('Skip review'),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: c.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tr(
+                              'People who use this link join at once, even '
+                              'when the circle reviews who joins.',
+                            ),
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.35,
+                              color: c.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    WeCordSwitch(
+                      key: const ValueKey('invite-skip-review'),
+                      semanticLabel: tr('Skip review'),
+                      value: _skipReview,
+                      onChanged: _isBusy
+                          ? null
+                          : (value) => setState(() => _skipReview = value),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 14),
               WeCordButton(
                 variant: WeCordButtonVariant.secondary,
@@ -310,7 +382,9 @@ class _CircleInviteLinksSectionState
                     icon: Icons.link_rounded,
                     tone: SettingsTone.accent,
                     title: circleInviteLink(invite.code),
-                    subtitle: _inviteDetails(invite),
+                    subtitle: _skipping.contains(invite.code)
+                        ? '${_inviteDetails(invite)} · ${tr('skips review')}'
+                        : _inviteDetails(invite),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -345,13 +419,22 @@ class _CircleInviteLinksSectionState
 
   Future<void> _createInvite() async {
     await _run(() async {
-      final code = await ref
-          .read(circlesRepositoryProvider)
-          .createInvite(
-            circleId: widget.circleId,
-            expiresIn: _expiry.duration,
-            maxUses: _maxUses,
-          );
+      final code = widget.canSkipReview && _skipReview
+          ? await ref
+                .read(joinRequestsRepositoryProvider)
+                .createInvite(
+                  circleId: widget.circleId,
+                  skipReview: true,
+                  expiresIn: _expiry.duration,
+                  maxUses: _maxUses,
+                )
+          : await ref
+                .read(circlesRepositoryProvider)
+                .createInvite(
+                  circleId: widget.circleId,
+                  expiresIn: _expiry.duration,
+                  maxUses: _maxUses,
+                );
       await Clipboard.setData(ClipboardData(text: circleInviteLink(code)));
       _copiedCode = code;
     }, failure: tr('Could not create invite link.'));

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_rpc.dart';
+import 'package:wecord/features/circles/join_requests/join_gate.dart';
+import 'package:wecord/features/circles/join_requests/join_request_models.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -282,14 +284,16 @@ class DiscoveryJoinException implements Exception {
   final DiscoveryJoinProblem problem;
   final Object? cause;
 
-  String get message => switch (problem) {
-    DiscoveryJoinProblem.banned => tr("You're banned from this circle."),
-    DiscoveryJoinProblem.rateLimited => tr(
-      "You've joined a lot of circles. Try again in a while.",
-    ),
-    DiscoveryJoinProblem.notFound => tr('This circle is no longer public.'),
-    DiscoveryJoinProblem.other => tr('Could not join. Try again.'),
-  };
+  String get message =>
+      (cause == null ? null : joinErrorMessage(cause!)) ??
+      switch (problem) {
+        DiscoveryJoinProblem.banned => tr("You're banned from this circle."),
+        DiscoveryJoinProblem.rateLimited => tr(
+          "You've joined a lot of circles. Try again in a while.",
+        ),
+        DiscoveryJoinProblem.notFound => tr('This circle is no longer public.'),
+        DiscoveryJoinProblem.other => tr('Could not join. Try again.'),
+      };
 
   @override
   String toString() => 'DiscoveryJoinException($problem, $cause)';
@@ -297,7 +301,15 @@ class DiscoveryJoinException implements Exception {
 
 DiscoveryJoinProblem _joinProblem(Object error) {
   final text = '$error';
-  if (text.contains('Banned from this circle') || text.contains('42501')) {
+  if (text.contains('Banned from this circle')) {
+    return DiscoveryJoinProblem.banned;
+  }
+  // Refusals with a message of their own (invite only, review rules, a
+  // circle that is down) are worded by DiscoveryJoinException.message.
+  if (joinErrorMessage(error) != null) {
+    return DiscoveryJoinProblem.other;
+  }
+  if (text.contains('42501')) {
     return DiscoveryJoinProblem.banned;
   }
   if (text.contains('PB429') || text.contains('Too many')) {
@@ -373,10 +385,14 @@ class CircleDiscoveryRepository {
 
   /// Joins a public circle; returns its id. Throws a
   /// [DiscoveryJoinException].
-  Future<String> join(String circleId) async {
+  ///
+  /// [answers] (by question id) go with the request when the circle asks
+  /// questions before it lets people in.
+  Future<String> join(String circleId, {Map<String, String>? answers}) async {
     try {
       final result = await _rpc('join_public_circle', {
         'target_circle_id': circleId,
+        if (answers != null) 'answers': joinAnswersJson(answers),
       });
       return result is String ? result : circleId;
     } catch (error) {

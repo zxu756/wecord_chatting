@@ -22,6 +22,7 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -34,7 +35,6 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
-import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -708,7 +708,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
 
   /// How many messages wait in the Review queue, for members who moderate.
   int _reviewCount(CircleDetail detail, {bool watch = false}) {
-    if (!detail.can(CirclePermission.manageMessages)) {
+    if (!detail.canOpenReview) {
       return 0;
     }
     final count = messageReviewCountProvider(detail.circle.id);
@@ -805,7 +805,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           icon: CircleIcons.aiGuard,
           label: tr('AI guard'),
         ),
-      if (detail.can(CirclePermission.manageMessages))
+      if (detail.canOpenReview)
         CircleMenuItem(
           value: _CircleMenuAction.review,
           icon: Icons.fact_check_outlined,

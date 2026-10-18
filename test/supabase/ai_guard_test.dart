@@ -106,6 +106,33 @@ void main() {
     expect(hidden, contains('or message.review_state is not null'));
   });
 
+  test('the Chinese reason has its own column and reaches the queue', () {
+    final zh = File(
+      'supabase/migrations/202610200020_ai_guard_reason_zh.sql',
+    ).readAsStringSync();
+    expect(zh, contains('add column if not exists reason_zh text;'));
+    expect(
+      zh,
+      contains(
+        'drop function if exists public.finish_message_review(uuid, text, text, text);',
+      ),
+    );
+    expect(zh, contains('p_reason_zh text default null'));
+    expect(zh, contains('reason_zh text\n)'));
+    expect(
+      zh,
+      contains(
+        'revoke execute on function public.finish_message_review(uuid, text, text, text, text) from public, anon, authenticated;',
+      ),
+    );
+    expect(
+      zh,
+      contains(
+        'grant execute on function public.finish_message_review(uuid, text, text, text, text) to service_role;',
+      ),
+    );
+  });
+
   behaviourTest(
     'holding, visibility, release, fail-open and no push before release',
     'test/supabase/ai_guard_behaviour.sql',

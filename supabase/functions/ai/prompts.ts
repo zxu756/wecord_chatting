@@ -115,8 +115,8 @@ export function guardPrompt(options: {
     '- "sexual": explicit sexual content or sexual solicitation.\n' +
     '- "other": clearly harmful in another way (doxxing, encouraging self-harm, selling illegal goods).\n' +
     'When unsure, choose "allow": a wrongly held message costs more than a missed one. ' +
-    'Reply with one JSON object and nothing else: {"category": "<one of the six>", "reason": "<one short sentence in English, at most 120 characters, saying what makes it that category>"}. ' +
-    'For "allow" the reason may be empty.';
+    'Reply with one JSON object and nothing else: {"category": "<one of the six>", "reason": "<one short sentence in English, at most 120 characters, saying what makes it that category>", "reason_zh": "<the same reason in Simplified Chinese, at most 60 characters>"}. ' +
+    'For "allow" both reasons may be empty.';
   const links = options.domains.length === 0
     ? "(no links)"
     : options.domains.join("\n");

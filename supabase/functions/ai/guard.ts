@@ -15,10 +15,15 @@ export interface GuardVerdict {
   category: GuardCategory;
   /// A short reason for the moderators; null when the model gave none.
   reason: string | null;
+  /// The same reason in Simplified Chinese, for moderators who use the app
+  /// in Chinese; null when the model gave none.
+  reasonZh: string | null;
 }
 
 /// Longest reason kept.
 export const MAX_REASON_CHARS = 160;
+/// Longest Chinese reason kept (Chinese is denser).
+export const MAX_REASON_ZH_CHARS = 80;
 /// Most link hosts sent along.
 export const MAX_DOMAINS = 10;
 /// Most characters of the message the model gets.
@@ -115,14 +120,53 @@ export function parseGuardVerdict(raw: string): GuardVerdict | null {
   if (category === undefined) {
     return null;
   }
-  let reason: string | null = null;
-  if (typeof fields.reason === "string") {
-    const cleaned = fields.reason.replace(/\s+/g, " ").trim();
-    if (cleaned !== "") {
-      reason = cleaned.length > MAX_REASON_CHARS
-        ? `${cleaned.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…`
-        : cleaned;
-    }
+  const { en, zh } = readReasons(fields);
+  return {
+    category,
+    reason: category === "allow" ? null : en,
+    reasonZh: category === "allow" ? null : zh,
+  };
+}
+
+/// A free-text field as one trimmed line cut to [max] characters; null when
+/// it is not text or empty.
+function cleanReason(value: unknown, max: number): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
-  return { category, reason: category === "allow" ? null : reason };
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (cleaned === "") {
+    return null;
+  }
+  return cleaned.length > max
+    ? `${cleaned.slice(0, max - 1).trimEnd()}…`
+    : cleaned;
+}
+
+/// The English and Chinese reasons of a verdict object. Tolerates the
+/// models' variations: "reason" + "reason_zh" (the asked-for shape),
+/// camelCase or "reason_cn" for the Chinese one, and "reason" as an object
+/// with "en" / "zh" keys.
+function readReasons(
+  fields: Record<string, unknown>,
+): { en: string | null; zh: string | null } {
+  let en: string | null = null;
+  let zh: string | null = null;
+  const reason = fields.reason;
+  if (reason !== null && typeof reason === "object" && !Array.isArray(reason)) {
+    const nested = reason as Record<string, unknown>;
+    en = cleanReason(nested.en ?? nested.english, MAX_REASON_CHARS);
+    zh = cleanReason(
+      nested.zh ?? nested["zh-CN"] ?? nested.zh_cn ?? nested.chinese,
+      MAX_REASON_ZH_CHARS,
+    );
+  } else {
+    en = cleanReason(reason, MAX_REASON_CHARS);
+  }
+  zh ??= cleanReason(
+    fields.reason_zh ?? fields.reasonZh ?? fields.reason_cn ??
+      fields.reason_zh_cn,
+    MAX_REASON_ZH_CHARS,
+  );
+  return { en, zh };
 }

@@ -144,6 +144,7 @@ class MessageReview {
     this.channelName,
     this.senderAvatarUrl,
     this.reason,
+    this.reasonZh,
   });
 
   factory MessageReview.fromJson(Map<String, dynamic> json) {
@@ -158,6 +159,7 @@ class MessageReview {
       held: json['state'] == 'held',
       verdict: AiGuardVerdict.fromKey(json['verdict']),
       reason: json['reason'] as String?,
+      reasonZh: json['reason_zh'] as String?,
       sentAt: DateTime.parse(json['sent_at'] as String),
     );
   }
@@ -175,7 +177,21 @@ class MessageReview {
   final bool held;
   final AiGuardVerdict verdict;
   final String? reason;
+
+  /// The AI's reason in Simplified Chinese; null for reviews made before it
+  /// was asked for.
+  final String? reasonZh;
   final DateTime sentAt;
+
+  /// The reason in the app's language: the Chinese one when the app is in
+  /// Chinese and there is one, else the English one.
+  String? get localizedReason {
+    final zh = reasonZh?.trim() ?? '';
+    if (AppStrings.isChinese && zh.isNotEmpty) {
+      return zh;
+    }
+    return reason;
+  }
 }
 
 /// The AI guard's settings and review queue.

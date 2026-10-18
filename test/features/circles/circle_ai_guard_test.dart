@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_ai_guard_screen.dart';
 import 'package:wecord/features/circles/circle_review_screen.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/theme/wecord_theme.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -330,6 +331,50 @@ void main() {
           findRichText: true,
         ),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('shows the Chinese reason in Chinese, else the English one', (
+      tester,
+    ) async {
+      tall(tester);
+      AppStrings.isChinese = true;
+      addTearDown(() => AppStrings.isChinese = false);
+      final rpc = FakeGuardRpc()
+        ..results['list_message_reviews'] = [
+          reviewJson(reasonZh: '推销药品'),
+          reviewJson(
+            id: 'message-2',
+            state: 'flagged',
+            verdict: 'scam',
+            reason: 'Asks for a password',
+          ),
+        ];
+      await tester.pumpWidget(
+        app(rpc, CircleReviewScreen(circleId: 'circle-1', now: now)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('垃圾信息 · 推销药品', findRichText: true),
+        findsOneWidget,
+      );
+      // No Chinese reason (an older review): the English one.
+      expect(
+        find.textContaining('· Asks for a password', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    test('the reason follows the app language', () {
+      final review = MessageReview.fromJson(reviewJson(reasonZh: '推销药品'));
+      expect(review.localizedReason, 'Sells pills');
+      AppStrings.isChinese = true;
+      addTearDown(() => AppStrings.isChinese = false);
+      expect(review.localizedReason, '推销药品');
+      expect(
+        MessageReview.fromJson(reviewJson(reasonZh: '  ')).localizedReason,
+        'Sells pills',
       );
     });
 

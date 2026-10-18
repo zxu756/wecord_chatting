@@ -55,14 +55,19 @@ class SystemChatFilePickerService implements ChatFilePickerService {
 }
 
 /// The file's type: what the picker reported, else guessed from its name
-/// and first bytes, else generic binary.
+/// and first bytes, else generic binary. A generic "binary" report (browsers
+/// give it for many files) counts as no report: a picture named `.png` must
+/// reach the picture bucket as `image/png`, which only takes pictures.
 String chatFileMimeType({
   required String name,
   String? reported,
   List<int>? headerBytes,
 }) {
   final known = reported?.trim();
-  if (known != null && known.isNotEmpty) {
+  if (known != null &&
+      known.isNotEmpty &&
+      known.toLowerCase() != 'application/octet-stream' &&
+      known.toLowerCase() != 'binary/octet-stream') {
     return known;
   }
   return lookupMimeType(name, headerBytes: headerBytes) ??

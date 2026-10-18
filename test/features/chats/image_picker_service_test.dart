@@ -21,6 +21,18 @@ void main() {
     expect(image.mimeType, 'image/png');
   });
 
+  test('a generic reported type is replaced by the name\'s', () async {
+    // The picture buckets only take image types, so "binary" must not be
+    // uploaded as it is.
+    final service = SystemImagePickerService.withPicker(
+      pickImageFile: () async =>
+          XFile('/tmp/shot.webp', mimeType: 'application/octet-stream'),
+      readImageFile: (_) async => Uint8List.fromList([1]),
+    );
+
+    expect((await service.pickImage())!.mimeType, 'image/webp');
+  });
+
   test(
     'pickImage wraps local file read failures with an actionable error',
     () async {

@@ -1,6 +1,7 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
-// events about to start and tasks that came due. The same tick removes the files of expired disappearing
+// events about to start, tasks that came due and likes and comments on
+// Moments. The same tick removes the files of expired disappearing
 // messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -23,6 +24,8 @@ import {
   type EventReminderRow,
   eventTarget,
   isAuthorized,
+  type MomentsPushRow,
+  momentsTarget,
   type PushTarget,
   targetPath,
   type TaskReminderRow,
@@ -132,6 +135,18 @@ Deno.serve(async (request) => {
   }
   targets.push(...((tasks ?? []) as TaskReminderRow[]).map(taskTarget));
 
+  // Likes, comments and replies on Moments nobody has pushed yet (the
+  // actor's app asks for its own right away; this catches the rest).
+  const { data: moments, error: momentsError } = await admin.rpc(
+    "claim_moments_pushes",
+  );
+  if (momentsError) {
+    // Not fatal: the other pushes still go out (the notifications are
+    // claimed again on the next wake-up).
+    console.error("claim_moments_pushes failed", momentsError.message);
+  }
+  targets.push(...((moments ?? []) as MomentsPushRow[]).map(momentsTarget));
+
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.
   try {
@@ -153,7 +168,7 @@ Deno.serve(async (request) => {
       const status = await sendWebPush(keys, target, {
         title: target.title,
         body: target.body,
-        tag: target.tag ?? target.conversation_id,
+        tag: target.tag ?? target.conversation_id ?? undefined,
         url: targetPath(target),
       }, { nowSeconds: Math.floor(Date.now() / 1000) });
       if (status === 404 || status === 410) {

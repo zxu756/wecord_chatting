@@ -328,10 +328,47 @@ enum MomentsRange {
 /// The person's own Moments settings.
 @immutable
 class MomentsSettings {
-  const MomentsSettings({this.range = MomentsRange.all, this.coverPath});
+  const MomentsSettings({
+    this.range = MomentsRange.all,
+    this.coverPath,
+    this.pushEnabled = true,
+  });
 
   final MomentsRange range;
   final String? coverPath;
+
+  /// Whether likes, comments and replies on the person's Moments are pushed
+  /// to their devices (they always show in Notifications).
+  final bool pushEnabled;
+}
+
+/// What a live signal says happened (the server's broadcast `event`).
+enum MomentsSignalKind {
+  /// A friend posted something the person may see.
+  post('post'),
+
+  /// A Moment the person could see is gone.
+  postRemoved('post_removed'),
+
+  /// A like or comment appeared or went on a Moment the person may see.
+  reaction('reaction'),
+
+  /// The channel (re)connected: anything may have changed.
+  resync('resync');
+
+  const MomentsSignalKind(this.wire);
+
+  final String wire;
+}
+
+/// "Something changed", never what: the app reads the data again through the
+/// same functions as always, which apply the visibility rules. Signals
+/// compare by identity, so two in a row are two events.
+class MomentsSignal {
+  const MomentsSignal(this.kind, [this.postId]);
+
+  final MomentsSignalKind kind;
+  final String? postId;
 }
 
 /// A person's Moments page header: their name and, when the viewer may see

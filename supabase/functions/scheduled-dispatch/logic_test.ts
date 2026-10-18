@@ -1,5 +1,11 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { eventTarget, isAuthorized, targetPath, taskTarget } from "./logic.ts";
+import {
+  eventTarget,
+  isAuthorized,
+  momentsTarget,
+  targetPath,
+  taskTarget,
+} from "./logic.ts";
 
 const target = {
   subscription_id: "s",
@@ -64,4 +70,21 @@ Deno.test("event and task reminders become pushes with their own tags", () => {
   assertEquals(task.tag, "task-n1");
   assertEquals(task.body, "Book the tent");
   assertEquals(targetPath(task), "/#/circles/o1?c=c2");
+});
+
+Deno.test("a Moments push opens the Moment and replaces others of its post", () => {
+  const moment = momentsTarget({
+    subscription_id: "s3",
+    endpoint: "https://push.example.com/m",
+    p256dh: "k",
+    auth: "a",
+    title: "Bob liked your Moment",
+    body: "hello",
+    tag: "moments-p1",
+    url: "/#/moments/p1",
+  });
+  assertEquals(targetPath(moment), "/#/moments/p1");
+  assertEquals(moment.tag, "moments-p1");
+  assertEquals(moment.title, "Bob liked your Moment");
+  assertEquals(moment.conversation_id, null);
 });

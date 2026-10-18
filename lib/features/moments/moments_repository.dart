@@ -77,6 +77,14 @@ abstract interface class MomentsRepository {
 
   Future<void> setRange(MomentsRange range);
 
+  /// Turns the push for likes, comments and replies on or off.
+  Future<void> setPushEnabled({required bool enabled});
+
+  /// Signals that the feed, a post or the notifications changed, as long as
+  /// someone listens; [MomentsSignalKind.resync] after every (re)connection.
+  /// They carry no content (see migration 202610190020).
+  Stream<MomentsSignal> signals();
+
   /// Uploads [jpeg] as the cover.
   Future<void> setCover(Uint8List jpeg);
 
@@ -253,6 +261,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
             onConflict: 'post_id,user_id',
             ignoreDuplicates: true,
           );
+      unawaited(_pushFor(postId));
     } else {
       await _client
           .from('moments_likes')
@@ -274,6 +283,19 @@ class SupabaseMomentsRepository implements MomentsRepository {
       'body': body,
       'reply_to_comment_id': ?replyToCommentId,
     });
+    unawaited(_pushFor(postId));
+  }
+
+  /// Asks the push function to notify the person this like or comment is
+  /// for. It claims only what this person just did and re-checks who may
+  /// see it; never throws (the like or comment is already made, and the
+  /// scheduled dispatch sends what this misses).
+  Future<void> _pushFor(String postId) async {
+    try {
+      await _client.functions.invoke('push', body: {'moments_post_id': postId});
+    } on Object {
+      // Push is a courtesy.
+    }
   }
 
   @override
@@ -306,7 +328,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
   Future<MomentsSettings> settings() async {
     final row = await _client
         .from('moments_settings')
-        .select('visible_range,cover_path')
+        .select('visible_range,cover_path,push_enabled')
         .eq('user_id', _userId)
         .maybeSingle();
     if (row == null) {
@@ -315,7 +337,60 @@ class SupabaseMomentsRepository implements MomentsRepository {
     return MomentsSettings(
       range: MomentsRange.fromWire(row['visible_range']),
       coverPath: row['cover_path'] as String?,
+      pushEnabled: row['push_enabled'] as bool? ?? true,
     );
+  }
+
+  @override
+  Future<void> setPushEnabled({required bool enabled}) async {
+    await _client.rpc<dynamic>(
+      'set_moments_settings',
+      params: {'p_push_enabled': enabled},
+    );
+  }
+
+  @override
+  Stream<MomentsSignal> signals() {
+    RealtimeChannel? channel;
+    late StreamController<MomentsSignal> controller;
+    controller = StreamController<MomentsSignal>(
+      onListen: () {
+        // A private channel of the person's own: the database tells only
+        // them, and only about what they may see.
+        final live = _client.channel(
+          'moments:$_userId',
+          opts: const RealtimeChannelConfig(private: true),
+        );
+        channel = live;
+        for (final kind in [
+          MomentsSignalKind.post,
+          MomentsSignalKind.postRemoved,
+          MomentsSignalKind.reaction,
+        ]) {
+          live.onBroadcast(
+            event: kind.wire,
+            callback: (message) {
+              final inner = message['payload'];
+              final id = inner is Map ? inner['post_id'] : null;
+              controller.add(MomentsSignal(kind, id is String ? id : null));
+            },
+          );
+        }
+        live.subscribe((status, error) {
+          // Anything may have changed while the line was down.
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            controller.add(const MomentsSignal(MomentsSignalKind.resync));
+          }
+        });
+      },
+      onCancel: () async {
+        final live = channel;
+        if (live != null) {
+          await _client.removeChannel(live);
+        }
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -501,6 +576,12 @@ class UninitializedMomentsRepository implements MomentsRepository {
 
   @override
   Future<void> setRange(MomentsRange range) => throw _unavailable();
+
+  @override
+  Future<void> setPushEnabled({required bool enabled}) => throw _unavailable();
+
+  @override
+  Stream<MomentsSignal> signals() => const Stream.empty();
 
   @override
   Future<void> setCover(Uint8List jpeg) => throw _unavailable();

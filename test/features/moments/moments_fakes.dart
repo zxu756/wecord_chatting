@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -109,8 +110,11 @@ class FakeMomentsRepository implements MomentsRepository {
     return byTime != 0 ? byTime : b.id.compareTo(a.id);
   }
 
+  var postCalls = 0;
+
   @override
   Future<MomentPost?> post(String id) async {
+    postCalls += 1;
     return posts.where((post) => post.id == id).firstOrNull;
   }
 
@@ -274,6 +278,7 @@ class FakeMomentsRepository implements MomentsRepository {
     settingsValue = MomentsSettings(
       range: range,
       coverPath: settingsValue.coverPath,
+      pushEnabled: settingsValue.pushEnabled,
     );
   }
 
@@ -286,14 +291,43 @@ class FakeMomentsRepository implements MomentsRepository {
     settingsValue = MomentsSettings(
       range: settingsValue.range,
       coverPath: path,
+      pushEnabled: settingsValue.pushEnabled,
     );
   }
 
   @override
   Future<void> clearCover() async {
     coversCleared += 1;
-    settingsValue = MomentsSettings(range: settingsValue.range);
+    settingsValue = MomentsSettings(
+      range: settingsValue.range,
+      pushEnabled: settingsValue.pushEnabled,
+    );
   }
+
+  final pushSwitches = <bool>[];
+
+  @override
+  Future<void> setPushEnabled({required bool enabled}) async {
+    _maybeFail();
+    pushSwitches.add(enabled);
+    settingsValue = MomentsSettings(
+      range: settingsValue.range,
+      coverPath: settingsValue.coverPath,
+      pushEnabled: enabled,
+    );
+  }
+
+  final _signals = StreamController<MomentsSignal>.broadcast();
+
+  @override
+  Stream<MomentsSignal> signals() => _signals.stream;
+
+  /// Whether the app listens for live signals.
+  bool get hasSignalListener => _signals.hasListener;
+
+  /// What the server would send; change [posts] first.
+  void emit(MomentsSignalKind kind, [String? postId]) =>
+      _signals.add(MomentsSignal(kind, postId));
 
   @override
   Future<List<MomentsFriendPref>> friendPrefs() async => prefs;

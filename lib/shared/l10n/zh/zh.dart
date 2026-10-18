@@ -28,6 +28,7 @@ import 'package:wecord/shared/l10n/zh/zh_media_send.dart';
 import 'package:wecord/shared/l10n/zh/zh_misc_features.dart';
 import 'package:wecord/shared/l10n/zh/zh_multi_select.dart';
 import 'package:wecord/shared/l10n/zh/zh_moments.dart';
+import 'package:wecord/shared/l10n/zh/zh_moments_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
@@ -104,6 +105,7 @@ const zhAreas = <Map<String, String>>[
   zhLocation,
   zhQrPat,
   zhMoments,
+  zhMomentsMore,
   zhDataExportMore,
 ];
 

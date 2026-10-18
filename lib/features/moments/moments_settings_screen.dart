@@ -82,6 +82,22 @@ class MomentsSettingsScreen extends ConsumerWidget {
           ],
         ),
         SettingsGroup(
+          header: tr('Notifications'),
+          children: [
+            SettingsRow.toggle(
+              key: const ValueKey('moments-push-row'),
+              icon: Icons.notifications_none_rounded,
+              title: tr('Moments notifications'),
+              subtitle: tr('Likes, comments and replies on your Moments'),
+              value: settings?.pushEnabled ?? true,
+              onChanged: settings == null
+                  ? null
+                  : (enabled) =>
+                        unawaited(_setPush(context, ref, enabled: enabled)),
+            ),
+          ],
+        ),
+        SettingsGroup(
           header: tr("Friends' Moments"),
           children: [
             SettingsRow(
@@ -106,6 +122,22 @@ class MomentsSettingsScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _setPush(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool enabled,
+  }) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref
+          .read(momentsRepositoryProvider)
+          .setPushEnabled(enabled: enabled);
+      ref.invalidate(momentsSettingsProvider);
+    } on Object {
+      messenger?.showSnackBar(SnackBar(content: Text(couldNotSaveText())));
+    }
   }
 
   Future<void> _chooseRange(

@@ -51,8 +51,12 @@ void main() {
 
     ai.gate!.complete();
     await tester.pumpAndSettle();
-    expect(ai.translateCalls.single.text, 'Hola amigos');
-    expect(ai.translateCalls.single.target, AiLanguage.english);
+    // Through the server's cache, for this one message, as asked by hand.
+    expect(ai.translateCalls, isEmpty);
+    expect(ai.batchCalls.single.messageIds, ['message-1']);
+    expect(ai.batchCalls.single.conversationId, 'conversation-1');
+    expect(ai.batchCalls.single.target, AiLanguage.english);
+    expect(ai.batchCalls.single.manual, isTrue);
     expect(find.text('Hello friends'), findsOneWidget);
     expect(find.text('Translated to English'), findsOneWidget);
     // The original stays.
@@ -88,7 +92,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message-translate')));
     await tester.pumpAndSettle();
     expect(find.text('Translated text.'), findsOneWidget);
-    expect(ai.translateCalls, hasLength(1));
+    expect(ai.batchCalls, hasLength(1));
   });
 
   testWidgets('translates into Chinese when the app is in Chinese', (
@@ -104,7 +108,7 @@ void main() {
     await openMenu(tester, 'Hola amigos');
     await tester.tap(find.byKey(const ValueKey('message-translate')));
     await tester.pumpAndSettle();
-    expect(ai.translateCalls.single.target, AiLanguage.chinese);
+    expect(ai.batchCalls.single.target, AiLanguage.chinese);
     expect(find.text('你好，朋友们'), findsOneWidget);
     expect(find.text('已翻译为中文'), findsOneWidget);
     expect(find.text('显示原文'), findsOneWidget);

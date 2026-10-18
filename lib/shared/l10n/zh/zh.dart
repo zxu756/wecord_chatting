@@ -11,6 +11,7 @@ import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_audit.dart';
+import 'package:wecord/shared/l10n/zh/zh_auto_translate.dart';
 import 'package:wecord/shared/l10n/zh/zh_app.dart';
 import 'package:wecord/shared/l10n/zh/zh_app_shell.dart';
 import 'package:wecord/shared/l10n/zh/zh_backend_fixes.dart';
@@ -133,6 +134,7 @@ const zhAreas = <Map<String, String>>[
   zhEditHistory,
   zhJoinRequests,
   zhReadStatus,
+  zhAutoTranslate,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

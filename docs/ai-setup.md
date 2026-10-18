@@ -173,23 +173,56 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `rewrite` | `mode` (`fix`/`shorter`/`polite`/`formal`/`translate`), `text`, `target` for `translate`, optional `conversation_id` | `{text}` |
 | `translate` | `text`, `target` (`en`/`zh`/`ja`/`ko`/`es`/`fr`), optional `conversation_id` | `{text}` |
 | `transcribe` | `message_id` of a voice message | `{text}` (empty when no speech was found) |
+| `translate_batch` | `conversation_id`, `message_ids` (up to 20), `target`, optional `manual` | `{target, translations: {id: {text, source_lang}}, skipped: {id: reason}, cached, translated}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
 (429, with `limit` and `used`), `ai_busy` (503, the provider's own limits),
-`ai_failed` (502), `conversation_not_found` (404), `text_too_long` (413), and for `transcribe`
+`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `text_too_long` (413), and for `transcribe`
 `transcribe_not_configured` (503), `message_not_found` (404), `audio_too_long`
 (413).
+
+### Translating messages (`translate_batch`)
+
+Auto-translate ("Auto-translate this chat" in the chat's More menu), the
+message menu's Translate and nothing else use this action; it is the only
+translation path that touches messages. The app sends the ids of the messages
+that are on screen (never the whole history), and the function:
+
+1. refuses a circle that turned AI off (`ai_disabled_in_circle`) and a person
+   who turned AI off (`ai_disabled_for_user`, copied from Settings → AI into
+   `user_ai_settings.ai_enabled`), before reading anything;
+2. reads the messages as the caller and never translates or returns one that
+   is recalled, expired, waiting for or removed by the AI guard, not text, or
+   not visible to the caller (`skipped: unavailable`);
+3. skips text without letters (emoji, links, @mentions), text already in the
+   target language by its script, and languages in the person's "Don't
+   translate" list, without a model call;
+4. answers from the cache `message_translations` (one row per message and
+   language), which costs nothing against the daily limit, even at the limit;
+5. sends the rest to the model as ONE request (up to about 6000 characters),
+   which counts once against `AI_DAILY_LIMIT_PER_USER` and is given back if
+   the provider fails or answers badly, and stores the answers.
+
+`manual: true` (the message menu) skips the language rules of step 3. The cache
+holds message text, so it goes with the message: a trigger clears it when the
+message is edited, recalled (including moderator delete), held or removed by
+the guard, or moved to expired, and the foreign key deletes it when the message
+is purged or its account or conversation is deleted. Only the service role
+writes it, through `store_message_translations`, which refuses text that has
+changed since it was translated. The function must be redeployed
+(`supabase functions deploy ai`) after migrations 202610220400 and
+202610220410.
 
 ### Privacy and safety
 
 - **Messages are read as the caller.** A summary uses the user's own token, so
   row level security decides what is visible: nothing the user cannot see in
   the app reaches the model. Recalled messages are left out.
-- **Nothing is stored.** Only a per-user, per-day request count is kept
-  (`ai_usage`, readable by its owner, written by the function with the service
-  role). Message text is not logged or saved, and translations are cached on
-  the user's device only, as are voice message transcripts.
+- **Little is stored.** A per-user, per-day request count is kept (`ai_usage`,
+  readable by its owner, written by the function with the service role).
+  Message text is not logged. The one exception is the translation cache,
+  below; voice message transcripts stay on the user's device only.
 - **Chat is data, not instructions.** Prompts fence the chat and the user's
   text between tags, tell the model to ignore any instruction inside them and
   never to invent messages, and the function strips control characters, chat

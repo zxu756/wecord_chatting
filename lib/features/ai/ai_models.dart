@@ -14,6 +14,16 @@ enum AiLanguage {
   /// The code the `ai` function takes.
   final String code;
 
+  /// The language with [code], or null for none of the six.
+  static AiLanguage? fromCode(Object? code) {
+    for (final language in values) {
+      if (language.code == code) {
+        return language;
+      }
+    }
+    return null;
+  }
+
   String get label => switch (this) {
     AiLanguage.english => tr('English'),
     AiLanguage.chinese => tr('Chinese'),
@@ -135,6 +145,11 @@ class AiTranscribeNotConfiguredException extends AiException {
   const AiTranscribeNotConfiguredException();
 }
 
+/// The person turned AI features off in Settings → AI (the server was told).
+class AiTurnedOffException extends AiException {
+  const AiTurnedOffException();
+}
+
 /// The provider is out of capacity or quota for now; try again later.
 class AiBusyException extends AiException {
   const AiBusyException();
@@ -172,6 +187,8 @@ AiException aiExceptionFor(int? status, Object? details) {
       return const AiBusyException();
     case 'ai_disabled_in_circle':
       return const AiDisabledInCircleException();
+    case 'ai_disabled_for_user':
+      return const AiTurnedOffException();
     case 'conversation_not_found' ||
         'text_too_long' ||
         'message_not_found' ||
@@ -202,6 +219,9 @@ String aiErrorMessage(Object error) {
     ),
     AiDisabledInCircleException() => tr(
       'AI features are turned off in this circle.',
+    ),
+    AiTurnedOffException() => tr(
+      'AI features are turned off. You can turn them on in Settings.',
     ),
     AiRejectedException() => tr("That can't be processed."),
     _ => tr('Something went wrong. Try again.'),

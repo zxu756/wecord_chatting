@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/ai/translate_repository.dart';
 
 /// An [AiRepository] for tests: answers are set up front, calls recorded.
-class FakeAiRepository implements AiRepository {
+class FakeAiRepository implements AiRepository, TranslateRepository {
   /// Thrown by [status] when set (AI not set up, say).
   Object? statusError;
   var statusValue = const AiStatus(dailyLimit: 50, used: 3);
@@ -103,6 +104,92 @@ class FakeAiRepository implements AiRepository {
     translateCalls.add((text: text, target: target));
     await _wait();
     return translated;
+  }
+
+  /// The message texts [translateBatch] knows: it answers with [translated]
+  /// (or [translations] for a message id when set) for these ids.
+  final translations = <String, String>{};
+  final skippedMessages = <String, TranslateSkip>{};
+
+  /// Every translate_batch request.
+  final batchCalls =
+      <
+        ({
+          String conversationId,
+          List<String> messageIds,
+          AiLanguage target,
+          bool manual,
+        })
+      >[];
+
+  /// Set when the daily limit stops a batch's misses.
+  var batchLimitReached = false;
+
+  @override
+  Future<TranslateBatchResult> translateBatch({
+    required String conversationId,
+    required List<String> messageIds,
+    required AiLanguage target,
+    bool manual = false,
+  }) async {
+    batchCalls.add((
+      conversationId: conversationId,
+      messageIds: messageIds,
+      target: target,
+      manual: manual,
+    ));
+    await _wait();
+    return TranslateBatchResult(
+      translations: {
+        for (final id in messageIds)
+          if (!skippedMessages.containsKey(id) && !batchLimitReached)
+            id: TranslatedMessage(text: translations[id] ?? translated),
+      },
+      skipped: {
+        for (final id in messageIds)
+          if (skippedMessages[id] case final reason?)
+            id: reason
+          else if (batchLimitReached)
+            id: TranslateSkip.later,
+      },
+      limitReached: batchLimitReached,
+    );
+  }
+
+  /// What the translation choices hold.
+  AiTranslateSettings? storedSettings;
+  final savedSettings = <AiTranslateSettings>[];
+  final syncedEnabled = <bool>[];
+  final conversationPrefs = <String, ConversationTranslatePref>{};
+  final savedPrefs = <(String, ConversationTranslatePref)>[];
+
+  @override
+  Future<AiTranslateSettings?> loadSettings() async => storedSettings;
+
+  @override
+  Future<void> saveSettings(AiTranslateSettings settings) async {
+    storedSettings = settings;
+    savedSettings.add(settings);
+  }
+
+  @override
+  Future<void> syncAiEnabled({required bool enabled}) async {
+    syncedEnabled.add(enabled);
+  }
+
+  @override
+  Future<ConversationTranslatePref> loadConversationPref(
+    String conversationId,
+  ) async =>
+      conversationPrefs[conversationId] ?? const ConversationTranslatePref();
+
+  @override
+  Future<void> saveConversationPref(
+    String conversationId,
+    ConversationTranslatePref pref,
+  ) async {
+    conversationPrefs[conversationId] = pref;
+    savedPrefs.add((conversationId, pref));
   }
 
   /// What [transcribe] gives back, and the messages it was asked for.

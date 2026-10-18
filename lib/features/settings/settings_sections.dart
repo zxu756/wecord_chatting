@@ -24,6 +24,7 @@ import 'package:wecord/features/privacy/profile_visibility.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/voice_settings_screen.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/custom_status.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -1094,7 +1095,7 @@ class _BlockedUsersSheetState extends ConsumerState<BlockedUsersSheet> {
           padding: EdgeInsets.symmetric(vertical: 32),
           child: Center(child: CircularProgressIndicator()),
         ),
-        error: (error, stackTrace) => message('$error'),
+        error: (error, stackTrace) => message(errorText(error)),
         data: (users) {
           if (users.isEmpty) {
             return message(tr('You have not blocked anyone.'));

@@ -8,6 +8,7 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/voice/voice_user_limit_section.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -268,7 +269,7 @@ class _CircleChannelSettingsScreenState
           : '# ${channel.name}',
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text(tr(error.toString()))),
+        error: (error, stackTrace) => Center(child: Text(errorText(error))),
         data: (detail) {
           final found = channel;
           if (found == null) {

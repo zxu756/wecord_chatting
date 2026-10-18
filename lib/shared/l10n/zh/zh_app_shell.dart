@@ -96,7 +96,7 @@ const zhAppShell = <String, String>{
   'Try again': '重试',
 
   // Messages, polls, stickers, threads and voice (lib/shared/models/).
-  'Message deleted by a moderator': '消息已被管理员删除',
+  'Message deleted by a moderator': '消息已被版主删除',
   'Message deleted': '消息已删除',
   '📊 Poll': '📊 投票',
   '📊 Poll: {question}': '📊 投票：{question}',

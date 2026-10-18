@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/media_send/album_label.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -50,7 +51,7 @@ ConversationPreview? conversationPreview(
       Icons.gif_box_outlined,
       tr('GIF'),
     ),
-    MessageType.text => (null, plainTextFromMarkdown(body)),
+    MessageType.text => (null, plainTextFromMarkdown(cardBodyText(body))),
     MessageType.image => (Icons.image_outlined, tr('Image')),
     MessageType.voice => (Icons.mic_none_rounded, tr('Voice message')),
     MessageType.file when conversation.lastMessageIsVideo => (
@@ -89,7 +90,7 @@ String? conversationPreviewText(
       tr('{name} started a call', {'name': match.group(1)}),
     );
   }
-  return (null, body);
+  return (null, systemNoticeText(body));
 }
 
 /// How long ago [time] was, as briefly as a conversation list shows it:

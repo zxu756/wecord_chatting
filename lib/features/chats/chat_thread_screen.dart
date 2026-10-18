@@ -13,6 +13,7 @@ import 'package:wecord/features/ai/ai_catch_up.dart';
 import 'package:wecord/features/ai/ai_composer_button.dart';
 import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
 import 'package:wecord/features/ai/ai_translation.dart';
+import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/transcribe/transcribe_controller.dart';
 import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
@@ -123,6 +124,7 @@ import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
 import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/features/wallpapers/wallpaper_picker.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/layout/panel_layout.dart';
@@ -1603,7 +1605,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                error.toString(),
+                errorText(error),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: c.dangerText),
               ),
@@ -6535,7 +6537,7 @@ class _SystemMessageLine extends StatelessWidget {
           Flexible(
             child: Text(
               noticeSeconds == null
-                  ? message.body
+                  ? systemNoticeText(message.body)
                   : disappearingNoticeText(
                       noticeSeconds,
                       message.attachment?['actor_name'] as String? ??

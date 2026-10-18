@@ -18,6 +18,7 @@ import 'package:wecord/features/search/recent_searches.dart';
 import 'package:wecord/features/search/search_filter_bar.dart';
 import 'package:wecord/features/search/search_query.dart';
 import 'package:wecord/features/search/search_results.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/discovery.dart';
@@ -805,7 +806,7 @@ class _GlobalMessageSearchScreenState
       return SearchHint(
         icon: Icons.error_outline_rounded,
         title: tr('Search failed'),
-        text: error.toString(),
+        text: errorText(error),
         action: WeCordButton(
           label: tr('Try again'),
           variant: WeCordButtonVariant.secondary,

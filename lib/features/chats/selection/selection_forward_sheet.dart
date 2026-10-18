@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/merged_forward/merged_forward_repository.d
 import 'package:wecord/features/chats/selection/selection_rules.dart';
 import 'package:wecord/features/chats/sheet_rows.dart';
 import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -212,7 +213,7 @@ class _SelectionForwardSheetState extends ConsumerState<SelectionForwardSheet> {
                 child: conversations.when(
                   loading: () => const SheetSpinner(),
                   error: (error, stackTrace) =>
-                      SheetNote(text: error.toString(), error: true),
+                      SheetNote(text: errorText(error), error: true),
                   data: _buildConversationList,
                 ),
               ),

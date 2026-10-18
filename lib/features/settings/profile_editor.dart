@@ -10,6 +10,7 @@ import 'package:wecord/features/profile/profile_extras_repository.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -386,7 +387,7 @@ class SettingsErrorText extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
       child: Text(
-        error.toString(),
+        errorText(error),
         style: TextStyle(color: context.tokens.colors.dangerText),
       ),
     );

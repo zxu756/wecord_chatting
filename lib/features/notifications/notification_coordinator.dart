@@ -7,6 +7,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/album_label.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
@@ -180,13 +181,15 @@ class NotificationCoordinator {
       }
       for (final reminder in due) {
         final text = switch (reminder.type) {
-          MessageType.text => plainTextFromMarkdown(reminder.body).trim(),
+          MessageType.text => plainTextFromMarkdown(
+            cardBodyText(reminder.body),
+          ).trim(),
           MessageType.image => tr('Image'),
           MessageType.file => tr('File'),
           MessageType.voice => tr('Voice message'),
           MessageType.poll => pollPreviewText(reminder.body),
           MessageType.sticker => stickerPreviewText(reminder.body),
-          MessageType.system => reminder.body,
+          MessageType.system => systemNoticeText(reminder.body),
         };
         final sender = reminder.senderName.trim();
         final body = !preferences.showPreviews || text.isEmpty
@@ -554,7 +557,9 @@ class NotificationCoordinator {
       final preview = body == null
           ? null
           : switch (conversation.lastMessageType ?? MessageType.text) {
-              MessageType.text => plainTextFromMarkdown(body).trim(),
+              MessageType.text => plainTextFromMarkdown(
+                cardBodyText(body),
+              ).trim(),
               MessageType.image || MessageType.file
                   when conversation.lastMessageAlbum != null =>
                 conversationAlbumLabel(conversation.lastMessageAlbum!),

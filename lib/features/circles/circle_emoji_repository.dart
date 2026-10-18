@@ -281,7 +281,7 @@ class SupabaseCircleEmojiRepository implements CircleEmojiRepository {
                 'count': maxCircleEmojis,
               }),
       ),
-      '22023' => CircleEmojiException(error.message),
+      '22023' => CircleEmojiException(tr(error.message)),
       _ => error,
     };
   }

@@ -319,7 +319,7 @@ const zhCirclesMore = <String, String>{
   'Previous 24 hours': '过去 24 小时',
   'Previous 7 days': '过去 7 天',
   'Reason (optional)': '原因（可选）',
-  'Only moderators see it.': '仅管理人员可见。',
+  'Only moderators see it.': '仅版主可见。',
   'Ban': '封禁',
   'Bans': '封禁列表',
   'Could not load bans.': '无法加载封禁列表。',

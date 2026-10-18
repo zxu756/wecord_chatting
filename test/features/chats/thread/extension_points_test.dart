@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart'
     show GlassMenuEntry;
-import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/message_action_menu.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';

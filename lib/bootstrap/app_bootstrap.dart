@@ -26,14 +26,16 @@ Future<void> runWeCordApp() async {
     'SUPABASE_ANON_KEY': String.fromEnvironment('SUPABASE_ANON_KEY'),
   });
 
+  // The offline copy of chats (SQLite, or IndexedDB on the web) and the
+  // device's connection; without them chats work online only. It opens
+  // while Supabase reads the saved session, not after it: the first frame
+  // waits for both.
+  final chatCacheOpening = openPlatformChatCache();
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
     publishableKey: config.supabaseAnonKey,
   );
-
-  // The offline copy of chats (SQLite, or IndexedDB on the web) and the
-  // device's connection; without them chats work online only.
-  final chatCache = await openPlatformChatCache();
+  final chatCache = await chatCacheOpening;
   runApp(
     ProviderScope(
       retry: noProviderRetry,

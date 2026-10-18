@@ -9,7 +9,7 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/qr_links.dart';
 import 'package:wecord/features/qr/qr_repository.dart';
-import 'package:wecord/features/qr/qr_scanner_sheet.dart';
+import 'package:wecord/features/qr/qr_scanner_sheet.dart' deferred as scanner;
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -25,7 +25,12 @@ final qrUrlLauncherProvider = Provider<QrUrlLauncher>(
 /// Scans with the camera (or a picture) and does what the code says. The
 /// entry for "Scan" everywhere.
 Future<void> openQrScanner(BuildContext context, WidgetRef ref) async {
-  final text = await showQrScannerSheet(context);
+  // The camera and code reader are fetched the first time on the web.
+  await scanner.loadLibrary();
+  if (!context.mounted) {
+    return;
+  }
+  final text = await scanner.showQrScannerSheet(context);
   if (text == null || !context.mounted) {
     return;
   }

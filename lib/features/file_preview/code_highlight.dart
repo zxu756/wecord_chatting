@@ -41,10 +41,8 @@ import 'package:re_highlight/languages/typescript.dart';
 import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/re_highlight.dart';
+import 'package:wecord/features/file_preview/code_highlight_limits.dart';
 import 'package:wecord/shared/ui/ui.dart';
-
-/// Highlighting stops past this much text (the plain view stays fast).
-const maxHighlightedChars = 400 * 1024;
 
 Highlight? _highlight;
 

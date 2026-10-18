@@ -11,17 +11,23 @@ const _databaseUrl = String.fromEnvironment(
   defaultValue: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
 );
 
-Future<String?> _unavailable() async {
+Future<String?> _unavailable({bool rebuildsSchema = false}) async {
   try {
     final probe = await Process.run('psql', [
       _databaseUrl,
       '-Atc',
-      "select to_regclass('public.messages') is not null "
-          "and exists (select 1 from information_schema.columns "
-          "where table_name = 'messages' and column_name = 'attachment_group_id')",
+      // A script that rebuilds the schema from every migration needs a
+      // database, not a particular migration state.
+      rebuildsSchema
+          ? 'select true'
+          : "select to_regclass('public.messages') is not null "
+                "and exists (select 1 from information_schema.columns "
+                "where table_name = 'messages' and column_name = 'attachment_group_id')",
     ]).timeout(const Duration(seconds: 10));
     if (probe.exitCode != 0 || '${probe.stdout}'.trim() != 't') {
-      return 'no local database with the album migration';
+      return rebuildsSchema
+          ? 'no local database'
+          : 'no local database with the album migration';
     }
     return null;
   } catch (_) {
@@ -30,10 +36,12 @@ Future<String?> _unavailable() async {
 }
 
 /// A test that runs [script] (a path from the repository root) with psql
-/// and fails with its output when the script raises.
-void behaviourTest(String name, String script) {
+/// and fails with its output when the script raises. A script that drops and
+/// rebuilds the whole `public` schema itself passes [rebuildsSchema], so a
+/// database at any migration state will do.
+void behaviourTest(String name, String script, {bool rebuildsSchema = false}) {
   test(name, () async {
-    final reason = await _unavailable();
+    final reason = await _unavailable(rebuildsSchema: rebuildsSchema);
     if (reason != null) {
       markTestSkipped(reason);
       return;

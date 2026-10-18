@@ -88,9 +88,21 @@ export interface ActionStore {
 
 // ------------------------------------------------------------------ time zones
 
-/// [zone] when the runtime knows it, else "UTC".
+/// A zone given as a fixed offset from UTC, "offset:480" for UTC+08:00.
+const FIXED_ZONE = /^offset:(-?\d{1,4})$/;
+
+function fixedOffsetMinutes(zone: string): number | null {
+  const match = FIXED_ZONE.exec(zone);
+  return match ? Number(match[1]) : null;
+}
+
+/// [zone] when the runtime knows it, else "UTC". "offset:<minutes>" is a
+/// zone of its own (see [resolveZone]).
 export function safeZone(zone: string | null | undefined): string {
   const name = zone?.trim();
+  if (name && fixedOffsetMinutes(name) !== null) {
+    return name;
+  }
   if (!name || !/^[A-Za-z0-9_+./-]{1,64}$/.test(name)) {
     return "UTC";
   }
@@ -101,6 +113,33 @@ export function safeZone(zone: string | null | undefined): string {
     return "UTC";
   }
 }
+
+/// The person's zone for dates: their IANA name when the runtime knows it,
+/// else their offset from UTC (the offset does not follow daylight saving, so
+/// a date weeks away across a change can be an hour out), else UTC.
+export function resolveZone(
+  name: string | null | undefined,
+  utcOffsetMinutes: number | null | undefined,
+): string {
+  const zone = safeZone(name);
+  if (zone !== "UTC" || name?.trim().toUpperCase() === "UTC") {
+    return zone;
+  }
+  return typeof utcOffsetMinutes === "number" &&
+      Number.isInteger(utcOffsetMinutes) && Math.abs(utcOffsetMinutes) <= 840
+    ? `offset:${utcOffsetMinutes}`
+    : "UTC";
+}
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 const wallFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -133,6 +172,18 @@ interface Wall {
 }
 
 function wallOf(epochMs: number, zone: string): Wall {
+  const fixed = fixedOffsetMinutes(zone);
+  if (fixed !== null) {
+    const date = new Date(epochMs + fixed * 60_000);
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      hour: date.getUTCHours(),
+      minute: date.getUTCMinutes(),
+      weekday: WEEKDAYS[date.getUTCDay()],
+    };
+  }
   const parts = wallFormatter(zone).formatToParts(new Date(epochMs));
   const get = (type: string) =>
     parts.find((part) => part.type === type)?.value ?? "";
@@ -178,13 +229,24 @@ export function wallToInstant(
   return instant;
 }
 
+function zoneLabel(zone: string): string {
+  const fixed = fixedOffsetMinutes(zone);
+  if (fixed === null) {
+    return zone;
+  }
+  const sign = fixed < 0 ? "-" : "+";
+  const abs = Math.abs(fixed);
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `UTC${sign}${two(Math.floor(abs / 60))}:${two(abs % 60)}`;
+}
+
 /// "2026-10-19 14:30 (Monday)" in [zone]: what the model is told "now" is.
 export function localNowText(epochMs: number, zone: string): string {
   const wall = wallOf(epochMs, zone);
   const two = (value: number) => String(value).padStart(2, "0");
   return `${wall.year}-${two(wall.month)}-${two(wall.day)} ${two(wall.hour)}:${
     two(wall.minute)
-  } (${wall.weekday}), time zone ${zone}`;
+  } (${wall.weekday}), time zone ${zoneLabel(zone)}`;
 }
 
 /// The model's date, "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" (a space also
@@ -533,7 +595,7 @@ export async function runExtractActions(
   }
 
   const members = await store.loadMembers(userId, parsed.conversationId);
-  const zone = safeZone(parsed.timeZone);
+  const zone = resolveZone(parsed.timeZone, parsed.utcOffsetMinutes);
   const ctx: ItemContext = { members, zone, nowMs, sources };
 
   const { allowed, used } = await deps.consume(userId, config.dailyLimit);

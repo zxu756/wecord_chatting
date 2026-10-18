@@ -84,8 +84,12 @@ export type AiRequest =
     conversationId: string;
     /// Distinct, 1 to MAX_EXTRACT_MESSAGES.
     messageIds: string[];
-    /// The person's IANA time zone for dates; null reads them as UTC.
+    /// The person's IANA time zone for dates, when the app knows it.
     timeZone: string | null;
+    /// The person's offset from UTC in minutes right now: used for dates
+    /// when there is no usable zone name (the iPhone and Mac apps do not
+    /// know it). Null reads dates as UTC.
+    utcOffsetMinutes: number | null;
   };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
@@ -255,11 +259,17 @@ export function parseAiRequest(body: unknown): AiRequest | null {
       const zone = typeof fields.time_zone === "string"
         ? fields.time_zone.trim()
         : "";
+      const offset = fields.utc_offset_minutes;
       return {
         action: "extract_actions",
         conversationId,
         messageIds,
         timeZone: /^[A-Za-z0-9_+./-]{1,64}$/.test(zone) ? zone : null,
+        utcOffsetMinutes:
+          typeof offset === "number" && Number.isInteger(offset) &&
+            offset >= -840 && offset <= 840
+            ? offset
+            : null,
       };
     }
     default:

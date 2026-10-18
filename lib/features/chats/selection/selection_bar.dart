@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/selection/selection_actions.dart';
 import 'package:wecord/features/chats/selection/selection_controller.dart';
 import 'package:wecord/features/chats/selection/selection_forward_sheet.dart';
+import 'package:wecord/features/chats/selection/selection_registrations.dart';
+import 'package:wecord/features/chats/selection/selection_registry.dart';
 import 'package:wecord/features/chats/selection/selection_rules.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -161,6 +163,31 @@ class ChatSelectionBar extends ConsumerWidget {
             : null,
         onPressed: canDelete ? () => unawaited(actions.delete()) : null,
       ),
+      // What features add (selection_registrations.dart).
+      for (final extra
+          in ref
+              .watch(selectionBarRegistryProvider)
+              .entriesFor(
+                SelectionBarContext(
+                  context: context,
+                  environment: environment,
+                  messages: messages,
+                  leaveSelection: () => ref
+                      .read(
+                        chatSelectionProvider(
+                          environment.conversationId,
+                        ).notifier,
+                      )
+                      .cancel(),
+                ),
+              ))
+        _BarItem(
+          key: extra.key,
+          icon: extra.icon,
+          label: extra.label,
+          hint: extra.hint,
+          onPressed: extra.onPressed,
+        ),
     ];
 
     final c = context.tokens.colors;

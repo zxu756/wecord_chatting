@@ -6,12 +6,14 @@
 // composer_menu_builtin.dart) occupy orders 100, 200, ... 1300; pick an
 // `order` between two of them to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu_builtin.dart';
 
 /// Feature contributions to the "+" menu. Append yours here.
 final List<ComposerMenuContribution> composerMenuExtensions = [
   // myFeatureComposerEntry,
+  askAssistantEntry,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

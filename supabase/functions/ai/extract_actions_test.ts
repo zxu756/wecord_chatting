@@ -11,6 +11,7 @@ import {
   parseActionItems,
   parseDue,
   resolveAssignee,
+  resolveZone,
   safeZone,
   wallToInstant,
 } from "./extract_actions.ts";
@@ -92,6 +93,38 @@ Deno.test("an unknown or odd zone is read as UTC", () => {
   assertEquals(safeZone("../../etc"), "UTC");
   assertEquals(safeZone(""), "UTC");
   assertEquals(safeZone(null), "UTC");
+});
+
+Deno.test("without a zone name the offset from UTC is used", () => {
+  assertEquals(resolveZone("Asia/Shanghai", 0), "Asia/Shanghai");
+  assertEquals(resolveZone("UTC", 480), "UTC");
+  assertEquals(resolveZone(null, 480), "offset:480");
+  assertEquals(resolveZone("Mars/Olympus", -300), "offset:-300");
+  assertEquals(resolveZone(null, null), "UTC");
+  assertEquals(resolveZone(null, 5000), "UTC");
+  assertEquals(resolveZone(null, 1.5), "UTC");
+  assertEquals(safeZone("offset:330"), "offset:330");
+  assertEquals(safeZone("offset:abc"), "UTC");
+  assertEquals(
+    new Date(wallToInstant(2026, 10, 23, 15, 0, "offset:480")).toISOString(),
+    "2026-10-23T07:00:00.000Z",
+  );
+  assertEquals(
+    new Date(wallToInstant(2026, 10, 23, 0, 5, "offset:330")).toISOString(),
+    "2026-10-22T18:35:00.000Z",
+  );
+  assertEquals(
+    new Date(wallToInstant(2026, 10, 23, 9, 0, "offset:-300")).toISOString(),
+    "2026-10-23T14:00:00.000Z",
+  );
+  assertStringIncludes(
+    localNowText(NOW, "offset:480"),
+    "2026-10-19 14:30 (Monday), time zone UTC+08:00",
+  );
+  assertStringIncludes(
+    localNowText(NOW, "offset:-330"),
+    "2026-10-19 01:00 (Monday), time zone UTC-05:30",
+  );
 });
 
 Deno.test("the model is told the date in the requester's zone", () => {
@@ -567,8 +600,27 @@ Deno.test("the request is checked", async () => {
       conversationId: conversation,
       messageIds: [id(1), id(2)],
       timeZone: "Europe/Paris",
+      utcOffsetMinutes: null,
     },
   );
+  assertEquals(
+    (parseAiRequest({
+      ...{ action: "extract_actions", conversation_id: conversation },
+      message_ids: [id(1)],
+      utc_offset_minutes: 480,
+    }) as { utcOffsetMinutes: number | null }).utcOffsetMinutes,
+    480,
+  );
+  for (const bad of [900, -841, 1.5, "480", null]) {
+    assertEquals(
+      (parseAiRequest({
+        ...{ action: "extract_actions", conversation_id: conversation },
+        message_ids: [id(1)],
+        utc_offset_minutes: bad,
+      }) as { utcOffsetMinutes: number | null }).utcOffsetMinutes,
+      null,
+    );
+  }
   const base = { action: "extract_actions", conversation_id: conversation };
   assertEquals(parseAiRequest({ ...base, message_ids: [] }), null);
   assertEquals(parseAiRequest({ ...base, message_ids: ["x"] }), null);
@@ -626,6 +678,21 @@ Deno.test("without a signed-in person or a store nothing happens", async () => {
   const none = await run({ messages: chat, actions: null });
   assertEquals(none.status, 503);
   assertEquals(none.calls.providerBodies.length, 0);
+});
+
+Deno.test("an offset stands in for a zone name the app does not have", async () => {
+  const answer = () =>
+    answerResponse(
+      '{"items":[{"title":"Call","due":"2099-01-05T10:00","kind":"task"}]}',
+    );
+  const { body } = await run({ messages: chat, answer }, [id(1)], {
+    time_zone: null,
+    utc_offset_minutes: 480,
+  });
+  assertEquals(
+    (body.items as { due: string }[])[0].due,
+    "2099-01-05T02:00:00.000Z",
+  );
 });
 
 Deno.test("the dates come back in the zone the person is in", async () => {

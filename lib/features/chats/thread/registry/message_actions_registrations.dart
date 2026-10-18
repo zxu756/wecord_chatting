@@ -8,10 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions_builtin.dart';
+import 'package:wecord/features/reports/report_message_action.dart';
 
 /// Feature contributions to the message menu. Append yours here.
 final List<MessageActionContribution> messageActionExtensions = [
   // myFeatureMessageAction,
+  reportMessageAction,
   editHistoryAction,
 ];
 

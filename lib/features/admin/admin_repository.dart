@@ -27,19 +27,48 @@ class AdminRepository {
     DateTime? before,
     int pageSize = 30,
   }) async {
-    final rows = await _rpc('admin_list_reports', {
-      'kind_filter': kind?.value,
-      'status_filter': status.value,
-      'page_size': pageSize,
-      'before_created_at': before?.toUtc().toIso8601String(),
-    });
+    // Reports of messages in direct chats and groups have a queue of their
+    // own (migration 202610220120).
+    final rows = kind == ReportKind.message
+        ? await _rpc('admin_list_message_reports', {
+            'status_filter': status.value,
+            'page_size': pageSize,
+            'before_created_at': before?.toUtc().toIso8601String(),
+          })
+        : await _rpc('admin_list_reports', {
+            'kind_filter': kind?.value,
+            'status_filter': status.value,
+            'page_size': pageSize,
+            'before_created_at': before?.toUtc().toIso8601String(),
+          });
     return [for (final row in rpcRows(rows)) AdminReport.fromJson(row)];
   }
 
-  Future<AdminReportDetail> reportDetail(String reportId) async {
+  Future<AdminReportDetail> reportDetail(
+    String reportId, {
+    bool message = false,
+  }) async {
     return AdminReportDetail.fromJson(
-      rpcObject(await _rpc('admin_get_report', {'target_report_id': reportId})),
+      rpcObject(
+        await _rpc(message ? 'admin_get_message_report' : 'admin_get_report', {
+          'target_report_id': reportId,
+        }),
+      ),
     );
+  }
+
+  /// Closes a report of a message: [action] is 'dismiss', 'delete_message'
+  /// or 'suspend' (after the person was suspended).
+  Future<void> resolveMessageReport({
+    required String reportId,
+    required String action,
+    String note = '',
+  }) async {
+    await _rpc('admin_resolve_message_report', {
+      'target_report_id': reportId,
+      'action': action,
+      'note': note.trim(),
+    });
   }
 
   /// Closes a report: [dismissed] for "no violation", else "reviewed".

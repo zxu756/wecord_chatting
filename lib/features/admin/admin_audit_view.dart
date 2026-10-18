@@ -22,6 +22,17 @@ String adminAuditSummary(AdminAuditEntry entry) {
           : tr('{actor} delisted the circle {title}', args),
     'enable_circle' => tr('{actor} restored the circle {title}', args),
     'delete_circle_post' => tr('{actor} deleted the post "{title}"', args),
+    'resolve_message_report' => switch (entry.details['action']) {
+      'delete_message' => tr(
+        '{actor} deleted a reported message: {title}',
+        args,
+      ),
+      'suspend' => tr(
+        '{actor} suspended the sender of a reported message',
+        args,
+      ),
+      _ => tr('{actor} dismissed a message report', args),
+    },
     'resolve_report' => tr('{actor} closed a report: {resolution}', {
       'actor': actor,
       'resolution':
@@ -38,7 +49,7 @@ IconData adminAuditIcon(String action) => switch (action) {
   'disable_circle' => Icons.visibility_off_outlined,
   'enable_circle' => Icons.visibility_outlined,
   'delete_circle_post' => Icons.delete_outline_rounded,
-  'resolve_report' => Icons.task_alt_rounded,
+  'resolve_report' || 'resolve_message_report' => Icons.task_alt_rounded,
   _ => Icons.history_rounded,
 };
 

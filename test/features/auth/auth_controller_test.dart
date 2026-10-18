@@ -74,7 +74,13 @@ void main() {
 
     await container
         .read(authControllerProvider.notifier)
-        .signUp('Ada_L', 'Ada Lovelace', 'ada@example.com', 'password123');
+        .signUp(
+          'Ada_L',
+          'Ada Lovelace',
+          'ada@example.com',
+          'password123',
+          acceptedTerms: true,
+        );
 
     expect(repository.signUpCalls, [
       const SignUpCall(
@@ -87,6 +93,39 @@ void main() {
     expect(container.read(authControllerProvider).errorMessage, isNull);
   });
 
+  test('signUp needs the age and terms box ticked', () async {
+    final repository = FakeAuthRepository();
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(authControllerProvider.notifier)
+        .signUp('ada', 'Ada Lovelace', 'ada@example.com', 'password123');
+
+    expect(repository.signUpCalls, isEmpty);
+    expect(
+      container.read(authControllerProvider).errorMessage,
+      'Please confirm your age and agree to the Terms and Community Guidelines.',
+    );
+    expect(container.read(signUpConsentProvider).given, isFalse);
+
+    await container
+        .read(authControllerProvider.notifier)
+        .signUp(
+          'ada',
+          'Ada Lovelace',
+          'ada@example.com',
+          'password123',
+          acceptedTerms: true,
+        );
+
+    expect(repository.signUpCalls, hasLength(1));
+    // The repository reads it when it signs the person up.
+    expect(container.read(signUpConsentProvider).given, isTrue);
+  });
+
   test('signUp rejects usernames that do not match profile rules', () async {
     final repository = FakeAuthRepository();
     final container = ProviderContainer(
@@ -97,7 +136,13 @@ void main() {
     for (final username in ['ab', 'ada-l', 'ada.lovelace', 'a' * 25]) {
       await container
           .read(authControllerProvider.notifier)
-          .signUp(username, 'Ada Lovelace', 'ada@example.com', 'password123');
+          .signUp(
+            username,
+            'Ada Lovelace',
+            'ada@example.com',
+            'password123',
+            acceptedTerms: true,
+          );
     }
 
     expect(repository.signUpCalls, isEmpty);

@@ -8,8 +8,22 @@ import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/site_url.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
+/// Whether the person signing up ticked "I am at least {age} and agree to the
+/// Terms and Community Guidelines". The sign-up form sets it just before it
+/// calls [AuthRepository.signUp], which has no parameter for it (every test
+/// double implements that signature); the repository reads it there.
+class SignUpConsent {
+  bool given = false;
+}
+
+final signUpConsentProvider = Provider<SignUpConsent>((ref) => SignUpConsent());
+
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return SupabaseAuthRepository(ref.watch(supabaseClientProvider));
+  final consent = ref.watch(signUpConsentProvider);
+  return SupabaseAuthRepository(
+    ref.watch(supabaseClientProvider),
+    consent: () => consent.given,
+  );
 });
 
 final authStateProvider = StreamProvider<AuthUser?>((ref) {
@@ -76,12 +90,18 @@ class SupabaseAuthRepository implements AuthRepository {
   const SupabaseAuthRepository(
     this._client, {
     this._redirectUrl = authRedirectUrl,
+    this.consent,
   });
 
   final SupabaseClient _client;
 
   /// Where links in auth emails lead back to (see [authRedirectUrl]).
   final String Function() _redirectUrl;
+
+  /// Whether the person ticked the age and terms box (see [SignUpConsent]);
+  /// when it is true the sign-up carries it, and the profile made after the
+  /// confirmation records the time.
+  final bool Function()? consent;
 
   @override
   AuthUser? get currentUser => _toAuthUser(_client.auth.currentUser);
@@ -130,6 +150,7 @@ class SupabaseAuthRepository implements AuthRepository {
       data: {
         'username': username.trim().toLowerCase(),
         'display_name': displayName.trim(),
+        if (consent?.call() ?? false) 'accepted_terms': true,
       },
     );
   }
@@ -170,11 +191,17 @@ class SupabaseAuthRepository implements AuthRepository {
       return;
     }
 
+    final accepted = metadata['accepted_terms'] == true;
+    final now = DateTime.now().toUtc().toIso8601String();
     await _client.from('profiles').insert({
       'id': user.id,
       'username': username,
       'display_name': displayName,
       'bio': '',
+      // The database stamps its own clock over these (migration
+      // 202610220130); they only say that the box was ticked at sign-up.
+      if (accepted) 'accepted_terms_at': now,
+      if (accepted) 'age_confirmed_at': now,
     });
   }
 }

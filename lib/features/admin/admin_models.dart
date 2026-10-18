@@ -1,3 +1,5 @@
+import 'package:wecord/features/reports/message_reports.dart'
+    show ReportContextMessage;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/report_reason.dart';
 
@@ -86,6 +88,7 @@ enum ReportResolution {
   noViolation('no_violation'),
   duplicate('duplicate'),
   contentRemoved('content_removed'),
+  messageDeleted('message_deleted'),
   userSuspended('user_suspended'),
   circleDelisted('circle_delisted'),
   circleSuspended('circle_suspended'),
@@ -108,6 +111,7 @@ enum ReportResolution {
     noViolation => tr('No violation'),
     duplicate => trIn('Admin', 'Duplicate'),
     contentRemoved => tr('Content removed'),
+    messageDeleted => tr('Message deleted'),
     userSuspended => tr('Person suspended'),
     circleDelisted => tr('Circle delisted'),
     circleSuspended => tr('Circle suspended'),
@@ -427,6 +431,14 @@ class AdminReportDetail {
   );
 
   bool get postDeleted => subject['deleted'] == true;
+
+  /// The messages around a reported message that the reporter shared.
+  List<ReportContextMessage> get contextMessages => [
+    if (snapshot['context'] case final List<dynamic> items)
+      for (final item in items)
+        if (item is Map)
+          ReportContextMessage.fromJson(Map<String, dynamic>.from(item)),
+  ];
   bool get subjectMissing => subject['missing'] == true;
 }
 

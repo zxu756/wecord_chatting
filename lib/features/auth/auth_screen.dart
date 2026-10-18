@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_controller.dart';
 import 'package:wecord/features/auth/auth_layout.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
+import 'package:wecord/features/legal/terms_checkbox.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -21,6 +22,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
   var _isCreatingAccount = false;
+  var _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -128,6 +130,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ],
           ),
         ),
+        if (creating) ...[
+          const SizedBox(height: 16),
+          TermsAgreementCheckbox(
+            key: const ValueKey('auth-accept-terms'),
+            value: _acceptedTerms,
+            onChanged: busy
+                ? null
+                : (value) => setState(() => _acceptedTerms = value),
+          ),
+        ],
         if (state.errorMessage != null) ...[
           const SizedBox(height: 16),
           AuthError(state.errorMessage!),
@@ -177,6 +189,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         _displayNameController.text,
         _emailController.text,
         _passwordController.text,
+        acceptedTerms: _acceptedTerms,
       );
       return;
     }

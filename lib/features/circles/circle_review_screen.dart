@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/reports/circle_message_reports_section.dart';
+import 'package:wecord/features/reports/message_reports.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -16,8 +18,10 @@ void openCircleReviewScreen(BuildContext context, String circleId) {
   );
 }
 
-/// The circle's Review queue: messages the AI guard held back or flagged,
-/// with the AI's category and reason, for moderators to approve or remove.
+/// The circle's Review queue: messages people reported, and messages the AI
+/// guard held back or flagged, with the AI's category and reason, for
+/// moderators to handle. Reports come first; their count is part of the
+/// red badge on the circle's moderation tools.
 class CircleReviewScreen extends ConsumerWidget {
   const CircleReviewScreen({required this.circleId, this.now, super.key});
 
@@ -29,6 +33,10 @@ class CircleReviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reviews = ref.watch(messageReviewsProvider(circleId));
+    // A moderator who cannot read reports (or no connection) just sees none.
+    final reports =
+        ref.watch(circleMessageReportsProvider(circleId)).value ??
+        const <CircleMessageReport>[];
     return CirclePageScaffold(
       title: tr('Review'),
       body: reviews.when(
@@ -38,27 +46,52 @@ class CircleReviewScreen extends ConsumerWidget {
           title: tr('Could not load the review queue.'),
           action: WeCordButton(
             label: tr('Try again'),
-            onPressed: () => ref.invalidate(messageReviewsProvider(circleId)),
+            onPressed: () {
+              ref.invalidate(messageReviewsProvider(circleId));
+              ref.invalidate(circleMessageReportsProvider(circleId));
+            },
           ),
         ),
-        data: (items) => items.isEmpty
+        data: (items) => items.isEmpty && reports.isEmpty
             ? CircleEmptyState(
                 key: const ValueKey('review-empty'),
                 icon: Icons.verified_user_outlined,
                 title: tr('Nothing to review'),
                 message: tr(
-                  'Messages the AI guard holds back or flags show up here.',
+                  'Messages the AI guard holds back or flags, and messages '
+                  'people report, show up here.',
                 ),
               )
-            : ListView.separated(
+            : ListView(
                 padding: circlePagePadding(context),
-                itemCount: items.length + 1,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                children: [
+                  if (reports.isNotEmpty) ...[
+                    ReviewSectionHeader(
+                      key: const ValueKey('review-reports-header'),
+                      title: tr('User reports'),
+                      count: reports.length,
+                    ),
+                    const SizedBox(height: 4),
+                    for (final report in reports) ...[
+                      const SizedBox(height: 8),
+                      MessageReportCard(
+                        key: ValueKey('report-${report.id}'),
+                        report: report,
+                        circleId: circleId,
+                        now: now,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
+                  if (items.isNotEmpty) ...[
+                    if (reports.isNotEmpty)
+                      ReviewSectionHeader(
+                        key: const ValueKey('review-guard-header'),
+                        title: tr('Held or flagged by the AI guard'),
+                        count: items.length,
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
                       child: Text(
                         tr(
                           'Held messages are hidden from everyone but their '
@@ -71,16 +104,18 @@ class CircleReviewScreen extends ConsumerWidget {
                           height: 1.4,
                         ),
                       ),
-                    );
-                  }
-                  final item = items[index - 1];
-                  return ReviewCard(
-                    key: ValueKey('review-${item.messageId}'),
-                    review: item,
-                    circleId: circleId,
-                    now: now,
-                  );
-                },
+                    ),
+                    for (final item in items) ...[
+                      const SizedBox(height: 12),
+                      ReviewCard(
+                        key: ValueKey('review-${item.messageId}'),
+                        review: item,
+                        circleId: circleId,
+                        now: now,
+                      ),
+                    ],
+                  ],
+                ],
               ),
       ),
     );

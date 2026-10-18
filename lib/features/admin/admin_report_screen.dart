@@ -8,20 +8,33 @@ import 'package:wecord/features/admin/admin_widgets.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart'
     show formatAuditTime;
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/reports/message_reports.dart'
+    show attachmentLabel;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// One report in full: the report, a copy of what was reported, the
 /// person or circle as it is now, what happened before, and the actions.
 final adminReportDetailProvider = FutureProvider.autoDispose
-    .family<AdminReportDetail, String>((ref, reportId) {
-      return ref.watch(adminRepositoryProvider).reportDetail(reportId);
+    .family<AdminReportDetail, ({String id, bool message})>((ref, key) {
+      return ref
+          .watch(adminRepositoryProvider)
+          .reportDetail(key.id, message: key.message);
     });
 
 class AdminReportScreen extends ConsumerStatefulWidget {
-  const AdminReportScreen({required this.reportId, this.now, super.key});
+  const AdminReportScreen({
+    required this.reportId,
+    this.message = false,
+    this.now,
+    super.key,
+  });
 
   final String reportId;
+
+  /// The report is of a message in a direct chat or a group (it has its own
+  /// functions); the others are users, circles and posts.
+  final bool message;
 
   /// The current time, for tests.
   final DateTime Function()? now;
@@ -35,7 +48,10 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
 
   DateTime get _now => widget.now?.call() ?? DateTime.now();
 
-  void _refresh() => ref.invalidate(adminReportDetailProvider(widget.reportId));
+  ({String id, bool message}) get _key =>
+      (id: widget.reportId, message: widget.message);
+
+  void _refresh() => ref.invalidate(adminReportDetailProvider(_key));
 
   void _say(String message) {
     ScaffoldMessenger.of(context)
@@ -73,6 +89,15 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
 
   Future<void> _close(AdminReportDetail detail, {required bool dismissed}) {
     final report = detail.report;
+    if (report.kind == ReportKind.message) {
+      return _run(
+        () => _repository.resolveMessageReport(
+          reportId: report.id,
+          action: 'dismiss',
+        ),
+        tr('Report dismissed.'),
+      );
+    }
     return _run(
       () => _repository.resolveReport(
         reportId: report.id,
@@ -82,6 +107,37 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
             : ReportResolution.other,
       ),
       dismissed ? tr('Report dismissed.') : tr('Report marked as handled.'),
+    );
+  }
+
+  /// Deletes the reported message of a direct chat or a group for everyone.
+  Future<void> _deleteMessage(AdminReportDetail detail) async {
+    final result = await askAdminReason(
+      context,
+      title: tr('Delete this message?'),
+      message: tr('It is deleted for everyone in the chat.'),
+      confirmLabel: tr('Continue'),
+      now: _now,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    final sure = await confirmCircleAction(
+      context,
+      title: tr('Delete this message?'),
+      message: tr('This cannot be undone.'),
+      confirmLabel: tr('Delete message'),
+    );
+    if (!sure || !mounted) {
+      return;
+    }
+    await _run(
+      () => _repository.resolveMessageReport(
+        reportId: detail.report.id,
+        action: 'delete_message',
+        note: result.reason,
+      ),
+      tr('The message was deleted.'),
     );
   }
 
@@ -120,15 +176,23 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
     if (!sure || !mounted) {
       return;
     }
-    await _run(
-      () => _repository.suspendUser(
+    final isMessage = detail.report.kind == ReportKind.message;
+    await _run(() async {
+      await _repository.suspendUser(
         userId: person.id,
         reason: result.reason,
         until: until,
-        reportId: detail.report.isOpen ? detail.report.id : null,
-      ),
-      tr('{name} was suspended.', {'name': person.name}),
-    );
+        // A message report is closed below, once the person is suspended.
+        reportId: detail.report.isOpen && !isMessage ? detail.report.id : null,
+      );
+      if (isMessage && detail.report.isOpen) {
+        await _repository.resolveMessageReport(
+          reportId: detail.report.id,
+          action: 'suspend',
+          note: result.reason,
+        );
+      }
+    }, tr('{name} was suspended.', {'name': person.name}));
   }
 
   Future<void> _liftSuspension(AdminPerson person) async {
@@ -268,7 +332,7 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final detail = ref.watch(adminReportDetailProvider(widget.reportId));
+    final detail = ref.watch(adminReportDetailProvider(_key));
     final role = ref.watch(adminRoleProvider).value;
     return CirclePageScaffold(
       title: tr('Report'),
@@ -300,6 +364,7 @@ class _AdminReportScreenState extends ConsumerState<AdminReportScreen> {
               onSuspendPerson: (person) => _suspendPerson(detail, person),
               onLiftSuspension: _liftSuspension,
               onDeletePost: () => _deletePost(detail),
+              onDeleteMessage: () => _deleteMessage(detail),
               onTakeCircleDown: (mode) => _takeCircleDown(detail, mode),
               onRestoreCircle: () => _restoreCircle(detail),
             ),
@@ -550,9 +615,56 @@ class _SnapshotCardState extends ConsumerState<_SnapshotCard> {
             ],
           ]);
         case ReportKind.message:
-          if (text('body').isNotEmpty) {
-            children.add(AdminQuote(text: text('body')));
-          }
+          children.addAll([
+            AdminFact(
+              label: tr('Sender'),
+              value: text('sender_username').isEmpty
+                  ? tr('Unknown')
+                  : '${text('sender_display_name')} (@${text('sender_username')})',
+            ),
+            AdminFact(
+              label: tr('Chat'),
+              value: text('conversation_type') == 'group'
+                  ? tr('Group {name}', {'name': text('conversation_title')})
+                  : tr('Direct chat'),
+            ),
+            if (time('created_at') case final sent?)
+              AdminFact(label: tr('Sent'), value: adminDateTime(sent)),
+            if (text('body').isNotEmpty) ...[
+              const SizedBox(height: 8),
+              AdminQuote(text: text('body')),
+            ],
+            if (attachmentLabel(snapshot['attachment']) case final label?) ...[
+              const SizedBox(height: 8),
+              Text(
+                label,
+                key: const ValueKey('admin-message-attachment'),
+                style: TextStyle(fontSize: 13.5, color: c.muted),
+              ),
+            ],
+            if (detail.contextMessages.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                tr('Messages around it'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: c.subtle,
+                ),
+              ),
+              const SizedBox(height: 6),
+              for (final item in detail.contextMessages)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    '${item.senderName}: '
+                    '${item.body.isNotEmpty ? item.body : (item.attachment ?? '')}',
+                    key: const ValueKey('admin-message-context'),
+                    style: TextStyle(fontSize: 13.5, height: 1.4, color: c.ink),
+                  ),
+                ),
+            ],
+          ]);
       }
     }
     return AdminSection(
@@ -651,6 +763,18 @@ class _NowCard extends StatelessWidget {
         ),
       );
     }
+    if (detail.kind == ReportKind.message && !detail.subjectMissing) {
+      tags.add(
+        AdminStateTag(
+          label: detail.postDeleted
+              ? tr('Message deleted')
+              : tr('Message is live'),
+          tone: detail.postDeleted
+              ? SettingsTone.success
+              : SettingsTone.neutral,
+        ),
+      );
+    }
     if (person != null) {
       if (person.isSuspended) {
         final until = person.suspendedUntil;
@@ -679,6 +803,7 @@ class _NowCard extends StatelessWidget {
           label: switch (detail.kind) {
             ReportKind.circle => tr('Owner'),
             ReportKind.post => tr('Author'),
+            ReportKind.message => tr('Sender'),
             _ => tr('Person'),
           },
           value: '${person.name} (@${person.username})',
@@ -813,6 +938,7 @@ class _ActionsCard extends StatelessWidget {
     required this.onSuspendPerson,
     required this.onLiftSuspension,
     required this.onDeletePost,
+    required this.onDeleteMessage,
     required this.onTakeCircleDown,
     required this.onRestoreCircle,
   });
@@ -824,6 +950,7 @@ class _ActionsCard extends StatelessWidget {
   final ValueChanged<AdminPerson> onSuspendPerson;
   final ValueChanged<AdminPerson> onLiftSuspension;
   final VoidCallback onDeletePost;
+  final VoidCallback onDeleteMessage;
   final ValueChanged<CircleTakedownMode> onTakeCircleDown;
   final VoidCallback onRestoreCircle;
 
@@ -861,12 +988,15 @@ class _ActionsCard extends StatelessWidget {
           () => onClose(true),
           icon: Icons.check_rounded,
         ),
-        button(
-          'admin-action-handled',
-          tr('Mark as handled'),
-          () => onClose(false),
-          icon: Icons.task_alt_rounded,
-        ),
+        // A message report ends in "No violation", deleting the message or
+        // suspending the sender.
+        if (detail.kind != ReportKind.message)
+          button(
+            'admin-action-handled',
+            tr('Mark as handled'),
+            () => onClose(false),
+            icon: Icons.task_alt_rounded,
+          ),
       ],
     ];
 
@@ -881,6 +1011,20 @@ class _ActionsCard extends StatelessWidget {
             'admin-action-delete-post',
             tr('Delete post'),
             onDeletePost,
+            variant: WeCordButtonVariant.danger,
+            icon: Icons.delete_outline_rounded,
+          ),
+        );
+      }
+      if (detail.kind == ReportKind.message &&
+          report.isOpen &&
+          !detail.postDeleted &&
+          !detail.subjectMissing) {
+        sanctions.add(
+          button(
+            'admin-action-delete-message',
+            tr('Delete message'),
+            onDeleteMessage,
             variant: WeCordButtonVariant.danger,
             icon: Icons.delete_outline_rounded,
           ),
@@ -923,6 +1067,7 @@ class _ActionsCard extends StatelessWidget {
         final label = switch (detail.kind) {
           ReportKind.circle => tr('Suspend owner'),
           ReportKind.post => tr('Suspend author'),
+          ReportKind.message => tr('Suspend sender'),
           _ => tr('Suspend person'),
         };
         if (person.isSuspended) {

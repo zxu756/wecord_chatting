@@ -78,6 +78,39 @@ Map<String, dynamic> adminDetailJson(
       'bio': 'DM me for crypto tips',
       'created_at': '2026-09-01T08:00:00Z',
     },
+    'message': {
+      'kind': 'message',
+      'title': 'send me your password or else',
+      'message_id': 'subject-$id',
+      'type': 'text',
+      'body': 'send me your password or else',
+      'attachment': {
+        'kind': 'image',
+        'mime_type': 'image/jpeg',
+        'name': 'screenshot.jpg',
+      },
+      'created_at': '2026-10-19T08:00:00Z',
+      'sender_username': 'eve',
+      'sender_display_name': 'Eve Adams',
+      'conversation_type': 'group',
+      'conversation_title': 'Weekend hikers',
+      'context': [
+        {
+          'id': 'c1',
+          'sender_name': 'Dee',
+          'body': 'who has the tickets?',
+          'created_at': '2026-10-19T07:59:00Z',
+          'position': 'before',
+        },
+        {
+          'id': 'c2',
+          'sender_name': 'Dee',
+          'body': 'please stop',
+          'created_at': '2026-10-19T08:01:00Z',
+          'position': 'after',
+        },
+      ],
+    },
   };
   final subjects = {
     'post': {
@@ -95,6 +128,7 @@ Map<String, dynamic> adminDetailJson(
       'disabled_mode': null,
     },
     'user': {'type': 'user'},
+    'message': {'type': 'message', 'id': 'subject-$id', 'deleted': false},
   };
   return {
     'report': {
@@ -190,7 +224,8 @@ class FakeAdminBackend {
         final before = params['before_created_at'] as String?;
         return [
           for (final report in reports)
-            if ((kind == null || report['kind'] == kind) &&
+            if (report['kind'] != 'message' &&
+                (kind == null || report['kind'] == kind) &&
                 (status == 'handled'
                     ? report['status'] != 'open'
                     : report['status'] == 'open') &&
@@ -198,6 +233,20 @@ class FakeAdminBackend {
                     (report['created_at'] as String).compareTo(before) < 0))
               report,
         ].take(params['page_size'] as int).toList();
+      case 'admin_list_message_reports':
+        if (failReports) {
+          throw StateError('Check your connection');
+        }
+        final status = params['status_filter'] as String?;
+        return [
+          for (final report in reports)
+            if (report['kind'] == 'message' &&
+                (status == 'handled'
+                    ? report['status'] != 'open'
+                    : report['status'] == 'open'))
+              report,
+        ];
+      case 'admin_get_message_report':
       case 'admin_get_report':
         final detail = details[params['target_report_id']];
         if (detail == null) {
@@ -212,6 +261,7 @@ class FakeAdminBackend {
         }
         return takedowns;
       case 'admin_resolve_report':
+      case 'admin_resolve_message_report':
       case 'admin_disable_circle':
       case 'admin_enable_circle':
       case 'admin_delete_circle_post':

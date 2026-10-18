@@ -716,3 +716,88 @@ leads the friends list (and a star button on each row), tag chips filter it,
 the *Tags* page makes, renames, deletes and fills tags, and a friend's
 profile has *Star*, *Tags* and *Moments* rows. Unfriending removes the friend
 from tags, stars and Moments choices.
+
+## Chat page extension points
+
+`lib/features/chats/chat_thread_screen.dart` is only the shell of the chat
+page (fields, lifecycle and `build`). Its parts live in
+`lib/features/chats/thread/` (`state_*.dart` hold what the page does,
+`build_*.dart` draw the header, banners, list and composer, `message_bubble.dart`,
+`message_content.dart` and `composer.dart` are the widgets) and its pure logic
+(sorting, grouping, the NEW divider, the latest outgoing read state, slowmode)
+in `thread_layout.dart`, which is unit-tested on its own.
+
+**A new chat feature does not edit those files.** It plugs in through four
+registries in `lib/features/chats/thread/registry/`. Each registry has the
+same three files:
+
+| File | What it is |
+|---|---|
+| `<name>.dart` | The types: a context, a contribution and the registry class. |
+| `<name>_builtin.dart` | The built-in entries, with orders 100, 200, ... in the order the page has always had them. |
+| `<name>_registrations.dart` | **The only file a feature touches**: an `...Extensions` list and the registry provider. |
+
+A feature writes its contribution in its own file (for example
+`lib/features/forms/forms_chat.dart`) and appends one line to the
+`...Extensions` list. An `order` places it among the built-in entries, in
+ascending order; pick a number between two neighbours (350 lands between 300
+and 400). Ids must be unique. Contexts carry what the page knows (the message,
+the conversation, the user's permissions) and a `BuildContext` for sheets and
+routes; read providers through `ctx.container` (or `ctx.ref` in the header).
+Tests can override the `...RegistryProvider` to add or drop entries.
+
+**Message menu** (`message_actions*.dart`): each contribution returns the
+`MessageAction`s it wants for a message (none when it does not apply). Both
+the phone long-press menu and the desktop right-click / hover More menu use
+it, and so does the screen-reader action list.
+
+```dart
+final editHistoryAction = MessageActionContribution(
+  id: 'edit-history', order: 650, // between Edit (600) and Create task (700)
+  build: (ctx) => [if (ctx.message.editedAt != null) MessageAction(icon: Icons.history, label: tr('Edit history'), onSelected: () => showEditHistory(ctx.context, ctx.message))]);
+```
+
+**Bubble footer slot** (`bubble_footer*.dart`): small things next to a
+message that are not its content. A `BubbleFooterEntry.below` draws under the
+bubble (`wrap: plain` for a card or chips, `pill` for a status label that
+stays readable over a wallpaper); a `BubbleFooterEntry.inside` adds widgets
+after the content inside the bubble. Circle channels use the card layout, so
+set `cardGap` (and `cardMaxWidth` for a card) too. Built in: task chip,
+edited, published inside; link preview, thread chip, reactions, disappearing
+mark, review mark and read receipt below.
+
+```dart
+const readStatus = BubbleFooterEntry.below(
+  id: 'read-status', order: 650, wrap: BubbleFooterWrap.pill, cardGap: 4,
+  build: _readStatus); // Widget? _readStatus(BubbleFooterContext ctx)
+```
+
+**Composer "+" menu** (`composer_menu*.dart`): each contribution returns one
+`GlassMenuEntry` (or null for chats it does not apply to). The context says
+whether the chat is direct or a group and whether the screen is phone width.
+A new feature opens its own sheet from `ctx.context`; it does not need the
+page's handlers (`ctx.actions` is for the built-in entries).
+
+```dart
+final formEntry = ComposerMenuContribution(id: 'form', order: 350,
+  build: (ctx) => GlassMenuEntry(icon: Icons.assignment_outlined, label: tr('Form'),
+      onSelected: () => unawaited(showFormComposer(ctx.context, conversationId: ctx.conversationId))));
+```
+
+**Header actions** (`header_actions*.dart`): each contribution returns a
+`ChatThreadAction`. The `ChatThreadAction.primary` rule is unchanged: on wide
+headers only `primary: true` actions stay buttons and every other action goes
+in the More menu; phones keep search, one primary action and More; `menuOnly`
+actions have no wide button. Actions a parent passes in
+(`ChatThreadScreen.extraActions`, which circles use) sit at order 1500, after
+the built-in ones and before Events (2000).
+
+```dart
+final formsAction = HeaderActionContribution(id: 'forms', order: 950,
+  build: (ctx) => ctx.isGroup ? ChatThreadAction(id: 'forms', tooltip: tr('Forms'),
+      icon: Icons.assignment_outlined, onPressed: () => showForms(ctx.context)) : null);
+```
+
+Behaviour that does not change when a registry grows: entries appear in
+`order`, then in the order they were listed for equal orders; built-in orders
+are never renumbered, so a feature's number stays valid.

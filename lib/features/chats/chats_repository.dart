@@ -2112,11 +2112,26 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   Future<List<Map<String, dynamic>>> listReadMarkers(
     String conversationId,
   ) async {
-    final rows = await _client
-        .from('conversation_members')
-        .select('user_id,last_read_message_id')
-        .eq('conversation_id', conversationId);
-    return rows.cast<Map<String, dynamic>>();
+    // Through list_read_markers, not the table: it leaves out the read
+    // positions of people who turned read receipts off (and all of them
+    // when the caller did), as well as blocked people's.
+    try {
+      final rows = await _client.rpc(
+        'list_read_markers',
+        params: {'target_conversation_id': conversationId},
+      );
+      return (rows as List).cast<Map<String, dynamic>>();
+    } on PostgrestException catch (error) {
+      // A server without the read-receipts setting yet.
+      if (error.code != 'PGRST202' && error.code != '42883') {
+        rethrow;
+      }
+      final rows = await _client
+          .from('conversation_members')
+          .select('user_id,last_read_message_id')
+          .eq('conversation_id', conversationId);
+      return rows.cast<Map<String, dynamic>>();
+    }
   }
 
   @override

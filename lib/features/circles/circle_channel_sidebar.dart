@@ -23,6 +23,8 @@ import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/onboarding/guide_page.dart';
+import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -720,6 +722,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final currentMember = detail.currentMember;
     final canManageChannels = detail.canManageChannels;
     final reviewCount = _reviewCount(detail);
+    final hasGuide =
+        ref.read(circleGuideProvider(detail.circle.id)).value?.enabled ?? false;
     // What members use every day, what runs the circle, what keeps it safe;
     // a section with nothing for this member does not show.
     final everyday = <CircleMenuItem<_CircleMenuAction>>[
@@ -752,6 +756,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           value: _CircleMenuAction.changeCircleAvatar,
           icon: Icons.face_retouching_natural_outlined,
           label: tr('Change circle avatar'),
+        ),
+      // The circle has a guide (onboarding 2.0): questions or tasks.
+      if (currentMember != null && hasGuide)
+        CircleMenuItem(
+          value: _CircleMenuAction.guide,
+          icon: Icons.explore_outlined,
+          label: tr('Member guide'),
         ),
     ];
     final manage = <CircleMenuItem<_CircleMenuAction>>[
@@ -878,6 +889,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleOnboardingSettings(context, detail);
       case _CircleMenuAction.emojis:
         openCircleEmojisScreen(context, detail.circle.id);
+      case _CircleMenuAction.guide:
+        openCircleGuide(
+          context,
+          circleId: detail.circle.id,
+          circleName: detail.circle.name,
+          channels: detail.channels,
+        );
       case _CircleMenuAction.changeNickname:
         widget.onChangeNickname(currentMember!);
       case _CircleMenuAction.changeCircleAvatar:
@@ -1119,6 +1137,7 @@ enum _CircleMenuAction {
   bans,
   autoMod,
   onboarding,
+  guide,
   emojis,
   notificationSettings,
   changeNickname,

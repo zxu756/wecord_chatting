@@ -3,6 +3,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 // The server writes some chat lines in English, one text for everybody:
 //
 //   system notices   "Ada pinned a message."   "Ada started a call."
+//                    "Ada joined the circle"
 //                    "Ada started a call that lasted 1 hour 5 minutes."
 //   card bodies      "Contact card: Ada"   "Chat history: Trip"
 //                    "📍 Live location"   "☑ Task" and the like
@@ -13,6 +14,7 @@ import 'package:wecord/shared/l10n/l10n.dart';
 
 final _pinned = RegExp(r'^(.+) pinned a message\.$');
 final _callStarted = RegExp(r'^(.+) started a call\.$');
+final _joinedCircle = RegExp(r'^(.+) joined the circle$');
 final _callEnded = RegExp(r'^(.+) started a call that lasted (.+)\.$');
 final _hours = RegExp(r'(\d+) hours?');
 final _minutes = RegExp(r'(\d+) minutes?');
@@ -24,6 +26,9 @@ String systemNoticeText(String body) {
   }
   if (_pinned.firstMatch(body) case final match?) {
     return tr('{name} pinned a message', {'name': match.group(1)});
+  }
+  if (_joinedCircle.firstMatch(body) case final match?) {
+    return tr('{name} joined the circle', {'name': match.group(1)});
   }
   if (_callStarted.firstMatch(body) case final match?) {
     return tr('{name} started a call', {'name': match.group(1)});

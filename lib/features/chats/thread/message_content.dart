@@ -19,6 +19,12 @@ class _SystemMessageLine extends StatelessWidget {
     if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
       return AutoModAlertCard(alert: alert);
     }
+    if (NewcomerNotice.maybeFromJson(message.attachment) case final notice?) {
+      return NewcomerCard(
+        conversationId: message.conversationId,
+        notice: notice,
+      );
+    }
     final announcedEvent = message.attachment;
     if (announcedEvent != null &&
         announcedEvent['kind'] == 'event' &&

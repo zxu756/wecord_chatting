@@ -156,7 +156,12 @@ Rect dragCrop(
       bounds.top,
       bounds.bottom - start.height,
     );
-    return Rect.fromLTWH(dx.toDouble(), dy.toDouble(), start.width, start.height);
+    return Rect.fromLTWH(
+      dx.toDouble(),
+      dy.toDouble(),
+      start.width,
+      start.height,
+    );
   }
   var left = start.left;
   var top = start.top;
@@ -217,10 +222,7 @@ Rect dragCrop(
         : bounds.right - anchorX;
     final double roomY =
         2.0 *
-        math.min(
-          start.center.dy - bounds.top,
-          bounds.bottom - start.center.dy,
-        );
+        math.min(start.center.dy - bounds.top, bounds.bottom - start.center.dy);
     room = math.min(roomX, roomY * aspect);
   } else {
     final roomY = handle == CropHandle.top
@@ -228,10 +230,7 @@ Rect dragCrop(
         : bounds.bottom - anchorY;
     final double roomX =
         2.0 *
-        math.min(
-          start.center.dx - bounds.left,
-          bounds.right - start.center.dx,
-        );
+        math.min(start.center.dx - bounds.left, bounds.right - start.center.dx);
     room = math.min(roomY * aspect, roomX);
   }
   final minWidth = math.max(min, min * aspect);

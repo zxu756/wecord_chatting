@@ -185,22 +185,21 @@ class EditorSession extends ChangeNotifier {
 
   /// Maps picture pixels to the canvas.
   Matrix4 get sourceToView =>
-      fit.turnedToView..multiply(sourceToRotated(sourceSize, document.quarterTurns));
+      fit.turnedToView
+        ..multiply(sourceToRotated(sourceSize, document.quarterTurns));
 
   Offset viewToSource(Offset point) {
     final inverse = Matrix4.copy(sourceToView)..invert();
     return transformPoint(inverse, point);
   }
 
-  Offset sourceToViewPoint(Offset point) =>
-      transformPoint(sourceToView, point);
+  Offset sourceToViewPoint(Offset point) => transformPoint(sourceToView, point);
 
   /// The crop rectangle on the canvas.
-  Rect get cropRectInView =>
-      Rect.fromPoints(
-        fit.toView(cropRect.topLeft),
-        fit.toView(cropRect.bottomRight),
-      );
+  Rect get cropRectInView => Rect.fromPoints(
+    fit.toView(cropRect.topLeft),
+    fit.toView(cropRect.bottomRight),
+  );
 
   void zoomAbout(Offset focal, double newZoom) {
     if (_tool == EditorTool.crop) {
@@ -435,7 +434,11 @@ class EditorSession extends ChangeNotifier {
 
   /// [scale] and [rotation] are those of two fingers since the gesture
   /// began (1 and 0 for one finger).
-  void updateTextGesture(Offset viewFocal, {double scale = 1, double rotation = 0}) {
+  void updateTextGesture(
+    Offset viewFocal, {
+    double scale = 1,
+    double rotation = 0,
+  }) {
     final start = _textStart;
     if (start == null) {
       return;
@@ -596,8 +599,7 @@ class EditorSession extends ChangeNotifier {
     controller.commit(document.copyWith(quarterTurns: 0, crop: null));
   }
 
-  bool get canResetCrop =>
-      document.quarterTurns != 0 || document.crop != null;
+  bool get canResetCrop => document.quarterTurns != 0 || document.crop != null;
 
   /// Nudges the crop with the keyboard: [delta] in picture pixels moves it;
   /// with [resize] the bottom-right corner moves instead.

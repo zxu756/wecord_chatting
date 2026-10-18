@@ -202,6 +202,9 @@ alter default privileges for role postgres in schema public grant all on sequenc
 \i supabase/migrations/202610220110_message_reports.sql
 \i supabase/migrations/202610220120_message_reports_admin.sql
 \i supabase/migrations/202610220130_terms_acceptance.sql
+\i supabase/migrations/202610220210_message_edit_history.sql
+\i supabase/migrations/202610220220_edit_review.sql
+\i supabase/migrations/202610220230_circle_edit_window.sql
 \o /dev/null
 
 create temp table failures (msg text);

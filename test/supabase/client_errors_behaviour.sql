@@ -9,6 +9,56 @@ begin;
 
 do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 
+\i supabase/migrations/202610170002_album_counts.sql
+\i supabase/migrations/202610170003_album_summaries.sql
+\i supabase/migrations/202610170004_album_push.sql
+\i supabase/migrations/202610170005_push_language.sql
+\i supabase/migrations/202610170010_scheduled_messages.sql
+\i supabase/migrations/202610170011_message_reminders.sql
+\i supabase/migrations/202610170012_saved_messages.sql
+\i supabase/migrations/202610170020_disappearing_messages.sql
+\i supabase/migrations/202610170021_view_once_media.sql
+\i supabase/migrations/202610170022_device_sessions.sql
+\i supabase/migrations/202610170023_poll_upgrade.sql
+\i supabase/migrations/202610170024_profile_visibility.sql
+\i supabase/migrations/202610170030_ai_usage.sql
+\i supabase/migrations/202610170031_circle_ai_switch.sql
+\i supabase/migrations/202610170040_call_links.sql
+\i supabase/migrations/202610170050_chat_events.sql
+\i supabase/migrations/202610170052_inactive_groups.sql
+\i supabase/migrations/202610170053_data_export.sql
+\i supabase/migrations/202610170060_notes.sql
+\i supabase/migrations/202610170061_note_versions_files.sql
+\i supabase/migrations/202610170062_task_lists.sql
+\i supabase/migrations/202610170063_task_notifications.sql
+\i supabase/migrations/202610170064_tasks_from_messages.sql
+\i supabase/migrations/202610170065_conversation_workspace.sql
+\i supabase/migrations/202610170070_dispatch_more.sql
+\i supabase/migrations/202610170090_ai_guard.sql
+\i supabase/migrations/202610170091_ai_guard_hidden.sql
+\i supabase/migrations/202610170100_push_time_zone.sql
+\i supabase/migrations/202610170101_profile_visibility_enforced.sql
+\i supabase/migrations/202610170110_chat_wallpapers.sql
+\i supabase/migrations/202610180030_user_qr_codes.sql
+\i supabase/migrations/202610180031_group_qr_codes.sql
+\i supabase/migrations/202610180032_pat.sql
+\i supabase/migrations/202610180033_note_to_self.sql
+\i supabase/migrations/202610180034_chat_list_pat_note.sql
+\i supabase/migrations/202610180040_friend_tags_and_stars.sql
+\i supabase/migrations/202610180041_moments.sql
+\i supabase/migrations/202610180042_moments_feed.sql
+\i supabase/migrations/202610180050_location.sql
+\i supabase/migrations/202610180060_group_chains.sql
+\i supabase/migrations/202610180070_merged_forward.sql
+\i supabase/migrations/202610180071_contact_cards.sql
+\i supabase/migrations/202610190010_security_attachment_paths.sql
+\i supabase/migrations/202610190011_security_hidden_messages.sql
+\i supabase/migrations/202610190012_security_chains.sql
+\i supabase/migrations/202610190013_security_deleted_content.sql
+\i supabase/migrations/202610190020_moments_realtime.sql
+\i supabase/migrations/202610190021_moments_push.sql
+\i supabase/migrations/202610190022_moments_video.sql
+\i supabase/migrations/202610190023_data_export_more.sql
 \i supabase/migrations/202610190030_client_errors.sql
 
 insert into auth.users (id, email, instance_id, aud, role)

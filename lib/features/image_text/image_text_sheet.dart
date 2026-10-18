@@ -88,10 +88,7 @@ class _ImageTextSheetState extends ConsumerState<ImageTextSheet> {
       return;
     }
     final file = widget.file;
-    final key = imageTextKey(
-      messageId: file.messageId,
-      storagePath: file.key,
-    );
+    final key = imageTextKey(messageId: file.messageId, storagePath: file.key);
     try {
       final cache = ref.read(imageTextCacheProvider);
       CachedImageText? cached;

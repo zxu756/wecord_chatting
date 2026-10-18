@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/features/chats/edit_history/circle_edit_window.dart'
+    show editWindowLabel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
@@ -519,6 +521,7 @@ IconData circleAuditIcon(String action) {
     'guard_remove' => Icons.delete_outline,
     'onboarding_update' => Icons.rule,
     'discovery_update' => Icons.explore_outlined,
+    'edit_window_update' => Icons.history_toggle_off,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
     'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
@@ -800,6 +803,13 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       {},
     ),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
+    'edit_window_update' => switch (_newValue(changes['edit_window_seconds'])) {
+      final int seconds when seconds > 0 => (
+        tr('{actor} set the edit time limit to {time}'),
+        {'time': editWindowLabel(seconds)},
+      ),
+      _ => (tr('{actor} removed the edit time limit'), {}),
+    },
     'discovery_update' => switch (_newValue(changes['is_public'])) {
       true => (tr('{actor} made the circle public'), {}),
       false => (tr('{actor} made the circle private'), {}),

@@ -140,7 +140,7 @@ begin
 
   failed := false;
   begin
-    perform pg_temp.send_as(ada, dm, 'file', '{"kind":"file","view_once": true,"bucket":"chat-files","path":"x/doc.pdf"}');
+    perform pg_temp.send_as(ada, dm, 'file', jsonb_build_object('kind', 'file', 'view_once', true, 'bucket', 'chat-files', 'path', dm || '/doc.pdf'));
   exception when invalid_parameter_value then failed := true;
   end;
   if not failed then failures := failures || E'\na document sent as view once'; end if;

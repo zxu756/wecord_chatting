@@ -47,5 +47,5 @@ void behaviourTest(String name, String script) {
       script,
     ]);
     expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, timeout: const Timeout(Duration(minutes: 6)));
 }

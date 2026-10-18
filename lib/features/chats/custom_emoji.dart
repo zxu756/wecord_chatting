@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/features/stickers/my_stickers_panel.dart';
+import 'package:wecord/features/stickers/sticker_pick.dart';
+import 'package:wecord/features/stickers/sticker_widgets.dart';
+import 'package:wecord/features/stickers/user_sticker.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
+
+// The chat page sends what the picker returns with [sendStickerPick].
+export 'package:wecord/features/stickers/sticker_pick.dart'
+    show StickerPick, sendStickerPick;
 
 /// Inline custom emoji in message text.
 const customEmojiInlineSize = 22.0;
@@ -303,13 +311,14 @@ class CustomEmojiCandidateList extends StatelessWidget {
   }
 }
 
-/// Picks one of the current user's stickers: [circleId]'s first, then the
-/// other circles'. Returns null when dismissed.
-Future<CircleEmoji?> showStickerPicker(
+/// Picks a sticker to send: one of the person's own ("Mine") or one of
+/// their circles' ([circleId]'s first, then the other circles'). Returns
+/// null when dismissed.
+Future<StickerPick?> showStickerPicker(
   BuildContext context, {
   String? circleId,
 }) {
-  return showModalBottomSheet<CircleEmoji>(
+  return showModalBottomSheet<StickerPick>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -317,20 +326,27 @@ Future<CircleEmoji?> showStickerPicker(
   );
 }
 
-class StickerPicker extends ConsumerWidget {
+enum _StickerTab { mine, circles }
+
+class StickerPicker extends ConsumerStatefulWidget {
   const StickerPicker({this.circleId, super.key});
 
   final String? circleId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StickerPicker> createState() => _StickerPickerState();
+}
+
+class _StickerPickerState extends ConsumerState<StickerPicker> {
+  // In a circle's channel its stickers come first; elsewhere the person's
+  // own.
+  late var _tab = widget.circleId != null
+      ? _StickerTab.circles
+      : _StickerTab.mine;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final usable = ref.watch(usableEmojisProvider);
-    final stickers = [
-      for (final emoji in usable.value ?? const <CircleEmoji>[])
-        if (emoji.isSticker) emoji,
-    ];
-    final groups = groupEmojisByCircle(stickers, circleId: circleId);
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -344,73 +360,118 @@ class StickerPicker extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(tr('Stickers'), style: theme.textTheme.titleLarge),
             ),
-            if (usable.isLoading && stickers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (stickers.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                child: Text(
-                  tr(
-                    'No stickers yet. Circles add them under Emoji & stickers.',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: WeCordSegmented<_StickerTab>(
+                expand: true,
+                selected: _tab,
+                onChanged: (tab) => setState(() => _tab = tab),
+                segments: [
+                  WeCordSegment(
+                    key: const ValueKey('sticker-tab-mine'),
+                    value: _StickerTab.mine,
+                    label: tr('Mine'),
                   ),
-                ),
+                  WeCordSegment(
+                    key: const ValueKey('sticker-tab-circles'),
+                    value: _StickerTab.circles,
+                    label: tr('Circles'),
+                  ),
+                ],
+              ),
+            ),
+            if (_tab == _StickerTab.mine)
+              MyStickersPanel(
+                onPick: (sticker) =>
+                    Navigator.of(context).pop(PersonalStickerPick(sticker)),
               )
             else
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                  children: [
-                    for (final group in groups) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-                        child: Text(
-                          group.label,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+              _CircleStickers(circleId: widget.circleId),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The stickers of the circles the person is in, grouped by circle.
+class _CircleStickers extends ConsumerWidget {
+  const _CircleStickers({this.circleId});
+
+  final String? circleId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final usable = ref.watch(usableEmojisProvider);
+    final stickers = [
+      for (final emoji in usable.value ?? const <CircleEmoji>[])
+        if (emoji.isSticker) emoji,
+    ];
+    final groups = groupEmojisByCircle(stickers, circleId: circleId);
+    if (usable.isLoading && stickers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (stickers.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: Text(
+          tr('No stickers yet. Circles add them under Emoji & stickers.'),
+        ),
+      );
+    }
+    return Flexible(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        children: [
+          for (final group in groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+              child: Text(
+                group.label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final sticker in group.emojis)
+                  Tooltip(
+                    message: sticker.name,
+                    child: InkWell(
+                      key: ValueKey('sticker-option-${sticker.id}'),
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () =>
+                          Navigator.of(context).pop(CircleStickerPick(sticker)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: CustomEmojiImage(
+                          storagePath: sticker.storagePath,
+                          size: 88,
+                          fallback: SizedBox.square(
+                            dimension: 88,
+                            child: Center(
+                              child: Text(
+                                sticker.name,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final sticker in group.emojis)
-                            Tooltip(
-                              message: sticker.name,
-                              child: InkWell(
-                                key: ValueKey('sticker-option-${sticker.id}'),
-                                borderRadius: BorderRadius.circular(8),
-                                onTap: () => Navigator.of(context).pop(sticker),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: CustomEmojiImage(
-                                    storagePath: sticker.storagePath,
-                                    size: 88,
-                                    fallback: SizedBox.square(
-                                      dimension: 88,
-                                      child: Center(
-                                        child: Text(
-                                          sticker.name,
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+                    ),
+                  ),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -449,7 +510,8 @@ List<CircleEmojiGroup> groupEmojisByCircle(
 }
 
 /// A sticker message: the sticker for members of its circle, otherwise a
-/// placeholder with its name.
+/// placeholder with its name. A personal sticker is a copy in the chat's
+/// folder, which every member of the chat reads.
 class StickerMessageContent extends ConsumerWidget {
   const StickerMessageContent({
     required this.attachment,
@@ -462,7 +524,10 @@ class StickerMessageContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sticker = ref.watch(usableEmojisByIdProvider)[attachment.emojiId];
+    final personal = attachment.personal;
+    final sticker = personal == null
+        ? ref.watch(usableEmojisByIdProvider)[attachment.emojiId]
+        : null;
     final placeholder = Container(
       key: const ValueKey('sticker-placeholder'),
       width: stickerSize,
@@ -487,6 +552,16 @@ class StickerMessageContent extends ConsumerWidget {
         ],
       ),
     );
+    if (personal != null) {
+      return StickerFileImage(
+        key: ValueKey('sticker-image-${personal.path}'),
+        file: StickerFile(personal.bucket, personal.path),
+        size: stickerSize,
+        animated: personal.animated,
+        fallback: placeholder,
+        semanticLabel: stickerPreviewText(attachment.name),
+      );
+    }
     if (sticker == null) {
       return placeholder;
     }

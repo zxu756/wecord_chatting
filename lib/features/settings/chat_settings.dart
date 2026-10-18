@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chat_folders/chat_folders_screen.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
+import 'package:wecord/features/stickers/sticker_management_screen.dart';
 import 'package:wecord/features/voice_input/voice_input_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -40,6 +41,15 @@ class ChatSettingsGroup extends ConsumerWidget {
           title: tr('Chat folders'),
           subtitle: tr('Sort your chats, and fold the groups you rarely read'),
           onTap: () => openChatFolders(context),
+        ),
+        SettingsRow(
+          key: const ValueKey('my-stickers-tile'),
+          icon: Icons.add_reaction_outlined,
+          title: tr('My stickers'),
+          subtitle: tr(
+            'Pictures, GIFs and cut-outs you keep to send in any chat',
+          ),
+          onTap: () => openStickerManagement(context),
         ),
         SettingsRow(
           key: const ValueKey('group-cleanup-tile'),

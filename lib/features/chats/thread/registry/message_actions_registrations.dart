@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions_builtin.dart';
 import 'package:wecord/features/reports/report_message_action.dart';
+import 'package:wecord/features/stickers/add_to_stickers_action.dart';
 
 /// Feature contributions to the message menu. Append yours here.
 final List<MessageActionContribution> messageActionExtensions = [
@@ -17,6 +18,7 @@ final List<MessageActionContribution> messageActionExtensions = [
   reportMessageAction,
   editHistoryAction,
   messageInfoAction,
+  addToStickersAction,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

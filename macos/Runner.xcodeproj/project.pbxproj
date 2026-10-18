@@ -25,6 +25,7 @@
 		E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */; };
 		E1B0F00000000000000000B4 /* TranscribePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B3 /* TranscribePlugin.swift */; };
 		E1B0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000001C1 /* ImageTextPlugin.swift */; };
+		E1B0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */; };
 		1CFCDF6946D6E46C361A5BB5 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C4A12A8F95DD2503ED91AF6 /* Pods_RunnerTests.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -98,6 +99,7 @@
 		E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEffectsPlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000000B3 /* TranscribePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TranscribePlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000001C1 /* ImageTextPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageTextPlugin.swift; sourceTree = "<group>"; };
+		E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StickerCutoutPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -197,6 +199,7 @@
 				E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */,
 				E1B0F00000000000000000B3 /* TranscribePlugin.swift */,
 				E1B0F00000000000000001C1 /* ImageTextPlugin.swift */,
+				E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -448,6 +451,7 @@
 				E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */,
 				E1B0F00000000000000000B4 /* TranscribePlugin.swift in Sources */,
 				E1B0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */,
+				E1B0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

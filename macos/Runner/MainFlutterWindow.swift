@@ -69,6 +69,8 @@ class MainFlutterWindow: NSWindow {
       with: flutterViewController.registrar(forPlugin: "TranscribePlugin"))
     ImageTextPlugin.register(
       with: flutterViewController.registrar(forPlugin: "ImageTextPlugin"))
+    StickerCutoutPlugin.register(
+      with: flutterViewController.registrar(forPlugin: "StickerCutoutPlugin"))
 
     super.awakeFromNib()
   }

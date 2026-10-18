@@ -53,6 +53,7 @@ import 'edit_history_a11y_screens.dart';
 import 'join_requests_a11y_screens.dart';
 import 'read_status_a11y_screens.dart';
 import 'auto_translate_a11y_screens.dart';
+import 'stickers_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -782,4 +783,5 @@ final allA11yScreens = <A11yScreen>[
   ...joinRequestsA11yScreens,
   ...readStatusA11yScreens,
   ...autoTranslateA11yScreens,
+  ...stickersA11yScreens,
 ];

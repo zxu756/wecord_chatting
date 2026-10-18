@@ -47,6 +47,7 @@ class BubbleFooterContext {
     required this.onToggleReaction,
     required this.onShowReactors,
     this.onOpenThread,
+    this.groupReadCount = 0,
   });
 
   /// A context inside the message, for providers and navigation.
@@ -65,8 +66,13 @@ class BubbleFooterContext {
   /// The link whose preview card shows under the message, if any.
   final String? previewUrl;
 
-  /// This is the newest own message and someone has read it.
+  /// This is the newest own message in a direct chat and the other person has
+  /// read it.
   final bool showReadReceipt;
+
+  /// This is the newest own message in a group: how many members have read it
+  /// (0 for any other message).
+  final int groupReadCount;
   final Future<void> Function(ChatMessage message, String emoji)
   onToggleReaction;
   final void Function(ChatMessage message, MessageReaction reaction)

@@ -9,6 +9,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isCurrentUser,
     required this.showReadReceipt,
     required this.onReply,
+    this.groupReadCount = 0,
     this.canCompose = true,
     this.sender,
     this.showSenderName = true,
@@ -76,6 +77,9 @@ class _MessageBubble extends StatelessWidget {
   final String? postTitle;
   final int replyCount;
   final bool showReadReceipt;
+
+  /// In a group, how many members have read this (the user's newest message).
+  final int groupReadCount;
 
   /// Who sent the message, shown as an avatar beside incoming bubbles (and
   /// every card).
@@ -506,6 +510,7 @@ class _MessageBubble extends StatelessWidget {
       textColor: textColor,
       previewUrl: _previewUrl,
       showReadReceipt: showReadReceipt,
+      groupReadCount: groupReadCount,
       onToggleReaction: onToggleReaction,
       onShowReactors: onShowReactors,
       onOpenThread: onOpenThread,

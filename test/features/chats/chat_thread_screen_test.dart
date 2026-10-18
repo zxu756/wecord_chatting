@@ -653,6 +653,14 @@ void main() {
     ) async {
       final repository = FakeChatsRepository()
         ..canPin = true
+        ..conversations = [
+          const ConversationSummary(
+            id: 'conversation-1',
+            type: ConversationType.group,
+            unreadCount: 0,
+            title: 'Pair',
+          ),
+        ]
         ..messages = [
           _message(
             id: 'message-1',
@@ -705,7 +713,9 @@ void main() {
 
       expect(find.text('Grace Hopper'), findsNWidgets(2)); // header + quote
       expect(find.text('2'), findsOneWidget);
-      expect(find.text('Read'), findsOneWidget);
+      // A group counts readers instead of saying "Read".
+      expect(find.text('1 read'), findsOneWidget);
+      expect(find.text('Read'), findsNothing);
 
       await tester.longPress(find.text('Follow-up'));
       await tester.pumpAndSettle();
@@ -1129,10 +1139,146 @@ void main() {
         ),
       ];
 
-    await tester.pumpWidget(_app(repository));
+    await tester.pumpWidget(
+      _app(repository, conversationType: ConversationType.direct),
+    );
     await tester.pump();
 
     expect(find.text('Read'), findsOneWidget);
+  });
+
+  group('who has read the newest message', () {
+    List<ChatMessage> sample() => [
+      _message(
+        id: 'message-1',
+        senderId: 'user-2',
+        body: 'Incoming',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 30),
+      ),
+      _message(
+        id: 'message-2',
+        senderId: 'user-1',
+        body: 'Outgoing',
+        createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+      ),
+    ];
+
+    FakeChatsRepository repositoryOf(
+      ConversationType type,
+      List<ConversationReadMarker> markers,
+    ) => FakeChatsRepository()
+      ..conversations = [
+        ConversationSummary(
+          id: 'conversation-1',
+          type: type,
+          unreadCount: 0,
+          title: 'Chat',
+        ),
+      ]
+      ..messages = sample()
+      ..readMarkers = markers;
+
+    testWidgets('a group counts the readers and never says "Read"', (
+      tester,
+    ) async {
+      final repository = repositoryOf(ConversationType.group, const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-2',
+        ),
+        ConversationReadMarker(
+          userId: 'user-3',
+          lastReadMessageId: 'message-2',
+        ),
+        ConversationReadMarker(userId: 'user-4', lastReadMessageId: null),
+      ]);
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('2 read'), findsOneWidget);
+      expect(find.text('Read'), findsNothing);
+    });
+
+    testWidgets('a group where nobody read it shows nothing', (tester) async {
+      final repository = repositoryOf(ConversationType.group, const [
+        ConversationReadMarker(userId: 'user-2', lastReadMessageId: null),
+      ]);
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.textContaining('read'), findsNothing);
+      expect(find.text('Read'), findsNothing);
+    });
+
+    testWidgets('a channel shows neither "Read" nor a count', (tester) async {
+      final repository = repositoryOf(ConversationType.channel, const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-2',
+        ),
+      ]);
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.channel),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Read'), findsNothing);
+      expect(find.textContaining(' read'), findsNothing);
+    });
+
+    testWidgets('"Message info" is in the menu of my message in a group', (
+      tester,
+    ) async {
+      final repository = repositoryOf(ConversationType.group, const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-2',
+        ),
+      ]);
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.group),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.text('Outgoing'));
+      await tester.pumpAndSettle();
+      expect(find.text('Message info'), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Incoming'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reply'), findsOneWidget);
+      expect(find.text('Message info'), findsNothing);
+    });
+
+    testWidgets('a direct chat has no "Message info"', (tester) async {
+      final repository = repositoryOf(ConversationType.direct, const [
+        ConversationReadMarker(
+          userId: 'user-2',
+          lastReadMessageId: 'message-2',
+        ),
+      ]);
+      await tester.pumpWidget(
+        _app(repository, conversationType: ConversationType.direct),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Read'), findsOneWidget);
+      await tester.longPress(find.text('Outgoing'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reply'), findsOneWidget);
+      expect(find.text('Message info'), findsNothing);
+    });
   });
 
   testWidgets('search does not move the read receipt to an older result', (

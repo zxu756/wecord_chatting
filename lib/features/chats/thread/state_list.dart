@@ -165,7 +165,8 @@ extension _ThreadListState on _ChatThreadScreenState {
         identical(previous.pending, pending) &&
         previous.query == _messageSearchQuery &&
         previous.dividerId == _newMessageDividerId &&
-        previous.currentUserId == currentUserId) {
+        previous.currentUserId == currentUserId &&
+        previous.readScope == _readScope) {
       return previous;
     }
     final layout = ThreadLayout.build(
@@ -176,6 +177,7 @@ extension _ThreadListState on _ChatThreadScreenState {
       dividerId: _newMessageDividerId,
       currentUserId: currentUserId,
       forumPost: widget.forumPost,
+      readScope: _readScope,
       search: (messages, query) => ref
           .read(chatsRepositoryProvider)
           .searchThreadMessages(messages, query),

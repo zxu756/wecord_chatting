@@ -207,6 +207,15 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                     latestOutgoingReadState.latestOutgoingMessageId,
                   ) &&
                   latestOutgoingReadState.isRead,
+              groupReadCount:
+                  pendingEntry == null &&
+                      !isNoteToSelf &&
+                      messageEndsAt(
+                        message,
+                        latestOutgoingReadState.latestOutgoingMessageId,
+                      )
+                  ? latestOutgoingReadState.groupReadCount
+                  : 0,
               mentionsMe: _mentionsUser(message, currentUserId),
               desktop: desktop,
               cards: cards,
@@ -345,6 +354,12 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                   latestOutgoingReadState.latestOutgoingMessageId,
                 ) &&
                 latestOutgoingReadState.isRead,
+            messageEndsAt(
+                  message,
+                  latestOutgoingReadState.latestOutgoingMessageId,
+                )
+                ? latestOutgoingReadState.groupReadCount
+                : 0,
             (sender?.name, sender?.avatarUrl, sender?.roleColor),
             (desktop, cards, showSenders, canSend, canStartThreads, touch),
             (

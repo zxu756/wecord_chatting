@@ -6,6 +6,7 @@
 // 100, 200, ... 1700; pick an `order` between two of them to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
+import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions_builtin.dart';
 
@@ -13,6 +14,7 @@ import 'package:wecord/features/chats/thread/registry/message_actions_builtin.da
 final List<MessageActionContribution> messageActionExtensions = [
   // myFeatureMessageAction,
   editHistoryAction,
+  messageInfoAction,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

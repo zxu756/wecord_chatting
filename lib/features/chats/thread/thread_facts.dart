@@ -189,6 +189,10 @@ extension _ThreadFactsState on _ChatThreadScreenState {
     final avatarUrl = widget.avatarUrl ?? conversationSummary?.avatarUrl;
     final conversationType =
         widget.conversationType ?? conversationSummary?.type;
+    _readScope = ReadReceiptScope.of(
+      conversationType,
+      noteToSelf: isNoteToSelf,
+    );
     final isThread = conversationType == ConversationType.thread;
     final topic = conversationType == ConversationType.channel
         ? switch (widget.topic?.trim()) {

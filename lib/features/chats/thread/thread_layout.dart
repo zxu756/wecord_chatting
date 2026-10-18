@@ -380,3 +380,11 @@ bool isOldestFirst(List<ChatMessage> messages) {
   }
   return true;
 }
+
+/// Whether [id] is [message] or, for an album, its last message.
+bool messageEndsAt(ChatMessage message, String? id) {
+  if (id == null) {
+    return false;
+  }
+  return message.id == id || message.album?.last.id == id;
+}

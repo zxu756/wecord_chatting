@@ -205,7 +205,9 @@ class _CircleInviteScreenState extends ConsumerState<CircleInviteScreen> {
                                 : WeCordButton(
                                     expand: true,
                                     size: WeCordButtonSize.large,
-                                    variant: WeCordButtonVariant.accent,
+                                    variant: plan.enabled
+                                        ? WeCordButtonVariant.accent
+                                        : WeCordButtonVariant.secondary,
                                     onPressed:
                                         _isJoining ||
                                             !plan.enabled ||

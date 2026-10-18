@@ -90,26 +90,42 @@ class JoinRequestsSection extends ConsumerWidget {
           return const SizedBox.shrink();
         }
         final height = MediaQuery.sizeOf(context).height;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: height * 0.55),
-          child: ListView.separated(
-            key: const ValueKey('join-requests'),
-            shrinkWrap: true,
-            padding: circlePagePadding(context).copyWith(bottom: 4),
-            itemCount: items.length + 1,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return _SectionHeader(count: items.length);
-              }
-              final item = items[index - 1];
-              return JoinRequestCard(
-                key: ValueKey('join-request-${item.id}'),
-                request: item,
-                circleId: circleId,
-                now: now,
-              );
-            },
+        final c = context.tokens.colors;
+        // A framed panel that scrolls on its own, so a card cut by its edge
+        // reads as "more below" and the held messages keep their place.
+        return Padding(
+          padding: circlePagePadding(context).copyWith(bottom: 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: height * 0.55),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(WeCordRadii.xl + 6),
+                border: Border.all(color: c.line),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(WeCordRadii.xl + 5),
+                child: ListView.separated(
+                  key: const ValueKey('join-requests'),
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+                  itemCount: items.length + 1,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _SectionHeader(count: items.length);
+                    }
+                    final item = items[index - 1];
+                    return JoinRequestCard(
+                      key: ValueKey('join-request-${item.id}'),
+                      request: item,
+                      circleId: circleId,
+                      now: now,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         );
       },

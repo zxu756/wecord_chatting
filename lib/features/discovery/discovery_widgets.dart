@@ -814,7 +814,9 @@ class _DiscoverableCirclePreviewViewState
                 : tr('Joining…'))
           : plan.label,
       icon: plan.enabled ? Icons.add_rounded : null,
-      variant: WeCordButtonVariant.accent,
+      variant: plan.enabled
+          ? WeCordButtonVariant.accent
+          : WeCordButtonVariant.secondary,
       size: WeCordButtonSize.large,
       expand: true,
       loading: _joining,

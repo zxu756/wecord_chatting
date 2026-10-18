@@ -9,6 +9,7 @@ import 'package:wecord/features/later/reminders_repository.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/notifications/notification_settings.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
@@ -936,6 +937,8 @@ class NotificationCoordinatorHarness {
     CirclesRepository? circlesRepository,
     DateTime Function()? now,
     bool Function()? doNotDisturb,
+    NotificationSettings? Function()? quietSettings,
+    Future<Set<String>> Function()? starredFriendIds,
     RemindersRepository? remindersRepository,
     void Function()? onRemindersChanged,
     bool Function()? isInForeground,
@@ -961,6 +964,8 @@ class NotificationCoordinatorHarness {
       notificationService: _notificationService,
       activeConversationId: () => _activeConversationId,
       doNotDisturb: doNotDisturb,
+      quietSettings: quietSettings,
+      starredFriendIds: starredFriendIds,
       now: now ?? () => DateTime.utc(2026, 5, 18, 12, 30),
       pollTicks: _pollTicks.stream,
       isInForeground: isInForeground,

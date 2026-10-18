@@ -7,6 +7,7 @@ import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
 import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
+import 'package:wecord/features/notifications/important_contact_row.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -59,6 +60,7 @@ class FriendProfileExtras extends ConsumerWidget {
           onChanged: (value) =>
               unawaited(toggleFriendStar(context, ref, friend, starred: value)),
         ),
+        ImportantContactRow(friend: friend),
         SettingsRow(
           key: const ValueKey('profile-tags'),
           icon: Icons.sell_outlined,

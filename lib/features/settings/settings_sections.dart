@@ -7,6 +7,7 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/auth/two_factor.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
+import 'package:wecord/features/notifications/quiet_hours_screen.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
@@ -727,6 +728,8 @@ class _NotificationSettingsGroupsState
           ],
         ),
         const SizedBox(height: 12),
+        const SettingsGroup(children: [QuietHoursSettingsRow()]),
+        const SizedBox(height: 12),
         SettingsGroup(
           footer: _errorText,
           children: [
@@ -755,7 +758,21 @@ class _NotificationSettingsGroupsState
   }
 
   Future<void> _save(NotificationPreferences preferences) async {
-    await ref.read(notificationPreferencesRepositoryProvider).save(preferences);
+    try {
+      await ref
+          .read(notificationPreferencesRepositoryProvider)
+          .save(preferences);
+      if (mounted && _errorText != null) {
+        setState(() => _errorText = null);
+      }
+    } catch (_) {
+      // Kept on this device; the server is told again later.
+      if (mounted) {
+        setState(() {
+          _errorText = tr('Could not save. Try again.');
+        });
+      }
+    }
     ref.invalidate(currentNotificationPreferencesProvider);
   }
 

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
+import 'package:wecord/features/notifications/quiet_hours_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
 import 'package:wecord/features/settings/custom_status_sheet.dart';
@@ -326,16 +327,32 @@ class PhoneUserPanel extends ConsumerWidget {
           ),
         ),
         actions: [
-          WeCordIconButton(
-            key: const ValueKey('phone-notifications-button'),
-            icon: Icons.notifications_none_rounded,
-            tooltip: tr('Notifications'),
-            variant: WeCordButtonVariant.onPaper,
-            size: 46,
-            iconSize: 22,
-            badgeCount: inboxCount,
-            badgeTone: BadgeTone.mention,
-            onPressed: () => context.push(InboxScreen.path),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              WeCordIconButton(
+                key: const ValueKey('phone-notifications-button'),
+                icon: Icons.notifications_none_rounded,
+                tooltip: tr('Notifications'),
+                variant: WeCordButtonVariant.onPaper,
+                size: 46,
+                iconSize: 22,
+                badgeCount: inboxCount,
+                badgeTone: BadgeTone.mention,
+                onPressed: () => context.push(InboxScreen.path),
+              ),
+              // Quiet hours are on: a small moon on the bell's corner.
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: IgnorePointer(
+                  child: QuietHoursMoon(
+                    size: 17,
+                    ringColor: tokens.glass.solidFill,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

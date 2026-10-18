@@ -6,6 +6,8 @@ import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/circles/insights/insights_models.dart';
+import 'package:wecord/features/circles/insights/insights_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -211,6 +213,9 @@ class _CircleInviteLinksSectionState
   /// The codes of the links that skip review (only read for members who
   /// may make such links).
   var _skipping = <String>{};
+
+  /// What each link brought and how many are still here, by code.
+  var _stats = <String, InviteStats>{};
   var _isBusy = false;
   String? _copiedCode;
   String? _errorText;
@@ -233,6 +238,14 @@ class _CircleInviteLinksSectionState
       } on Object {
         // The links still show; only their "skips review" mark is missing.
       }
+    }
+    try {
+      _stats = await ref
+          .read(circleInsightsRepositoryProvider)
+          .inviteStats(widget.circleId);
+    } on Object {
+      // The links still show; only "brought · still here" is missing.
+      _stats = <String, InviteStats>{};
     }
     return invites;
   }
@@ -382,9 +395,7 @@ class _CircleInviteLinksSectionState
                     icon: Icons.link_rounded,
                     tone: SettingsTone.accent,
                     title: circleInviteLink(invite.code),
-                    subtitle: _skipping.contains(invite.code)
-                        ? '${_inviteDetails(invite)} · ${tr('skips review')}'
-                        : _inviteDetails(invite),
+                    subtitle: _inviteSubtitle(invite),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -415,6 +426,18 @@ class _CircleInviteLinksSectionState
         ),
       ],
     );
+  }
+
+  /// Code, uses and expiry, then "Brought 12 · still here 9".
+  String _inviteSubtitle(CircleInvite invite) {
+    final details = _skipping.contains(invite.code)
+        ? '${_inviteDetails(invite)} · ${tr('skips review')}'
+        : _inviteDetails(invite);
+    final stats = _stats[invite.code];
+    if (stats == null) {
+      return details;
+    }
+    return '$details\n${inviteBroughtText(stats)}';
   }
 
   Future<void> _createInvite() async {
@@ -500,5 +523,14 @@ String _inviteDetails(CircleInvite invite) {
     'code': invite.code,
     'uses': uses,
     'expiry': expiry,
+  });
+}
+
+/// "Brought 12 · still here 9": the people one invite link brought, and how
+/// many of them are still in the circle.
+String inviteBroughtText(InviteStats stats) {
+  return tr('Brought {brought} · still here {remaining}', {
+    'brought': stats.brought,
+    'remaining': stats.remaining,
   });
 }

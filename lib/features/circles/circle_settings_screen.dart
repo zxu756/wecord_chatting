@@ -16,6 +16,8 @@ import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_tag_widgets.dart';
 import 'package:wecord/features/circles/circle_template_widgets.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/insights/insights_repository.dart';
+import 'package:wecord/features/circles/insights/insights_screen.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/join_requests/join_settings_screen.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
@@ -231,6 +233,15 @@ class _ManageGroup extends ConsumerWidget {
           icon: Icons.history,
           title: tr('Audit log'),
           onTap: () => openCircleAuditLogScreen(context, circleId),
+        ),
+      if (detail.canViewInsights)
+        SettingsRow(
+          key: const ValueKey('circle-settings-insights'),
+          icon: Icons.insights_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Insights'),
+          subtitle: tr('Members, activity and invites'),
+          onTap: () => openCircleInsights(context, detail),
         ),
       if (detail.currentMember != null)
         SettingsRow(

@@ -145,7 +145,7 @@ class JoinRequestsRepository {
     Duration? expiresIn,
     int? maxUses,
   }) async {
-    final code = await _rpc('create_circle_invite', {
+    final code = await _rpc('create_circle_invite_v2', {
       'target_circle_id': circleId,
       'expires_in_hours': expiresIn?.inHours,
       'max_uses': maxUses,

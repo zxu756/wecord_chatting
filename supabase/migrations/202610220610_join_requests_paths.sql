@@ -510,14 +510,14 @@ grant execute on function public.invite_circle_members(uuid, uuid[]) to authenti
 -- Invites that skip review
 -- ---------------------------------------------------------------------------
 
--- create_circle_invite with a fourth argument (no default, so the three
--- argument call keeps resolving to the original). Skipping review needs both
--- create_invites and kick_members; the entry is audited.
-create or replace function public.create_circle_invite(
+-- create_circle_invite plus [skip_review], under its own name so the original
+-- three argument function stays the one definition of its kind. Skipping
+-- review needs both create_invites and kick_members; the entry is audited.
+create or replace function public.create_circle_invite_v2(
   target_circle_id uuid,
   expires_in_hours integer,
   max_uses integer,
-  skip_review boolean
+  skip_review boolean default false
 )
 returns text
 language plpgsql
@@ -540,8 +540,8 @@ begin
 
   created_code := public.create_circle_invite(
     target_circle_id,
-    create_circle_invite.expires_in_hours,
-    create_circle_invite.max_uses
+    create_circle_invite_v2.expires_in_hours,
+    create_circle_invite_v2.max_uses
   );
 
   if coalesce(skip_review, false) then
@@ -563,9 +563,9 @@ begin
 end;
 $$;
 
-revoke execute on function public.create_circle_invite(uuid, integer, integer, boolean)
+revoke execute on function public.create_circle_invite_v2(uuid, integer, integer, boolean)
   from public, anon;
-grant execute on function public.create_circle_invite(uuid, integer, integer, boolean)
+grant execute on function public.create_circle_invite_v2(uuid, integer, integer, boolean)
   to authenticated;
 
 -- The codes of this circle's invites that skip review, for the invite list.

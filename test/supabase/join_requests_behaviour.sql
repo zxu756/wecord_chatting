@@ -17,52 +17,7 @@ begin;
 do $$ begin perform pg_advisory_xact_lock(20261017); end $$;
 set local client_min_messages = warning;
 
--- Every migration after the local baseline (202610140001), in order, so the
--- script runs on a freshly reset local database.
-\i supabase/migrations/202610140002_default_voice_channel.sql
-\i supabase/migrations/202610140003_backfill_voice_channels.sql
-\i supabase/migrations/202610140004_bans_and_timeouts.sql
-\i supabase/migrations/202610140005_delete_account.sql
-\i supabase/migrations/202610140006_direct_calls.sql
-\i supabase/migrations/202610140007_file_messages.sql
-\i supabase/migrations/202610140008_push_notifications.sql
-\i supabase/migrations/202610160001_presence_statuses.sql
-\i supabase/migrations/202610160002_profile_extras.sql
-\i supabase/migrations/202610160003_role_and_here_mentions.sql
-\i supabase/migrations/202610160004_voice_moderation.sql
-\i supabase/migrations/202610160005_voice_text_chat.sql
-\i supabase/migrations/202610160014_live_circle_emojis.sql
-\i supabase/migrations/202610160015_group_admin_pins.sql
-\i supabase/migrations/202610160016_reactions_performance.sql
-\i supabase/migrations/202610160017_deleted_channel_storage.sql
-\i supabase/migrations/202610160018_stage_channels.sql
-\i supabase/migrations/202610160019_soundboard.sql
-\i supabase/migrations/202610160020_automod.sql
-\i supabase/migrations/202610160021_member_onboarding.sql
-\i supabase/migrations/202610160026_soundboard_cleanup.sql
-\i supabase/migrations/202610160027_announcement_channels.sql
-\i supabase/migrations/202610160028_circle_templates.sql
-\i supabase/migrations/202610160029_circle_tags.sql
-\i supabase/migrations/202610160030_bot_api.sql
-\i supabase/migrations/202610160031_bot_accounts_via_auth_admin.sql
-\i supabase/migrations/202610160032_push_delivery_recipients.sql
-\i supabase/migrations/202610160033_file_previews.sql
-\i supabase/migrations/202610160034_bots_are_not_friends.sql
-\i supabase/migrations/202610160035_automod_quiet_sends.sql
-\i supabase/migrations/202610160036_voice_needs_rules.sql
-\i supabase/migrations/202610160037_announcement_webhooks.sql
-\i supabase/migrations/202610160038_server_presence_for_here.sql
-\i supabase/migrations/202610160039_soundboard_server_duration.sql
-\i supabase/migrations/202610160040_public_circles.sql
-\i supabase/migrations/202610160041_circle_discovery.sql
-\i supabase/migrations/202610160042_report_public_circles.sql
-\i supabase/migrations/202610160043_message_search_indexes.sql
-\i supabase/migrations/202610160044_search_messages_rpc.sql
-\i supabase/migrations/202610160045_search_filter_suggestions.sql
-\i supabase/migrations/202610160046_message_pagination.sql
-\i supabase/migrations/202610160047_message_client_id.sql
-\i supabase/migrations/202610160050_summary_attachment_kind.sql
-\i supabase/migrations/202610170001_media_albums.sql
+-- Every migration after the local baseline (202610170001), in order.
 \i supabase/migrations/202610170002_album_counts.sql
 \i supabase/migrations/202610170003_album_summaries.sql
 \i supabase/migrations/202610170004_album_push.sql
@@ -506,15 +461,15 @@ do $$
 declare c uuid := pg_temp.i('circle'); inv text; plain text; dm uuid; message uuid; card_code text;
 begin
   perform pg_temp.act(pg_temp.i('bob'));
-  perform pg_temp.expect(pg_temp.state(format('select public.create_circle_invite(%L, null, null, true)', c)) = '42501',
+  perform pg_temp.expect(pg_temp.state(format('select public.create_circle_invite_v2(%L, null, null, true)', c)) = '42501',
     'skip review: a member with create_invites only cannot');
-  plain := public.create_circle_invite(c, null, null, false);
+  plain := public.create_circle_invite_v2(c, null, null, false);
   perform pg_temp.expect((select not skip_review from public.circle_invites where circle_invites.code = plain), 'skip review: false is an ordinary invite');
   perform pg_temp.expect(public.list_circle_invites_skipping_review(c) = '{}', 'skip review: nothing listed yet');
   perform pg_temp.act(pg_temp.i('cy'));
-  perform pg_temp.must_refuse(format('select public.create_circle_invite(%L, null, null, true)', c), 'skip review: an outsider cannot');
+  perform pg_temp.must_refuse(format('select public.create_circle_invite_v2(%L, null, null, true)', c), 'skip review: an outsider cannot');
   perform pg_temp.act(pg_temp.i('mia'));
-  inv := public.create_circle_invite(c, 168, null, true);
+  inv := public.create_circle_invite_v2(c, 168, null, true);
   perform pg_temp.expect(public.list_circle_invites_skipping_review(c) = array[inv], 'skip review: listed');
   perform pg_temp.root();
   perform pg_temp.expect((select skip_review from public.circle_invites where circle_invites.code = inv), 'skip review: marked');

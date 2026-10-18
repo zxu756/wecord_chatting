@@ -238,7 +238,7 @@ void main() {
         ..answer('dismiss_join_request_result', null)
         ..answer('accept_circle_invite', 'circle-9')
         ..answer('list_circle_invites_skipping_review', ['abc', 'def'])
-        ..answer('create_circle_invite', 'newcode')
+        ..answer('create_circle_invite_v2', 'newcode')
         ..answer('set_circle_join_settings', null);
       final repository = JoinRequestsRepository(rpc.call);
 
@@ -299,7 +299,7 @@ void main() {
         ),
         'newcode',
       );
-      expect(rpc.paramsOf('create_circle_invite').single, {
+      expect(rpc.paramsOf('create_circle_invite_v2').single, {
         'target_circle_id': 'circle-9',
         'expires_in_hours': 168,
         'max_uses': 5,
@@ -975,7 +975,7 @@ void main() {
       _tall(tester, size: const Size(800, 2600));
       final rpc = JoinRpc()
         ..answer('list_circle_invites_skipping_review', ['skipcode1'])
-        ..answer('create_circle_invite', 'madecode1');
+        ..answer('create_circle_invite_v2', 'madecode1');
       final repository = FakeCirclesRepository()
         ..invites = [
           CircleInvite(
@@ -1033,7 +1033,7 @@ void main() {
       await tester.tap(find.text('Create link'));
       await tester.pumpAndSettle();
       expect(
-        rpc.paramsOf('create_circle_invite').single['skip_review'],
+        rpc.paramsOf('create_circle_invite_v2').single['skip_review'],
         isTrue,
       );
       expect(repository.createdInvites, isEmpty);
@@ -1045,7 +1045,7 @@ void main() {
       final (rpc, repository) = await pump(tester, canSkip: true);
       await tester.tap(find.text('Create link'));
       await tester.pumpAndSettle();
-      expect(rpc.paramsOf('create_circle_invite'), isEmpty);
+      expect(rpc.paramsOf('create_circle_invite_v2'), isEmpty);
       expect(repository.createdInvites, hasLength(1));
     });
 

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
 import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
+import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
+import 'package:wecord/features/error_reports/error_reporting_wiring.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/shared/config/app_config.dart';
@@ -26,10 +29,17 @@ Future<void> runWeCordApp() async {
     'SUPABASE_ANON_KEY': String.fromEnvironment('SUPABASE_ANON_KEY'),
   });
 
+  // Crash and error reports: the device's setting and queue first, so what
+  // goes wrong from here on is counted.
+  await startErrorReporting();
+
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
     publishableKey: config.supabaseAnonKey,
+    // Notices RPC, Edge Function and sign-in calls that fail.
+    httpClient: ErrorReportingHttpClient(http.Client(), errorReporter),
   );
+  watchAuthEvents(Supabase.instance.client.auth, errorReporter);
 
   // The offline copy of chats (SQLite, or IndexedDB on the web) and the
   // device's connection; without them chats work online only.
@@ -37,6 +47,7 @@ Future<void> runWeCordApp() async {
   runApp(
     ProviderScope(
       retry: noProviderRetry,
+      observers: [ErrorReportingProviderObserver(errorReporter)],
       overrides: [
         if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
         deviceConnectivityProvider.overrideWith(
@@ -54,6 +65,8 @@ class WeCordApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    // Route and lifecycle breadcrumbs for error reports.
+    ref.watch(errorReportingWiringProvider);
     // Wipes the offline copy of chats on sign-out.
     ref.watch(offlineSessionGuardProvider);
     // Reads the wallpapers kept on this device now, so a chat paints with

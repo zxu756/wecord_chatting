@@ -19,6 +19,7 @@ import 'package:wecord/shared/l10n/zh/zh_circles_extra.dart';
 import 'package:wecord/shared/l10n/zh/zh_circles_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_design.dart';
 import 'package:wecord/shared/l10n/zh/zh_discovery.dart';
+import 'package:wecord/shared/l10n/zh/zh_error_reports.dart';
 import 'package:wecord/shared/l10n/zh/zh_file_preview.dart';
 import 'package:wecord/shared/l10n/zh/zh_later.dart';
 import 'package:wecord/shared/l10n/zh/zh_location.dart';
@@ -103,6 +104,7 @@ const zhAreas = <Map<String, String>>[
   zhLocation,
   zhQrPat,
   zhMoments,
+  zhErrorReports,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -60,6 +61,8 @@ Future<bool> confirmAndDeleteAccount(
     return false;
   }
   final messenger = ScaffoldMessenger.maybeOf(context);
+  // The login goes away: the sign-out that follows is not an anomaly.
+  errorReporter.expectSignOut(within: const Duration(minutes: 2));
   try {
     await ref.read(accountDeletionServiceProvider).deleteAccount();
   } on AccountOwnsCirclesException catch (error) {

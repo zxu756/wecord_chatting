@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
 final profileExtrasRepositoryProvider = Provider<ProfileExtrasRepository>((
@@ -85,8 +86,14 @@ class ProfileExtrasRepository {
     required String mimeType,
     required Uint8List bytes,
   }) async {
-    final path = _uploadPath(fileName, fallbackName: 'banner.jpg');
-    await _upload(bannerBucket, path, bytes, mimeType);
+    final image = await prepareProfileImage(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      maxEdge: bannerMaxEdge,
+    );
+    final path = _uploadPath(image.fileName, fallbackName: 'banner.jpg');
+    await _upload(bannerBucket, path, image.bytes, image.mimeType);
     return '$bannerBucket/$path';
   }
 
@@ -98,11 +105,17 @@ class ProfileExtrasRepository {
     required String mimeType,
     required Uint8List bytes,
   }) async {
+    final image = await prepareProfileImage(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      maxEdge: avatarMaxEdge,
+    );
     final path = _uploadPath(
-      'circle-$circleId-$fileName',
+      'circle-$circleId-${image.fileName}',
       fallbackName: 'avatar.jpg',
     );
-    await _upload(avatarBucket, path, bytes, mimeType);
+    await _upload(avatarBucket, path, image.bytes, image.mimeType);
     return path;
   }
 

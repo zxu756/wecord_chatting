@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_history.dart';
@@ -1440,6 +1441,51 @@ void main() {
       ),
     ]);
   });
+
+  test(
+    'a group avatar is stored at 512 px, an animated one as it is',
+    () async {
+      final dataSource = FakeChatsDataSource();
+      final repository = SupabaseChatsRepository.withDataSource(
+        dataSource,
+        currentUserId: () => 'user-1',
+        storagePathSeed: () => 'seed-1',
+      );
+      final big = img.Image(width: 1600, height: 1200);
+      img.fill(big, color: img.ColorRgb8(30, 120, 200));
+      final png = Uint8List.fromList(img.encodePng(big));
+
+      final path = await repository.uploadGroupAvatar(
+        conversationId: 'conversation-1',
+        image: ChatImageUpload(
+          bytes: png,
+          fileName: 'Group.PNG',
+          mimeType: 'image/png',
+        ),
+      );
+
+      expect(path, 'group-avatars/conversation-1/seed-1-group.jpg');
+      final stored = dataSource.uploadedImages.single;
+      expect(stored.mimeType, 'image/jpeg');
+      final decoded = img.decodeJpg(stored.bytes)!;
+      expect((decoded.width, decoded.height), (512, 384));
+
+      final frames = img.Image(width: 700, height: 700)..frameDuration = 100;
+      img.fill(frames, color: img.ColorRgb8(255, 0, 0));
+      frames.addFrame(img.Image(width: 700, height: 700)..frameDuration = 100);
+      final gif = Uint8List.fromList(img.encodeGif(frames));
+      await repository.uploadGroupAvatar(
+        conversationId: 'conversation-1',
+        image: ChatImageUpload(
+          bytes: gif,
+          fileName: 'dance.gif',
+          mimeType: 'image/gif',
+        ),
+      );
+      expect(dataSource.uploadedImages.last.mimeType, 'image/gif');
+      expect(identical(dataSource.uploadedImages.last.bytes, gif), isTrue);
+    },
+  );
 
   test('group management methods call scoped RPCs and storage', () async {
     final dataSource = FakeChatsDataSource()..signedUrlResult = 'signed-avatar';

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -1106,14 +1107,20 @@ class SupabaseChatsRepository
     required ChatImageUpload image,
   }) async {
     const bucket = 'group-avatars';
+    final prepared = await prepareProfileImage(
+      bytes: image.bytes,
+      fileName: image.fileName,
+      mimeType: image.mimeType,
+      maxEdge: avatarMaxEdge,
+    );
     final path =
-        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(image.fileName)}';
+        '$conversationId/${_nextStoragePathSeed()}-${_safeFileName(prepared.fileName)}';
     await _withStorageTimeout(
       _dataSource.uploadBinary(
         bucket: bucket,
         path: path,
-        bytes: image.bytes,
-        mimeType: image.mimeType,
+        bytes: prepared.bytes,
+        mimeType: prepared.mimeType,
       ),
     );
     return '$bucket/$path';

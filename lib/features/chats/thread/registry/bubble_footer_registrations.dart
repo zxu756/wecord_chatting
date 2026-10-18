@@ -6,12 +6,14 @@
 // The built-in entries (see bubble_footer_builtin.dart) use orders 100, 200,
 // ... within each placement; pick a number in between to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer_builtin.dart';
 
 /// Feature entries for the footer slot. Append yours here.
 final List<BubbleFooterEntry> bubbleFooterExtensions = [
   // myFeatureFooterEntry,
+  autoTranslateFooterEntry,
 ];
 
 /// The slot's registry. Tests can override it to add or drop entries.

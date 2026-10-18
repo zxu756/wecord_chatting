@@ -50,6 +50,7 @@ import 'reports_legal_a11y_screens.dart';
 import 'admin_a11y_screens.dart';
 import 'agenda_a11y_screens.dart';
 import 'edit_history_a11y_screens.dart';
+import 'auto_translate_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -776,4 +777,5 @@ final allA11yScreens = <A11yScreen>[
   ...agendaA11yScreens,
   ...reportsLegalA11yScreens,
   ...editHistoryA11yScreens,
+  ...autoTranslateA11yScreens,
 ];

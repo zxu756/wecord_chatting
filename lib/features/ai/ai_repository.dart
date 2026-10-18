@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/ai/ai_models.dart';
+import 'package:wecord/features/ai/translate_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
 /// The `ai` Edge Function: catch-up summaries, rewriting drafts and
@@ -55,7 +56,7 @@ abstract interface class AiRepository {
   Future<void> setCircleAiEnabled(String circleId, {required bool enabled});
 }
 
-class SupabaseAiRepository implements AiRepository {
+class SupabaseAiRepository implements AiRepository, TranslateRepository {
   const SupabaseAiRepository(this._client);
 
   final SupabaseClient _client;
@@ -169,6 +170,137 @@ class SupabaseAiRepository implements AiRepository {
   }
 
   @override
+  Future<TranslateBatchResult> translateBatch({
+    required String conversationId,
+    required List<String> messageIds,
+    required AiLanguage target,
+    bool manual = false,
+  }) async {
+    final data = await _invoke({
+      'action': 'translate_batch',
+      'conversation_id': conversationId,
+      'message_ids': messageIds,
+      'target': target.code,
+      if (manual) 'manual': true,
+    });
+    final translations = <String, TranslatedMessage>{};
+    final rawTranslations = data['translations'];
+    if (rawTranslations is Map) {
+      rawTranslations.forEach((id, value) {
+        if (id is String && value is Map && value['text'] is String) {
+          translations[id] = TranslatedMessage(
+            text: value['text'] as String,
+            sourceLanguage: AiLanguage.fromCode(value['source_lang']),
+          );
+        }
+      });
+    }
+    final skipped = <String, TranslateSkip>{};
+    final rawSkipped = data['skipped'];
+    if (rawSkipped is Map) {
+      rawSkipped.forEach((id, reason) {
+        if (id is String) {
+          skipped[id] = TranslateSkip.fromJson(reason);
+        }
+      });
+    }
+    return TranslateBatchResult(
+      translations: translations,
+      skipped: skipped,
+      limitReached: data['error'] == 'ai_limit_reached',
+    );
+  }
+
+  @override
+  Future<AiTranslateSettings?> loadSettings() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return null;
+    }
+    final row = await _client
+        .from('user_ai_settings')
+        .select('translate_target,no_translate_langs')
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (row == null) {
+      return null;
+    }
+    final langs = row['no_translate_langs'];
+    return AiTranslateSettings(
+      target: AiLanguage.fromCode(row['translate_target']),
+      noTranslate: {
+        if (langs is List)
+          for (final code in langs) ?AiLanguage.fromCode(code),
+      },
+    );
+  }
+
+  @override
+  Future<void> saveSettings(AiTranslateSettings settings) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return;
+    }
+    await _client.from('user_ai_settings').upsert({
+      'user_id': userId,
+      'translate_target': settings.target?.code,
+      'no_translate_langs': [for (final l in settings.noTranslate) l.code],
+    });
+  }
+
+  @override
+  Future<void> syncAiEnabled({required bool enabled}) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return;
+    }
+    await _client.from('user_ai_settings').upsert({
+      'user_id': userId,
+      'ai_enabled': enabled,
+    });
+  }
+
+  @override
+  Future<ConversationTranslatePref> loadConversationPref(
+    String conversationId,
+  ) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return const ConversationTranslatePref();
+    }
+    final row = await _client
+        .from('conversation_translation_prefs')
+        .select('auto,target_lang')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .maybeSingle();
+    if (row == null) {
+      return const ConversationTranslatePref();
+    }
+    return ConversationTranslatePref(
+      auto: row['auto'] == true,
+      target: AiLanguage.fromCode(row['target_lang']),
+    );
+  }
+
+  @override
+  Future<void> saveConversationPref(
+    String conversationId,
+    ConversationTranslatePref pref,
+  ) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      return;
+    }
+    await _client.from('conversation_translation_prefs').upsert({
+      'user_id': userId,
+      'conversation_id': conversationId,
+      'auto': pref.auto,
+      'target_lang': pref.target?.code,
+    });
+  }
+
+  @override
   Future<bool> circleAiEnabled(String circleId) async {
     final row = await _client
         .from('circles')
@@ -191,7 +323,7 @@ class SupabaseAiRepository implements AiRepository {
 }
 
 /// Used where there is no server (tests): AI is not set up.
-class NoAiRepository implements AiRepository {
+class NoAiRepository implements AiRepository, TranslateRepository {
   const NoAiRepository();
 
   @override
@@ -226,6 +358,34 @@ class NoAiRepository implements AiRepository {
       Future.error(const AiNotConfiguredException());
 
   @override
+  Future<TranslateBatchResult> translateBatch({
+    required String conversationId,
+    required List<String> messageIds,
+    required AiLanguage target,
+    bool manual = false,
+  }) => Future.error(const AiNotConfiguredException());
+
+  @override
+  Future<AiTranslateSettings?> loadSettings() async => null;
+
+  @override
+  Future<void> saveSettings(AiTranslateSettings settings) async {}
+
+  @override
+  Future<void> syncAiEnabled({required bool enabled}) async {}
+
+  @override
+  Future<ConversationTranslatePref> loadConversationPref(
+    String conversationId,
+  ) async => const ConversationTranslatePref();
+
+  @override
+  Future<void> saveConversationPref(
+    String conversationId,
+    ConversationTranslatePref pref,
+  ) async {}
+
+  @override
   Future<bool> circleAiEnabled(String circleId) async => true;
 
   @override
@@ -241,6 +401,16 @@ final aiRepositoryProvider = Provider<AiRepository>((ref) {
   } on Object {
     return const NoAiRepository();
   }
+});
+
+/// The part of the AI repository that translates messages and keeps the
+/// translation choices. Tests that swap in an [AiRepository] without it get
+/// a repository that has no AI.
+final translateRepositoryProvider = Provider<TranslateRepository>((ref) {
+  final repository = ref.watch(aiRepositoryProvider);
+  return repository is TranslateRepository
+      ? repository as TranslateRepository
+      : const NoAiRepository();
 });
 
 /// Today's AI status, or null once the server said AI isn't set up. An
@@ -311,6 +481,11 @@ class AiEnabledController extends Notifier<bool> {
       if (enabled != null && !_changed) {
         state = enabled;
       }
+      // The server honours the switch for translations: tell it what this
+      // device has (best effort).
+      if (enabled != null) {
+        _sync(_changed ? state : enabled);
+      }
     }, onError: (Object _) {});
     return true;
   }
@@ -322,6 +497,18 @@ class AiEnabledController extends Notifier<bool> {
       await ref.read(aiEnabledStoreProvider).save(enabled);
     } on Object {
       // Still applies for this session.
+    }
+    _sync(enabled);
+  }
+
+  void _sync(bool enabled) {
+    try {
+      ref
+          .read(translateRepositoryProvider)
+          .syncAiEnabled(enabled: enabled)
+          .catchError((Object _) {});
+    } on Object {
+      // Not signed in, or no server (tests).
     }
   }
 }

@@ -7,12 +7,14 @@
 // then the parent's extra actions at 1500, then Events at 2000. Pick an
 // `order` to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
 
 /// Feature contributions to the header. Append yours here.
 final List<HeaderActionContribution> headerActionExtensions = [
   // myFeatureHeaderAction,
+  autoTranslateHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.

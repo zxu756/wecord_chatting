@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/ai/translate_settings.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/image_text/image_text_cache.dart';
 import 'package:wecord/features/image_text/image_text_models.dart';
@@ -187,7 +188,7 @@ class _ImageTextSheetState extends ConsumerState<ImageTextSheet> {
           .read(aiRepositoryProvider)
           .translate(
             text: text,
-            target: AiLanguage.appLanguage,
+            target: translateTargetOf(ref.read(aiTranslateSettingsProvider)),
             conversationId: widget.file.conversationId,
           );
       if (!mounted) {
@@ -465,7 +466,9 @@ class _ImageTextSheetState extends ConsumerState<ImageTextSheet> {
           children: [
             Text(
               tr('Translated to {language}', {
-                'language': AiLanguage.appLanguage.label,
+                'language': translateTargetOf(
+                  ref.read(aiTranslateSettingsProvider),
+                ).label,
               }),
               style: TextStyle(
                 fontSize: 12,

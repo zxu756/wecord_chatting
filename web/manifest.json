@@ -1,14 +1,25 @@
 {
+    "id": "/",
     "name": "WeCord",
     "short_name": "WeCord",
-    "description": "WeCord: chat with friends, groups and circles in real time.",
+    "description": "WeCord: chat with friends, groups and circles in real time. 与朋友、群组和圈子实时聊天。",
     "lang": "en",
+    "dir": "ltr",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
-    "orientation": "portrait-primary",
-    "background_color": "#F7F8FA",
-    "theme_color": "#F7F8FA",
+    "display_override": [
+        "standalone",
+        "minimal-ui"
+    ],
+    "launch_handler": {
+        "client_mode": [
+            "navigate-existing",
+            "auto"
+        ]
+    },
+    "background_color": "#F5F4F1",
+    "theme_color": "#F5F4F1",
     "categories": [
         "social",
         "communication"
@@ -28,6 +39,12 @@
             "purpose": "any"
         },
         {
+            "src": "icons/Icon-1024.png",
+            "sizes": "1024x1024",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
             "src": "icons/Icon-maskable-192.png",
             "sizes": "192x192",
             "type": "image/png",
@@ -38,6 +55,66 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-1024.png",
+            "sizes": "1024x1024",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "New message",
+            "short_name": "New message",
+            "description": "Start a conversation with a friend",
+            "url": "/#/contacts",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Saved",
+            "short_name": "Saved",
+            "description": "Your saved messages",
+            "url": "/#/saved",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Moments",
+            "short_name": "Moments",
+            "description": "Photos and updates from friends",
+            "url": "/#/moments",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Notifications",
+            "short_name": "Notifications",
+            "description": "Mentions, replies and friend requests",
+            "url": "/#/notifications",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
         }
     ]
 }

@@ -5,6 +5,7 @@ import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/location/live_location_sharer.dart';
 import 'package:wecord/features/notifications/notification_shell_listener.dart';
 import 'package:wecord/features/push/push_shell_listener.dart';
+import 'package:wecord/features/pwa/pwa_shell_listener.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/direct_call_view.dart';
 import 'package:wecord/features/voice/mini_player/call_mini_player.dart';
@@ -78,7 +79,9 @@ class WeCordShell extends StatelessWidget {
       child: AppKeyboardShortcuts(
         child: NotificationShellListener(
           child: LiveLocationShellListener(
-            child: IncomingCallListener(child: PushShellListener(child: child)),
+            child: IncomingCallListener(
+              child: PushShellListener(child: PwaShellListener(child: child)),
+            ),
           ),
         ),
       ),

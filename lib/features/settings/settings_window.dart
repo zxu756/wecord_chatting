@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/pwa/install_app_tile.dart';
 import 'package:wecord/features/qr/qr_entries.dart';
 import 'package:wecord/features/settings/chat_settings.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
@@ -491,6 +492,7 @@ class _SectionPage extends ConsumerWidget {
                 ChatWallpaperRow(showIcon: false),
               ],
             ),
+            const InstallAppGroup(),
           ],
         );
       case SettingsWindowSection.voice:

@@ -11,6 +11,7 @@ import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
 import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/features/error_reports/error_reporting_wiring.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
+import 'package:wecord/features/pwa/pwa_overlay.dart';
 import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -111,8 +112,10 @@ class WeCordApp extends ConsumerWidget {
           child: WeCordDensityScope(
             density: density,
             child: MacosTitleBarFrame(
-              child: PresenceActivityListener(
-                child: child ?? const SizedBox.shrink(),
+              child: PwaOverlayHost(
+                child: PresenceActivityListener(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),

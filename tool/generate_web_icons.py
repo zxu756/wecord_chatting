@@ -5,9 +5,10 @@ The mark is a white speech bubble with a "W" on the app's seed blue
 (WeCordTheme._seedColor, #2F7CF6), drawn on a 1024 px canvas and scaled
 down, so every size comes from one drawing:
 
-* web/icons/Icon-192.png, Icon-512.png: rounded square, transparent corners.
-* web/icons/Icon-maskable-192.png, Icon-maskable-512.png: full-bleed blue,
-  the mark inside the 80% safe zone.
+* web/icons/Icon-192.png, Icon-512.png, Icon-1024.png: rounded square,
+  transparent corners (manifest purpose "any").
+* web/icons/Icon-maskable-192.png, -512.png, -1024.png: full-bleed blue,
+  the mark inside the 80% safe zone (manifest purpose "maskable").
 * web/icons/apple-touch-icon.png (180): full-bleed, iOS rounds it.
 * web/favicon.png (32) and web/icons/favicon-16.png.
 
@@ -113,8 +114,10 @@ def main() -> None:
 
     save(rounded, WEB / "icons" / "Icon-192.png", 192)
     save(rounded, WEB / "icons" / "Icon-512.png", 512)
+    save(rounded, WEB / "icons" / "Icon-1024.png", 1024)
     save(maskable, WEB / "icons" / "Icon-maskable-192.png", 192, opaque=True)
     save(maskable, WEB / "icons" / "Icon-maskable-512.png", 512, opaque=True)
+    save(maskable, WEB / "icons" / "Icon-maskable-1024.png", 1024, opaque=True)
     save(apple, WEB / "icons" / "apple-touch-icon.png", 180, opaque=True)
     save(rounded, WEB / "favicon.png", 32)
     save(rounded, WEB / "icons" / "favicon-16.png", 16)

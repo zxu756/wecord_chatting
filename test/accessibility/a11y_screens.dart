@@ -46,6 +46,7 @@ import 'moments_a11y_screens.dart';
 import 'quiet_hours_a11y_screens.dart';
 import 'chat_folders_a11y_screens.dart';
 import 'privacy2_a11y_screens.dart';
+import 'admin_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -768,4 +769,5 @@ final allA11yScreens = <A11yScreen>[
   ...quietHoursA11yScreens,
   ...chatFoldersA11yScreens,
   ...privacy2A11yScreens,
+  ...adminA11yScreens,
 ];

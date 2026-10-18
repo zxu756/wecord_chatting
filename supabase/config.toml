@@ -515,6 +515,14 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/sessions/index.ts"
 
+[functions.admin]
+enabled = true
+# Platform admins act on other people's accounts (ban, end sessions). Keeps
+# verify_jwt = true: the function also asks is_app_admin() in the database
+# as the caller before doing anything with the service role.
+verify_jwt = true
+entrypoint = "./functions/admin/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

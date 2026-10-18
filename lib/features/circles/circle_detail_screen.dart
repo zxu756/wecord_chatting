@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/admin/circle_suspended_view.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_feed_view.dart';
-import 'package:wecord/features/circles/circle_membership_actions.dart';
 import 'package:wecord/features/circles/circle_onboarding.dart';
 import 'package:wecord/features/circles/circle_channel_sidebar.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
@@ -72,7 +72,7 @@ class CircleDetailScreen extends ConsumerWidget {
         body: const Center(child: CircularProgressIndicator()),
       ),
       error: (error, stackTrace) => error is CircleMembershipLostException
-          ? CircleMembershipLostView(circleId: circleId)
+          ? CircleUnavailableView(circleId: circleId)
           : CirclePageScaffold(
               title: tr('Circle'),
               body: CircleEmptyState(

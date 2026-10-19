@@ -20,6 +20,8 @@ import 'package:wecord/features/circles/insights/insights_repository.dart';
 import 'package:wecord/features/circles/insights/insights_screen.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/join_requests/join_settings_screen.dart';
+import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
+import 'package:wecord/features/circles/mod_tools/raid_protection.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
 import 'package:wecord/features/profile/support_links_editor.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -162,6 +164,15 @@ class _ManageGroup extends ConsumerWidget {
           value: '${detail.roles.length}',
           onTap: () => openCircleRolesScreen(context, circleId),
         ),
+      if (detail.canModerateMembers)
+        SettingsRow(
+          key: const ValueKey('circle-settings-members'),
+          icon: Icons.manage_accounts_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Members'),
+          subtitle: tr('Find, warn and act on many at once'),
+          onTap: () => openMemberToolsScreen(context, circleId),
+        ),
       if (detail.canBanMembers)
         SettingsRow(
           key: const ValueKey('circle-settings-bans'),
@@ -169,6 +180,15 @@ class _ManageGroup extends ConsumerWidget {
           tone: SettingsTone.danger,
           title: tr('Bans'),
           onTap: () => openCircleBansScreen(context, circleId),
+        ),
+      if (detail.canRunSafetyActions)
+        SettingsRow(
+          key: const ValueKey('circle-settings-raid'),
+          icon: Icons.shield_outlined,
+          tone: SettingsTone.warning,
+          title: tr('Raid protection'),
+          subtitle: tr('Pause invites and lock down joining'),
+          onTap: () => openRaidProtectionScreen(context, circleId),
         ),
       if (detail.canManageCircle) ...[
         SettingsRow(

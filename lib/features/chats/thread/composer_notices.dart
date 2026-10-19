@@ -119,9 +119,13 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
     required this.desktop,
     required this.bottomGap,
     this.timedOutUntil,
+    this.threadLocked = false,
   });
 
   final DateTime? timedOutUntil;
+
+  /// The thread is locked: only moderators can reply.
+  final bool threadLocked;
   final bool desktop;
   final double bottomGap;
 
@@ -151,6 +155,9 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(switch (timedOutUntil) {
+                _ when threadLocked => tr(
+                  'This thread is locked. Only moderators can reply.',
+                ),
                 final until? => tr(
                   "You're timed out until {time}. "
                   'You can read, but not send messages or react.',

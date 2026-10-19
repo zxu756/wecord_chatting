@@ -1636,8 +1636,45 @@ sealed class SendRefusedException implements Exception {
   /// null for other errors.
   static SendRefusedException? fromPostgrest(PostgrestException error) {
     return AutoModBlockedException.fromPostgrest(error) ??
-        CircleRulesNotAcceptedException.fromPostgrest(error);
+        CircleRulesNotAcceptedException.fromPostgrest(error) ??
+        ThreadLockedException.fromPostgrest(error) ??
+        RaidNewcomerLinksException.fromPostgrest(error);
   }
+}
+
+/// A moderator locked the thread: only moderators can post in it.
+class ThreadLockedException extends SendRefusedException {
+  const ThreadLockedException();
+
+  /// SQLSTATE 42501 with detail `thread_locked`.
+  static ThreadLockedException? fromPostgrest(PostgrestException error) {
+    if (error.code != '42501' || '${error.details ?? ''}' != 'thread_locked') {
+      return null;
+    }
+    return const ThreadLockedException();
+  }
+
+  @override
+  String toString() => tr('This thread is locked. Only moderators can reply.');
+}
+
+/// The circle is locked down against a raid, and people who just joined
+/// cannot post links yet.
+class RaidNewcomerLinksException extends SendRefusedException {
+  const RaidNewcomerLinksException();
+
+  /// SQLSTATE 42501 with detail `raid_newcomer_links`.
+  static RaidNewcomerLinksException? fromPostgrest(PostgrestException error) {
+    if (error.code != '42501' ||
+        '${error.details ?? ''}' != 'raid_newcomer_links') {
+      return null;
+    }
+    return const RaidNewcomerLinksException();
+  }
+
+  @override
+  String toString() =>
+      tr('New members cannot post links while the circle is locked down.');
 }
 
 /// The circle asks new members to accept its rules first.

@@ -24,6 +24,7 @@ class _ThreadFacts {
     required this.threadId,
     required this.canManageThread,
     required this.threadArchived,
+    required this.threadLocked,
     required this.isDirectOrGroup,
     required this.disappearingSeconds,
     required this.canSend,
@@ -71,6 +72,9 @@ class _ThreadFacts {
   final String? threadId;
   final bool canManageThread;
   final bool threadArchived;
+
+  /// A moderator locked the thread and the current user cannot post in it.
+  final bool threadLocked;
   final bool isDirectOrGroup;
   final int? disappearingSeconds;
   final bool canSend;
@@ -221,6 +225,11 @@ extension _ThreadFactsState on _ChatThreadScreenState {
                 .value ??
             false);
     final threadArchived = conversationSummary?.threadArchivedAt != null;
+    final threadLock = isThread
+        ? ref.watch(threadLockProvider(widget.conversationId)).value
+        : null;
+    final threadLocked =
+        threadLock != null && threadLock.locked && !threadLock.canPost;
     // Direct chats and groups can have messages that disappear.
     final isDirectOrGroup =
         conversationType == ConversationType.direct ||
@@ -232,7 +241,10 @@ extension _ThreadFactsState on _ChatThreadScreenState {
       _refreshDisappearingOnNotice(thread.value?.messages);
     }
     final canSend =
-        widget.canSendMessages ?? conversationSummary?.canSendMessages ?? true;
+        (widget.canSendMessages ??
+            conversationSummary?.canSendMessages ??
+            true) &&
+        !threadLocked;
     final slowmodeSeconds =
         widget.slowmodeSeconds ?? conversationSummary?.slowmodeSeconds ?? 0;
     _circleId = conversationSummary?.circleId;
@@ -393,6 +405,7 @@ extension _ThreadFactsState on _ChatThreadScreenState {
       threadId: threadId,
       canManageThread: canManageThread,
       threadArchived: threadArchived,
+      threadLocked: threadLocked,
       isDirectOrGroup: isDirectOrGroup,
       disappearingSeconds: disappearingSeconds,
       canSend: canSend,

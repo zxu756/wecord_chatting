@@ -41,6 +41,7 @@ import {
 import { type DigestPushRow, digestPushTarget } from "./digest.ts";
 import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
+import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
   audibleTargets,
@@ -195,6 +196,20 @@ Deno.serve(async (request) => {
   }
   targets.push(
     ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
+  );
+
+  // Raid protection locked a circle by itself (to its moderators), and the
+  // answer to a ban appeal (to the person who appealed): decide_ban_appeal
+  // and the raid check wake this function.
+  const { data: moderation, error: moderationError } = await admin.rpc(
+    "claim_moderation_pushes",
+  );
+  if (moderationError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_moderation_pushes failed", moderationError.message);
+  }
+  targets.push(
+    ...((moderation ?? []) as ModerationPushRow[]).map(moderationTarget),
   );
 
   // The push of an official notice (K6), a batch of devices at a time: in

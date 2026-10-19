@@ -526,6 +526,20 @@ IconData circleAuditIcon(String action) {
     'join_request_deny' => Icons.person_off_outlined,
     'join_settings_update' => Icons.how_to_reg_outlined,
     'invite_skip_review' => Icons.add_link,
+    'member_unban_auto' => Icons.lock_open_outlined,
+    'member_batch_action' => Icons.groups_2_outlined,
+    'thread_lock' => Icons.lock_outline,
+    'thread_unlock' => Icons.lock_open_outlined,
+    'mod_note_add' || 'mod_note_delete' => Icons.sticky_note_2_outlined,
+    'mod_warn' => Icons.warning_amber_rounded,
+    'ban_appeal_submit' => Icons.mark_email_unread_outlined,
+    'ban_appeal_approve' => Icons.lock_open_outlined,
+    'ban_appeal_deny' => Icons.block,
+    'raid_lockdown' => Icons.shield_outlined,
+    'raid_release' => Icons.shield_moon_outlined,
+    'raid_settings_update' => Icons.shield_outlined,
+    'invites_pause' => Icons.pause_circle_outline,
+    'invites_resume' => Icons.play_circle_outline,
     'discovery_update' => Icons.explore_outlined,
     'edit_window_update' => Icons.history_toggle_off,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
@@ -835,6 +849,45 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       tr('{actor} made invite {target} skip review'),
       {},
     ),
+    'member_unban_auto' => (tr('The ban on {target} ended'), {}),
+    'member_batch_action' => switch (changes['action']) {
+      'timeout' => (tr('{actor} timed out several members at once'), {}),
+      'untimeout' => (
+        tr('{actor} ended the timeout of several members at once'),
+        {},
+      ),
+      'kick' => (tr('{actor} kicked several members at once'), {}),
+      'ban' => (tr('{actor} banned several members at once'), {}),
+      _ => (tr('{actor} acted on several members at once'), {}),
+    },
+    'thread_lock' => (tr('{actor} locked thread {target}'), {}),
+    'thread_unlock' => (tr('{actor} unlocked thread {target}'), {}),
+    'mod_note_add' => (tr('{actor} added a note about {target}'), {}),
+    'mod_warn' => (tr('{actor} warned {target}'), {}),
+    'mod_note_delete' => (tr('{actor} deleted a note about {target}'), {}),
+    'ban_appeal_submit' => (tr('{target} appealed their ban'), {}),
+    'ban_appeal_approve' => (
+      tr('{actor} approved the ban appeal of {target}'),
+      {},
+    ),
+    'ban_appeal_deny' => (
+      tr('{actor} turned down the ban appeal of {target}'),
+      {},
+    ),
+    'raid_lockdown' => switch (changes['source']) {
+      'auto' => (tr('Raid protection locked down joining'), {}),
+      _ => (tr('{actor} locked down joining'), {}),
+    },
+    'raid_release' => switch (changes['source']) {
+      'expired' => (tr('The lockdown ended by itself'), {}),
+      _ => (tr('{actor} ended the lockdown'), {}),
+    },
+    'raid_settings_update' => (
+      tr('{actor} changed the raid protection settings'),
+      {},
+    ),
+    'invites_pause' => (tr('{actor} paused invites'), {}),
+    'invites_resume' => (tr('{actor} resumed invites'), {}),
     'discovery_update' => switch (_newValue(changes['is_public'])) {
       true => (tr('{actor} made the circle public'), {}),
       false => (tr('{actor} made the circle private'), {}),
@@ -975,6 +1028,17 @@ String _labelFor(String key) {
     'category' => tr('Category'),
     'language' => tr('Language'),
     'tags' => tr('Tags'),
+    'hours' => tr('Hours'),
+    'source' => tr('Started by'),
+    'joins' => tr('Joined or asked'),
+    'new_accounts' => tr('New accounts'),
+    'join_mode_switched' => tr('Switched to apply'),
+    'join_mode_restored' => tr('Join mode put back'),
+    'requested' => tr('Chosen'),
+    'done' => tr('Done'),
+    'warnings' => tr('Warnings'),
+    'threshold' => tr('Threshold'),
+    'expired_at' => tr('Ended'),
     _ =>
       key.isEmpty
           ? key
@@ -1034,6 +1098,13 @@ String _formatValue(String key, Object? value) {
   if (key == 'action' && (value == 'flag' || value == 'hold')) {
     return value == 'flag' ? tr('Flag only') : tr('Hold for review');
   }
+  if (key == 'source' && value is String) {
+    return switch (value) {
+      'auto' => tr('Raid protection'),
+      'expired' => tr('The clock'),
+      _ => tr('A moderator'),
+    };
+  }
   if (key == 'kind' && value is String) {
     return switch (value) {
       'keyword' => tr('Custom keywords'),
@@ -1063,6 +1134,7 @@ String _formatValue(String key, Object? value) {
   if ((key == 'expires_at' ||
           key == 'starts_at' ||
           key == 'ends_at' ||
+          key == 'expired_at' ||
           key == 'until') &&
       value is String) {
     final time = DateTime.tryParse(value)?.toLocal();

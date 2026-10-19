@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/circles/mod_tools/ban_duration_picker.dart';
+import 'package:wecord/features/circles/mod_tools/mod_tools_models.dart'
+    show banEndLabel;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_ban.dart';
@@ -152,10 +155,10 @@ Future<void> banCircleMember(
   required CircleMember member,
 }) async {
   final name = member.displayName;
-  final choice = await showCircleDialog<({String reason, int deleteHours})>(
-    context,
-    builder: (context) => _BanDialog(name: name),
-  );
+  final choice =
+      await showCircleDialog<
+        ({String reason, int deleteHours, Duration? length})
+      >(context, builder: (context) => _BanDialog(name: name));
   if (choice == null || !context.mounted) {
     return;
   }
@@ -168,6 +171,7 @@ Future<void> banCircleMember(
           userId: member.profile.id,
           reason: choice.reason,
           deleteMessageHours: choice.deleteHours,
+          duration: choice.length,
         );
     ref
       ..invalidate(circleDetailProvider(circleId))
@@ -196,6 +200,7 @@ class _BanDialog extends StatefulWidget {
 class _BanDialogState extends State<_BanDialog> {
   final _reason = TextEditingController();
   var _deleteHours = 0;
+  Duration? _length;
 
   @override
   void dispose() {
@@ -217,6 +222,11 @@ class _BanDialogState extends State<_BanDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
+          BanDurationPicker(
+            selected: _length,
+            onChanged: (length) => setState(() => _length = length),
+          ),
+          const SizedBox(height: 16),
           SettingsGroup(
             key: const ValueKey('ban-delete-messages'),
             header: tr('Delete their messages'),
@@ -255,9 +265,11 @@ class _BanDialogState extends State<_BanDialog> {
         CircleDialogAction.danger(
           key: const ValueKey('ban-confirm'),
           label: tr('Ban'),
-          onPressed: () => Navigator.of(
-            context,
-          ).pop((reason: _reason.text.trim(), deleteHours: _deleteHours)),
+          onPressed: () => Navigator.of(context).pop((
+            reason: _reason.text.trim(),
+            deleteHours: _deleteHours,
+            length: _length,
+          )),
         ),
       ],
     );
@@ -387,6 +399,8 @@ class _BanRow extends StatelessWidget {
     final c = colors;
     final details = [
       '@${ban.username}',
+      banEndLabel(ban.expiresAt),
+      if (ban.appealStatus == 'pending') tr('Appeal waiting'),
       if (ban.reason case final reason? when reason.isNotEmpty) reason,
       if (ban.bannedByName case final by?) tr('Banned by {name}', {'name': by}),
     ].join(' · ');

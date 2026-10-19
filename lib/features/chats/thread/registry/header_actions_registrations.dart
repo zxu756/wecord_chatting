@@ -10,11 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
+import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
 
 /// Feature contributions to the header. Append yours here.
 final List<HeaderActionContribution> headerActionExtensions = [
   // myFeatureHeaderAction,
   autoTranslateHeaderAction,
+  threadLockHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.

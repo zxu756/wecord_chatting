@@ -133,12 +133,14 @@ abstract interface class CirclesRepository {
 
   /// Bans [userId] (a member or not) from the circle, removing them if they
   /// are a member, and deletes their circle messages from the last
-  /// [deleteMessageHours] (0 keeps them).
+  /// [deleteMessageHours] (0 keeps them). With a [duration] the ban lifts
+  /// itself; without one it lasts until a moderator lifts it.
   Future<void> banMember({
     required String circleId,
     required String userId,
     String? reason,
     int deleteMessageHours = 0,
+    Duration? duration,
   });
 
   Future<void> unbanMember({required String circleId, required String userId});
@@ -665,6 +667,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     required String userId,
     String? reason,
     int deleteMessageHours = 0,
+    Duration? duration,
   }) async {
     final trimmedReason = reason?.trim();
     final result = await _dataSource.rpc('ban_circle_member', {
@@ -674,6 +677,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
           ? null
           : trimmedReason,
       'delete_message_hours': deleteMessageHours,
+      if (duration != null) 'ban_duration_seconds': duration.inSeconds,
     });
     // Deleted messages' images and voice clips nothing else uses; removing
     // them is best effort, as when deleting a single message.
@@ -1797,6 +1801,7 @@ class UninitializedCirclesRepository implements CirclesRepository {
     required String userId,
     String? reason,
     int deleteMessageHours = 0,
+    Duration? duration,
   }) {
     throw StateError('Supabase must be initialized before banning members.');
   }

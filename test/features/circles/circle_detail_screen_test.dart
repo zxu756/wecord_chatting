@@ -3334,6 +3334,7 @@ class FakeCirclesRepository implements CirclesRepository {
     required String userId,
     String? reason,
     int deleteMessageHours = 0,
+    Duration? duration,
   }) async {
     bannedUserIds.add(userId);
   }

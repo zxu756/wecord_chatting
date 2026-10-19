@@ -7,6 +7,8 @@ import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
+import 'package:wecord/features/voice/captions/captions_sheets.dart';
+import 'package:wecord/features/voice/captions/captions_strip.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
 import 'package:wecord/features/voice/reactions/floating_reactions.dart';
@@ -313,6 +315,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                                   .setAudioOnly(!session.audioOnly),
                             ),
                           ),
+                        if (connected) const CaptionsButton(),
                         if (chatBuilder != null && !connected)
                           VoiceHeaderButton(
                             key: const ValueKey('voice-chat-button'),
@@ -346,6 +349,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                       ],
                     ),
                     if (connected) const VoiceQualityBanner(),
+                    if (connected) const CaptionStrip(),
                   ],
                 ),
                 controls: controls,
@@ -1531,7 +1535,7 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
         ],
         leaveLabel: tr('Leave'),
         leaveTooltip: tr('Disconnect'),
-        onLeave: controller.leave,
+        onLeave: () => unawaited(leaveCallOfferingRecap(context)),
       ),
     );
   }

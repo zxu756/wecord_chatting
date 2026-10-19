@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/voice/captions/captions_sheets.dart';
 import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_repository.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
@@ -1159,7 +1160,7 @@ class _StageControlsState extends ConsumerState<StageControls> {
         ],
         leaveLabel: tr('Leave'),
         leaveTooltip: tr('Disconnect'),
-        onLeave: controller.leave,
+        onLeave: () => unawaited(leaveCallOfferingRecap(context)),
       ),
     );
   }

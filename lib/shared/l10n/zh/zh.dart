@@ -78,6 +78,7 @@ import 'package:wecord/shared/l10n/zh/zh_wallpapers.dart';
 import 'package:wecord/shared/l10n/zh/zh_insights.dart';
 import 'package:wecord/shared/l10n/zh/zh_forms.dart';
 import 'package:wecord/shared/l10n/zh/zh_notes2.dart';
+import 'package:wecord/shared/l10n/zh/zh_captions.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -157,6 +158,7 @@ const zhAreas = <Map<String, String>>[
   zhProfileExtras,
   zhChatPolish,
   zhNotes2,
+  zhCaptions,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

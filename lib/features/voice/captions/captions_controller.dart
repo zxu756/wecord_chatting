@@ -800,3 +800,18 @@ class CaptionsController extends Notifier<CaptionsState> {
     }
   }
 }
+
+/// Whether the voice server's token lets this person turn captions on in
+/// the call they are in.
+final captionsCanHostProvider = Provider<bool>((ref) {
+  final session = ref.watch(call_session.voiceSessionProvider);
+  if (session == null || !session.isConnected) {
+    return false;
+  }
+  for (final participant in session.participants) {
+    if (participant.isLocal) {
+      return participant.captionsHost;
+    }
+  }
+  return false;
+});

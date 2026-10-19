@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wecord/features/accessibility/video_captions/video_captions_service.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/image_text/image_text_cache.dart';
@@ -129,6 +130,11 @@ class AutoCleanPeriodController extends Notifier<AutoCleanPeriod> {
 
 final diskCacheProvider = Provider<DiskCache>((ref) => createDiskCache());
 
+/// What the browser says about its storage (the web only); tests swap it.
+final browserEstimateProvider = Provider<Future<BrowserEstimate?> Function()>(
+  (ref) => browserStorageEstimate,
+);
+
 /// Measures and empties this device's copies (see [LocalStorageService]).
 final localStorageServiceProvider = Provider<LocalStorageService>((ref) {
   String? userId() {
@@ -145,7 +151,9 @@ final localStorageServiceProvider = Provider<LocalStorageService>((ref) {
     disk: ref.watch(diskCacheProvider),
     transcripts: ref.watch(transcriptCacheProvider),
     imageTexts: ref.watch(imageTextCacheProvider),
+    videoCaptions: ref.watch(videoCaptionCacheProvider),
     wallpapers: ref.watch(wallpaperPhotoStoreProvider),
+    browserEstimate: ref.watch(browserEstimateProvider),
   );
 });
 

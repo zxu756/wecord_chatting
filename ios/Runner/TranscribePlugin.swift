@@ -13,8 +13,11 @@ import Speech
 ///   available right now, whether it can run on the device, and the speech
 ///   recognition permission (`notDetermined`, `authorized`, `denied`,
 ///   `restricted`). Never asks for permission.
-/// * `transcribe {path, locales, allowServer}` → `{text, onDevice, locale}`.
-///   Asks for permission the first time. Fails with `not_authorized`,
+/// * `transcribe {path, locales, allowServer, video?, segments?}` →
+///   `{text, onDevice, locale, segments?}`. `video` says the file is a video
+///   (its sound is recognized); `segments` also returns the words with their
+///   times, `[{t: seconds in, d: seconds long, s: text}]`, for captions
+///   (roadmap L8). Asks for permission the first time. Fails with `not_authorized`,
 ///   `unsupported_locale`, `unavailable`, `needs_server` (the language can't
 ///   run on the device and `allowServer` is false), `unreadable` (not audio
 ///   the system can open), `no_speech` or `failed`.
@@ -41,7 +44,9 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
       }
       transcribe(
         url: URL(fileURLWithPath: path), locales: locales,
-        allowServer: args["allowServer"] as? Bool ?? false, result: result)
+        allowServer: args["allowServer"] as? Bool ?? false,
+        video: args["video"] as? Bool ?? false,
+        segments: args["segments"] as? Bool ?? false, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -105,7 +110,8 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
   }
 
   private func transcribe(
-    url: URL, locales: [String], allowServer: Bool, result: @escaping FlutterResult
+    url: URL, locales: [String], allowServer: Bool, video: Bool, segments: Bool,
+    result: @escaping FlutterResult
   ) {
     guard let recognizer = TranscribePlugin.recognizer(for: locales) else {
       result(
@@ -139,18 +145,34 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
       }
       // Fails for anything the system can't open (a WebM or Ogg file, say),
       // before the recognizer is started.
-      guard let file = try? AVAudioFile(forReading: url), file.length > 0 else {
-        result(
-          FlutterError(code: "unreadable", message: "The audio can't be read", details: nil))
-        return
+      if video {
+        // A video: it needs a playable sound track.
+        let asset = AVURLAsset(url: url)
+        guard asset.isReadable else {
+          result(
+            FlutterError(code: "unreadable", message: "The video can't be read", details: nil))
+          return
+        }
+        guard !asset.tracks(withMediaType: .audio).isEmpty else {
+          result(FlutterError(code: "no_speech", message: "The video has no sound", details: nil))
+          return
+        }
+      } else {
+        guard let file = try? AVAudioFile(forReading: url), file.length > 0 else {
+          result(
+            FlutterError(code: "unreadable", message: "The audio can't be read", details: nil))
+          return
+        }
       }
       self.recognize(
-        url: url, recognizer: recognizer, onDevice: onDevice, result: result)
+        url: url, recognizer: recognizer, onDevice: onDevice, video: video,
+        segments: segments, result: result)
     }
   }
 
   private func recognize(
-    url: URL, recognizer: SFSpeechRecognizer, onDevice: Bool, result: @escaping FlutterResult
+    url: URL, recognizer: SFSpeechRecognizer, onDevice: Bool, video: Bool, segments: Bool,
+    result: @escaping FlutterResult
   ) {
     let request = SFSpeechURLRecognitionRequest(url: url)
     request.requiresOnDeviceRecognition = onDevice
@@ -160,6 +182,19 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
     }
     var finished = false
     var task: SFSpeechRecognitionTask?
+    // What is sent back for a transcription: its text, where it ran, and, for
+    // captions, the words with their times.
+    func payload(_ transcription: SFTranscription, text: String) -> [String: Any] {
+      var out: [String: Any] = [
+        "text": text, "onDevice": onDevice, "locale": recognizer.locale.identifier,
+      ]
+      if segments {
+        out["segments"] = transcription.segments.map { segment -> [String: Any] in
+          ["t": segment.timestamp, "d": segment.duration, "s": segment.substring]
+        }
+      }
+      return out
+    }
     // The recognizer answers on its own queue and the timeout on the main
     // one; everything is settled on the main queue, once.
     func finish(_ value: Any?) {
@@ -180,9 +215,7 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
         if text.isEmpty {
           finish(FlutterError(code: "no_speech", message: "No speech found", details: nil))
         } else {
-          finish([
-            "text": text, "onDevice": onDevice, "locale": recognizer.locale.identifier,
-          ])
+          finish(payload(recognition.bestTranscription, text: text))
         }
         return
       }
@@ -192,10 +225,8 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
         let silent = error.code == 1110 || error.localizedDescription.contains("No speech")
         let text = recognition?.bestTranscription.formattedString
           .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !text.isEmpty {
-          finish([
-            "text": text, "onDevice": onDevice, "locale": recognizer.locale.identifier,
-          ])
+        if !text.isEmpty, let recognition = recognition {
+          finish(payload(recognition.bestTranscription, text: text))
         } else if silent {
           finish(FlutterError(code: "no_speech", message: "No speech found", details: nil))
         } else {
@@ -208,8 +239,9 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
     if let task = task {
       running[ObjectIdentifier(task)] = task
     }
-    // A recognition that never answers is given up on.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 180) {
+    // A recognition that never answers is given up on (a video's sound takes
+    // longer than a voice message).
+    DispatchQueue.main.asyncAfter(deadline: .now() + (video ? 900 : 180)) {
       finish(FlutterError(code: "failed", message: "Timed out", details: nil))
     }
   }

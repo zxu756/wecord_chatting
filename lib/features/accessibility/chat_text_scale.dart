@@ -28,11 +28,11 @@ double nearestChatTextScale(double value) {
 String chatTextSizeName(double factor) {
   final index = chatTextScaleOptions.indexOf(nearestChatTextScale(factor));
   return switch (index) {
-    0 => tr('Small'),
+    0 => trIn('chat-text-size', 'Small'),
     1 => tr('Default'),
-    2 => tr('Large'),
-    3 => tr('Larger'),
-    _ => tr('Largest'),
+    2 => trIn('chat-text-size', 'Large'),
+    3 => trIn('chat-text-size', 'Larger'),
+    _ => trIn('chat-text-size', 'Largest'),
   };
 }
 

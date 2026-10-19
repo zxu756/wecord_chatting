@@ -1,11 +1,8 @@
-import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/accessibility/image_alt_sheet.dart';
-import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/media_send/media_draft.dart';
 import 'package:wecord/features/chats/media_send/media_picker.dart';

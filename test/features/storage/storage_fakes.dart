@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:wecord/features/accessibility/video_captions/video_captions_service.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/image_text/image_text_cache.dart';
 import 'package:wecord/features/storage/disk_cache.dart';
@@ -87,13 +88,18 @@ class StorageWorld {
     this.userId = 'user-1',
     List<DiskEntry> disk = const [],
     bool diskAvailable = true,
+    this.browser,
   }) : diskCache = FakeDiskCache(disk, available: diskAvailable);
 
   final String userId;
+
+  /// What the browser says (the web).
+  final BrowserEstimate? browser;
   final cache = KeyValueChatCache.memory();
   final FakeDiskCache diskCache;
   final transcripts = InMemoryTranscriptCache();
   final imageTexts = InMemoryImageTextCache();
+  final videoCaptions = InMemoryVideoCaptionCache();
   final wallpapers = InMemoryWallpaperPhotoStore();
   final settings = InMemoryStorageSettingsStore();
 
@@ -105,7 +111,9 @@ class StorageWorld {
     diskCacheProvider.overrideWithValue(diskCache),
     transcriptCacheProvider.overrideWithValue(transcripts),
     imageTextCacheProvider.overrideWithValue(imageTexts),
+    videoCaptionCacheProvider.overrideWithValue(videoCaptions),
     wallpaperPhotoStoreProvider.overrideWithValue(wallpapers),
     storageSettingsStoreProvider.overrideWithValue(settings),
+    browserEstimateProvider.overrideWithValue(() async => browser),
   ];
 }

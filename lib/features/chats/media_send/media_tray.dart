@@ -490,7 +490,7 @@ class _TrayThumb extends StatelessWidget {
                   if (item.canDescribe)
                     Positioned(
                       left: 4,
-                      bottom: 4,
+                      top: 4,
                       child: ImageAltBadge(
                         key: ValueKey('media-tray-alt-${item.id}'),
                         described: item.alt != null,
@@ -708,23 +708,26 @@ class _DescribeRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: c.ink,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                    ),
+                  ),
+                  if (status != null)
+                    Text(
+                      status,
+                      key: const ValueKey('media-tray-describe-status'),
+                      style: TextStyle(fontSize: 12, color: c.muted),
+                    ),
+                ],
               ),
             ),
-            if (status != null) ...[
-              const SizedBox(width: 8),
-              Text(
-                status,
-                key: const ValueKey('media-tray-describe-status'),
-                style: TextStyle(fontSize: 12, color: c.muted),
-              ),
-            ],
             const SizedBox(width: 4),
             Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
           ],

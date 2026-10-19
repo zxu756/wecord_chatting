@@ -62,8 +62,11 @@ class ImageAltBadge extends StatelessWidget {
         ],
       ),
     );
+    // A small mark on a picture: it keeps its size when the text grows.
+    Widget fixed(Set<WidgetState> states) =>
+        MediaQuery.withNoTextScaling(child: mark(states));
     if (onPressed == null) {
-      return ExcludeSemantics(child: mark(const {}));
+      return ExcludeSemantics(child: fixed(const {}));
     }
     return WeCordPressable(
       onPressed: onPressed,
@@ -71,7 +74,7 @@ class ImageAltBadge extends StatelessWidget {
       semanticLabel: semanticLabel,
       shape: const StadiumBorder(),
       pressedScale: 0.94,
-      builder: (context, states) => mark(states),
+      builder: (context, states) => fixed(states),
     );
   }
 }
@@ -222,7 +225,7 @@ class _PictureField extends StatelessWidget {
   Widget build(BuildContext context) {
     final bytes = picture.picture;
     final label = number == null
-        ? tr('Description')
+        ? trIn('picture-description', 'Description')
         : tr('Description of picture {number}', {'number': number});
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,

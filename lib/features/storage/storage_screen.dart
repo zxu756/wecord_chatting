@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -195,6 +196,8 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
     bool hasDisk,
   ) {
     final c = context.tokens.colors;
+    // At large text the size would squeeze the words: it joins them instead.
+    final inline = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final categories = [
       for (final category in StorageCategory.values)
         if (_shown(category, report, hasDisk)) category,
@@ -220,8 +223,10 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
               icon: _categoryIcon(category),
               tone: _categoryTone(category),
               title: _categoryTitle(category),
-              subtitle: _categorySubtitle(category),
-              value: formatFileSize(report.of(category)),
+              subtitle: inline
+                  ? '${formatFileSize(report.of(category))} · ${_categorySubtitle(category)}'
+                  : _categorySubtitle(category),
+              value: inline ? null : formatFileSize(report.of(category)),
               onTap: category.clearable && report.of(category) > 0 && !_busy
                   ? () => unawaited(_clearCategory(category))
                   : null,
@@ -247,16 +252,20 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
           header: tr('By chat'),
           children: [
             for (final usage in report.conversations.take(storageChatLimit))
-              _chatRow(usage, titles[usage.conversationId]),
+              _chatRow(usage, titles[usage.conversationId], inline: inline),
             if (report.unassignedFileBytes > 0)
               SettingsRow(
                 key: const ValueKey('storage-unassigned'),
                 icon: Icons.insert_drive_file_outlined,
                 title: tr('Files not tied to a chat'),
-                subtitle: tr(
-                  'Kept before WeCord took note of where they came from',
-                ),
-                value: formatFileSize(report.unassignedFileBytes),
+                subtitle: inline
+                    ? '${formatFileSize(report.unassignedFileBytes)} · ${tr('Kept before WeCord took note of where they came from')}'
+                    : tr(
+                        'Kept before WeCord took note of where they came from',
+                      ),
+                value: inline
+                    ? null
+                    : formatFileSize(report.unassignedFileBytes),
               ),
           ],
         ),
@@ -265,7 +274,11 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
     ];
   }
 
-  Widget _chatRow(ConversationStorage usage, ConversationSummary? chat) {
+  Widget _chatRow(
+    ConversationStorage usage,
+    ConversationSummary? chat, {
+    required bool inline,
+  }) {
     final title = chat?.title?.trim();
     final name = title == null || title.isEmpty ? tr('A chat') : title;
     final direct = chat?.type == ConversationType.direct;
@@ -279,8 +292,8 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
       key: ValueKey('storage-chat-${usage.conversationId}'),
       icon: direct ? Icons.person_outline_rounded : Icons.forum_outlined,
       title: name,
-      subtitle: parts.join(' · '),
-      value: formatFileSize(usage.total),
+      subtitle: [if (inline) formatFileSize(usage.total), ...parts].join(' · '),
+      value: inline ? null : formatFileSize(usage.total),
       onTap: _busy ? null : () => unawaited(_clearConversation(usage, name)),
     );
   }
@@ -317,7 +330,7 @@ String _categoryTitle(StorageCategory category) => switch (category) {
   StorageCategory.messages => tr('Cached messages'),
   StorageCategory.downloads => tr('Downloaded files'),
   StorageCategory.thumbnails => tr('Previews'),
-  StorageCategory.texts => tr('Recognized text and transcripts'),
+  StorageCategory.texts => tr('Recognized text and captions'),
   StorageCategory.wallpapers => tr('Wallpaper photos'),
   StorageCategory.unsent => tr('Waiting to send'),
 };
@@ -331,7 +344,7 @@ String _categorySubtitle(StorageCategory category) => switch (category) {
   ),
   StorageCategory.thumbnails => tr('Small pictures of PDFs and videos'),
   StorageCategory.texts => tr(
-    'Text read from pictures and voice messages, kept only here',
+    'Text read from pictures, voice messages and videos, kept only here',
   ),
   StorageCategory.wallpapers => tr('Photos you chose as chat wallpaper'),
   StorageCategory.unsent => tr(
@@ -343,7 +356,7 @@ String _categoryClearTitle(StorageCategory category) => switch (category) {
   StorageCategory.messages => tr('Clear cached messages?'),
   StorageCategory.downloads => tr('Clear downloaded files?'),
   StorageCategory.thumbnails => tr('Clear previews?'),
-  StorageCategory.texts => tr('Clear recognized text and transcripts?'),
+  StorageCategory.texts => tr('Clear recognized text and captions?'),
   StorageCategory.wallpapers => tr('Clear wallpaper photos?'),
   StorageCategory.unsent => tr('Clear all cached data?'),
 };
@@ -359,7 +372,7 @@ String _categoryClearBody(StorageCategory category) => switch (category) {
     'Previews are drawn again the next time you see the file, which uses data.',
   ),
   StorageCategory.texts => tr(
-    'Text read from pictures and voice messages is made again the next time you ask for it.',
+    'Text read from pictures, voice messages and videos is made again the next time you ask for it.',
   ),
   StorageCategory.wallpapers => tr(
     'Wallpaper photos are downloaded again the next time a chat shows them, which uses data.',
@@ -428,12 +441,18 @@ class _Summary extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: SizedBox(
+                      width: double.infinity,
                       height: 10,
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           for (final category in parts)
                             Expanded(
-                              flex: report.of(category).clamp(1, 1 << 30),
+                              // Per mille, at least a sliver.
+                              flex: math.max(
+                                1,
+                                (report.of(category) * 1000 / total).round(),
+                              ),
                               child: ColoredBox(color: colorOf(category)),
                             ),
                         ],
@@ -508,7 +527,7 @@ class _AutoCleanCard extends ConsumerWidget {
                   WeCordSegment(
                     key: const ValueKey('auto-clean-off'),
                     value: AutoCleanPeriod.off,
-                    label: tr('Never'),
+                    label: tr('Off'),
                   ),
                   for (final option in AutoCleanPeriod.values)
                     if (option.days != null)

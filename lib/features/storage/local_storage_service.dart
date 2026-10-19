@@ -1,3 +1,4 @@
+import 'package:wecord/features/accessibility/video_captions/video_captions_service.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/image_text/image_text_cache.dart';
 import 'package:wecord/features/storage/disk_cache.dart';
@@ -97,9 +98,11 @@ class LocalStorageService {
     required this.transcripts,
     required this.imageTexts,
     required this.wallpapers,
+    VideoCaptionCache? videoCaptions,
     DateTime Function()? clock,
     Future<BrowserEstimate?> Function()? browserEstimate,
-  }) : _clock = clock ?? DateTime.now,
+  }) : videoCaptions = videoCaptions ?? InMemoryVideoCaptionCache(),
+       _clock = clock ?? DateTime.now,
        _browserEstimate = browserEstimate ?? browserStorageEstimate;
 
   /// The signed-in user's id, or null when nobody is.
@@ -109,6 +112,9 @@ class LocalStorageService {
   final TranscriptCache transcripts;
   final ImageTextCache imageTexts;
   final WallpaperPhotoStore wallpapers;
+
+  /// Captions made for videos, which count with the texts.
+  final VideoCaptionCache videoCaptions;
   final DateTime Function() _clock;
   final Future<BrowserEstimate?> Function() _browserEstimate;
 
@@ -130,9 +136,7 @@ class LocalStorageService {
     final entries = await _safely(disk.list, const <DiskEntry>[]);
     final bytes = <StorageCategory, int>{
       StorageCategory.messages: sizes.clearable,
-      StorageCategory.texts:
-          await _safely<int>(transcripts.totalBytes, 0) +
-          await _safely<int>(imageTexts.totalBytes, 0),
+      StorageCategory.texts: await _textBytes(),
       StorageCategory.wallpapers: await _safely<int>(wallpapers.totalBytes, 0),
     };
     final fileBytes = <String, int>{};
@@ -194,11 +198,10 @@ class LocalStorageService {
       case StorageCategory.thumbnails:
         return _removeDisk(DiskKind.thumbnail);
       case StorageCategory.texts:
-        final bytes =
-            await _safely<int>(transcripts.totalBytes, 0) +
-            await _safely<int>(imageTexts.totalBytes, 0);
+        final bytes = await _textBytes();
         await _safely(transcripts.clear, null);
         await _safely(imageTexts.clear, null);
+        await _safely(videoCaptions.clear, null);
         return bytes;
       case StorageCategory.wallpapers:
         final bytes = await _safely<int>(wallpapers.totalBytes, 0);
@@ -208,6 +211,11 @@ class LocalStorageService {
         return 0;
     }
   }
+
+  Future<int> _textBytes() async =>
+      await _safely<int>(transcripts.totalBytes, 0) +
+      await _safely<int>(imageTexts.totalBytes, 0) +
+      await _safely<int>(videoCaptions.totalBytes, 0);
 
   Future<int> _removeDisk(
     DiskKind kind, {
@@ -274,6 +282,7 @@ class LocalStorageService {
     ]);
     freed += await _safely(() => transcripts.removeOlderThan(cutoff), 0);
     freed += await _safely(() => imageTexts.removeOlderThan(cutoff), 0);
+    freed += await _safely(() => videoCaptions.removeOlderThan(cutoff), 0);
     return freed;
   }
 
@@ -284,6 +293,7 @@ class LocalStorageService {
     await _forgetTexts(row);
     final key = objectKeyOfRow(row);
     if (key != null) {
+      await _safely(() => videoCaptions.remove(key), null);
       await _safely(() => disk.removeObject(key), null);
     }
   }

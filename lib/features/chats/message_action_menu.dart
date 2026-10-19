@@ -343,6 +343,19 @@ class _MessageMenuCard extends StatelessWidget {
       for (final action in actions)
         if (action.slot == MessageActionSlot.list) action,
     ];
+    // What the screen leaves for the rows: its height less the safe areas,
+    // the reactions, the tiles, the card's padding and a sliver of the
+    // message; at least three rows.
+    final screen = MediaQuery.of(context);
+    final rowsMaxHeight =
+        (screen.size.height -
+                screen.padding.vertical -
+                70 -
+                20 -
+                (tiles.isEmpty ? 0 : 80) -
+                20 -
+                80)
+            .clamp(138.0, double.infinity);
     return SizedBox(
       width: 282,
       child: WeCordGlass(
@@ -380,19 +393,26 @@ class _MessageMenuCard extends StatelessWidget {
                     color: inner,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final (index, action) in rows.indexed)
-                          GlassMenuRow(
-                            height: 46,
-                            entry: action.toEntry(),
-                            autofocus: tiles.isEmpty && index == 0,
-                          ),
-                      ],
+                  // A message with many actions on a short screen: the rows
+                  // scroll instead of running off the bottom.
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: rowsMaxHeight),
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final (index, action) in rows.indexed)
+                              GlassMenuRow(
+                                height: 46,
+                                entry: action.toEntry(),
+                                autofocus: tiles.isEmpty && index == 0,
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

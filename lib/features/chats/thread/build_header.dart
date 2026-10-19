@@ -215,11 +215,17 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
         key: ValueKey('chat-connectivity-banner'),
         padding: EdgeInsets.only(top: 6, bottom: 2),
       ),
+      UrgentBanner(
+        conversationId: widget.conversationId,
+        desktop: desktop,
+        onJump: (id) => unawaited(_scrollToMessage(id)),
+      ),
       if (canCall)
         DirectCallBar(conversationId: widget.conversationId, title: title),
       if (conversationType == ConversationType.group &&
           conversationSummary?.announcement.trim().isNotEmpty == true)
         _AnnouncementStrip(
+          conversationId: widget.conversationId,
           announcement: conversationSummary!.announcement.trim(),
         ),
       if (pinnedNote != null)

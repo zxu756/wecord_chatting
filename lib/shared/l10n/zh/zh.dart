@@ -57,6 +57,7 @@ import 'package:wecord/shared/l10n/zh/zh_polish.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 import 'package:wecord/shared/l10n/zh/zh_pwa.dart';
 import 'package:wecord/shared/l10n/zh/zh_read_status.dart';
+import 'package:wecord/shared/l10n/zh/zh_urgent_recurring.dart';
 import 'package:wecord/shared/l10n/zh/zh_qr_pat.dart';
 import 'package:wecord/shared/l10n/zh/zh_quiet_hours.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
@@ -143,6 +144,7 @@ const zhAreas = <Map<String, String>>[
   zhJoinRequests,
   zhCircleOnboarding,
   zhReadStatus,
+  zhUrgentRecurring,
   zhAutoTranslate,
   zhStickers,
   zhInsights,

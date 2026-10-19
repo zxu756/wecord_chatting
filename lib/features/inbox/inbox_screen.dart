@@ -36,6 +36,9 @@ import 'package:wecord/features/moments/moment_notification_card.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/privacy/security_alerts.dart';
+import 'package:wecord/features/urgent/urgent_inbox.dart';
+import 'package:wecord/features/urgent/urgent_models.dart';
+import 'package:wecord/features/urgent/urgent_repository.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -86,6 +89,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
   final official = ref.watch(announcementsUnreadProvider);
   final digests = ref.watch(aiDigestsUnreadProvider);
+  // Urgent messages and announcements waiting for a confirmation (A7).
+  final toConfirm = ref.watch(pendingConfirmationCountProvider);
   return unread +
       requests +
       reminders +
@@ -97,7 +102,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       joinAnswers +
       readReminders +
       official +
-      digests;
+      digests +
+      toConfirm;
 });
 
 /// Which notifications the inbox shows.
@@ -119,6 +125,9 @@ enum InboxFilter {
 
   /// The daily digest of the chats the person follows.
   digest,
+
+  /// Urgent messages and group announcements waiting for a confirmation.
+  confirm,
 }
 
 /// Mentions of and replies to the current user and reminders that came
@@ -149,6 +158,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(announcementsProvider)
       ..invalidate(aiDigestsProvider)
       ..invalidate(birthdaysTodayProvider)
+      ..invalidate(pendingUrgentsProvider(null))
+      ..invalidate(pendingAnnouncementAcksProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -275,7 +286,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.security ||
       InboxFilter.circles ||
       InboxFilter.official ||
-      InboxFilter.digest => const <InboxItem>[],
+      InboxFilter.digest ||
+      InboxFilter.confirm => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
@@ -287,6 +299,19 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         ? ref.watch(aiDigestsProvider).value ?? const <AiDigest>[]
         : const <AiDigest>[];
     final unreadDigests = ref.watch(aiDigestsUnreadProvider);
+    // Urgent messages and announcements to confirm: on top, under All and
+    // their own chip.
+    final showConfirm =
+        _filter == InboxFilter.all || _filter == InboxFilter.confirm;
+    final pendingUrgents = showConfirm
+        ? ref.watch(pendingUrgentsProvider(null)).value ??
+              const <PendingUrgent>[]
+        : const <PendingUrgent>[];
+    final pendingAnnouncements = showConfirm
+        ? ref.watch(pendingAnnouncementAcksProvider).value ??
+              const <PendingAnnouncementAck>[]
+        : const <PendingAnnouncementAck>[];
+    final toConfirm = ref.watch(pendingConfirmationCountProvider);
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -350,6 +375,36 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           if (showOfficial)
             for (final notice in announcements)
               AnnouncementCard(announcement: notice),
+          for (final urgent in pendingUrgents)
+            UrgentInboxCard(
+              urgent: urgent,
+              place: conversationPlaceLabel(
+                conversations[urgent.conversationId],
+                circles,
+              ),
+              onOpen: () => openMessage(
+                context,
+                ref,
+                conversationId: urgent.conversationId,
+                messageId: urgent.messageId,
+                conversation: conversations[urgent.conversationId],
+              ),
+            ),
+          for (final pending in pendingAnnouncements)
+            AnnouncementAckCard(
+              pending: pending,
+              onOpen: () {
+                final conversation = conversations[pending.conversationId];
+                if (conversation != null) {
+                  openConversation(context, conversation);
+                } else {
+                  openPage(
+                    context,
+                    '${ChatsScreen.path}/${pending.conversationId}',
+                  );
+                }
+              },
+            ),
           if (showSecurity)
             for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
           if (showJoinRequests)
@@ -588,6 +643,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         unreadOfficial,
                       ),
                       chip(InboxFilter.digest, tr('Digest'), unreadDigests),
+                      const SizedBox(width: 6),
+                      chip(InboxFilter.confirm, tr('To confirm'), toConfirm),
                     ],
                   ),
                 ),
@@ -1066,6 +1123,10 @@ class _EmptyInbox extends StatelessWidget {
                   : filter == InboxFilter.digest
                   ? tr(
                       'Your daily digest shows up here. Set it up in Settings, under AI.',
+                    )
+                  : filter == InboxFilter.confirm
+                  ? tr(
+                      'Urgent messages and announcements that ask you to confirm show up here.',
                     )
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',

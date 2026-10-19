@@ -4,8 +4,12 @@ part of '../chat_thread_screen.dart';
 
 /// A group's announcement, as a soft card under the header.
 class _AnnouncementStrip extends StatelessWidget {
-  const _AnnouncementStrip({required this.announcement});
+  const _AnnouncementStrip({
+    required this.conversationId,
+    required this.announcement,
+  });
 
+  final String conversationId;
   final String announcement;
 
   @override
@@ -27,11 +31,19 @@ class _AnnouncementStrip extends StatelessWidget {
           Icon(Icons.campaign_outlined, size: 18, color: c.accentText),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              announcement,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13.5, height: 1.4, color: c.ink),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  announcement,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13.5, height: 1.4, color: c.ink),
+                ),
+                // "Confirmed 12/30" and the Confirm button, when the owner
+                // asked for confirmations (A7).
+                AnnouncementAckBar(conversationId: conversationId),
+              ],
             ),
           ),
         ],

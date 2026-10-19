@@ -8,6 +8,8 @@ import 'package:wecord/features/circles/circle_ai_guard_repository.dart'
 import 'package:wecord/features/circles/circle_audit_log_screen.dart'
     show formatAuditTime;
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/join_requests/join_requests_repository.dart'
+    show joinRequestCountProvider;
 import 'package:wecord/features/circles/mod_tools/mod_tools_models.dart';
 import 'package:wecord/features/circles/mod_tools/mod_tools_repository.dart';
 import 'package:wecord/features/circles/mod_tools/raid_protection.dart';
@@ -16,7 +18,7 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// The Review page body with the moderator tools' own things above [child]:
 /// the raid banner and the ban appeals, in a panel that scrolls on its own
-/// (a quarter of the screen at most), so the join requests and the held
+/// (a little over a quarter of the screen at most), so the join requests and the held
 /// messages below keep their room.
 class ModToolsReviewHost extends ConsumerWidget {
   const ModToolsReviewHost({
@@ -39,12 +41,16 @@ class ModToolsReviewHost extends ConsumerWidget {
     if (!showBanner && appeals.isEmpty) {
       return child;
     }
+    // Join requests take up to 55% below; without any, there is more room.
+    final waiting = ref.watch(joinRequestCountProvider(circleId)).value ?? 0;
     final height = MediaQuery.sizeOf(context).height;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: height * 0.25),
+          constraints: BoxConstraints(
+            maxHeight: height * (waiting == 0 ? 0.5 : 0.28),
+          ),
           child: SingleChildScrollView(
             key: const ValueKey('mod-tools-panel'),
             child: Column(
@@ -189,6 +195,9 @@ class _BanAppealCardState extends ConsumerState<BanAppealCard> {
           .read(modToolsRepositoryProvider)
           .decideAppeal(appeal.id, approve: approve, note: note);
       _refresh();
+      if (mounted) {
+        setState(() => _busy = null);
+      }
       messenger?.showSnackBar(
         SnackBar(
           content: Text(

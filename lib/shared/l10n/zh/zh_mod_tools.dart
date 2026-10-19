@@ -163,14 +163,14 @@ const zhModTools = <String, String>{
   '{count} people': '{count} 人',
   'Stays locked for': '锁门时长',
   'Raid protection saved.': '突袭防护设置已保存。',
-  'Only members who can manage the circle change these.': '只有能管理圈子的成员才能修改这些设置。',
+  'Only members who can manage the circle can change these.':
+      '只有能管理圈子的成员才能修改这些设置。',
   'Raid protection locked this circle': '突袭防护已锁定这个圈子',
   'Joining is locked down': '入圈已锁门',
   'Invites are paused': '邀请已暂停',
   '{count} people joined or asked to join within 10 minutes.':
       '10 分钟内有 {count} 人加入或申请加入。',
-  'Until {time}. Invites are paused and new people need approval; nobody was removed.':
-      '到 {time} 前，邀请暂停，新人需要审核通过；没有人被移除。',
+  'Locked until {time}. Nobody was removed.': '锁门至 {time}，没有人被移除。',
   'Until {time}. Invite links and adding friends are off.':
       '到 {time} 前，邀请链接和添加好友都已关闭。',
   '{count} people joined or asked to join within 10 minutes, {fresh} with a new account.':

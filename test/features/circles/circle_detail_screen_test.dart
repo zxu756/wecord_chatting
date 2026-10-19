@@ -1077,6 +1077,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Ban Bo'), findsOneWidget);
       await tester.enterText(find.byKey(const ValueKey('ban-reason')), 'spam');
+      // The ban dialog also asks how long, so it scrolls.
+      await tester.ensureVisible(find.byKey(const ValueKey('ban-confirm')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('ban-confirm')));
       await tester.pumpAndSettle();
       expect(repository.bannedUserIds, ['user-4']);

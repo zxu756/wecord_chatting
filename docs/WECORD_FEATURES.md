@@ -167,12 +167,22 @@
 
 - **创建圈子**：空白创建或从模板创建（模板码，可同步更新）；圈子名、头像、描述、标签（如「像素艺术」）、语言、分类。
 - **频道与分类**：文字频道、论坛频道（帖子 + 标签 + 帖子内 @提及）、公告频道（可被其他圈子关注，通过 webhook 转发）、语音频道、舞台频道；频道分类（可折叠、记住折叠状态）；频道主题、私有频道、只读频道。
-- **话题（Threads）**：从消息开话题，话题列表，管理员可归档/锁定。
+- **话题（Threads）**：从消息开话题，话题列表；话题创建者或圈主/管理员可归档；有「管理消息」权限的版主可**锁定**话题或论坛帖子（话题页菜单「锁定话题」）：锁定后所有人还能读和加表情，但只有版主能发言，输入框换成「这个话题已锁定，只有版主可以回复」；锁定和解锁写审计日志；发送由 `messages` 上的触发器拦下，所有发送路径（含定时发送、转发）都挡住。
 - **角色与权限**：
   - 角色（颜色、排序、可单独显示、可被 @提及），按角色分配权限；
   - 权限项：查看频道、发送消息、管理消息、管理频道、管理角色、管理昵称、管理表情、管理活动、管理 webhook、创建邀请、踢出成员、@everyone、连接语音等；
   - 频道权限覆盖（按角色或成员允许/拒绝/继承）；只能管理比自己低的角色。
-- **成员管理**：邀请（链接 + 二维码）、踢出、封禁（含期限）、禁言/超时、圈子内昵称、成员列表（按角色分组，在线/离线）、退出圈子。
+- **成员管理**：邀请（链接 + 二维码）、踢出、封禁（**可限期**：永久 / 1 小时 / 1 天 / 7 天 / 30 天，到期自动解封）、禁言/超时、圈子内昵称、成员列表（按角色分组，在线/离线）、退出圈子。
+- **版主工具 2.0**（C5；圈子设置或圈子菜单 →「成员」）：
+  - **限期封禁**：`circle_bans.expires_at`；独立的 pg_cron 任务 `wecord-circle-safety-sweep`（每分钟，不改 `run_later_dispatch()`）解封并写 `member_unban_auto` 审计；入圈守卫触发器遇到已到期的封禁也会当场解除。封禁弹窗选时长；封禁列表显示「永久 / 某时结束」和「有申诉待处理」。
+  - **版主备注与警告**（`circle_mod_notes`，需要「禁言成员」权限，只能处理排位比自己低的人）：成员行菜单「版主备注」，或成员页点一行；备注和警告只有版主看得到，被警告的人不会收到通知；审计日志只写「添加了备注 / 警告了某人」，不写内容。
+  - **成员筛选与批量处理**：按加入时间、账号年龄、圈内发言数、角色、是否被标记（有警告、有未处理举报、或消息被 AI 守护扣留/标记）和名字筛选；每行告诉你对这个人能不能禁言/踢出/封禁（权限和排位）；点「选择」后一次最多 50 人批量禁言、踢出、封禁。批量复用单个操作的函数，排位更高的人会被单独拒绝而不影响其他人，并多写一条 `member_batch_action` 审计。
+  - **封禁申诉**（`circle_ban_appeals`）：被封的人在通知页「圈子」看到卡片和「申诉这次封禁」（每次封禁只能申诉一次，再封一次可以再申诉）；有「封禁成员」权限的版主在「审核」页的「封禁申诉」（红色计数）批准（解封）或驳回（可附理由）；不能推翻排位比自己高的人做的封禁；结果推送给申诉人。封禁理由不会给被封的人看。
+- **突袭防护**（C6；圈子设置 →「突袭防护」、圈子菜单 →「安全动作」；需要「踢出成员」或「管理圈子」）：
+  - **安全动作**：暂停邀请 1 / 24 小时（邀请链接、名片邀请、成员加好友全部停用，不影响探索页加入）；入圈锁门 1 / 24 小时 =  暂停邀请 + 开放圈子临时改成「申请加入」（C1），**不踢任何人**。
+  - **自动触发**：10 分钟内加入或申请加入的人数达到阈值（默认 20，圈子可设 3 到 500，也可关闭），或其中的新账号（不到一天）达到阈值的一半（至少 5 个）时自动锁门（锁 1 或 24 小时）。事务提交时才检查，所以批量加好友不会被半路拒绝；不到一小时的新圈子不触发。
+  - **提醒与解除**：往 AutoMod 告警频道发一张「突袭防护」卡片（圈子有告警频道时），推送给圈主和有「踢出成员 / 管理圈子」权限的角色成员，审核页顶部横幅一键「解除锁门」。到期自动解除，并把加入方式恢复成锁门前的样子；锁门期间如果有人手动改了加入方式，以他的选择为准。全部写审计（`raid_lockdown`、`raid_release`、`invites_pause`、`invites_resume`、`raid_settings_update`）。
+  - **和别的功能的协调**：锁门期间进来的人（批准的申请也算）在锁门结束前不能发链接；圈子开了 AI 守护时，他们的消息也交给 AI 守护检查（不管守护自己的「谁算新人」规则）；规则确认（C2 引导）、申请审核（C1）、封禁照旧；圈子被 K1 下架或封停时，所有版主操作被拒绝。
 - **慢速模式**：频道级发送间隔。
 - **AutoMod**：关键词/正则规则、垃圾信息、提及轰炸限制（每条消息唯一提及数、时间窗口内消息数），动作：拦截消息、发送警报到指定频道、超时成员；可豁免角色和频道；被拦截时发送者看到提示卡片。
 - **新成员 AI 守护**（见第 12 节）。
@@ -190,7 +200,7 @@
 - **发现**（`/discover`）：公开圈子列表（最热、最活跃、按分类和标签筛选），圈子发现设置（是否公开列出），举报公开圈子。
 - **Webhook**：频道 webhook（外部服务往频道发消息），公告频道转发 webhook。
 - **机器人**：创建机器人账号（独立身份，不是好友），机器人 token（重置/吊销），斜杠命令注册，Bot API（见第 18 节）。
-- **圈子菜单分组**：常用（邀请、通知设置、表情、昵称、圈子头像）/ 管理（建频道、建分类、圈子设置、引导）/ 审核与安全（角色、封禁、AutoMod、AI 守护、审核队列、审计日志）；没权限的分组整组隐藏。
+- **圈子菜单分组**：常用（邀请、通知设置、表情、昵称、圈子头像）/ 管理（建频道、建分类、圈子设置、引导）/ 审核与安全（角色、封禁、AutoMod、AI 守护、审核队列、审计日志、成员、安全动作）；没权限的分组整组隐藏。
 
 ## 11. 语音、视频与通话
 
@@ -326,7 +336,7 @@
 - **版本号**：`pubspec.yaml` 的 `version`（不含 `+` 后的构建号）在构建时作为 `APP_VERSION` 传入（`tool/deploy_web.sh` 已自动传），用于功能开关的最低版本和「本次更新」弹窗。发新版时改 `pubspec.yaml` 的版本，并在 `lib/features/announcements/whats_new_content.dart` 加对应条目。
 - **数据库**：`supabase db push --linked --yes`（编号早于线上最新的迁移需加 `--include-all`）。
 - **Edge Functions**：`supabase functions deploy <name>`。
-- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，AI 守护清扫（`wecord-ai-guard-sweep`）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）等任务。
+- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，AI 守护清扫（`wecord-ai-guard-sweep`）、圈子安全清扫（`wecord-circle-safety-sweep`，每分钟：限期封禁到期解封、突袭锁门到期解除）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）等任务。
 - **已设置的密钥（只列名字）**：`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`DISPATCH_SECRET`、`GIPHY_API_KEY`、`GOTENBERG_URL/USERNAME/PASSWORD`、`LIVEKIT_URL/API_KEY/API_SECRET`、`VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT`。
 - **工具脚本**（`tool/`）：`deploy_web.sh`、`setup_later_dispatch.sh`、`setup_web_push.sh`、`errors_report.sh`、`generate_web_icons.py`、各功能的截图测试 `tool/screenshots/*`、端到端脚本 `tool/e2e/`。
 - **文档**（`docs/`）：`ai-setup.md`、`bot-api.md`、`chat-events.md`、`data-export.md`、`error-reports.md`、`file-preview-converter.md`、`location.md`、`design/wecord-design-language.md`、`design/calls-more.md`。

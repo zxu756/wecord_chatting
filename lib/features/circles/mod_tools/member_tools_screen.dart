@@ -761,34 +761,28 @@ class _BatchBar extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
-                    child: WeCordButton(
-                      key: const ValueKey('member-tools-timeout'),
-                      label: tr('Time out'),
-                      variant: WeCordButtonVariant.secondary,
-                      loading: busy,
-                      onPressed: busy ? null : onTimeout,
-                    ),
+                  WeCordButton(
+                    key: const ValueKey('member-tools-timeout'),
+                    label: tr('Time out'),
+                    variant: WeCordButtonVariant.secondary,
+                    loading: busy,
+                    onPressed: busy ? null : onTimeout,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: WeCordButton(
-                      key: const ValueKey('member-tools-kick'),
-                      label: tr('Remove'),
-                      variant: WeCordButtonVariant.secondary,
-                      onPressed: busy ? null : onKick,
-                    ),
+                  WeCordButton(
+                    key: const ValueKey('member-tools-kick'),
+                    label: tr('Remove'),
+                    variant: WeCordButtonVariant.secondary,
+                    onPressed: busy ? null : onKick,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: WeCordButton(
-                      key: const ValueKey('member-tools-ban'),
-                      label: tr('Ban'),
-                      variant: WeCordButtonVariant.danger,
-                      onPressed: busy ? null : onBan,
-                    ),
+                  WeCordButton(
+                    key: const ValueKey('member-tools-ban'),
+                    label: tr('Ban'),
+                    variant: WeCordButtonVariant.danger,
+                    onPressed: busy ? null : onBan,
                   ),
                 ],
               ),
@@ -922,7 +916,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   label: tr('Any time'),
                   selected:
                       f.joinedWithinDays == null && f.joinedBeforeDays == null,
-                  onTap: () => _filter = f.copyWith(
+                  onTap: () => _filter = _filter.copyWith(
                     joinedWithinDays: null,
                     joinedBeforeDays: null,
                   ),
@@ -931,7 +925,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-joined-7'),
                   label: tr('In the last 7 days'),
                   selected: f.joinedWithinDays == 7,
-                  onTap: () => _filter = f.copyWith(
+                  onTap: () => _filter = _filter.copyWith(
                     joinedWithinDays: 7,
                     joinedBeforeDays: null,
                   ),
@@ -940,7 +934,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-joined-30'),
                   label: tr('In the last 30 days'),
                   selected: f.joinedWithinDays == 30,
-                  onTap: () => _filter = f.copyWith(
+                  onTap: () => _filter = _filter.copyWith(
                     joinedWithinDays: 30,
                     joinedBeforeDays: null,
                   ),
@@ -949,7 +943,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-joined-old'),
                   label: tr('More than 30 days ago'),
                   selected: f.joinedBeforeDays == 30,
-                  onTap: () => _filter = f.copyWith(
+                  onTap: () => _filter = _filter.copyWith(
                     joinedWithinDays: null,
                     joinedBeforeDays: 30,
                   ),
@@ -961,19 +955,21 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-account-any'),
                   label: tr('Any age'),
                   selected: f.accountWithinDays == null,
-                  onTap: () => _filter = f.copyWith(accountWithinDays: null),
+                  onTap: () =>
+                      _filter = _filter.copyWith(accountWithinDays: null),
                 ),
                 _option(
                   key: const ValueKey('filter-account-7'),
                   label: tr('Under 7 days old'),
                   selected: f.accountWithinDays == 7,
-                  onTap: () => _filter = f.copyWith(accountWithinDays: 7),
+                  onTap: () => _filter = _filter.copyWith(accountWithinDays: 7),
                 ),
                 _option(
                   key: const ValueKey('filter-account-30'),
                   label: tr('Under 30 days old'),
                   selected: f.accountWithinDays == 30,
-                  onTap: () => _filter = f.copyWith(accountWithinDays: 30),
+                  onTap: () =>
+                      _filter = _filter.copyWith(accountWithinDays: 30),
                 ),
               ]),
               const SizedBox(height: 12),
@@ -982,7 +978,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-messages-any'),
                   label: tr('Any number'),
                   selected: f.minMessages == null && f.maxMessages == null,
-                  onTap: () => _filter = f.copyWith(
+                  onTap: () => _filter = _filter.copyWith(
                     minMessages: null,
                     maxMessages: null,
                   ),
@@ -991,22 +987,28 @@ class _FilterSheetState extends State<_FilterSheet> {
                   key: const ValueKey('filter-messages-none'),
                   label: tr('None'),
                   selected: f.maxMessages == 0,
-                  onTap: () =>
-                      _filter = f.copyWith(minMessages: null, maxMessages: 0),
+                  onTap: () => _filter = _filter.copyWith(
+                    minMessages: null,
+                    maxMessages: 0,
+                  ),
                 ),
                 _option(
                   key: const ValueKey('filter-messages-few'),
                   label: tr('Fewer than 5'),
                   selected: f.maxMessages == 4,
-                  onTap: () =>
-                      _filter = f.copyWith(minMessages: null, maxMessages: 4),
+                  onTap: () => _filter = _filter.copyWith(
+                    minMessages: null,
+                    maxMessages: 4,
+                  ),
                 ),
                 _option(
                   key: const ValueKey('filter-messages-many'),
                   label: tr('5 or more'),
                   selected: f.minMessages == 5,
-                  onTap: () =>
-                      _filter = f.copyWith(minMessages: 5, maxMessages: null),
+                  onTap: () => _filter = _filter.copyWith(
+                    minMessages: 5,
+                    maxMessages: null,
+                  ),
                 ),
               ]),
               if (widget.roles.isNotEmpty) ...[
@@ -1016,14 +1018,14 @@ class _FilterSheetState extends State<_FilterSheet> {
                     key: const ValueKey('filter-role-any'),
                     label: tr('Any role'),
                     selected: f.roleId == null,
-                    onTap: () => _filter = f.copyWith(roleId: null),
+                    onTap: () => _filter = _filter.copyWith(roleId: null),
                   ),
                   for (final role in widget.roles)
                     _option(
                       key: ValueKey('filter-role-${role.id}'),
                       label: role.name,
                       selected: f.roleId == role.id,
-                      onTap: () => _filter = f.copyWith(roleId: role.id),
+                      onTap: () => _filter = _filter.copyWith(roleId: role.id),
                     ),
                 ]),
               ],
@@ -1039,8 +1041,9 @@ class _FilterSheetState extends State<_FilterSheet> {
                       'held or flagged.',
                     ),
                     value: f.onlyFlagged,
-                    onChanged: (on) =>
-                        setState(() => _filter = f.copyWith(onlyFlagged: on)),
+                    onChanged: (on) => setState(
+                      () => _filter = _filter.copyWith(onlyFlagged: on),
+                    ),
                   ),
                 ],
               ),

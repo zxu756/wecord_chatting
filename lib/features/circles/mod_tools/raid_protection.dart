@@ -82,11 +82,9 @@ class RaidStatusBanner extends ConsumerWidget {
               'count': lockdown.joins,
             })
           : null;
-      final until = tr(
-        'Until {time}. Invites are paused and new people need approval; '
-        'nobody was removed.',
-        {'time': raidTimeLabel(lockdown.until, now: current)},
-      );
+      final until = tr('Locked until {time}. Nobody was removed.', {
+        'time': raidTimeLabel(lockdown.until, now: current),
+      });
       message = [?counts, until].join(' ');
     } else {
       title = tr('Invites are paused');
@@ -477,7 +475,7 @@ class _RaidBodyState extends ConsumerState<_RaidBody> {
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 12, 6, 0),
             child: Text(
-              tr('Only members who can manage the circle change these.'),
+              tr('Only members who can manage the circle can change these.'),
               style: TextStyle(fontSize: 13, color: c.muted),
             ),
           ),

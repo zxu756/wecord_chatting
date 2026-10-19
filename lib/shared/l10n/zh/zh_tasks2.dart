@@ -1,0 +1,66 @@
+// Chinese for Task lists 2.0 (D7): a list's own fields, subtasks, repeating
+// tasks and the calendar view.
+const zhTasks2 = <String, String>{
+  // The list's own fields.
+  'Custom fields': '自定义字段',
+  'Add fields to keep more about each task: a number, a choice, a link or a person.':
+      '添加字段，为每项任务记录更多内容：数字、单选、链接或人员。',
+  'Field name': '字段名称',
+  'Remove field': '删除字段',
+  'Add a field': '添加字段',
+  'Choice': '选项',
+  'Add a choice': '添加选项',
+  'Remove choice': '删除选项',
+  'Values that no longer fit a field, and the values of a removed field, are cleared.':
+      '不再符合字段类型的值，以及已删除字段的值，都会被清除。',
+  'Give every field and choice a name, and every single-choice field at least one choice.':
+      '请给每个字段和选项起名，每个单选字段至少要有一个选项。',
+  'Could not change the fields.': '无法修改字段。',
+  'Number': '数字',
+  'Single choice': '单选',
+  'task-field|Person': '人员',
+  'A number': '数字',
+  'Enter a number.': '请输入数字。',
+  'Enter a web address.': '请输入网址。',
+  'No choice': '不选',
+  'Nothing to choose from yet.': '还没有可选的内容。',
+  'Not set': '未设置',
+  'Open the link': '打开链接',
+  // Subtasks.
+  'Subtasks': '子任务',
+  '{done} of {total} done': '已完成 {done}/{total}',
+  'Opens the subtask': '打开子任务',
+  'Add a subtask': '添加子任务',
+  'Subtask of {title}': '「{title}」的子任务',
+  // Repeating tasks.
+  'Repeat': '重复',
+  'Does not repeat': '不重复',
+  'Every': '每',
+  'Every day': '每天',
+  'Every week': '每周',
+  'Every month': '每月',
+  'Every year': '每年',
+  'Every {count} days': '每 {count} 天',
+  'Every {count} weeks': '每 {count} 周',
+  'Every {count} months': '每 {count} 个月',
+  'Every {count} years': '每 {count} 年',
+  'repeat-unit|Day': '天',
+  'repeat-unit|Week': '周',
+  'repeat-unit|Month': '月',
+  'repeat-unit|Year': '年',
+  '{count} days': '{count} 天',
+  '{count} weeks': '{count} 周',
+  '{count} months': '{count} 个月',
+  '{count} years': '{count} 年',
+  'Less often': '减少',
+  'More often': '增加',
+  'When you finish it, the next one is made, due on the next date.':
+      '完成后会自动生成下一项，截止日期顺延到下一个日期。',
+  // The calendar view.
+  'View': '视图',
+  'Calendar view': '日历视图',
+  '{count} tasks due': '{count} 项任务到期',
+  'No tasks due': '这天没有到期的任务',
+  'Add a task for this day': '为这一天添加任务',
+  'No date ({count})': '未设日期（{count}）',
+};

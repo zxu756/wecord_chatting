@@ -39,6 +39,10 @@ abstract interface class ListsRepository {
 
   Future<void> deleteList(String listId);
 
+  /// Sets the list's own fields (up to 20). Values that no longer fit a
+  /// changed field are cleared on the server.
+  Future<TaskList> setListFields(String listId, List<TaskFieldDef> fields);
+
   /// Creates or changes an item; [fields] holds only what changes (see
   /// upsert_task_item).
   Future<TaskItem> upsertItem(String listId, Map<String, Object?> fields);
@@ -200,6 +204,21 @@ class SupabaseListsRepository implements ListsRepository {
       'delete_task_list',
       params: {'p_list_id': listId},
     );
+  }
+
+  @override
+  Future<TaskList> setListFields(
+    String listId,
+    List<TaskFieldDef> fields,
+  ) async {
+    final data = await _client.rpc<Object?>(
+      'set_task_list_fields',
+      params: {
+        'p_list_id': listId,
+        'p_field_defs': [for (final field in fields) field.toJson()],
+      },
+    );
+    return TaskList.fromJson(_object(data));
   }
 
   @override
@@ -429,6 +448,12 @@ class UninitializedListsRepository implements ListsRepository {
 
   @override
   Future<void> deleteList(String listId) async => _fail();
+
+  @override
+  Future<TaskList> setListFields(
+    String listId,
+    List<TaskFieldDef> fields,
+  ) async => _fail();
 
   @override
   Future<TaskItem> upsertItem(

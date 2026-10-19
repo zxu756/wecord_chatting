@@ -10,6 +10,8 @@ import 'package:wecord/features/chats/offline/outbox.dart' show newClientId;
 import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/lists/lists_repository.dart';
 import 'package:wecord/features/lists/task_board.dart';
+import 'package:wecord/features/lists/task_calendar_view.dart';
+import 'package:wecord/features/lists/task_fields_editor.dart';
 import 'package:wecord/features/lists/task_item_sheet.dart';
 import 'package:wecord/features/lists/task_list_controller.dart';
 import 'package:wecord/features/lists/task_patch_store.dart';
@@ -21,8 +23,12 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-/// One task list: its tasks grouped by status (list view) or as columns
-/// (board), with filters (all, mine, overdue, open), sorting, quick add, and
+/// How a list is shown on this device. A list opens in its own default view
+/// (list or board); the calendar is a way to look at it, not a setting.
+enum TaskViewMode { list, board, calendar }
+
+/// One task list: its tasks grouped by status (list view), as columns
+/// (board) or on a month calendar by due date, with filters (all, mine, overdue, open), sorting, quick add, and
 /// everything updating live as other people change it.
 class TaskListPage extends ConsumerStatefulWidget {
   const TaskListPage({
@@ -53,7 +59,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   StreamSubscription<TaskItem>? _items;
   StreamSubscription<void>? _structure;
   Timer? _refetch;
-  TaskListView _view = TaskListView.list;
+  TaskViewMode _view = TaskViewMode.list;
   var _loading = true;
   Object? _error;
   var _openedInitial = false;
@@ -97,7 +103,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
         return;
       }
       if (first) {
-        _view = snapshot.list.defaultView;
+        _view = snapshot.list.defaultView == TaskListView.board
+            ? TaskViewMode.board
+            : TaskViewMode.list;
       }
       TaskListDraft? draft;
       final userId = _controller.currentUserId;
@@ -175,12 +183,16 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     );
   }
 
-  void _addTask(String title, {String? statusId}) {
+  void _addTask(String title, {String? statusId, DateTime? day}) {
     final trimmed = title.trim();
     if (trimmed.isEmpty) {
       return;
     }
-    _controller.createItem(trimmed, statusId: statusId);
+    _controller.createItem(
+      trimmed,
+      statusId: statusId,
+      dueAt: day == null ? null : endOfDay(day),
+    );
     ref.invalidate(taskListsProvider(widget.conversationId));
   }
 
@@ -229,6 +241,26 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       await _load();
     } on Object {
       _toast(tr('Could not change the statuses.'));
+    }
+  }
+
+  Future<void> _editFields() async {
+    final list = _controller.list;
+    if (list == null) {
+      return;
+    }
+    final edited = await showTaskFieldsEditor(context, list.fieldDefs);
+    if (edited == null || !mounted || edited == list.fieldDefs) {
+      return;
+    }
+    try {
+      final updated = await ref
+          .read(listsRepositoryProvider)
+          .setListFields(list.id, edited);
+      _controller.updateList(updated);
+      await _load();
+    } on Object {
+      _toast(tr('Could not change the fields.'));
     }
   }
 
@@ -310,6 +342,12 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
               label: tr('Edit statuses'),
               onSelected: () => unawaited(_editStatuses()),
             ),
+          if (list.canEdit)
+            GlassMenuEntry(
+              icon: Icons.tune_rounded,
+              label: tr('Custom fields'),
+              onSelected: () => unawaited(_editFields()),
+            ),
           if (list.canManage)
             GlassMenuEntry(
               icon: Icons.delete_outline_rounded,
@@ -317,6 +355,36 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
               destructive: true,
               onSelected: () => unawaited(_delete()),
             ),
+        ],
+      ),
+    );
+  }
+
+  void _openViewMenu(BuildContext buttonContext) {
+    GlassMenuEntry entry(TaskViewMode mode, IconData icon, String label) {
+      return GlassMenuEntry(
+        icon: _view == mode ? Icons.check_rounded : icon,
+        label: label,
+        onSelected: () => setState(() => _view = mode),
+      );
+    }
+
+    unawaited(
+      showGlassMenu(
+        buttonContext,
+        anchor: globalRectOf(buttonContext),
+        entries: [
+          entry(TaskViewMode.list, Icons.view_list_rounded, tr('List view')),
+          entry(
+            TaskViewMode.board,
+            Icons.view_kanban_outlined,
+            tr('Board view'),
+          ),
+          entry(
+            TaskViewMode.calendar,
+            Icons.calendar_month_outlined,
+            tr('Calendar view'),
+          ),
         ],
       ),
     );
@@ -410,29 +478,36 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
               ),
             ),
           Expanded(
-            child: _view == TaskListView.board
-                ? TaskBoardView(
-                    controller: _controller,
-                    members: members,
-                    canEdit: canEdit,
-                    onOpen: (item) => unawaited(_openItem(item)),
-                    onAdd: (statusId, title) =>
-                        _addTask(title, statusId: statusId),
-                  )
-                : _GroupedListView(
-                    controller: _controller,
-                    members: members,
-                    collapsed: _collapsed,
-                    canEdit: canEdit,
-                    onToggleSection: (id) => setState(() {
-                      if (!_collapsed.remove(id)) {
-                        _collapsed.add(id);
-                      }
-                    }),
-                    onOpen: (item) => unawaited(_openItem(item)),
-                  ),
+            child: switch (_view) {
+              TaskViewMode.board => TaskBoardView(
+                controller: _controller,
+                members: members,
+                canEdit: canEdit,
+                onOpen: (item) => unawaited(_openItem(item)),
+                onAdd: (statusId, title) => _addTask(title, statusId: statusId),
+              ),
+              TaskViewMode.calendar => TaskCalendarView(
+                controller: _controller,
+                members: members,
+                canEdit: canEdit,
+                onOpen: (item) => unawaited(_openItem(item)),
+                onAddOnDay: (day, title) => _addTask(title, day: day),
+              ),
+              TaskViewMode.list => _GroupedListView(
+                controller: _controller,
+                members: members,
+                collapsed: _collapsed,
+                canEdit: canEdit,
+                onToggleSection: (id) => setState(() {
+                  if (!_collapsed.remove(id)) {
+                    _collapsed.add(id);
+                  }
+                }),
+                onOpen: (item) => unawaited(_openItem(item)),
+              ),
+            },
           ),
-          if (canEdit && _view == TaskListView.list)
+          if (canEdit && _view == TaskViewMode.list)
             _AddBar(
               controller: _addController,
               focusNode: _addFocus,
@@ -498,27 +573,21 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                     ),
                   ),
                   if (list != null) ...[
-                    WeCordIconButton(
-                      key: const ValueKey('view-list'),
-                      tooltip: tr('List view'),
-                      icon: Icons.view_list_rounded,
-                      iconSize: 21,
-                      size: size,
-                      variant: WeCordButtonVariant.ghost,
-                      selected: _view == TaskListView.list,
-                      onPressed: () =>
-                          setState(() => _view = TaskListView.list),
-                    ),
-                    WeCordIconButton(
-                      key: const ValueKey('view-board'),
-                      tooltip: tr('Board view'),
-                      icon: Icons.view_kanban_outlined,
-                      iconSize: 21,
-                      size: size,
-                      variant: WeCordButtonVariant.ghost,
-                      selected: _view == TaskListView.board,
-                      onPressed: () =>
-                          setState(() => _view = TaskListView.board),
+                    Builder(
+                      builder: (buttonContext) => WeCordIconButton(
+                        key: const ValueKey('view-menu'),
+                        tooltip: tr('View'),
+                        icon: switch (_view) {
+                          TaskViewMode.list => Icons.view_list_rounded,
+                          TaskViewMode.board => Icons.view_kanban_outlined,
+                          TaskViewMode.calendar =>
+                            Icons.calendar_month_outlined,
+                        },
+                        iconSize: 21,
+                        size: size,
+                        variant: WeCordButtonVariant.ghost,
+                        onPressed: () => _openViewMenu(buttonContext),
+                      ),
                     ),
                     Builder(
                       builder: (buttonContext) => WeCordIconButton(
@@ -619,6 +688,7 @@ class _GroupedListView extends StatelessWidget {
     final c = context.tokens.colors;
     final list = controller.list!;
     final total = controller.items.length;
+    final fields = list.fieldDefs;
     if (total == 0) {
       return Center(
         child: Padding(
@@ -653,9 +723,11 @@ class _GroupedListView extends StatelessWidget {
     }
     final sections = <Widget>[];
     for (final status in list.statuses) {
-      final items = controller.itemsIn(status.id);
+      final items = controller.rootsIn(status.id);
       final all = controller.items
-          .where((item) => item.status == status.id)
+          .where(
+            (item) => item.status == status.id && !controller.isNested(item),
+          )
           .length;
       if (items.isEmpty && controller.filter != TaskFilter.all) {
         continue;
@@ -712,16 +784,37 @@ class _GroupedListView extends StatelessWidget {
       );
       if (!isCollapsed) {
         for (final item in items) {
+          final progress = controller.subtaskProgress(item.id);
           sections.add(
             TaskRow(
               key: ValueKey('task-${item.id}'),
               item: item,
               members: members,
+              fields: fields,
+              subtasks: progress.total == 0 ? null : progress,
               canEdit: canEdit,
               onOpen: () => onOpen(item),
               onToggleDone: () => controller.setDone(item.id, !item.isDone),
             ),
           );
+          for (final subtask in controller.visibleSubtasks(item)) {
+            sections.add(
+              Padding(
+                key: ValueKey('subtask-row-${subtask.id}'),
+                padding: const EdgeInsets.only(left: 28),
+                child: TaskRow(
+                  key: ValueKey('task-${subtask.id}'),
+                  item: subtask,
+                  members: members,
+                  fields: fields,
+                  canEdit: canEdit,
+                  onOpen: () => onOpen(subtask),
+                  onToggleDone: () =>
+                      controller.setDone(subtask.id, !subtask.isDone),
+                ),
+              ),
+            );
+          }
         }
         if (items.isEmpty) {
           sections.add(

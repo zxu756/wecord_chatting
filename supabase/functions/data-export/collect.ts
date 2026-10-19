@@ -483,6 +483,21 @@ export async function collectExportData(
     null,
   );
 
+  // The fields, values, subtasks and repeat rules of my task lists
+  // (export_my_task_extras).
+  const taskExtras = await tryRead<Row | null>(
+    skipped,
+    "task list fields",
+    async () => {
+      const result = await admin.rpc("export_my_task_extras", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -553,6 +568,7 @@ export async function collectExportData(
     aiDigest,
     noteExtras,
     stories,
+    taskExtras,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

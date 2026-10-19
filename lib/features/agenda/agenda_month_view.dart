@@ -2,6 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/agenda/agenda_models.dart';
+import 'package:wecord/features/agenda/month_day_cell.dart';
 import 'package:wecord/features/agenda/agenda_navigation.dart';
 import 'package:wecord/features/agenda/agenda_repository.dart';
 import 'package:wecord/features/agenda/agenda_row.dart';
@@ -142,13 +143,17 @@ class _AgendaMonthViewState extends ConsumerState<AgendaMonthView> {
                     children: [
                       for (final day in week)
                         Expanded(
-                          child: _DayCell(
+                          child: MonthDayCell(
                             day: day,
                             inMonth: day.month == _month.month,
                             today: day == dateOnly(now),
                             selected: day == _selected,
-                            items: byDay[day] ?? const [],
-                            now: now,
+                            count: (byDay[day] ?? const []).length,
+                            overdue: (byDay[day] ?? const []).any(
+                              (item) => item.isOverdue(now),
+                            ),
+                            countLabel: (count) =>
+                                tr('{count} on the agenda', {'count': count}),
                             onPressed: () => setState(() => _selected = day),
                           ),
                         ),
@@ -233,127 +238,6 @@ class _AgendaMonthViewState extends ConsumerState<AgendaMonthView> {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _DayCell extends StatelessWidget {
-  const _DayCell({
-    required this.day,
-    required this.inMonth,
-    required this.today,
-    required this.selected,
-    required this.items,
-    required this.now,
-    required this.onPressed,
-  });
-
-  final DateTime day;
-  final bool inMonth;
-  final bool today;
-  final bool selected;
-  final List<AgendaItem> items;
-  final DateTime now;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.tokens.colors;
-    final localizations = MaterialLocalizations.of(context);
-    final overdue = items.any((item) => item.isOverdue(now));
-    final label = [
-      localizations.formatFullDate(day),
-      if (today) tr('Today'),
-      if (items.isNotEmpty)
-        tr('{count} on the agenda', {'count': items.length}),
-      if (overdue) tr('Overdue'),
-    ].join(', ');
-    final numberColor = selected
-        ? c.onInk
-        : inMonth
-        ? c.ink
-        : c.faint;
-    return WeCordPressable(
-      key: ValueKey('agenda-day-${day.year}-${day.month}-${day.day}'),
-      onPressed: onPressed,
-      selected: selected,
-      semanticLabel: label,
-      excludeSemantics: true,
-      pressedScale: 0.94,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(WeCordRadii.md),
-      ),
-      builder: (context, states) {
-        final hovered = states.contains(WidgetState.hovered);
-        return SizedBox(
-          height: 54,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: ShapeDecoration(
-                  color: selected
-                      ? c.ink
-                      : hovered
-                      ? c.raised
-                      : Colors.transparent,
-                  shape: CircleBorder(
-                    side: today && !selected
-                        ? BorderSide(color: c.accent, width: 2)
-                        : BorderSide.none,
-                  ),
-                ),
-                child: Text(
-                  '${day.day}',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: today || selected
-                        ? FontWeight.w800
-                        : FontWeight.w600,
-                    color: numberColor,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 3),
-              SizedBox(
-                height: 6,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (overdue)
-                      _Dot(color: c.badgeMention)
-                    else if (items.isNotEmpty)
-                      _Dot(color: inMonth ? c.accent : c.faint),
-                    if (items.length > 1)
-                      _Dot(color: inMonth ? c.accent : c.faint),
-                    if (items.length > 2)
-                      _Dot(color: inMonth ? c.accent : c.faint),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _Dot extends StatelessWidget {
-  const _Dot({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 6,
-      height: 6,
-      margin: const EdgeInsets.symmetric(horizontal: 1.5),
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

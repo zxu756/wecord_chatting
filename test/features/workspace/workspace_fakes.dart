@@ -343,6 +343,16 @@ class FakeListsRepository implements ListsRepository {
   }
 
   @override
+  Future<TaskList> setListFields(
+    String listId,
+    List<TaskFieldDef> fields,
+  ) async {
+    final updated = lists[listId]!.copyWith(fieldDefs: fields);
+    lists[listId] = updated;
+    return updated;
+  }
+
+  @override
   Future<TaskItem> upsertItem(
     String listId,
     Map<String, Object?> fields,
@@ -393,6 +403,27 @@ class FakeListsRepository implements ListsRepository {
         case 'assignees':
           item = item.copyWith(
             assignees: [for (final a in value! as List) '$a'],
+          );
+        case 'custom':
+          final merged = {...item.custom};
+          for (final field in (value! as Map).entries) {
+            if (list.fieldById('${field.key}') == null) {
+              continue;
+            }
+            if (field.value == null) {
+              merged.remove('${field.key}');
+            } else {
+              merged['${field.key}'] = field.value;
+            }
+          }
+          item = item.copyWith(custom: merged);
+        case 'parent_id':
+          item = item.copyWith(parentId: value);
+        case 'recurrence':
+          item = item.copyWith(
+            recurrence: value == null
+                ? null
+                : TaskRecurrence.tryFromJson(value),
           );
       }
     }

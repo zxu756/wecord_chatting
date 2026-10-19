@@ -128,6 +128,17 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610230410_ai_assistant_jobs.sql
 \i supabase/migrations/202610230420_ai_assistant_rpcs.sql
 \i supabase/migrations/202610230430_ai_reply_channel_send.sql
+\i supabase/migrations/202610230500_ai_digest_schema.sql
+\i supabase/migrations/202610230510_ai_digest_rpcs.sql
+\i supabase/migrations/202610230520_ai_digest_run.sql
+\i supabase/migrations/202610230530_ai_digest_push.sql
+\i supabase/migrations/202610230540_export_my_ai_digest.sql
+\i supabase/migrations/202610230600_status_visibility.sql
+\i supabase/migrations/202610230610_profile_birthday.sql
+\i supabase/migrations/202610230620_birthday_push.sql
+\i supabase/migrations/202610230630_support_links.sql
+\i supabase/migrations/202610230640_friend_source.sql
+\i supabase/migrations/202610230650_mutuals.sql
 \i supabase/migrations/202610240400_urgent_schema.sql
 \i supabase/migrations/202610240410_urgent_rpcs.sql
 \i supabase/migrations/202610240420_announcement_ack_rpcs.sql

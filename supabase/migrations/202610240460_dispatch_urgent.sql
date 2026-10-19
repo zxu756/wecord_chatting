@@ -1,8 +1,10 @@
 -- The one-minute dispatcher, with the second push of urgent messages (A7).
 --
--- This is run_later_dispatch exactly as 202610190021_moments_push.sql left it
--- (the latest definition: 202610170010, then 202610170070, then that one; no
--- later migration rewrites it), with two more reasons to wake the
+-- This is run_later_dispatch exactly as 202610230620_birthday_push.sql left
+-- it (the latest definition: 202610170010, 202610170070, 202610190021, then
+-- that one, which added `public.birthday_pushes_waiting()`; the later digest
+-- migration 202610230520 and the other mentions only wake the function
+-- through wake_scheduled_dispatch), with two more reasons to wake the
 -- scheduled-dispatch function:
 --
 --   * an urgent message (message_urgent_targets, 202610240400) whose first
@@ -88,7 +90,7 @@ begin
     from public.moments_notifications mn
     where mn.pushed_at is null
       and mn.created_at > now() - interval '10 minutes'
-  ) or exists (
+  ) or public.birthday_pushes_waiting() or exists (
     -- An urgent message (A7) whose first push nobody has claimed, or whose
     -- second push is due: 10 minutes after the first, still unconfirmed
     -- (claim_urgent_pushes).

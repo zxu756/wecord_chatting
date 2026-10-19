@@ -89,10 +89,33 @@ begin
 end;
 $$;
 
+-- A pure rule over its arguments, nothing about anyone: the guard calls it as
+-- the client, so signed-in people may call it too.
 revoke execute on function public.recurrence_next(text, integer, time, text, timestamptz, date)
-  from public, anon, authenticated;
+  from public, anon;
 grant execute on function public.recurrence_next(text, integer, time, text, timestamptz, date)
-  to service_role;
+  to authenticated, service_role;
+
+-- The zone a client's repeating message falls back to when the app did not
+-- report one: the caller's own notification zone (202610210310). The guard
+-- runs as the client, and notification_time_zone is private to the server, so
+-- this answers for the caller only; for anyone else it says UTC.
+create or replace function public.schedule_fallback_time_zone(p_owner_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when p_owner_id is not null and p_owner_id = auth.uid()
+      then public.notification_time_zone(p_owner_id)
+    else 'UTC'
+  end;
+$$;
+
+revoke execute on function public.schedule_fallback_time_zone(uuid) from public, anon;
+grant execute on function public.schedule_fallback_time_zone(uuid) to authenticated;
 
 -- 202610170010 with the repeat rule. What clients (the authenticated role)
 -- may write: queue a message for a conversation they can send in, change its
@@ -188,7 +211,7 @@ begin
     zone := coalesce(
       (select n.name from pg_timezone_names n
         where n.name = nullif(btrim(new.recurrence_tz), '') limit 1),
-      public.notification_time_zone(new.owner_id),
+      public.schedule_fallback_time_zone(new.owner_id),
       'UTC'
     );
     new.recurrence_tz := zone;

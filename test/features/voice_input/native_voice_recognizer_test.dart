@@ -46,6 +46,24 @@ void main() {
     messenger.setMockStreamHandler(events, null);
   });
 
+  test(
+    'in a call the native side is told to leave the audio session alone',
+    () async {
+      final recognizer = NativeVoiceRecognizer();
+      final session = await recognizer.start(
+        locale: 'en-US',
+        allowServer: false,
+        inCall: true,
+      );
+      expect(calls.single.arguments, {
+        'locale': 'en-US',
+        'allowServer': false,
+        'inCall': true,
+      });
+      await session.cancel();
+    },
+  );
+
   test('it reads what the system recognizer can do', () async {
     onCall = (call) => {
       'supported': true,

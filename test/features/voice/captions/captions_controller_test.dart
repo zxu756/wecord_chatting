@@ -1,134 +1,16 @@
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/voice/captions/caption_protocol.dart';
 import 'package:wecord/features/voice/captions/captions_controller.dart';
 import 'package:wecord/features/voice/voice_call.dart';
-import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice_input/voice_input_controller.dart';
 import 'package:wecord/features/voice_input/voice_input_models.dart';
-import 'package:wecord/features/voice_input/voice_input_settings.dart';
-import 'package:wecord/features/voice_input/voice_recognizer.dart';
 
 import '../../voice_input/fake_voice_recognizer.dart';
-import '../voice_fakes.dart';
-
-/// The data a fake call was asked to publish on the caption topic.
-List<Map<String, Object?>> sent(FakeVoiceCall call) => [
-  for (final message in call.published)
-    if (message.topic == captionTopic)
-      {
-        ...jsonDecode(utf8.decode(message.data)) as Map<String, Object?>,
-        '_reliable': message.reliable,
-      },
-];
-
-class _Setup {
-  _Setup({this.host = true, FakeVoiceRecognizer? recognizer})
-    : recognizer = recognizer ?? FakeVoiceRecognizer() {
-    repository = FakeVoiceRepository();
-    connector = FakeVoiceCallConnector();
-    connector.prepare = (call) {
-      call.localCaptionsHost = host;
-      call.remotes = remotes;
-    };
-    container = ProviderContainer(
-      overrides: [
-        voiceRepositoryProvider.overrideWithValue(repository),
-        voiceCallConnectorProvider.overrideWithValue(connector),
-        authStateProvider.overrideWith(
-          (ref) => Stream.value(const AuthUser(id: 'user-1')),
-        ),
-        voiceRecognizerProvider.overrideWithValue(this.recognizer),
-        voiceInputStoreProvider.overrideWithValue(InMemoryVoiceInputStore()),
-        captionClockProvider.overrideWithValue(() => now),
-      ],
-    );
-    _current = this;
-    container.listen(captionsProvider, (previous, next) {});
-    container.listen(voiceSessionProvider, (previous, next) {});
-  }
-
-  final bool host;
-  final remotes = const [
-    VoiceCallParticipant(userId: 'user-2', name: 'Bart'),
-    VoiceCallParticipant(userId: 'user-3', name: 'Grace'),
-  ];
-  final FakeVoiceRecognizer recognizer;
-  late final FakeVoiceRepository repository;
-  late final FakeVoiceCallConnector connector;
-  late final ProviderContainer container;
-  var now = DateTime(2026, 10, 19, 12);
-
-  CaptionsController get captions => container.read(captionsProvider.notifier);
-  CaptionsState get state => container.read(captionsProvider);
-  FakeVoiceCall get call => connector.last;
-
-  late WidgetTester tester;
-
-  Future<void> join(WidgetTester tester) async {
-    this.tester = tester;
-    await container
-        .read(voiceSessionProvider.notifier)
-        .join(
-          circleId: 'circle-1',
-          channelId: 'ch-lounge',
-          conversationId: 'conv-lounge',
-          channelName: 'Lounge',
-        );
-    await tester.pump();
-  }
-
-  /// Someone else sends a caption message.
-  Future<void> receive(
-    String userId,
-    List<int> data, {
-    String topic = captionTopic,
-  }) async {
-    call.receiveData(userId, topic, data);
-    // The message crosses two streams before the controller sees it.
-    await tester.pump();
-    await tester.pump();
-  }
-
-  /// [userId] starts listening as someone who may turn captions on.
-  void makeHost(String userId) {
-    call.remotes = [
-      for (final remote in call.remotes)
-        VoiceCallParticipant(
-          userId: remote.userId,
-          name: remote.name,
-          captionsHost: remote.userId == userId,
-        ),
-    ];
-    call.update();
-  }
-
-  /// Leaves the call (which stops its timers) and drops the providers.
-  Future<void> shutdown(WidgetTester tester) async {
-    await container.read(voiceSessionProvider.notifier).leave();
-    await tester.pump();
-    container.dispose();
-    await tester.pump();
-  }
-}
-
-_Setup? _current;
-
-void captionsTest(
-  String name,
-  Future<void> Function(WidgetTester tester) body,
-) {
-  testWidgets(name, (tester) async {
-    _current = null;
-    await body(tester);
-    await _current?.shutdown(tester);
-  });
-}
+import 'captions_fakes.dart';
 
 Future<void> settle(WidgetTester tester) async {
   await tester.pump();
@@ -139,7 +21,7 @@ void main() {
   captionsTest('the host turns captions on and everyone is told', (
     tester,
   ) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     expect(setup.state.active, isFalse);
     expect(setup.captions.canHost, isTrue);
@@ -175,7 +57,7 @@ void main() {
   captionsTest('someone who may not host can not turn captions on', (
     tester,
   ) async {
-    final setup = _Setup(host: false);
+    final setup = CaptionsWorld(host: false);
     await setup.join(tester);
     expect(setup.captions.canHost, isFalse);
     await setup.captions.start();
@@ -187,7 +69,7 @@ void main() {
   captionsTest('what you say becomes a caption line sent to the room', (
     tester,
   ) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -222,7 +104,7 @@ void main() {
   captionsTest(
     'lines from others are put together, only from people in the call',
     (tester) async {
-      final setup = _Setup();
+      final setup = CaptionsWorld();
       await setup.join(tester);
       await setup.captions.start();
       await settle(tester);
@@ -290,7 +172,7 @@ void main() {
   captionsTest('nobody can turn captions on by sending a message', (
     tester,
   ) async {
-    final setup = _Setup(host: false);
+    final setup = CaptionsWorld(host: false);
     await setup.join(tester);
 
     await setup.receive('user-2', encodeCaptionControl(on: true));
@@ -322,7 +204,7 @@ void main() {
   captionsTest('captions end when the host leaves or goes quiet', (
     tester,
   ) async {
-    final setup = _Setup(host: false);
+    final setup = CaptionsWorld(host: false);
     await setup.join(tester);
     setup.makeHost('user-2');
     await setup.receive('user-2', encodeCaptionControl(on: true));
@@ -352,7 +234,7 @@ void main() {
   });
 
   captionsTest('a muted microphone is not listened to', (tester) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -376,7 +258,7 @@ void main() {
   captionsTest('not sharing means nothing is listened to or sent', (
     tester,
   ) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.setSharing(false);
     await setup.captions.start();
@@ -405,7 +287,9 @@ void main() {
   });
 
   captionsTest('a device that can not make captions says so', (tester) async {
-    final setup = _Setup(recognizer: FakeVoiceRecognizer(supported: false));
+    final setup = CaptionsWorld(
+      recognizer: FakeVoiceRecognizer(supported: false),
+    );
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -420,7 +304,7 @@ void main() {
   });
 
   captionsTest('a recognizer that needs a service asks first', (tester) async {
-    final setup = _Setup(
+    final setup = CaptionsWorld(
       recognizer: FakeVoiceRecognizer(engine: VoiceInputEngine.appleServer),
     );
     await setup.join(tester);
@@ -440,7 +324,7 @@ void main() {
   ) async {
     final recognizer = FakeVoiceRecognizer()
       ..startError = const VoiceInputException(VoiceInputFailure.speechDenied);
-    final setup = _Setup(recognizer: recognizer);
+    final setup = CaptionsWorld(recognizer: recognizer);
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -456,7 +340,7 @@ void main() {
   captionsTest('voice input in a chat takes the recognizer for a while', (
     tester,
   ) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -479,7 +363,7 @@ void main() {
   captionsTest('stopping hands the host the words and tells everyone', (
     tester,
   ) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -516,7 +400,7 @@ void main() {
   });
 
   captionsTest('ending the call forgets everything', (tester) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);
@@ -534,7 +418,7 @@ void main() {
   });
 
   captionsTest('the language can be switched while listening', (tester) async {
-    final setup = _Setup();
+    final setup = CaptionsWorld();
     await setup.join(tester);
     await setup.captions.start();
     await settle(tester);

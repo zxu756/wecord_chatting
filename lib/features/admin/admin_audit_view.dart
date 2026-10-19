@@ -33,6 +33,32 @@ String adminAuditSummary(AdminAuditEntry entry) {
       ),
       _ => tr('{actor} dismissed a message report', args),
     },
+    'set_feature_flag' =>
+      entry.details['created'] == true
+          ? tr('{actor} created the flag {title}', args)
+          : tr('{actor} changed the flag {title}', args),
+    'delete_feature_flag' => tr('{actor} deleted the flag {title}', args),
+    'set_min_version' =>
+      (entry.details['min_version'] as String? ?? '').isEmpty
+          ? tr('{actor} removed the minimum version for {title}', args)
+          : tr('{actor} set the minimum version for {title} to {version}', {
+              ...args,
+              'version': entry.details['min_version'],
+            }),
+    'publish_announcement' => tr(
+      '{actor} published the notice “{title}”',
+      args,
+    ),
+    'retract_announcement' => tr(
+      '{actor} took back the notice “{title}”',
+      args,
+    ),
+    'reply_feedback' => tr('{actor} replied to the feedback of {title}', args),
+    'close_feedback' => tr('{actor} closed the feedback of {title}', args),
+    'reopen_feedback' => tr(
+      '{actor} opened the feedback of {title} again',
+      args,
+    ),
     'resolve_report' => tr('{actor} closed a report: {resolution}', {
       'actor': actor,
       'resolution':
@@ -50,12 +76,20 @@ IconData adminAuditIcon(String action) => switch (action) {
   'enable_circle' => Icons.visibility_outlined,
   'delete_circle_post' => Icons.delete_outline_rounded,
   'resolve_report' || 'resolve_message_report' => Icons.task_alt_rounded,
+  'set_feature_flag' || 'delete_feature_flag' => Icons.flag_outlined,
+  'set_min_version' => Icons.system_update_alt_rounded,
+  'publish_announcement' || 'retract_announcement' => Icons.campaign_outlined,
+  'reply_feedback' ||
+  'close_feedback' ||
+  'reopen_feedback' => Icons.chat_bubble_outline_rounded,
   _ => Icons.history_rounded,
 };
 
 SettingsTone adminAuditTone(String action) => switch (action) {
   'suspend_user' || 'delete_circle_post' => SettingsTone.danger,
-  'disable_circle' => SettingsTone.warning,
+  'disable_circle' ||
+  'set_min_version' ||
+  'retract_announcement' => SettingsTone.warning,
   'enable_circle' || 'unsuspend_user' => SettingsTone.success,
   _ => SettingsTone.neutral,
 };

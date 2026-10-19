@@ -4,6 +4,7 @@
 // several areas reads the same everywhere.
 import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
+import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
 import 'package:wecord/shared/l10n/zh/zh_edit_history.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai.dart';
@@ -146,6 +147,7 @@ const zhAreas = <Map<String, String>>[
   zhStickers,
   zhInsights,
   zhForms,
+  zhAdminOps,
   zhAiAssistant,
   zhDigest,
   zhProfileExtras,

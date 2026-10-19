@@ -111,6 +111,11 @@ export interface ExportData {
    */
   forms?: Json[] | null;
   /**
+   * The feedback I sent and the replies to it (export_my_feedback, migration
+   * 202610240660); null when it could not be read, absent in older callers.
+   */
+  feedback?: Json[] | null;
+  /**
    * The daily digest settings (export_my_ai_digest, migration
    * 202610230540); null when it could not be read, absent in older callers.
    */
@@ -628,6 +633,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   if (data.forms) {
     out.push({ path: "data/forms.json", value: formsJson(data) });
   }
+  if (data.feedback) {
+    out.push({ path: "data/feedback.json", value: feedbackJson(data) });
+  }
   if (data.aiDigest) {
     out.push({ path: "data/ai_digest.json", value: data.aiDigest });
   }
@@ -1004,6 +1012,63 @@ export function formFilesToSign(
   return [...seen.values()];
 }
 
+/** The screenshots I attached to feedback: files to link to. */
+export function feedbackFilesToSign(
+  feedback: Json[],
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const item of feedback) {
+    const bucket = item["screenshot_bucket"];
+    const path = item["screenshot_path"];
+    if (typeof bucket === "string" && typeof path === "string") {
+      seen.set(`${bucket}/${path}`, { bucket, path });
+    }
+  }
+  return [...seen.values()];
+}
+
+/** My feedback with the link to each screenshot. */
+function feedbackJson(data: ExportData): Json[] {
+  const ref = fileRefs(data);
+  return (data.feedback ?? []).map((item) => {
+    const { screenshot_bucket: bucket, screenshot_path: path, ...rest } = item;
+    return {
+      ...rest,
+      screenshot: typeof bucket === "string" ? ref(bucket, path) : null,
+    };
+  });
+}
+
+export function buildFeedbackHtml(data: ExportData): string {
+  const ref = fileRefs(data);
+  const items = (data.feedback ?? []).map((item) => {
+    const bucket = item["screenshot_bucket"];
+    const picture = typeof bucket === "string"
+      ? fileHtml(ref(bucket, item["screenshot_path"]), "Your screenshot", true)
+      : "";
+    const replies = objects(item["replies"]).map((reply) =>
+      `<div class="muted">Reply, ${
+        escapeHtml(readableTime(str(reply["published_at"])))
+      }:</div>${text(reply["body"])}`
+    ).join("");
+    const version = [str(item["platform"]), str(item["app_version"])]
+      .filter((part) => part !== null && part !== "").join(" ");
+    return entry(
+      str(item["created_at"]),
+      `${text(item["message"])}${
+        version ? `<div class="muted">${escapeHtml(version)}</div>` : ""
+      }${picture}${replies}`,
+    );
+  }).join("");
+  return page(
+    "Feedback — your WeCord data",
+    `${backLink()}<h1>Feedback and help</h1>
+<p class="muted">The feedback you sent, with the version and platform it carried,
+and the replies from the WeCord team.</p>
+<div class="card">${items || '<div class="row muted">No feedback.</div>'}</div>`,
+  );
+}
+
 /** One answer in words: the label of a choice, a date, a number. */
 function formAnswerText(question: Json, value: unknown): string {
   const type = str(question["type"]);
@@ -1160,6 +1225,14 @@ export function buildSectionPages(
       content: buildFormsHtml(data),
     });
   }
+  if (data.feedback) {
+    out.push({
+      path: "pages/feedback.html",
+      label: "Feedback and help",
+      summary: `${data.feedback.length}`,
+      content: buildFeedbackHtml(data),
+    });
+  }
   if (data.aiDigest) {
     const followed = objects(
       isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
@@ -1230,6 +1303,7 @@ data/moments.json     Your Moments posts, the comments you wrote, your likes
 data/friend_tags.json Your friend tags and starred friends.
 data/chains.json      Group chains you started or joined (your own line).
 data/forms.json       Forms you made or answered (your own answers).
+data/feedback.json    Feedback you sent and the replies you got.
 data/ai_digest.json   Your daily digest settings and the chats you follow.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).

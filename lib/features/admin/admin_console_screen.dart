@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/admin/admin_audit_view.dart';
+import 'package:wecord/features/admin/admin_feedback_view.dart';
+import 'package:wecord/features/admin/admin_flags_view.dart';
 import 'package:wecord/features/admin/admin_models.dart';
+import 'package:wecord/features/admin/admin_notices_view.dart';
 import 'package:wecord/features/admin/admin_report_screen.dart';
 import 'package:wecord/features/admin/admin_repository.dart';
 import 'package:wecord/features/admin/admin_widgets.dart';
@@ -12,8 +17,9 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// The admin console (`/admin`, hidden: Settings lists it only for admins):
-/// the report queue and the audit log. A signed-in person who is not an
-/// admin sees an empty page; every call is checked by the server anyway.
+/// the report queue, the audit log, and the tabs for feature flags, official
+/// notices and feedback. A signed-in person who is not an admin sees an empty
+/// page; every call is checked by the server anyway.
 class AdminConsoleScreen extends ConsumerStatefulWidget {
   const AdminConsoleScreen({this.pageSize = 30, this.now, super.key});
 
@@ -28,7 +34,7 @@ class AdminConsoleScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminConsoleScreen> createState() => _AdminConsoleScreenState();
 }
 
-enum _Tab { reports, audit }
+enum _Tab { reports, audit, flags, notices, feedback }
 
 /// The kinds the queue can filter by. Messages are the reports of direct
 /// chats and groups; a circle's message reports go to its moderators.
@@ -182,29 +188,49 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                child: WeCordSegmented<_Tab>(
-                  expand: true,
-                  selected: _tab,
-                  onChanged: (tab) => setState(() => _tab = tab),
-                  semanticLabel: tr('Section'),
-                  segments: [
-                    WeCordSegment(
-                      value: _Tab.reports,
-                      label: tr('Reports'),
-                      key: const ValueKey('admin-tab-reports'),
-                    ),
-                    WeCordSegment(
-                      value: _Tab.audit,
-                      label: tr('Audit log'),
-                      key: const ValueKey('admin-tab-audit'),
-                    ),
-                  ],
+                // Five tabs do not fit a phone as one segmented control: a
+                // row of chips that scrolls sideways.
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  child: Row(
+                    children: [
+                      for (final (index, tab) in _Tab.values.indexed) ...[
+                        if (index > 0) const SizedBox(width: 8),
+                        Builder(
+                          builder: (chipContext) => WeCordChip(
+                            key: ValueKey('admin-tab-${tab.name}'),
+                            label: _tabLabel(tab),
+                            selected: _tab == tab,
+                            onPaper: true,
+                            onPressed: () {
+                              setState(() => _tab = tab);
+                              // A tab at the edge of a phone comes into view.
+                              unawaited(
+                                Scrollable.ensureVisible(
+                                  chipContext,
+                                  alignment: 0.5,
+                                  duration: WeCordMotion.durationOf(
+                                    chipContext,
+                                    WeCordMotion.quick,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
               Expanded(
                 child: switch (_tab) {
                   _Tab.reports => _buildQueue(now),
                   _Tab.audit => AdminAuditView(now: widget.now),
+                  _Tab.flags => const AdminFlagsView(),
+                  _Tab.notices => AdminNoticesView(now: widget.now),
+                  _Tab.feedback => AdminFeedbackView(now: widget.now),
                 },
               ),
             ],
@@ -213,6 +239,14 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
       },
     );
   }
+
+  String _tabLabel(_Tab tab) => switch (tab) {
+    _Tab.reports => tr('Reports'),
+    _Tab.audit => tr('Audit log'),
+    _Tab.flags => tr('Flags'),
+    _Tab.notices => tr('Notices'),
+    _Tab.feedback => tr('Feedback'),
+  };
 
   Widget _buildQueue(DateTime now) {
     return Column(

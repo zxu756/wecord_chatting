@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/announcements/announcement_card.dart';
+import 'package:wecord/features/announcements/announcement_models.dart';
+import 'package:wecord/features/announcements/announcements_providers.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/events/chat_event_reminder_card.dart';
@@ -81,6 +84,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
+  final official = ref.watch(announcementsUnreadProvider);
   final digests = ref.watch(aiDigestsUnreadProvider);
   return unread +
       requests +
@@ -92,6 +96,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       security +
       joinAnswers +
       readReminders +
+      official +
       digests;
 });
 
@@ -108,6 +113,9 @@ enum InboxFilter {
 
   /// Answers to requests to join circles, and requests still waiting.
   circles,
+
+  /// Notices from the WeCord team, and its answers to feedback (K6, K7).
+  official,
 
   /// The daily digest of the chats the person follows.
   digest,
@@ -138,6 +146,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(securityAlertsProvider)
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
+      ..invalidate(announcementsProvider)
       ..invalidate(aiDigestsProvider)
       ..invalidate(birthdaysTodayProvider)
       ..invalidate(inboxProvider);
@@ -212,6 +221,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final joinRequests =
         ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
     final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
+    final announcements =
+        ref.watch(announcementsProvider).value ?? const <Announcement>[];
+    final unreadOfficial = ref.watch(announcementsUnreadProvider);
+    final showOfficial =
+        _filter == InboxFilter.all || _filter == InboxFilter.official;
     // Friends whose birthday is today, under the Friends chip.
     final birthdays =
         _filter == InboxFilter.all || _filter == InboxFilter.friends
@@ -260,6 +274,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.friends ||
       InboxFilter.security ||
       InboxFilter.circles ||
+      InboxFilter.official ||
       InboxFilter.digest => const <InboxItem>[],
     };
     final showTasks =
@@ -331,6 +346,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ),
       data: (_) {
         final cards = <Widget>[
+          // Notices from the team first: maintenance, changes to the terms.
+          if (showOfficial)
+            for (final notice in announcements)
+              AnnouncementCard(announcement: notice),
           if (showSecurity)
             for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
           if (showJoinRequests)
@@ -563,6 +582,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         unseenJoinAnswers,
                       ),
                       const SizedBox(width: 6),
+                      chip(
+                        InboxFilter.official,
+                        tr('Official'),
+                        unreadOfficial,
+                      ),
                       chip(InboxFilter.digest, tr('Digest'), unreadDigests),
                     ],
                   ),
@@ -1034,6 +1058,11 @@ class _EmptyInbox extends StatelessWidget {
                     )
                   : filter == InboxFilter.circles
                   ? tr('Answers to your requests to join circles show up here.')
+                  : filter == InboxFilter.official
+                  ? tr(
+                      'Notices from the WeCord team, and its answers to your '
+                      'feedback, show up here.',
+                    )
                   : filter == InboxFilter.digest
                   ? tr(
                       'Your daily digest shows up here. Set it up in Settings, under AI.',

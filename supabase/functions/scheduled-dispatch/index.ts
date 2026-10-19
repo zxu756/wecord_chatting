@@ -1,8 +1,9 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
 // events about to start, tasks that came due, likes and comments on
-// Moments, new-login alerts, answers to circle join requests, and friends'
-// birthdays (at 9 in the morning of the recipient's device). The same
+// Moments, new-login alerts, answers to circle join requests, the one push of
+// an official notice, and friends' birthdays (at 9 in the morning of the
+// recipient's device). The same
 // tick removes the files of expired disappearing messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -33,6 +34,10 @@ import {
   type TaskReminderRow,
   taskTarget,
 } from "./logic.ts";
+import {
+  type AnnouncementPushRow,
+  announcementTarget,
+} from "./announcements.ts";
 import { type DigestPushRow, digestPushTarget } from "./digest.ts";
 import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
@@ -187,6 +192,20 @@ Deno.serve(async (request) => {
     ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
   );
 
+  // The push of an official notice (K6), a batch of devices at a time: in
+  // the language of each device, held back in quiet hours below like the
+  // rest. publish_announcement wakes this function, and claim gives out the
+  // next batch and wakes it again until every device has been reached.
+  const { data: notices, error: noticesError } = await admin.rpc(
+    "claim_announcement_pushes",
+  );
+  if (noticesError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_announcement_pushes failed", noticesError.message);
+  }
+  targets.push(
+    ...((notices ?? []) as AnnouncementPushRow[]).map(announcementTarget),
+  );
   // "Your daily digest is ready", once the `ai` function finished a card (it
   // wakes this function).
   const { data: digests, error: digestsError } = await admin.rpc(

@@ -45,7 +45,9 @@ function returnsPushText(sql: string): boolean {
     /\bbody\s+text\b/.test(columns);
 }
 
-const hasChinese = /[一-鿿]/;
+// Chinese written in the SQL, or picked from a column that holds it (an
+// official notice carries the admin's own `title_zh` / `body_zh`).
+const hasChinese = /[一-鿿]|\b\w+_zh\b/;
 
 Deno.test("every push text function writes Chinese for zh subscriptions", () => {
   const functions = latestFunctions();

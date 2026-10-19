@@ -16,6 +16,9 @@ import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/circles/join_requests/join_request_inbox_card.dart';
 import 'package:wecord/features/circles/join_requests/join_request_models.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/mod_tools/ban_inbox_card.dart';
+import 'package:wecord/features/circles/mod_tools/mod_tools_models.dart';
+import 'package:wecord/features/circles/mod_tools/mod_tools_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
@@ -237,6 +240,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final joinRequests =
         ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
     final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
+    final circleBans =
+        ref.watch(myCircleBansProvider).value ?? const <MyCircleBan>[];
     final announcements =
         ref.watch(announcementsProvider).value ?? const <Announcement>[];
     final unreadOfficial = ref.watch(announcementsUnreadProvider);
@@ -441,6 +446,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           if (showJoinRequests)
             for (final request in joinRequests)
               JoinRequestInboxCard(request: request),
+          if (showJoinRequests)
+            for (final ban in circleBans) BanInboxCard(ban: ban),
           for (final digest in digests)
             AiDigestCard(
               digest: digest,

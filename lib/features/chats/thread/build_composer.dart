@@ -18,6 +18,7 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
       :groupDetail,
       :isDirectOrGroup,
       :canSend,
+      :threadLocked,
       :slowmodeSeconds,
       :circleId,
       :canDeleteAsModerator,
@@ -49,6 +50,7 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
         if (!canSend)
           _ReadOnlyComposerNotice(
             timedOutUntil: widget.timedOutUntil,
+            threadLocked: threadLocked,
             desktop: desktop,
             bottomGap: composerBottomGap,
           )

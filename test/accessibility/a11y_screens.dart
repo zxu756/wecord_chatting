@@ -62,6 +62,8 @@ import 'ai_assistant_a11y_screens.dart';
 import 'onboarding_guide_a11y_screens.dart';
 import 'digest_a11y_screens.dart';
 import 'profile_extras_a11y_screens.dart';
+import 'stories_a11y_screens.dart';
+import 'mod_tools_a11y_screens.dart';
 import 'urgent_a11y_screens.dart';
 import 'captions_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
@@ -804,6 +806,8 @@ final allA11yScreens = <A11yScreen>[
   ...profileExtrasA11yScreens,
   ...chatPolishA11yScreens,
   ...notes2A11yScreens,
+  ...storiesA11yScreens,
   ...urgentA11yScreens,
   ...captionsA11yScreens,
+  ...modToolsA11yScreens,
 ];

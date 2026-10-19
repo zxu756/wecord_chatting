@@ -21,6 +21,7 @@ const userBuckets = [
   "moments",
   "user-stickers",
   "feedback-screenshots",
+  "stories",
 ];
 
 // Storage removes at most 1000 objects per request.

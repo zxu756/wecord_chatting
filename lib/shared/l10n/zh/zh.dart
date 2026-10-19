@@ -76,9 +76,11 @@ import 'package:wecord/shared/l10n/zh/zh_voice_chain.dart';
 import 'package:wecord/shared/l10n/zh/zh_voice_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_wallpapers.dart';
 import 'package:wecord/shared/l10n/zh/zh_insights.dart';
+import 'package:wecord/shared/l10n/zh/zh_mod_tools.dart';
 import 'package:wecord/shared/l10n/zh/zh_forms.dart';
 import 'package:wecord/shared/l10n/zh/zh_notes2.dart';
 import 'package:wecord/shared/l10n/zh/zh_captions.dart';
+import 'package:wecord/shared/l10n/zh/zh_stories.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -156,9 +158,11 @@ const zhAreas = <Map<String, String>>[
   zhAiAssistant,
   zhDigest,
   zhProfileExtras,
+  zhModTools,
   zhChatPolish,
   zhNotes2,
   zhCaptions,
+  zhStories,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

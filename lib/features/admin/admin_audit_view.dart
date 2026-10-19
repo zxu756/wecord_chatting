@@ -33,6 +33,11 @@ String adminAuditSummary(AdminAuditEntry entry) {
       ),
       _ => tr('{actor} dismissed a message report', args),
     },
+    'resolve_story_report' => switch (entry.details['action']) {
+      'delete_story' => tr('{actor} deleted a reported daily: {title}', args),
+      'suspend' => tr('{actor} suspended the author of a reported daily', args),
+      _ => tr('{actor} dismissed a daily report', args),
+    },
     'set_feature_flag' =>
       entry.details['created'] == true
           ? tr('{actor} created the flag {title}', args)
@@ -75,7 +80,9 @@ IconData adminAuditIcon(String action) => switch (action) {
   'disable_circle' => Icons.visibility_off_outlined,
   'enable_circle' => Icons.visibility_outlined,
   'delete_circle_post' => Icons.delete_outline_rounded,
-  'resolve_report' || 'resolve_message_report' => Icons.task_alt_rounded,
+  'resolve_report' ||
+  'resolve_message_report' ||
+  'resolve_story_report' => Icons.task_alt_rounded,
   'set_feature_flag' || 'delete_feature_flag' => Icons.flag_outlined,
   'set_min_version' => Icons.system_update_alt_rounded,
   'publish_announcement' || 'retract_announcement' => Icons.campaign_outlined,

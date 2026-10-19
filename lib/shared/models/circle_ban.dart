@@ -8,6 +8,8 @@ class CircleBan {
     this.avatarUrl,
     this.reason,
     this.bannedByName,
+    this.expiresAt,
+    this.appealStatus,
   });
 
   factory CircleBan.fromJson(Map<String, dynamic> json) {
@@ -19,6 +21,10 @@ class CircleBan {
       reason: json['reason'] as String?,
       bannedByName: json['banned_by_name'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
+      expiresAt: json['expires_at'] == null
+          ? null
+          : DateTime.parse(json['expires_at'] as String),
+      appealStatus: json['appeal_status'] as String?,
     );
   }
 
@@ -31,6 +37,12 @@ class CircleBan {
   /// Who banned them, when that member is still known.
   final String? bannedByName;
   final DateTime createdAt;
+
+  /// When the ban lifts itself; null for a ban without an end.
+  final DateTime? expiresAt;
+
+  /// 'pending' while the person's appeal waits for a moderator.
+  final String? appealStatus;
 
   /// The name shown in the list: display name, then username.
   String get name {

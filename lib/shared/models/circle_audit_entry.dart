@@ -117,6 +117,9 @@ enum CircleAuditActionGroup {
   guard('guard', 'AI guard'),
   onboarding('onboarding', 'Onboarding'),
   join('join', 'Join requests'),
+  mod('mod', 'Notes and warnings'),
+  ban('ban', 'Ban appeals'),
+  raid('raid', 'Raid protection'),
   discovery('discovery', 'Discovery'),
   other('', 'Other');
 
@@ -158,6 +161,9 @@ enum CircleAuditActionGroup {
     guard,
     onboarding,
     join,
+    mod,
+    ban,
+    raid,
     discovery,
   ];
 }

@@ -33,7 +33,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>WeCord uses speech recognition to turn a voice message into text, to type what you say when you ask it to, and to make captions of what you say in a call when captions are on and you share yours. It runs on your Mac whenever it can. Only the text is shared with the call, never your voice.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>WeCord uses the camera for video in voice channels and to scan QR codes.</string>
+	<string>WeCord uses the camera for video in voice channels, to scan QR codes and to take photos and videos for your daily.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

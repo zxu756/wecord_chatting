@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/circles/circle_automod_repository.dart'
     show RpcDataSource, SupabaseRpcDataSource, UninitializedRpcDataSource;
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/mod_tools/mod_tools_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
@@ -324,7 +325,8 @@ final messageReviewsProvider = FutureProvider.autoDispose
     });
 
 /// How many things wait for review in a circle, for the badge on its
-/// moderation tools: held and flagged messages, and join requests. 0 while
+/// moderation tools: held and flagged messages, join requests and ban
+/// appeals. 0 while
 /// loading and when it cannot be read.
 final messageReviewCountProvider = FutureProvider.autoDispose
     .family<int, String>((ref, circleId) async {
@@ -337,5 +339,6 @@ final messageReviewCountProvider = FutureProvider.autoDispose
       final joinRequests = await ref.watch(
         joinRequestCountProvider(circleId).future,
       );
-      return messages + joinRequests;
+      final appeals = await ref.watch(banAppealCountProvider(circleId).future);
+      return messages + joinRequests + appeals;
     });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/agenda/agenda_repository.dart';
@@ -16,6 +18,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/conversation_preview.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
+import 'package:wecord/features/home/phone_home.dart' show userPanelName;
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/note_to_self/note_to_self.dart';
 import 'package:wecord/features/qr/qr_link_handler.dart';
@@ -24,6 +27,10 @@ import 'package:wecord/features/moments/moments_widgets.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/profile_social_repository.dart';
+import 'package:wecord/features/settings/settings_providers.dart';
+import 'package:wecord/features/stories/stories_providers.dart';
+import 'package:wecord/features/stories/story_composer_screen.dart';
+import 'package:wecord/features/stories/story_ring.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -156,7 +163,7 @@ class PhoneMessagesPanel extends ConsumerWidget {
               key: const ValueKey('phone-friends-row'),
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-              itemCount: sortedFriends.length + 4,
+              itemCount: sortedFriends.length + 5,
               separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 // The shortcuts sit lower by the room the bubbles take.
@@ -178,7 +185,10 @@ class PhoneMessagesPanel extends ConsumerWidget {
                 if (index == 3) {
                   return lowered(const _MomentsTile());
                 }
-                final friend = sortedFriends[index - 4];
+                if (index == 4) {
+                  return lowered(const _DailyTile());
+                }
+                final friend = sortedFriends[index - 5];
                 return _FriendTile(
                   friend: friend,
                   presence: presence(friend.id),
@@ -366,7 +376,9 @@ class _QuickFriendTile extends StatelessWidget {
     required this.label,
     required this.leading,
     required this.onPressed,
+    this.onLongPress,
     this.tooltip,
+    this.semanticLabel,
     this.width = 62,
     super.key,
   });
@@ -374,7 +386,11 @@ class _QuickFriendTile extends StatelessWidget {
   final String label;
   final Widget leading;
   final VoidCallback onPressed;
+
+  /// A second way in (a friend with a daily: the chat).
+  final VoidCallback? onLongPress;
   final String? tooltip;
+  final String? semanticLabel;
   final double width;
 
   @override
@@ -382,8 +398,9 @@ class _QuickFriendTile extends StatelessWidget {
     final c = context.tokens.colors;
     return WeCordPressable(
       onPressed: onPressed,
+      onLongPress: onLongPress,
       tooltip: tooltip,
-      semanticLabel: tooltip ?? label,
+      semanticLabel: semanticLabel ?? tooltip ?? label,
       excludeSemantics: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(WeCordRadii.lg),
@@ -528,6 +545,76 @@ class _MomentsTile extends StatelessWidget {
   }
 }
 
+/// "Daily", fifth in the friends row: your own dailies (a tap watches them,
+/// with who viewed) or, when there are none, a way to post one.
+class _DailyTile extends ConsumerWidget {
+  const _DailyTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
+    final userId = ref.watch(storiesUserIdProvider);
+    final mine = userId == null
+        ? null
+        : ref.watch(storyTrayEntryProvider(userId));
+    final profile = ref.watch(currentProfileProvider).value;
+    final Widget leading = mine == null
+        ? Container(
+            width: 58,
+            height: 58,
+            decoration: ShapeDecoration(
+              color: c.raised,
+              shape: RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: Icon(Icons.add_a_photo_outlined, size: 22, color: c.muted),
+          )
+        : Stack(
+            clipBehavior: Clip.none,
+            children: [
+              StoryRing(
+                entry: mine,
+                child: ResolvedAvatar(
+                  name: userPanelName(profile),
+                  avatarUrl: profile?.avatarUrl,
+                  size: 58,
+                ),
+              ),
+              Positioned(
+                right: -4,
+                bottom: -4,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: c.accent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.panel, width: 2),
+                  ),
+                  child: Icon(Icons.add_rounded, size: 14, color: c.onAccent),
+                ),
+              ),
+            ],
+          );
+    return _QuickFriendTile(
+      key: const ValueKey('phone-home-daily'),
+      label: trIn('Stories', 'Daily'),
+      tooltip: mine == null ? tr('Post a daily') : tr('Your daily'),
+      semanticLabel: mine == null
+          ? tr('Daily. Post a daily.')
+          : tr('Daily. Watch your daily. Hold to post another.'),
+      onPressed: mine == null
+          ? () => unawaited(openStoryComposer(context, ref))
+          : () => openStoriesOf(context, ref, mine.authorId),
+      onLongPress: mine == null
+          ? null
+          : () => unawaited(openStoryComposer(context, ref)),
+      leading: leading,
+    );
+  }
+}
+
 /// "Add friend", first in the friends row: opens Friends, with a badge for
 /// pending requests.
 class _AddFriendTile extends StatelessWidget {
@@ -599,20 +686,39 @@ class _FriendTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A friend with a daily up: a ring on the avatar (the accent color while
+    // there is something new), and a tap watches it. The chat is one long
+    // press away (and in the list below).
+    final daily = ref.watch(storyTrayEntryProvider(friend.id));
+    final avatar = ResolvedAvatar(
+      name: friend.displayLabel,
+      avatarUrl: friend.avatarUrl,
+      size: 58,
+      showPresence: true,
+      presence: presence,
+    );
     final tile = _QuickFriendTile(
       key: ValueKey('phone-friend-${friend.id}'),
       label: friend.displayLabel,
       tooltip: friend.displayLabel,
+      semanticLabel: daily == null
+          ? null
+          : daily.hasUnseen
+          ? tr('{name}: new daily. Opens the daily.', {
+              'name': friend.displayLabel,
+            })
+          : tr('{name}: daily. Opens the daily.', {
+              'name': friend.displayLabel,
+            }),
       // A tile with a bubble is wider, so the bubble has room to read.
       width: bubble == null ? 62 : 78,
-      onPressed: () => openDirectMessage(context, ref, friend),
-      leading: ResolvedAvatar(
-        name: friend.displayLabel,
-        avatarUrl: friend.avatarUrl,
-        size: 58,
-        showPresence: true,
-        presence: presence,
-      ),
+      onPressed: daily == null
+          ? () => openDirectMessage(context, ref, friend)
+          : () => openStoriesOf(context, ref, friend.id),
+      onLongPress: daily == null
+          ? null
+          : () => openDirectMessage(context, ref, friend),
+      leading: daily == null ? avatar : StoryRing(entry: daily, child: avatar),
     );
     if (bubbleRoom == 0) {
       return tile;

@@ -1248,6 +1248,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      // The menu has grown (Reply to part of text): give it room.
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.longPress(find.text('Outgoing'));
       await tester.pumpAndSettle();
       expect(find.text('Message info'), findsOneWidget);

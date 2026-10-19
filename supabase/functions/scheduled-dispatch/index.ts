@@ -19,6 +19,7 @@
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { dropQuietPushes } from "../push/quiet_hours.ts";
+import { dropSilentPushes } from "../push/silent_messages.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import { cleanUpExpired } from "../expire-messages/cleanup.ts";
@@ -221,7 +222,9 @@ Deno.serve(async (request) => {
   // inbox entries were written above and do not depend on this).
   const audible = await dropQuietPushes(
     admin,
-    targets,
+    // Messages sent silently (a silent scheduled message, for one) are told
+    // to nobody.
+    await dropSilentPushes(admin, targets),
     Math.floor(Date.now() / 1000),
   );
   // Times in the text are written for each subscriber's zone and language.

@@ -155,6 +155,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   var _closing = false;
   var _closed = false;
   var _remoteAudioEnabled = true;
+  var _audioOnly = false;
   var _volumes = <String, double>{};
   final _reactions = StreamController<VoiceReaction>.broadcast();
   final _reactionReceiver = ReactionReceiver();
@@ -175,6 +176,13 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
         if (volume != null) {
           unawaited(_applyVolume(track, volume));
         }
+      case lk.TrackPublishedEvent(:final publication)
+          when _audioOnly && publication.kind == lk.TrackType.VIDEO:
+        // Someone turned a camera on while this one is audio only.
+        unawaited(_unsubscribe(publication));
+      case lk.TrackSubscribedEvent(:final publication)
+          when _audioOnly && publication.kind == lk.TrackType.VIDEO:
+        unawaited(_unsubscribe(publication));
       case lk.DataReceivedEvent(:final participant, :final data, :final topic):
         // The sender is who LiveKit says, whatever the message claims.
         final reaction = _reactionReceiver.receive(
@@ -465,6 +473,37 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       }
     }
     _changed();
+  }
+
+  @override
+  Future<void> setAudioOnly(bool enabled) async {
+    _audioOnly = enabled;
+    for (final remote in _room.remoteParticipants.values) {
+      for (final publication in remote.videoTrackPublications) {
+        if (enabled) {
+          await _unsubscribe(publication);
+        } else {
+          await _subscribe(publication);
+        }
+      }
+    }
+    _changed();
+  }
+
+  Future<void> _unsubscribe(lk.RemoteTrackPublication publication) async {
+    try {
+      await publication.unsubscribe();
+    } catch (_) {
+      // The track is gone, or the room is closing.
+    }
+  }
+
+  Future<void> _subscribe(lk.RemoteTrackPublication publication) async {
+    try {
+      await publication.subscribe();
+    } catch (_) {
+      // See [_unsubscribe].
+    }
   }
 
   @override

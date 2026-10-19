@@ -37,6 +37,16 @@ final voiceStatesProvider = FutureProvider.autoDispose
       return repository.listVoiceStates(circleId);
     });
 
+/// The status lines of the circle's voice channels with somebody in them
+/// (E6), by channel id. Reloads with [voiceStatesProvider]: a status changes
+/// when people come and go, and a change of the status itself reaches the
+/// same stream.
+final voiceChannelStatusesProvider = FutureProvider.autoDispose
+    .family<Map<String, String>, String>((ref, circleId) {
+      ref.watch(voiceStatesProvider(circleId));
+      return ref.watch(voiceRepositoryProvider).listChannelStatuses(circleId);
+    });
+
 /// How often active calls are reloaded without a change, so ringing stops
 /// and calls whose members vanished end.
 const directCallsRefreshInterval = Duration(seconds: 15);
@@ -150,6 +160,19 @@ abstract interface class VoiceRepository {
 
   /// Sets [channelId]'s user limit; 0 removes it.
   Future<void> setUserLimit({required String channelId, required int limit});
+
+  /// The status lines of the circle's voice channels that have somebody in
+  /// them, by channel id (E6).
+  Future<Map<String, String>> listChannelStatuses(String circleId);
+
+  /// Sets what [channelId] says about itself ("playing ranked"); blank
+  /// clears it. Only people in the channel may. Returns the status as
+  /// stored (null when cleared). Throws [VoiceAccessDeniedException] for
+  /// someone who is not in the channel.
+  Future<String?> setChannelStatus({
+    required String channelId,
+    required String status,
+  });
 
   /// A LiveKit server and token for the voice channel. Throws
   /// [VoiceNotConfiguredException] when voice is not set up and
@@ -386,6 +409,39 @@ class SupabaseVoiceRepository implements VoiceRepository {
   }
 
   @override
+  Future<Map<String, String>> listChannelStatuses(String circleId) async {
+    final data = await _dataSource.rpc('list_voice_channel_statuses', {
+      'target_circle_id': circleId,
+    });
+    if (data is! Map) {
+      return const {};
+    }
+    return {
+      for (final MapEntry(:key, :value) in data.entries)
+        if (key is String && value is String && value.isNotEmpty) key: value,
+    };
+  }
+
+  @override
+  Future<String?> setChannelStatus({
+    required String channelId,
+    required String status,
+  }) async {
+    try {
+      final stored = await _dataSource.rpc('set_voice_channel_status', {
+        'target_channel_id': channelId,
+        'new_status': status,
+      });
+      return stored is String && stored.isNotEmpty ? stored : null;
+    } on PostgrestException catch (error) {
+      if (error.code == '42501') {
+        throw const VoiceAccessDeniedException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
   Future<bool> updateVoiceState({
     required bool selfMute,
     required bool selfDeaf,
@@ -572,6 +628,23 @@ class SupabaseVoiceDataSource implements VoiceDataSource {
                 }
               },
             )
+            // A channel's status line changed (E6).
+            .onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              schema: 'public',
+              table: 'circle_channels',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'circle_id',
+                value: circleId,
+              ),
+              callback: (payload) {
+                if (payload.oldRecord['voice_status'] !=
+                    payload.newRecord['voice_status']) {
+                  controller.add(null);
+                }
+              },
+            )
             .subscribe();
       },
       onCancel: () async {
@@ -726,6 +799,16 @@ class UninitializedVoiceRepository implements VoiceRepository {
 
   @override
   Future<Map<String, int>> listUserLimits(String circleId) async => const {};
+
+  @override
+  Future<Map<String, String>> listChannelStatuses(String circleId) async =>
+      const {};
+
+  @override
+  Future<String?> setChannelStatus({
+    required String channelId,
+    required String status,
+  }) async => null;
 
   @override
   Future<void> setUserLimit({

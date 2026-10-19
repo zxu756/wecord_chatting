@@ -90,12 +90,13 @@ String formatSlowmodeCountdown(int seconds) {
   return '$minutes:$rest';
 }
 
-ReplyPreview replyPreviewForMessage(ChatMessage message) {
+ReplyPreview replyPreviewForMessage(ChatMessage message, {ReplyQuote? quote}) {
   return ReplyPreview(
     messageId: message.id,
     senderName: 'Message',
     body: replyPreviewBody(message),
     type: message.type,
+    quote: quote,
   );
 }
 

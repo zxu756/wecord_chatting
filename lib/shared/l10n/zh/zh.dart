@@ -20,6 +20,7 @@ import 'package:wecord/shared/l10n/zh/zh_backend_fixes.dart';
 import 'package:wecord/shared/l10n/zh/zh_calls_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_chat_folders.dart';
 import 'package:wecord/shared/l10n/zh/zh_chat_more.dart';
+import 'package:wecord/shared/l10n/zh/zh_chat_polish.dart';
 import 'package:wecord/shared/l10n/zh/zh_chat_thread.dart';
 import 'package:wecord/shared/l10n/zh/zh_chats.dart';
 import 'package:wecord/shared/l10n/zh/zh_circle_onboarding.dart';
@@ -149,6 +150,7 @@ const zhAreas = <Map<String, String>>[
   zhAiAssistant,
   zhDigest,
   zhProfileExtras,
+  zhChatPolish,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

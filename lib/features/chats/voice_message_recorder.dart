@@ -45,13 +45,31 @@ abstract interface class VoiceMessageRecorder {
   Future<void> cancel();
 }
 
-class AudioVoiceMessageRecorder implements VoiceMessageRecorder {
+/// A recorder that can be paused and carry on (A10). Like
+/// `OutboxMessageSender`, a recorder may or may not be one; the pause button
+/// shows only for those that are.
+abstract interface class PausableVoiceRecorder {
+  bool get isPaused;
+
+  /// Stops taking sound in; what was recorded is kept.
+  Future<void> pause();
+
+  /// Carries on into the same recording.
+  Future<void> resume();
+
+  /// What has been recorded so far as a WAV, without stopping (to trim it
+  /// or listen to it while paused). Null before anything was recorded.
+  RecordedVoiceMessage? snapshot();
+}
+
+class AudioVoiceMessageRecorder
+    implements VoiceMessageRecorder, PausableVoiceRecorder {
   AudioVoiceMessageRecorder({AudioRecorder? recorder})
     : _recorder = recorder ?? AudioRecorder();
 
   final AudioRecorder _recorder;
   final _recordedChunks = <Uint8List>[];
-  DateTime? _startedAt;
+  var _paused = false;
   StreamSubscription<Uint8List>? _recordingSubscription;
 
   @override
@@ -63,7 +81,7 @@ class AudioVoiceMessageRecorder implements VoiceMessageRecorder {
 
     await _recordingSubscription?.cancel();
     _recordedChunks.clear();
-    _startedAt = DateTime.now();
+    _paused = false;
     final stream = await _recorder.startStream(
       const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
@@ -71,14 +89,62 @@ class AudioVoiceMessageRecorder implements VoiceMessageRecorder {
         numChannels: _voiceNumChannels,
       ),
     );
-    _recordingSubscription = stream.listen(_recordedChunks.add);
+    // While paused, whatever still arrives is dropped: the browser's and the
+    // phone's recorders differ in how soon they go quiet.
+    _recordingSubscription = stream.listen((chunk) {
+      if (!_paused) {
+        _recordedChunks.add(chunk);
+      }
+    });
+  }
+
+  @override
+  bool get isPaused => _paused;
+
+  @override
+  Future<void> pause() async {
+    if (_paused) {
+      return;
+    }
+    _paused = true;
+    try {
+      await _recorder.pause();
+    } catch (_) {
+      // Some platforms cannot pause the input; the chunks are dropped anyway.
+    }
+  }
+
+  @override
+  Future<void> resume() async {
+    if (!_paused) {
+      return;
+    }
+    try {
+      await _recorder.resume();
+    } catch (_) {
+      // See [pause].
+    }
+    _paused = false;
+  }
+
+  @override
+  RecordedVoiceMessage? snapshot() {
+    if (_recordedChunks.isEmpty) {
+      return null;
+    }
+    final pcmBytes = Uint8List.fromList([
+      for (final chunk in _recordedChunks) ...chunk,
+    ]);
+    return RecordedVoiceMessage(
+      bytes: _wavBytes(pcmBytes),
+      mimeType: 'audio/wav',
+      durationMs: _pcmDurationMs(pcmBytes.length),
+    );
   }
 
   @override
   Future<RecordedVoiceMessage?> stop() async {
-    final startedAt = _startedAt;
-    _startedAt = null;
-
+    _paused = false;
     await _recorder.stop();
     await _recordingSubscription?.cancel();
     _recordingSubscription = null;
@@ -90,19 +156,17 @@ class AudioVoiceMessageRecorder implements VoiceMessageRecorder {
       for (final chunk in _recordedChunks) ...chunk,
     ]);
     _recordedChunks.clear();
-    final durationMs = startedAt == null
-        ? 0
-        : DateTime.now().difference(startedAt).inMilliseconds;
+    // The length of the sound itself, so a pause does not count.
     return RecordedVoiceMessage(
       bytes: _wavBytes(pcmBytes),
       mimeType: 'audio/wav',
-      durationMs: durationMs,
+      durationMs: _pcmDurationMs(pcmBytes.length),
     );
   }
 
   @override
   Future<void> cancel() async {
-    _startedAt = null;
+    _paused = false;
     await _recorder.cancel();
     await _recordingSubscription?.cancel();
     _recordingSubscription = null;
@@ -114,6 +178,11 @@ class AudioVoiceMessageRecorder implements VoiceMessageRecorder {
     unawaited(_recorder.dispose());
   }
 }
+
+int _pcmDurationMs(int pcmLength) =>
+    pcmLength *
+    1000 ~/
+    (_voiceSampleRate * _voiceNumChannels * _voiceBitsPerSample ~/ 8);
 
 Uint8List _wavBytes(Uint8List pcmBytes) {
   final bytes = Uint8List(44 + pcmBytes.length);

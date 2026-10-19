@@ -457,11 +457,23 @@ extension _ThreadComposerState on _ChatThreadScreenState {
     return _mentionDraft.mentionsFor(body, hereUserIds: _hereUserIds);
   }
 
+  /// The quote of the reply being written, if the person picked a part of
+  /// the message's text.
+  ReplyQuote? get _activeReplyQuote =>
+      _replyingTo != null && _replyQuoteFor?.messageId == _replyingTo!.id
+      ? _replyQuoteFor!.quote
+      : null;
+
   void _startReply(ChatMessage message) {
     if (message.recalledAt != null) {
       return;
     }
+    final request = ref.read(replyQuoteRequestProvider);
+    ref.read(replyQuoteRequestProvider.notifier).clear();
     setState(() {
+      _replyQuoteFor = request != null && request.messageId == message.id
+          ? (messageId: message.id, quote: request.quote)
+          : null;
       _replyingTo = message;
       _editingMessage = null;
       _sendError = null;
@@ -490,6 +502,7 @@ extension _ThreadComposerState on _ChatThreadScreenState {
   void _cancelReply() {
     setState(() {
       _replyingTo = null;
+      _replyQuoteFor = null;
       _pendingDraftReplyId = null;
     });
     _saveDraft();

@@ -49,6 +49,10 @@ class _Composer extends StatelessWidget {
     this.attachmentTray,
     this.aiButton,
     this.scheduledBanner,
+    this.isVoicePaused = false,
+    this.onToggleVoicePause,
+    this.onTrimVoiceRecording,
+    this.voiceTrimLabel,
   });
 
   /// The AI rewrite button (see [AiComposerButton]); on phones it only
@@ -130,6 +134,15 @@ class _Composer extends StatelessWidget {
   /// Seconds left of the recording in its last stretch; null before.
   final ValueListenable<int?> voiceSecondsLeft;
   final bool isSendingVoice;
+
+  /// The recording is paused (A10). [onToggleVoicePause] is null when the
+  /// recorder cannot pause; [onTrimVoiceRecording] is null unless paused.
+  final bool isVoicePaused;
+  final Future<void> Function()? onToggleVoicePause;
+  final Future<void> Function()? onTrimVoiceRecording;
+
+  /// "Keeps 0:07" once the recording was trimmed.
+  final String? voiceTrimLabel;
   final Future<void> Function() onStartVoiceRecording;
   final Future<void> Function() onCancelVoiceRecording;
   final Future<void> Function() onSendVoiceRecording;
@@ -192,13 +205,26 @@ class _Composer extends StatelessWidget {
                 const ExcludeSemantics(child: _RecordingDot()),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    tr('Recording...'),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: c.ink,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isVoicePaused ? tr('Paused') : tr('Recording...'),
+                        key: const ValueKey('voice-recording-state'),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: c.ink,
+                        ),
+                      ),
+                      if (voiceTrimLabel != null)
+                        Text(
+                          voiceTrimLabel!,
+                          key: const ValueKey('voice-trim-label'),
+                          style: TextStyle(fontSize: 12.5, color: c.muted),
+                        ),
+                    ],
                   ),
                 ),
                 // Not read out every second: it is a quiet visual cue.
@@ -348,6 +374,28 @@ class _Composer extends StatelessWidget {
                   ? null
                   : () => unawaited(onCancelVoiceRecording()),
             ),
+            if (onTrimVoiceRecording != null)
+              WeCordIconButton(
+                key: const ValueKey('composer-voice-trim'),
+                tooltip: tr('Trim'),
+                icon: Icons.content_cut_rounded,
+                size: desktop ? 36 : 40,
+                variant: WeCordButtonVariant.ghost,
+                onPressed: isSendingVoice
+                    ? null
+                    : () => unawaited(onTrimVoiceRecording!()),
+              ),
+            if (onToggleVoicePause != null)
+              WeCordIconButton(
+                key: const ValueKey('composer-voice-pause'),
+                tooltip: isVoicePaused ? tr('Resume recording') : tr('Pause'),
+                icon: isVoicePaused ? Icons.mic_rounded : Icons.pause_rounded,
+                size: desktop ? 36 : 40,
+                variant: WeCordButtonVariant.ghost,
+                onPressed: isSendingVoice
+                    ? null
+                    : () => unawaited(onToggleVoicePause!()),
+              ),
             const SizedBox(width: 2),
             isSendingVoice
                 ? Container(

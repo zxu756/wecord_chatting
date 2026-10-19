@@ -158,6 +158,7 @@ class VoiceSession {
     this.noiseMode = VoiceNoiseMode.standard,
     this.backgroundSupport = VideoBackgroundSupport.none,
     this.backgroundBlur = false,
+    this.audioOnly = false,
   });
 
   /// The circle and voice channel, for a voice channel; null in a call.
@@ -216,6 +217,9 @@ class VoiceSession {
   /// The background is blurred (or the system's effect is on).
   final bool backgroundBlur;
 
+  /// Other people's video is not received (E6).
+  final bool audioOnly;
+
   /// In a stage's audience, where the microphone stays off.
   bool get stageListener => stage && !stageSpeaker;
 
@@ -256,6 +260,7 @@ class VoiceSession {
     VoiceNoiseMode? noiseMode,
     VideoBackgroundSupport? backgroundSupport,
     bool? backgroundBlur,
+    bool? audioOnly,
   }) {
     return VoiceSession(
       circleId: circleId,
@@ -281,6 +286,7 @@ class VoiceSession {
       noiseMode: noiseMode ?? this.noiseMode,
       backgroundSupport: backgroundSupport ?? this.backgroundSupport,
       backgroundBlur: backgroundBlur ?? this.backgroundBlur,
+      audioOnly: audioOnly ?? this.audioOnly,
     );
   }
 }
@@ -914,6 +920,24 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     } catch (_) {
       // Applies from the next call.
     }
+  }
+
+  /// Stops receiving other people's video (and screen shares), or receives
+  /// it again (E6).
+  Future<void> setAudioOnly(bool enabled) async {
+    final session = state;
+    final call = _call;
+    if (session == null || call == null || session.audioOnly == enabled) {
+      return;
+    }
+    await call.setAudioOnly(enabled);
+    if (!mounted) {
+      return;
+    }
+    state = state?.copyWith(
+      audioOnly: enabled,
+      participants: call.participants,
+    );
   }
 
   Future<void> toggleDeafen() async {

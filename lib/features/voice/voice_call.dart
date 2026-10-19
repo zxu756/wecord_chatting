@@ -100,6 +100,12 @@ abstract interface class VoiceCall implements Listenable {
   /// Stops (or resumes) hearing everyone else.
   Future<void> setRemoteAudioEnabled(bool enabled);
 
+  /// Audio only (E6): stops receiving everyone else's camera and screen
+  /// share, which saves data on a poor connection, or receives them again.
+  /// Applies to people who start video later too. Your own camera is not
+  /// affected.
+  Future<void> setAudioOnly(bool enabled);
+
   /// Restarts the microphone with [audio]'s processing.
   Future<void> setAudioProcessing(VoiceAudioProcessing audio);
 

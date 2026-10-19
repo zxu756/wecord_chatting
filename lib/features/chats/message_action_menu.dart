@@ -134,6 +134,9 @@ class _MessageMenuRoute extends PopupRoute<void> {
   static const _reactionsHeight = 60.0;
   static const _gap = 10.0;
 
+  /// The least the lifted message keeps when the actions need the room.
+  static const _minPreviewHeight = 72.0;
+
   @override
   Widget buildPage(
     BuildContext context,
@@ -142,54 +145,69 @@ class _MessageMenuRoute extends PopupRoute<void> {
   ) {
     final padding = MediaQuery.paddingOf(context);
     final pop = Navigator.of(context).pop;
-    final menu = _MessageMenuCard(
-      actions: [
-        for (final action in actions)
-          MessageAction(
-            key: action.key,
-            icon: action.icon,
-            label: action.label,
-            slot: action.slot,
-            destructive: action.destructive,
-            onSelected: () {
-              pop();
-              action.onSelected();
-            },
-          ),
-      ],
-    );
+    final menuActions = [
+      for (final action in actions)
+        MessageAction(
+          key: action.key,
+          icon: action.icon,
+          label: action.label,
+          slot: action.slot,
+          destructive: action.destructive,
+          onSelected: () {
+            pop();
+            action.onSelected();
+          },
+        ),
+    ];
     final lift = CurvedAnimation(
       parent: animation,
       curve: WeCordMotion.bouncy.curve,
       reverseCurve: Curves.easeInCubic,
     );
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        if (reactions case final reactions?) ...[
-          SizedBox(height: _reactionsHeight, child: reactions),
-          const SizedBox(height: _gap),
-        ],
-        Flexible(
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 1, end: 1.03).animate(lift),
-            alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
-            child: SizedBox(
-              width: messageRect.width,
-              child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: IgnorePointer(child: preview),
+    Widget buildContent(double availableHeight) {
+      // The actions scroll when the screen is too short for all of them,
+      // leaving the lifted message at least a little room.
+      final menu = _MessageMenuCard(
+        actions: menuActions,
+        maxHeight: math.max(
+          160,
+          availableHeight -
+              (reactions == null ? 0 : _reactionsHeight + _gap) -
+              _gap -
+              _minPreviewHeight,
+        ),
+      );
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          if (reactions case final reactions?) ...[
+            SizedBox(height: _reactionsHeight, child: reactions),
+            const SizedBox(height: _gap),
+          ],
+          Flexible(
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 1, end: 1.03).animate(lift),
+              alignment: alignEnd
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: SizedBox(
+                width: messageRect.width,
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: IgnorePointer(child: preview),
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: _gap),
-        menu,
-      ],
-    );
+          const SizedBox(height: _gap),
+          menu,
+        ],
+      );
+    }
+
     return capturedThemes.wrap(
       Semantics(
         scopesRoute: true,
@@ -224,7 +242,10 @@ class _MessageMenuRoute extends PopupRoute<void> {
                     alignment: alignEnd
                         ? Alignment.centerRight
                         : Alignment.centerLeft,
-                    child: content,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) =>
+                          buildContent(constraints.maxHeight),
+                    ),
                   ),
                 ),
               ),
@@ -320,9 +341,12 @@ class _MessageMenuLayout extends SingleChildLayoutDelegate {
 
 /// The glass card under the lifted message.
 class _MessageMenuCard extends StatelessWidget {
-  const _MessageMenuCard({required this.actions});
+  const _MessageMenuCard({required this.actions, this.maxHeight});
 
   final List<MessageAction> actions;
+
+  /// The tallest the card may be; the rows scroll past it.
+  final double? maxHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +367,7 @@ class _MessageMenuCard extends StatelessWidget {
       for (final action in actions)
         if (action.slot == MessageActionSlot.list) action,
     ];
-    return SizedBox(
+    final card = SizedBox(
       width: 282,
       child: WeCordGlass(
         key: const ValueKey('message-action-menu'),
@@ -375,24 +399,28 @@ class _MessageMenuCard extends StatelessWidget {
               if (tiles.isNotEmpty && rows.isNotEmpty)
                 const SizedBox(height: 8),
               if (rows.isNotEmpty)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: inner,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final (index, action) in rows.indexed)
-                          GlassMenuRow(
-                            height: 46,
-                            entry: action.toEntry(),
-                            autofocus: tiles.isEmpty && index == 0,
-                          ),
-                      ],
+                Flexible(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: inner,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final (index, action) in rows.indexed)
+                              GlassMenuRow(
+                                height: 46,
+                                entry: action.toEntry(),
+                                autofocus: tiles.isEmpty && index == 0,
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -401,6 +429,13 @@ class _MessageMenuCard extends StatelessWidget {
         ),
       ),
     );
+    final limit = maxHeight;
+    return limit == null
+        ? card
+        : ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: limit),
+            child: card,
+          );
   }
 }
 

@@ -6,6 +6,7 @@
 // The built-in entries (see bubble_footer_builtin.dart) use orders 100, 200,
 // ... within each placement; pick a number in between to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chats/chat_polish/silent_send.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
@@ -19,6 +20,7 @@ final List<BubbleFooterEntry> bubbleFooterExtensions = [
   autoTranslateFooterEntry,
   aiReplyFooterEntry,
   assistantRequestFooterEntry,
+  silentFooterEntry,
 ];
 
 /// The slot's registry. Tests can override it to add or drop entries.

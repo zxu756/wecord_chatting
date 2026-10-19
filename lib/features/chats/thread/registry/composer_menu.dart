@@ -28,6 +28,7 @@ class ComposerMenuActions {
     required this.changeWallpaper,
     required this.pickSticker,
     required this.pickGif,
+    this.sendSilently,
   });
 
   final Future<void> Function() pickPhotosAndVideos;
@@ -43,6 +44,10 @@ class ComposerMenuActions {
   final VoidCallback changeWallpaper;
   final Future<void> Function() pickSticker;
   final Future<void> Function() pickGif;
+
+  /// Sends the text in the box without a push; null where that is not
+  /// possible (the note to self, a server without it).
+  final Future<void> Function()? sendSilently;
 }
 
 /// What a contribution can look at when the menu opens.

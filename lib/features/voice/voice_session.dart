@@ -325,6 +325,10 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
   /// user's as they are sent. Floats over the sender's tile.
   final _reactions = StreamController<VoiceReaction>.broadcast();
   StreamSubscription<VoiceReaction>? _reactionSubscription;
+
+  /// Data messages from the room that are not reactions (captions, E1).
+  final _dataMessages = StreamController<VoiceDataMessage>.broadcast();
+  StreamSubscription<VoiceDataMessage>? _dataSubscription;
   var _sendLimit = ReactionRateLimiter();
   Timer? _heartbeat;
   Timer? _retryMicrophone;
@@ -518,11 +522,41 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     return true;
   }
 
+  /// Data messages other people in the call send (captions, E1), with the
+  /// sender the voice server vouches for.
+  Stream<VoiceDataMessage> get dataMessages => _dataMessages.stream;
+
+  /// Sends [data] to everyone in the call under [topic]. False when there is
+  /// no connected call or it could not be sent.
+  Future<bool> publishData(
+    List<int> data, {
+    required String topic,
+    bool reliable = true,
+  }) async {
+    final session = state;
+    final call = _call;
+    if (session == null || call == null || !session.isConnected) {
+      return false;
+    }
+    try {
+      await call.publishData(data, topic: topic, reliable: reliable);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// [carried] is the session before a move, whose mute and deafen stay.
   void _connected(VoiceCall call, {VoiceSession? carried}) {
     _call = call;
     call.addListener(_syncFromCall);
     _sendLimit = ReactionRateLimiter();
+    unawaited(_dataSubscription?.cancel());
+    _dataSubscription = call.dataMessages.listen((message) {
+      if (!_dataMessages.isClosed) {
+        _dataMessages.add(message);
+      }
+    });
     unawaited(_reactionSubscription?.cancel());
     _reactionSubscription = call.reactions.listen((reaction) {
       if (!_reactions.isClosed) {
@@ -780,6 +814,8 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     call?.removeListener(_syncFromCall);
     unawaited(_reactionSubscription?.cancel());
     _reactionSubscription = null;
+    unawaited(_dataSubscription?.cancel());
+    _dataSubscription = null;
     return call;
   }
 
@@ -1146,6 +1182,7 @@ class VoiceSessionController extends StateNotifier<VoiceSession?> {
     _disposed = true;
     unawaited(leave());
     unawaited(_reactions.close());
+    unawaited(_dataMessages.close());
     super.dispose();
   }
 }

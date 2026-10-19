@@ -1,5 +1,10 @@
 // Reads the app's request body. No network.
 
+import {
+  type MeetingRecapRequest,
+  parseMeetingRecapRequest,
+} from "./meeting_recap_request.ts";
+
 export const LANGUAGES = {
   en: "English",
   zh: "Simplified Chinese",
@@ -129,7 +134,9 @@ export type AiRequest =
     target: LanguageCode | null;
     /// The language to write in, or null for the note's own.
     language: LanguageCode | null;
-  };
+  }
+  /// The minutes of a call whose captions were on (meeting_recap.ts).
+  | MeetingRecapRequest;
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === "string" &&
@@ -371,6 +378,8 @@ export function parseAiRequest(body: unknown): AiRequest | null {
         language,
       };
     }
+    case "meeting_recap":
+      return parseMeetingRecapRequest(fields);
     default:
       return null;
   }

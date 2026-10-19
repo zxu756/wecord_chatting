@@ -27,6 +27,7 @@ class VoiceCallParticipant {
     this.screenShareEnabled = false,
     this.cameraView,
     this.screenView,
+    this.captionsHost = false,
   });
 
   /// The participant identity, which is their user id.
@@ -43,6 +44,29 @@ class VoiceCallParticipant {
 
   /// Builds the shared screen while [screenShareEnabled].
   final WidgetBuilder? screenView;
+
+  /// The voice server's signed token says this person may turn captions on
+  /// (E1). Nobody in the room can fake it; see [captionHostAttribute].
+  final bool captionsHost;
+}
+
+/// The LiveKit participant attribute (set by the `livekit-token` function,
+/// in the signed token) that marks someone who may turn captions on.
+const captionHostAttribute = 'cap';
+
+/// A data message someone in the room sent: [senderId] is the identity the
+/// voice server vouches for, whatever the message says.
+@immutable
+class VoiceDataMessage {
+  const VoiceDataMessage({
+    required this.senderId,
+    required this.topic,
+    required this.data,
+  });
+
+  final String senderId;
+  final String topic;
+  final List<int> data;
 }
 
 /// A live connection to a voice channel's media room.
@@ -67,6 +91,18 @@ abstract interface class VoiceCall implements Listenable {
 
   /// Sends [emoji] (one of [callReactionEmojis]) to everyone in the room.
   Future<void> sendReaction(String emoji);
+
+  /// Data messages other people in the room send, other than reactions
+  /// (captions, E1). Your own are not repeated here.
+  Stream<VoiceDataMessage> get dataMessages;
+
+  /// Sends [data] to everyone in the room under [topic]. [reliable] false is
+  /// for messages that may be lost (a caption still being spoken).
+  Future<void> publishData(
+    List<int> data, {
+    required String topic,
+    bool reliable = true,
+  });
 
   Future<void> setMicrophoneEnabled(bool enabled);
 

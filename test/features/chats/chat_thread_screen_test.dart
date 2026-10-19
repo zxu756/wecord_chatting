@@ -2336,6 +2336,9 @@ void main() {
 
       await tester.longPress(find.text('mine https://example.com'));
       await tester.pumpAndSettle();
+      // The menu scrolls on a short screen.
+      await tester.ensureVisible(find.text('Remove embed'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Remove embed'));
       await tester.pumpAndSettle();
 
@@ -3284,6 +3287,9 @@ void main() {
     expect(find.text('Copy'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
 
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(find.text('Delete'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 

@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/offline/offline_session.dart';
 import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
 import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/features/error_reports/error_reporting_wiring.dart';
+import 'package:wecord/features/feature_flags/update_required_screen.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/features/pwa/pwa_overlay.dart';
 import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
@@ -113,8 +114,12 @@ class WeCordApp extends ConsumerWidget {
             density: density,
             child: MacosTitleBarFrame(
               child: PwaOverlayHost(
-                child: PresenceActivityListener(
-                  child: child ?? const SizedBox.shrink(),
+                // "Please update" instead of the app while this version is
+                // older than the server allows (K4).
+                child: AppUpdateGate(
+                  child: PresenceActivityListener(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

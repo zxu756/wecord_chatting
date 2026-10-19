@@ -38,7 +38,9 @@ void main() {
       expect(all, contains('alter table public.$table enable row level'));
       expect(
         all,
-        contains('revoke all on public.$table from public, anon, authenticated;'),
+        contains(
+          'revoke all on public.$table from public, anon, authenticated;',
+        ),
         reason: table,
       );
       expect(
@@ -103,8 +105,14 @@ void main() {
   });
 
   test('screenshots are private and live in the sender folder', () {
-    expect(feedback, contains("'feedback-screenshots',\n  'feedback-screenshots',\n  false,"));
-    expect(feedback, contains('(storage.foldername(name))[1] = auth.uid()::text'));
+    expect(
+      feedback,
+      contains("'feedback-screenshots',\n  'feedback-screenshots',\n  false,"),
+    );
+    expect(
+      feedback,
+      contains('(storage.foldername(name))[1] = auth.uid()::text'),
+    );
     expect(feedback, contains('public.is_app_admin()'));
     expect(feedback, contains("errcode = 'PB429'"));
   });

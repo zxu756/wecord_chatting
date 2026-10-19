@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wecord/features/announcements/whats_new_host.dart';
 import 'package:wecord/features/circles/circle_rail.dart';
 import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/home/user_panel.dart';
@@ -80,7 +81,9 @@ class WeCordShell extends StatelessWidget {
         child: NotificationShellListener(
           child: LiveLocationShellListener(
             child: IncomingCallListener(
-              child: PushShellListener(child: PwaShellListener(child: child)),
+              child: PushShellListener(
+                child: PwaShellListener(child: WhatsNewHost(child: child)),
+              ),
             ),
           ),
         ),

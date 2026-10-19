@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/admin/admin_entry.dart';
+import 'package:wecord/features/feedback/feedback_entry.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
@@ -181,6 +182,7 @@ class SettingsPhonePage extends ConsumerWidget {
           const NotificationSettingsGroups(),
           PrivacySettingsGroup(header: tr('Privacy & Safety')),
           const AdminConsoleEntry(),
+          const FeedbackSettingsEntry(),
           const AboutSettingsEntry(),
           AccountActionsGroup(username: value.username, header: tr('Account')),
         ],

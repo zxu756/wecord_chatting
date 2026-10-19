@@ -26,7 +26,7 @@ class AdminConsoleEntry extends ConsumerWidget {
             key: const ValueKey('settings-admin-console'),
             icon: Icons.admin_panel_settings_outlined,
             title: tr('Admin console'),
-            subtitle: tr('Reports and the audit log'),
+            subtitle: tr('Reports, flags, notices and feedback'),
             value: role.label,
             onTap: () {
               // The wide settings window floats over the app: go to the

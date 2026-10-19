@@ -22,6 +22,9 @@ class FakeVoiceRecognizer implements VoiceRecognizer {
   final unsupportedLocales = <String>{};
 
   final starts = <({String locale, bool allowServer})>[];
+
+  /// Whether each start was for a call (captions).
+  final startsInCall = <bool>[];
   final sessions = <FakeVoiceSession>[];
 
   FakeVoiceSession get session => sessions.last;
@@ -42,12 +45,14 @@ class FakeVoiceRecognizer implements VoiceRecognizer {
   Future<VoiceSession> start({
     required String locale,
     required bool allowServer,
+    bool inCall = false,
   }) async {
     if (startError case final error?) {
       startError = null;
       throw error;
     }
     starts.add((locale: locale, allowServer: allowServer));
+    startsInCall.add(inCall);
     final session = FakeVoiceSession();
     sessions.add(session);
     return session;

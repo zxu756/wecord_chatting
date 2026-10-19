@@ -43,6 +43,7 @@ class BrowserVoiceRecognizer implements VoiceRecognizer {
   Future<VoiceSession> start({
     required String locale,
     required bool allowServer,
+    bool inCall = false,
   }) async {
     final constructor = _constructor();
     if (constructor == null) {

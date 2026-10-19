@@ -14,6 +14,8 @@ import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
+import 'package:wecord/features/urgent/announcement_ack.dart';
+import 'package:wecord/features/urgent/urgent_repository.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -65,6 +67,9 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
   var _isSaving = false;
   String? _errorText;
   String? _loadedConversationId;
+
+  /// "Ask members to confirm" as the owner set it; null until touched.
+  bool? _requireAck;
 
   @override
   void dispose() {
@@ -169,6 +174,21 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
               style: TextStyle(fontSize: 12.5, color: c.muted),
             ),
           ),
+        if (canManage) ...[
+          const SizedBox(height: 12),
+          AnnouncementAckToggle(
+            value:
+                _requireAck ??
+                ref
+                    .watch(announcementAckStateProvider(detail.conversationId))
+                    .value
+                    ?.requiresAck ??
+                false,
+            onChanged: _isSaving
+                ? null
+                : (value) => setState(() => _requireAck = value),
+          ),
+        ],
         if (_errorText != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
@@ -375,7 +395,33 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             avatarUrl: _pendingAvatarUrl.isEmpty ? null : _pendingAvatarUrl,
             announcement: _announcementController.text,
           );
-      ref.invalidate(groupDetailProvider(detail.conversationId));
+      // Asking for confirmations is a separate call (A7): after the text, so
+      // the request is for the text just saved.
+      final wanted = _requireAck;
+      final before = ref
+          .read(announcementAckStateProvider(detail.conversationId))
+          .value
+          ?.requiresAck;
+      if (wanted != null && wanted != before) {
+        try {
+          await ref
+              .read(urgentRepositoryProvider)
+              .setAnnouncementRequiresAck(
+                detail.conversationId,
+                required: wanted,
+              );
+        } catch (error) {
+          if (mounted) {
+            setState(() {
+              _requireAck = before;
+              _errorText = announcementAckProblemText(error);
+            });
+          }
+        }
+      }
+      ref
+        ..invalidate(announcementAckStateProvider(detail.conversationId))
+        ..invalidate(groupDetailProvider(detail.conversationId));
     } catch (_) {
       if (mounted) {
         setState(() {

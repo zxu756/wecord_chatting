@@ -253,6 +253,9 @@ void main() {
 
       await tester.tap(find.byTooltip('Group details'));
       await settle(tester);
+      // The owner's "Ask members to confirm" switch sits above the list of
+      // actions; scroll down to the last of them.
+      await scrollIntoView(tester, find.text('Leave group'));
       expect(find.text('Leave group'), findsOneWidget);
       expectWeCordSheet(tester);
     });

@@ -4,6 +4,7 @@
 // several areas reads the same everywhere.
 import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
+import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
 import 'package:wecord/shared/l10n/zh/zh_edit_history.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai.dart';
@@ -57,6 +58,7 @@ import 'package:wecord/shared/l10n/zh/zh_polish.dart';
 import 'package:wecord/shared/l10n/zh/zh_push.dart';
 import 'package:wecord/shared/l10n/zh/zh_pwa.dart';
 import 'package:wecord/shared/l10n/zh/zh_read_status.dart';
+import 'package:wecord/shared/l10n/zh/zh_urgent_recurring.dart';
 import 'package:wecord/shared/l10n/zh/zh_qr_pat.dart';
 import 'package:wecord/shared/l10n/zh/zh_quiet_hours.dart';
 import 'package:wecord/shared/l10n/zh/zh_redesign_shell.dart';
@@ -143,10 +145,12 @@ const zhAreas = <Map<String, String>>[
   zhJoinRequests,
   zhCircleOnboarding,
   zhReadStatus,
+  zhUrgentRecurring,
   zhAutoTranslate,
   zhStickers,
   zhInsights,
   zhForms,
+  zhAdminOps,
   zhAiAssistant,
   zhDigest,
   zhProfileExtras,

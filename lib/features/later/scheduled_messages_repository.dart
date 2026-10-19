@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/later/schedule_repeat.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
@@ -25,6 +26,7 @@ class ScheduledMessage {
     this.mentions = const [],
     this.status = ScheduledMessageStatus.pending,
     this.lastError,
+    this.repeat,
   });
 
   factory ScheduledMessage.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class ScheduledMessage {
         json['status'] as String? ?? 'pending',
       ),
       lastError: json['last_error'] as String?,
+      repeat: ScheduleRepeat.fromRow(json),
     );
   }
 
@@ -56,6 +59,12 @@ class ScheduledMessage {
   /// Why a failed message was not sent (the server's words, or
   /// `automod:<reason>`).
   final String? lastError;
+
+  /// How it repeats; null when it is sent once. A repeating message is the
+  /// next send of its series: sending it writes the one after.
+  final ScheduleRepeat? repeat;
+
+  bool get isRepeating => repeat != null;
 
   bool get isFailed => status == ScheduledMessageStatus.failed;
 
@@ -120,14 +129,17 @@ abstract interface class ScheduledMessagesRepository {
     required String body,
     required DateTime sendAt,
     List<Map<String, dynamic>> mentions = const [],
+    ScheduleRepeat? repeat,
   });
 
-  /// Changes the text or time; a failed message goes back in the queue.
+  /// Changes the text, time or repeat (null: sent once); a failed message
+  /// goes back in the queue.
   Future<ScheduledMessage> update(
     String id, {
     required String body,
     required DateTime sendAt,
     required List<Map<String, dynamic>> mentions,
+    ScheduleRepeat? repeat,
   });
 
   Future<void> delete(String id);
@@ -180,6 +192,7 @@ class SupabaseScheduledMessagesRepository
     required String body,
     required DateTime sendAt,
     List<Map<String, dynamic>> mentions = const [],
+    ScheduleRepeat? repeat,
   }) async {
     final ownerId = _client.auth.currentUser?.id;
     if (ownerId == null) {
@@ -193,6 +206,7 @@ class SupabaseScheduledMessagesRepository
           'body': body,
           'mentions': mentions,
           'send_at': sendAt.toUtc().toIso8601String(),
+          if (repeat != null) ...repeat.toColumns(),
         })
         .select()
         .single();
@@ -205,6 +219,7 @@ class SupabaseScheduledMessagesRepository
     required String body,
     required DateTime sendAt,
     required List<Map<String, dynamic>> mentions,
+    ScheduleRepeat? repeat,
   }) async {
     final row = await _client
         .from(_table)
@@ -212,6 +227,12 @@ class SupabaseScheduledMessagesRepository
           'body': body,
           'mentions': mentions,
           'send_at': sendAt.toUtc().toIso8601String(),
+          ...(repeat?.toColumns() ??
+              {
+                'recurrence': null,
+                'recurrence_tz': null,
+                'recurrence_until': null,
+              }),
         })
         .eq('id', id)
         .select()
@@ -247,6 +268,7 @@ class UninitializedScheduledMessagesRepository
     required String body,
     required DateTime sendAt,
     List<Map<String, dynamic>> mentions = const [],
+    ScheduleRepeat? repeat,
   }) => throw StateError('Supabase must be initialized to schedule messages.');
 
   @override
@@ -255,6 +277,7 @@ class UninitializedScheduledMessagesRepository
     required String body,
     required DateTime sendAt,
     required List<Map<String, dynamic>> mentions,
+    ScheduleRepeat? repeat,
   }) => throw StateError('Supabase must be initialized to schedule messages.');
 
   @override

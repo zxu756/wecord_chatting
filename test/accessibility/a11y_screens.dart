@@ -57,10 +57,12 @@ import 'auto_translate_a11y_screens.dart';
 import 'stickers_a11y_screens.dart';
 import 'insights_a11y_screens.dart';
 import 'forms_a11y_screens.dart';
+import 'admin_ops_a11y_screens.dart';
 import 'ai_assistant_a11y_screens.dart';
 import 'onboarding_guide_a11y_screens.dart';
 import 'digest_a11y_screens.dart';
 import 'profile_extras_a11y_screens.dart';
+import 'urgent_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -793,9 +795,11 @@ final allA11yScreens = <A11yScreen>[
   ...stickersA11yScreens,
   ...insightsA11yScreens,
   ...formsA11yScreens,
+  ...adminOpsA11yScreens,
   ...aiAssistantA11yScreens,
   ...onboardingGuideA11yScreens,
   ...digestA11yScreens,
   ...profileExtrasA11yScreens,
   ...chatPolishA11yScreens,
+  ...urgentA11yScreens,
 ];

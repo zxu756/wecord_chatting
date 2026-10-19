@@ -4,6 +4,7 @@ import {
   type MeetingRecapRequest,
   parseMeetingRecapRequest,
 } from "./meeting_recap_request.ts";
+import { type AskRequest, parseAskRequest } from "./ask_request.ts";
 
 export const LANGUAGES = {
   en: "English",
@@ -136,7 +137,9 @@ export type AiRequest =
     language: LanguageCode | null;
   }
   /// The minutes of a call whose captions were on (meeting_recap.ts).
-  | MeetingRecapRequest;
+  | MeetingRecapRequest
+  /// A question about the chats a person can read (ask.ts).
+  | AskRequest;
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === "string" &&
@@ -380,6 +383,8 @@ export function parseAiRequest(body: unknown): AiRequest | null {
     }
     case "meeting_recap":
       return parseMeetingRecapRequest(fields);
+    case "ask":
+      return parseAskRequest(fields);
     default:
       return null;
   }

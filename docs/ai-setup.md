@@ -179,6 +179,7 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `digest` | `digest_id`; only the database may call it (shared secret) | `{ok, chats}` or `{ok, skipped: reason}` / `{ok, failed: reason}` |
 | `note_assist` | `note_id`, `mode` (`continue`/`summarize`/`outline`/`tone`/`translate`/`extract_tasks`), optional `text` (the selection, up to 8000 characters), `tone` (`polite`/`formal`/`casual`/`concise`/`fix`) for `tone`, `target` for `translate`, optional `language` | `{blocks: [{kind, text, checked}], text, truncated, source_chars}` |
 | `meeting_recap` | `conversation_id`, `entries` (1 to 2000 sentences `{speaker, text, at?}`), optional `language`, `time_zone`, `utc_offset_minutes` | `{title, summary, decisions, action_items, truncated, line_count, speaker_count}` |
+| `ask` | `question` (up to 500 characters), `scope` (`{type: everywhere}`, or `{type: circle\|conversation, id}`; required), optional `language`, `time_zone`, `utc_offset_minutes` | `{found, answer, sources: [{n, message_id, conversation_id, sender, snippet, type, created_at, place}], keywords, candidate_count, reason?}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
@@ -404,6 +405,55 @@ returns (`source_message_id` is always null).
   only people who chose to share are in the transcript, and the transcript only
   lives in the host's memory until they ask for the recap.
 
+### Ask AI about your chats (`ask`)
+
+Search → "Ask AI" (roadmap F1, stage 1; no vectors yet). A person types a
+question ("where did we say the dinner is?") and gets a short answer with the
+messages it came from; tapping a source opens that message in its chat. It
+starts in the chat or circle Search was opened from; asking in all chats is the
+person's own choice (the "Everywhere" segment, or "Ask in all your chats" after
+a miss). Apply migration `202610250300_ai_ask.sql`, then `supabase functions
+deploy ai`. No new secret. Code: `supabase/functions/ai/ask.ts` (decisions),
+`ask_request.ts` (reading the request) and `ask_store.ts` (the database calls);
+`request.ts`, `handler.ts` and `index.ts` only gained a branch each.
+
+How a question is answered:
+
+1. **Scope check, free.** `ai_ask_scope` says whether the person may ask here:
+   the scope must be one they can read (`conversation_not_found` otherwise),
+   they must not have turned AI off (`ai_disabled_for_user`), and the circle or
+   the group's owner must not have turned AI off (`ai_disabled_in_circle`).
+2. **One request on the daily limit** (`AI_DAILY_LIMIT_PER_USER`, shared with
+   every AI feature), however many model calls follow. Any failure gives it
+   back.
+3. **Keywords.** The model reads only the question and answers with up to
+   three groups of up to six words. If that is unusable, words are taken from
+   the question itself.
+4. **Search.** `ai_ask_search` finds at most 50 messages through the full-text
+   index message search uses (`message_search_entries`): a message matches a
+   group when it has every word of it, and the search when it matches any group.
+   Nothing found: one more try with single words; still nothing: "not found" and
+   the model is not asked again. Words are always literals in the query.
+5. **Answer.** The messages are numbered, fenced as untrusted data
+   (`<chat_log>`, `DATA_RULES`) and the model answers in JSON, citing `[n]`;
+   it is told to say "not found" rather than guess.
+6. **Sources.** The numbers the model cited are mapped back to message ids on
+   the server; a number that was not in the list is dropped, so only messages
+   the person was shown can be cited, and the citations are renumbered 1, 2, 3.
+   An answer that cites nothing is not trusted (502 `ai_failed`, request given
+   back). The cited ids are then checked once more (`ai_ask_visible`): a message
+   recalled while the model was thinking withholds the whole answer
+   (`found: false, reason: "sources_changed"`).
+
+What the model may read (the same rules as the assistant and the daily digest,
+and no looser): only conversations the person can read right now, inside the
+scope, where the circle and the group's owner allow AI; never recalled or
+expired messages, messages waiting for or removed by the AI guard or an edit
+review, view-once pictures, notices, the assistant's own replies, or a sender the
+person blocked or who blocked them. Their own messages are included. Not found
+is a normal answer (`found: false`, `reason`: `no_matches`, `not_in_messages`,
+`sources_changed`, `no_keywords`). Nothing is stored.
+
 ### Who may turn captions on (`livekit-token`)
 
 `livekit-token` asks `can_current_user_host_captions` when it mints a token and
@@ -502,5 +552,5 @@ moderators), and the circle's daily request count.
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/features/inbox test/features/notes
+flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/supabase/ai_ask_test.dart test/features/inbox test/features/notes
 ```

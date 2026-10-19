@@ -48,6 +48,18 @@
 //     speakers are named from the conversation's members, not from the app;
 //     see meeting_recap.ts. Nothing is recorded or stored. Counts against the
 //     same daily limit; honours the circle's and the person's AI switches.
+//   ask {question, scope: {type: everywhere|circle|conversation, id?},
+//     language?, time_zone?, utc_offset_minutes?}
+//     -> {found, answer, sources: [{n, message_id, conversation_id, sender,
+//     snippet, type, created_at, place}], keywords, candidate_count, reason?}.
+//     Ask AI about your chats (F1, stage 1): the question becomes keywords,
+//     the database finds the messages the person may see (not recalled,
+//     expired, held, view-once, blocked, or in chats where AI is off), and the
+//     model answers from those alone, citing them; the citations are checked
+//     on the server and a message recalled meanwhile withholds the answer; see
+//     ask.ts and migration 202610250300. One request against the same daily
+//     limit however many model calls it takes; honours the circle's, the
+//     group's and the person's AI switches. Nothing is stored.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the
@@ -57,6 +69,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleAiRequest } from "./handler.ts";
 import { loadMessages } from "./messages.ts";
 import { createActionStore, createAssistantStore } from "./assistant_store.ts";
+import { createAskStore } from "./ask_store.ts";
 import { createDigestStore } from "./digest_store.ts";
 import { createNoteAssistStore } from "./note_assist_store.ts";
 import { createTranslationStore } from "./translations_store.ts";
@@ -215,5 +228,6 @@ Deno.serve(async (request) => {
     actions: createActionStore(userClient),
     digest: createDigestStore(admin),
     noteAssist: createNoteAssistStore(userClient),
+    ask: createAskStore(admin),
   });
 });

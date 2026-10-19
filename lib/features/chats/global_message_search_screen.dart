@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
+import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/ai/ask/ask_controller.dart';
+import 'package:wecord/features/ai/ask/ask_panel.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/home/home_avatars.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
@@ -128,6 +131,12 @@ class _GlobalMessageSearchScreenState
   var _highlighted = 0;
   var _dismissedSuggestions = false;
 
+  /// "Ask AI" instead of searching (the box holds a question), and what
+  /// each mode had in the box when the person switched.
+  var _askMode = false;
+  var _searchDraft = '';
+  var _askDraft = '';
+
   /// Suggestions fetched for the value being typed.
   String? _suggestionKey;
   List<_Suggestion> _asyncSuggestions = const [];
@@ -200,13 +209,40 @@ class _GlobalMessageSearchScreenState
 
   void _handleTextChange() {
     final text = _controller.text;
-    if (text != ref.read(messageSearchControllerProvider).input) {
-      _search.setInput(text);
-      _dismissedSuggestions = false;
-      _highlighted = 0;
+    if (!_askMode) {
+      if (text != ref.read(messageSearchControllerProvider).input) {
+        _search.setInput(text);
+        _dismissedSuggestions = false;
+        _highlighted = 0;
+      }
+      _refreshAsyncSuggestions();
     }
-    _refreshAsyncSuggestions();
     setState(() {});
+  }
+
+  /// Switches between searching and asking AI; each keeps its own text.
+  void _setAskMode(bool ask) {
+    if (ask == _askMode) {
+      return;
+    }
+    if (ask) {
+      _searchDraft = _controller.text;
+    } else {
+      _askDraft = _controller.text;
+    }
+    _askMode = ask;
+    _dismissedSuggestions = true;
+    _setText(ask ? _askDraft : _searchDraft);
+    setState(() {});
+  }
+
+  void _ask([String? question, MessageSearchScope? scope]) {
+    final text = question ?? _controller.text;
+    unawaited(
+      ref
+          .read(askControllerProvider.notifier)
+          .ask(text, scope ?? ref.read(messageSearchControllerProvider).scope),
+    );
   }
 
   void _handleScroll() {
@@ -674,7 +710,18 @@ class _GlobalMessageSearchScreenState
     final state = ref.watch(messageSearchControllerProvider);
     ref.watch(recentSearchesProvider);
     final parsed = ParsedSearchQuery.parse(_controller.text);
-    final suggestions = _suggestions();
+    final askAvailable = ref.watch(aiAvailableProvider(null));
+    final asking = _askMode && askAvailable;
+    // A different place means a different answer.
+    ref.listen(messageSearchControllerProvider.select((s) => s.scope), (
+      previous,
+      next,
+    ) {
+      if (_askMode) {
+        ref.read(askControllerProvider.notifier).clear();
+      }
+    });
+    final suggestions = asking ? const <_Suggestion>[] : _suggestions();
     final highlighted = suggestions.isEmpty
         ? -1
         : _highlighted.clamp(0, suggestions.length - 1);
@@ -699,19 +746,40 @@ class _GlobalMessageSearchScreenState
                     controller: _controller,
                     focusNode: _focusNode,
                     onPaper: true,
-                    hint: switch (state.scope) {
-                      ConversationScope(:final title?) => tr('Search {name}', {
-                        'name': title,
-                      }),
-                      CircleScope(:final name?) => tr('Search {name}', {
-                        'name': name,
-                      }),
-                      _ => tr('Search messages'),
-                    },
-                    prefixIcon: Icons.search_rounded,
-                    textInputAction: TextInputAction.search,
+                    hint: asking
+                        ? switch (state.scope) {
+                            ConversationScope(:final title?) => tr(
+                              'Ask about {name}',
+                              {'name': title},
+                            ),
+                            CircleScope(:final name?) => tr(
+                              'Ask about {name}',
+                              {'name': name},
+                            ),
+                            _ => tr('Ask about your chats'),
+                          }
+                        : switch (state.scope) {
+                            ConversationScope(:final title?) => tr(
+                              'Search {name}',
+                              {'name': title},
+                            ),
+                            CircleScope(:final name?) => tr('Search {name}', {
+                              'name': name,
+                            }),
+                            _ => tr('Search messages'),
+                          },
+                    prefixIcon: asking
+                        ? Icons.auto_awesome_rounded
+                        : Icons.search_rounded,
+                    textInputAction: asking
+                        ? TextInputAction.send
+                        : TextInputAction.search,
                     onSubmitted: (_) {
-                      unawaited(_search.submit());
+                      if (asking) {
+                        _ask();
+                      } else {
+                        unawaited(_search.submit());
+                      }
                     },
                     suffix: _controller.text.isEmpty
                         ? null
@@ -730,6 +798,30 @@ class _GlobalMessageSearchScreenState
                           ),
                   ),
                 ),
+                if (askAvailable)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: WeCordSegmented<bool>(
+                      key: const ValueKey('search-mode'),
+                      expand: true,
+                      semanticLabel: tr('Search or ask AI'),
+                      segments: [
+                        WeCordSegment(
+                          value: false,
+                          label: tr('Search'),
+                          key: const ValueKey('search-mode-search'),
+                        ),
+                        WeCordSegment(
+                          value: true,
+                          label: tr('Ask AI'),
+                          icon: Icons.auto_awesome_rounded,
+                          key: const ValueKey('search-mode-ask'),
+                        ),
+                      ],
+                      selected: asking,
+                      onChanged: _setAskMode,
+                    ),
+                  ),
                 if (scopes.length > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -751,13 +843,28 @@ class _GlobalMessageSearchScreenState
                     ),
                   ),
                 const SizedBox(height: 8),
-                SearchFilterBar(
-                  parsed: parsed,
-                  onRemove: _removeToken,
-                  onAdd: (operator) => unawaited(_addFilter(operator)),
-                ),
+                if (!asking)
+                  SearchFilterBar(
+                    parsed: parsed,
+                    onRemove: _removeToken,
+                    onAdd: (operator) => unawaited(_addFilter(operator)),
+                  ),
                 Expanded(
-                  child: suggestions.isNotEmpty
+                  child: asking
+                      ? AskAiPanel(
+                          question: _controller.text,
+                          scope: state.scope,
+                          onAsk: _ask,
+                          onAskEverywhere: () {
+                            _search.setScope(const EverywhereScope());
+                            _ask(null, const EverywhereScope());
+                          },
+                          onPickExample: (example) {
+                            _setText(example);
+                            _ask(example);
+                          },
+                        )
+                      : suggestions.isNotEmpty
                       ? _SuggestionsPanel(
                           suggestions: suggestions,
                           highlighted: highlighted,

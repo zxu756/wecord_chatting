@@ -22,6 +22,7 @@ import { type ActionStore, runExtractActions } from "./extract_actions.ts";
 import { type DigestStore, runDigest } from "./digest.ts";
 import { type NoteAssistStore, runNoteAssist } from "./note_assist.ts";
 import { runMeetingRecap } from "./meeting_recap.ts";
+import { type AskStore, runAsk } from "./ask.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
@@ -167,6 +168,8 @@ export interface AiDeps {
   /// What note_assist reads (see note_assist.ts). Without it that action
   /// answers 503.
   noteAssist?: NoteAssistStore;
+  /// What ask reads (see ask.ts). Without it that action answers 503.
+  ask?: AskStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -286,6 +289,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "meeting_recap") {
     const result = await runMeetingRecap(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+  if (parsed.action === "ask") {
+    const result = await runAsk(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 

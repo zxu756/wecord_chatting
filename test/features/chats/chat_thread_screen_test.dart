@@ -1242,6 +1242,11 @@ void main() {
           lastReadMessageId: 'message-2',
         ),
       ]);
+      // The menu of one's own message in a group has a dozen rows; give it
+      // the height of a phone.
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(
         _app(repository, conversationType: ConversationType.group),
       );

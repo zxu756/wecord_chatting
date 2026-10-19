@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
+import 'package:wecord/features/later/schedule_repeat.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -167,5 +168,48 @@ void main() {
 
     expect(find.text('Scheduled messages'), findsOneWidget);
     expect(find.text('Queued earlier'), findsOneWidget);
+  });
+
+  testWidgets('a repeat chosen in the sheet is scheduled with the message', (
+    tester,
+  ) async {
+    final chats = thread_test.FakeChatsRepository();
+    final scheduled = FakeScheduledMessagesRepository();
+    await tester.pumpWidget(app(chats, scheduled));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'Weekly report');
+    await tester.pump();
+    await tester.longPress(find.byKey(const ValueKey('composer-send-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('when-repeat')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('option-RepeatKind.daily')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('repeat-done')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('when-tomorrowMorning')));
+    await tester.pumpAndSettle();
+
+    expect(scheduled.created.single.body, 'Weekly report');
+    expect(scheduled.createdRepeats.single?.kind, RepeatKind.daily);
+    expect(find.textContaining('Scheduled: Every day 9:00 AM'), findsOneWidget);
+    expect(chats.sentMessages, isEmpty);
+  });
+
+  testWidgets('without a repeat the message is scheduled once', (tester) async {
+    final chats = thread_test.FakeChatsRepository();
+    final scheduled = FakeScheduledMessagesRepository();
+    await tester.pumpWidget(app(chats, scheduled));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'Just once');
+    await tester.pump();
+    await tester.longPress(find.byKey(const ValueKey('composer-send-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('when-tomorrowMorning')));
+    await tester.pumpAndSettle();
+
+    expect(scheduled.createdRepeats.single, isNull);
   });
 }

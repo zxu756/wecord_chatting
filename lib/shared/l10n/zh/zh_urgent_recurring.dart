@@ -18,7 +18,8 @@ const zhUrgentRecurring = <String, String>{
   'Made urgent for {count} people': '已加急给 {count} 人',
   'They get a notification that gets through quiet hours and mutes, and a red banner until they confirm. If they do not confirm within 10 minutes, they are notified once more.':
       '他们会收到一条不受免打扰和静音限制的通知，并在聊天顶部看到红色横幅，直到确认。10 分钟内没确认，会再通知一次。',
-  '{remaining} of {allowed} left in 24 hours': '24 小时内还剩 {remaining}/{allowed} 次',
+  '{remaining} of {allowed} left in 24 hours':
+      '24 小时内还剩 {remaining}/{allowed} 次',
   'You used all {allowed} urgent messages of the last 24 hours.':
       '最近 24 小时的 {allowed} 次加急已用完。',
   'You can make 5 messages urgent in 24 hours. Try again later.':
@@ -70,10 +71,8 @@ const zhUrgentRecurring = <String, String>{
       '给还没确认的成员发一条通知。每 6 小时只能提醒一次。',
   'Reminded 1 person': '已提醒 1 人',
   'Reminded {count} people': '已提醒 {count} 人',
-  'Write an announcement before asking for confirmations.':
-      '请先写好公告，再要求成员确认。',
-  'You reminded the group a short while ago. Try again later.':
-      '你刚提醒过，请稍后再试。',
+  'Write an announcement before asking for confirmations.': '请先写好公告，再要求成员确认。',
+  'You reminded the group a short while ago. Try again later.': '你刚提醒过，请稍后再试。',
   'You can not do this in this group.': '你不能在这个群里这样做。',
   // Repeating scheduled messages.
   'Does not repeat': '不重复',

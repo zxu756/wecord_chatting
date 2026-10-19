@@ -32,6 +32,13 @@
 //     follows: only the database calls it (the same shared secret and wake-up
 //     as guard and assistant; see digest.ts and migrations 202610230500 to
 //     202610230540). Writes one card per person per day for Notifications.
+//   note_assist {note_id, mode, text?, tone?, target?, language?}
+//     -> {blocks: [{kind, text, checked}], text, truncated, source_chars}.
+//     The AI in the notes editor: mode is continue, summarize, outline, tone
+//     (tone: polite, formal, casual, concise, fix), translate (target) or
+//     extract_tasks; `text` is the selection (up to 8000 characters), else the
+//     whole note is read as the caller; see note_assist.ts. Counts against the
+//     same daily limit; honours the circle's and the person's AI switches.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the
@@ -42,6 +49,7 @@ import { corsHeaders, handleAiRequest } from "./handler.ts";
 import { loadMessages } from "./messages.ts";
 import { createActionStore, createAssistantStore } from "./assistant_store.ts";
 import { createDigestStore } from "./digest_store.ts";
+import { createNoteAssistStore } from "./note_assist_store.ts";
 import { createTranslationStore } from "./translations_store.ts";
 
 Deno.serve(async (request) => {
@@ -197,5 +205,6 @@ Deno.serve(async (request) => {
     assistant: createAssistantStore(admin),
     actions: createActionStore(userClient),
     digest: createDigestStore(admin),
+    noteAssist: createNoteAssistStore(userClient),
   });
 });

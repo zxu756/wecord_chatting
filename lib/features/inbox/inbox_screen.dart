@@ -32,6 +32,8 @@ import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/moments/moment_notification_card.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
+import 'package:wecord/features/notes/note_comment_notifications.dart';
+import 'package:wecord/features/notes/notes2_models.dart';
 import 'package:wecord/features/privacy/security_alerts.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
@@ -82,6 +84,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
   final digests = ref.watch(aiDigestsUnreadProvider);
+  final noteComments = ref.watch(noteCommentNotificationsUnreadProvider);
   return unread +
       requests +
       reminders +
@@ -92,7 +95,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       security +
       joinAnswers +
       readReminders +
-      digests;
+      digests +
+      noteComments;
 });
 
 /// Which notifications the inbox shows.
@@ -140,6 +144,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(readReminderNoticesProvider)
       ..invalidate(aiDigestsProvider)
       ..invalidate(birthdaysTodayProvider)
+      ..invalidate(noteCommentNotificationsProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -230,12 +235,38 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final unreadTasks = taskNotifications
         .where((notification) => notification.isUnread)
         .length;
-    final unreadMentions = items
-        .where((item) => item.isUnread && item.reason != InboxReason.reply)
-        .length;
-    final unreadReplies = items
-        .where((item) => item.isUnread && item.reason == InboxReason.reply)
-        .length;
+    // Mentions of me in comments on notes, and replies to my comments.
+    final allNoteComments =
+        ref.watch(noteCommentNotificationsProvider).value ??
+        const <NoteCommentNotification>[];
+    final noteCommentCards = [
+      for (final notification in allNoteComments)
+        if (switch (_filter) {
+          InboxFilter.all => true,
+          InboxFilter.mentions => !notification.isReply,
+          InboxFilter.replies => notification.isReply,
+          _ => false,
+        })
+          notification,
+    ];
+    final unreadMentions =
+        items
+            .where((item) => item.isUnread && item.reason != InboxReason.reply)
+            .length +
+        allNoteComments
+            .where(
+              (notification) => notification.isUnread && !notification.isReply,
+            )
+            .length;
+    final unreadReplies =
+        items
+            .where((item) => item.isUnread && item.reason == InboxReason.reply)
+            .length +
+        allNoteComments
+            .where(
+              (notification) => notification.isUnread && notification.isReply,
+            )
+            .length;
 
     final showRequests =
         _filter == InboxFilter.all || _filter == InboxFilter.friends;
@@ -408,6 +439,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 (notification.createdAt, notification),
             for (final notification in momentNotifications)
               (notification.createdAt, notification),
+            for (final notification in noteCommentCards)
+              (notification.createdAt, notification),
           ]..sort((a, b) => b.$1.compareTo(a.$1)))
             switch (entry.$2) {
               final InboxItem item => _InboxCard(
@@ -447,6 +480,14 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
               final MomentNotification notification => MomentNotificationCard(
                 notification: notification,
               ),
+              final NoteCommentNotification notification =>
+                NoteCommentNotificationCard(
+                  notification: notification,
+                  conversationName: conversationPlaceLabel(
+                    conversations[notification.conversationId],
+                    circles,
+                  ),
+                ),
               _ => const SizedBox.shrink(),
             },
           if (_filter == InboxFilter.reminders &&

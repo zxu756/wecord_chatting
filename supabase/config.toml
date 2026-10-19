@@ -532,6 +532,17 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/calendar-feed/index.ts"
 
+[functions.note-public]
+enabled = true
+# Published notes (D5) are read by people without a WeCord account, so there
+# is no login token to check. The secret in the link (192 random bits, made
+# when the note is published, withdrawn at any time) is checked inside the
+# database function public_note_by_token, which only the service role may
+# call; the function also rate-limits wrong tokens and answers JSON only.
+# Deploy with: supabase functions deploy note-public
+verify_jwt = false
+entrypoint = "./functions/note-public/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

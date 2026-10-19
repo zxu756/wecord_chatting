@@ -8,6 +8,9 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart'
     show GlassMenuEntry, globalRectOf, showGlassMenu;
 import 'package:wecord/features/notes/note_block_views.dart';
+import 'package:wecord/features/notes/note_editor_extras.dart';
+import 'package:wecord/features/notes/note_merge.dart';
+import 'package:wecord/features/notes/note_table.dart';
 import 'package:wecord/features/notes/note_editor_controller.dart';
 import 'package:wecord/features/notes/note_models.dart';
 import 'package:wecord/features/notes/note_text_controller.dart';
@@ -50,6 +53,7 @@ class NoteEditor extends ConsumerStatefulWidget {
     this.padding = const EdgeInsets.fromLTRB(20, 8, 20, 96),
     this.maxContentWidth = 760,
     this.autofocus = false,
+    this.extras = const NoteEditorExtras(),
     super.key,
   });
 
@@ -65,6 +69,9 @@ class NoteEditor extends ConsumerStatefulWidget {
 
   /// Puts the caret in the first block when it opens.
   final bool autofocus;
+
+  /// Comments and the AI, hooked in by the page around the editor.
+  final NoteEditorExtras extras;
 
   @override
   ConsumerState<NoteEditor> createState() => NoteEditorState();
@@ -84,6 +91,7 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
   void initState() {
     super.initState();
     _controller.addListener(_onEngine);
+    widget.extras.comments?.addListener(_onComments);
     if (widget.autofocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final first = _controller.engine.blocks.firstOrNull;
@@ -101,11 +109,17 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
       oldWidget.controller.removeListener(_onEngine);
       widget.controller.addListener(_onEngine);
     }
+    if (oldWidget.extras.comments != widget.extras.comments) {
+      oldWidget.extras.comments?.removeListener(_onComments);
+      widget.extras.comments?.addListener(_onComments);
+      _syncHighlights();
+    }
   }
 
   @override
   void dispose() {
     _controller.removeListener(_onEngine);
+    widget.extras.comments?.removeListener(_onComments);
     for (final field in [..._fields.values, ..._stale]) {
       field.dispose();
     }
@@ -125,7 +139,34 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
         field.text.applyRemote(block.text, block.marks);
       }
     }
+    _syncHighlights();
     setState(() {});
+  }
+
+  void _onComments() {
+    if (!mounted) {
+      return;
+    }
+    _syncHighlights();
+    setState(() {});
+  }
+
+  /// Highlights the words open comments are about. Done here, outside a
+  /// build, because it makes the text fields redraw.
+  void _syncHighlights() {
+    final comments = widget.extras.comments;
+    for (final block in _controller.engine.blocks) {
+      final field = _fields[block.id];
+      if (field == null) {
+        continue;
+      }
+      field.text.highlights = comments == null
+          ? const []
+          : [
+              for (final anchor in comments.anchorsFor(block))
+                NoteMark(anchor.start, anchor.end, NoteMark.highlight),
+            ];
+    }
   }
 
   _BlockField _fieldFor(NoteBlock block) {
@@ -134,6 +175,13 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
       return existing;
     }
     final field = _BlockField(block.id, block);
+    final comments = widget.extras.comments;
+    if (comments != null) {
+      field.text.highlights = [
+        for (final anchor in comments.anchorsFor(block))
+          NoteMark(anchor.start, anchor.end, NoteMark.highlight),
+      ];
+    }
     field.text.onUserChange = (text, marks) =>
         _onUserChange(block.id, text, marks);
     field.focus.addListener(() {
@@ -250,6 +298,10 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
   }) {
     final field = _fields[block.id];
     var nextProps = props ?? block.props;
+    if (block.kind == NoteBlockKind.table && kind != NoteBlockKind.table) {
+      // The cells of a table mean nothing to another kind of block.
+      nextProps = const {};
+    }
     if (kind != NoteBlockKind.todo) {
       nextProps = {
         for (final entry in nextProps.entries)
@@ -532,6 +584,165 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
     }
   }
 
+  // ------------------------------------------------- tables, comments, AI --
+
+  /// A table with a heading row and two rows under it, after [block] (in
+  /// its place when it is an empty paragraph), with the caret in the first
+  /// cell.
+  void _insertTable(NoteBlock block) {
+    if (_readOnly) {
+      return;
+    }
+    final engine = _controller.engine;
+    final table = NoteTable.empty(
+      newId: () => _controller.newId().substring(0, 8),
+    );
+    if (block.kind == NoteBlockKind.paragraph && block.text.isEmpty) {
+      engine.updateBlock(
+        block.id,
+        kind: NoteBlockKind.table,
+        text: '',
+        marks: const [],
+        props: table.toProps(),
+      );
+      _fields[block.id]?.text.applyRemote('', const []);
+      final next = engine.insertBlock(afterId: block.id);
+      _focus(next.id);
+      return;
+    }
+    final created = engine.insertBlock(
+      afterId: block.id,
+      kind: NoteBlockKind.table,
+      props: table.toProps(),
+    );
+    _focus(engine.insertBlock(afterId: created.id).id);
+  }
+
+  /// The selection of the focused block: the block and the words, if any.
+  ({String blockId, int? start, int? end, String? text})? currentSelection() {
+    final block = _focusedBlock;
+    final field = _focusedField;
+    if (block == null || field == null || !block.kind.hasText) {
+      return null;
+    }
+    final selection = field.text.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return (blockId: block.id, start: null, end: null, text: null);
+    }
+    final start = selection.start.clamp(0, block.text.length);
+    var end = selection.end.clamp(0, block.text.length);
+    if (end <= start) {
+      return (blockId: block.id, start: null, end: null, text: null);
+    }
+    return (
+      blockId: block.id,
+      start: start,
+      end: end,
+      text: block.text.substring(start, end),
+    );
+  }
+
+  void _comment() {
+    final handler = widget.extras.onComment;
+    if (handler == null) {
+      return;
+    }
+    final selection = currentSelection();
+    final block = _focusedBlock ?? _blocks.firstOrNull;
+    if (selection == null) {
+      if (block != null) {
+        handler(NoteCommentTarget(blockId: block.id));
+      }
+      return;
+    }
+    var quote = selection.text;
+    var end = selection.end;
+    if (quote != null && selection.start != null) {
+      // A quotation is at most 300 characters, never cut in the middle of
+      // a pair of UTF-16 units.
+      if (quote.length > 300) {
+        var cut = 300;
+        if (quote.codeUnitAt(cut - 1) >= 0xD800 &&
+            quote.codeUnitAt(cut - 1) <= 0xDBFF) {
+          cut--;
+        }
+        quote = quote.substring(0, cut);
+        end = selection.start! + cut;
+      }
+      if (quote.trim().isEmpty) {
+        quote = null;
+      }
+    }
+    handler(
+      NoteCommentTarget(
+        blockId: selection.blockId,
+        start: quote == null ? null : selection.start,
+        end: quote == null ? null : end,
+        quote: quote,
+      ),
+    );
+  }
+
+  void _assist({String? replaceBlockId}) {
+    final handler = widget.extras.onAssist;
+    if (handler == null || _readOnly) {
+      return;
+    }
+    final selection = replaceBlockId == null ? currentSelection() : null;
+    handler(
+      NoteAssistTarget(
+        blockId: selection?.blockId ?? _focusedBlock?.id,
+        start: selection?.start,
+        end: selection?.end,
+        selectedText: selection?.text,
+        replaceBlockId: replaceBlockId,
+      ),
+    );
+  }
+
+  /// Puts [items] (an AI answer) as blocks after [afterId] (the end of the
+  /// note when null). [removeBlockId] is an empty block they take the place
+  /// of.
+  void insertBlocksAfter(
+    String? afterId,
+    List<({NoteBlockKind kind, String text, Map<String, Object?> props})>
+    items, {
+    String? removeBlockId,
+  }) {
+    if (_readOnly || items.isEmpty) {
+      return;
+    }
+    final engine = _controller.engine;
+    final anchor = afterId ?? _blocks.lastOrNull?.id;
+    final created = engine.insertBlocks(anchor, items);
+    final remove = removeBlockId == null
+        ? null
+        : engine.blockById(removeBlockId);
+    if (remove != null && remove.text.isEmpty) {
+      engine.deleteBlock(remove.id);
+    }
+    if (created.isNotEmpty) {
+      _focus(created.last.id, offset: created.last.text.length);
+    }
+  }
+
+  /// Replaces the words [start] to [end] of a block with [text] (an AI
+  /// answer), keeping the formatting outside them.
+  void replaceRange(String blockId, int start, int end, String text) {
+    final block = _controller.engine.blockById(blockId);
+    if (_readOnly || block == null || !block.kind.hasText) {
+      return;
+    }
+    final from = start.clamp(0, block.text.length);
+    final to = end.clamp(from, block.text.length);
+    final edit = TextEdit(from, to - from, text);
+    final marks = applyEditToMarks(block.marks, block.text.length, edit);
+    final next = block.text.replaceRange(from, to, text);
+    _controller.engine.updateBlock(block.id, text: next, marks: marks);
+    _fields[block.id]?.text.applyRemote(next, marks);
+    _focus(block.id, offset: from + text.length);
+  }
+
   // ---------------------------------------------------------- block menu --
 
   void _openBlockMenu(NoteBlock block, {bool slash = false, Rect? anchor}) {
@@ -613,6 +824,39 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
               unawaited(_insertImage());
             },
           ),
+          GlassMenuEntry(
+            icon: Icons.table_chart_outlined,
+            label: tr('Table'),
+            onSelected: () {
+              if (slash) {
+                _controller.engine.updateBlock(
+                  block.id,
+                  text: '',
+                  marks: const [],
+                );
+                _fields[block.id]?.text.applyRemote('', const []);
+              }
+              _insertTable(block);
+            },
+          ),
+          if (widget.extras.onAssist != null)
+            GlassMenuEntry(
+              icon: Icons.auto_awesome_rounded,
+              label: tr('AI…'),
+              onSelected: () {
+                if (slash) {
+                  _controller.engine.updateBlock(
+                    block.id,
+                    text: '',
+                    marks: const [],
+                  );
+                  _fields[block.id]?.text.applyRemote('', const []);
+                  _assist(replaceBlockId: block.id);
+                } else {
+                  _assist();
+                }
+              },
+            ),
           if (!slash) ...[
             GlassMenuEntry(
               icon: Icons.arrow_upward_rounded,
@@ -818,6 +1062,15 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
               readOnly: readOnly,
               peers: peersByBlock[block.id] ?? const [],
               onKeyEvent: (event) => _onKey(block, event),
+              onTableChanged: readOnly
+                  ? null
+                  : (props) => engine.updateBlock(block.id, props: props),
+              newId: () => _controller.newId().substring(0, 8),
+              commentCount:
+                  widget.extras.comments?.openThreadsOn(block.id).length ?? 0,
+              onComments: widget.extras.onOpenComments == null
+                  ? null
+                  : () => widget.extras.onOpenComments!(block.id),
               onToggleChecked: readOnly
                   ? null
                   : () => engine.updateBlock(
@@ -847,8 +1100,12 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
       ),
     );
 
+    final canCommentHere =
+        widget.extras.canComment && widget.extras.onComment != null;
     final bar = readOnly
-        ? null
+        ? (canCommentHere
+              ? NoteFormatBar.commentOnly(onComment: _comment)
+              : null)
         : NoteFormatBar(
             kind: focused?.kind,
             isActive: _markActive,
@@ -856,6 +1113,8 @@ class NoteEditorState extends ConsumerState<NoteEditor> {
             onLink: _editLink,
             onKind: _setKind,
             onImage: _insertImage,
+            onComment: canCommentHere ? _comment : null,
+            onAssist: widget.extras.onAssist == null ? null : _assist,
             onMention: () {
               final field = _focusedField;
               if (field == null) {

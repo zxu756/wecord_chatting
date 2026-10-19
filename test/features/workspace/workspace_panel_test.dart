@@ -87,6 +87,10 @@ void main() {
     final workspace = await openPanel(tester);
     await tester.tap(find.byKey(const ValueKey('workspace-create')));
     await settle(tester);
+    // How the note starts: a blank page, or a template.
+    expect(find.text('Meeting notes'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('new-note-blank')));
+    await settle(tester);
     expect(workspace.notes.created, hasLength(1));
     expect(find.byKey(const ValueKey('note-title')), findsOneWidget);
     expect(find.byType(TextField), findsWidgets);

@@ -190,6 +190,7 @@ AiException aiExceptionFor(int? status, Object? details) {
     case 'ai_disabled_for_user':
       return const AiTurnedOffException();
     case 'conversation_not_found' ||
+        'note_not_found' ||
         'text_too_long' ||
         'message_not_found' ||
         'audio_too_long':

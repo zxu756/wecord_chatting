@@ -115,6 +115,12 @@ export interface ExportData {
    * 202610230540); null when it could not be read, absent in older callers.
    */
   aiDigest?: Json | null;
+  /**
+   * The comments I wrote on notes, my note templates and the pages I
+   * published (export_my_note_extras, migration 202610240340); null when it
+   * could not be read, absent in older callers.
+   */
+  noteExtras?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -631,6 +637,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   if (data.aiDigest) {
     out.push({ path: "data/ai_digest.json", value: data.aiDigest });
   }
+  if (data.noteExtras) {
+    out.push({ path: "data/note_extras.json", value: data.noteExtras });
+  }
   const extras = data.extras;
   if (extras) {
     out.push({ path: "data/chains.json", value: extras.chains });
@@ -1129,6 +1138,51 @@ themselves are short-lived and not included.</p>
   );
 }
 
+/** Comments on notes, personal templates and published pages (D5). */
+export function buildNoteExtrasHtml(data: ExportData): string {
+  const extras = isObject(data.noteExtras) ? data.noteExtras : {};
+  const comments = objects(extras["comments"]).map((comment) =>
+    entry(
+      str(comment["created_at"]),
+      `<div><strong>${escapeHtml(str(comment["note_title"]) || "Untitled note")}</strong> ${
+        comment["reply"] === true ? tag("reply") : ""
+      }${comment["resolved"] === true ? tag("resolved") : ""}</div>${
+        str(comment["quoted"])
+          ? `<div class="muted">on “${escapeHtml(str(comment["quoted"]) ?? "")}”</div>`
+          : ""
+      }${text(comment["body"])}`,
+    )
+  ).join("");
+  const templates = objects(extras["templates"]).map((template) =>
+    entry(
+      str(template["created_at"]),
+      `<div><strong>${escapeHtml(str(template["name"]) ?? "")}</strong> <span class="muted">${
+        escapeHtml(String(Array.isArray(template["blocks"]) ? template["blocks"].length : 0))
+      } blocks</span></div>`,
+    )
+  ).join("");
+  const published = objects(extras["published"]).map((note) =>
+    entry(
+      str(note["published_at"]),
+      `<div><strong>${escapeHtml(str(note["note_title"]) || "Untitled note")}</strong> ${
+        note["allow_indexing"] === true ? tag("search engines allowed") : ""
+      }</div>`,
+    )
+  ).join("");
+  return page(
+    "Note comments, templates and pages — your WeCord data",
+    `${backLink()}<h1>Note comments, templates and pages</h1>
+<p class="muted">Only what you wrote. The links of pages you published are
+secret and are not included; withdrawing a page turns its link off.</p>
+<h2>Comments you wrote</h2>
+<div class="card">${comments || '<div class="row muted">No comments.</div>'}</div>
+<h2>Your templates</h2>
+<div class="card">${templates || '<div class="row muted">No templates.</div>'}</div>
+<h2>Pages you published</h2>
+<div class="card">${published || '<div class="row muted">No published pages.</div>'}</div>`,
+  );
+}
+
 /** The HTML pages of the new sections, and the index rows that link them. */
 export function buildSectionPages(
   data: ExportData,
@@ -1169,6 +1223,18 @@ export function buildSectionPages(
       label: "Daily digest",
       summary: `${followed.length} chat${followed.length === 1 ? "" : "s"} followed`,
       content: buildAiDigestHtml(data),
+    });
+  }
+  if (data.noteExtras) {
+    const counts = (key: string) =>
+      objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
+    out.push({
+      path: "pages/note_extras.html",
+      label: "Note comments, templates and published pages",
+      summary: `${counts("comments")} comment${counts("comments") === 1 ? "" : "s"} · ${
+        counts("templates")
+      } template${counts("templates") === 1 ? "" : "s"} · ${counts("published")} published`,
+      content: buildNoteExtrasHtml(data),
     });
   }
   const extras = data.extras;
@@ -1231,6 +1297,8 @@ data/friend_tags.json Your friend tags and starred friends.
 data/chains.json      Group chains you started or joined (your own line).
 data/forms.json       Forms you made or answered (your own answers).
 data/ai_digest.json   Your daily digest settings and the chats you follow.
+data/note_extras.json The comments you wrote on notes, your note templates
+                      and the pages you published (without their links).
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json

@@ -61,6 +61,7 @@ import 'onboarding_guide_a11y_screens.dart';
 import 'digest_a11y_screens.dart';
 import 'profile_extras_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
+import 'notes2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -796,4 +797,5 @@ final allA11yScreens = <A11yScreen>[
   ...onboardingGuideA11yScreens,
   ...digestA11yScreens,
   ...profileExtrasA11yScreens,
+  ...notes2A11yScreens,
 ];

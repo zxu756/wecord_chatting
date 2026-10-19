@@ -18,6 +18,7 @@ import {
   type ExportMoments,
   type ExportStage,
   exportFileZipPath,
+  favoriteFilesToSign,
   feedbackFilesToSign,
   formFilesToSign,
   type Json,
@@ -483,6 +484,20 @@ export async function collectExportData(
     null,
   );
 
+  // What I kept: folders, tags, links, notes (export_my_saved_items).
+  const favorites = await tryRead<Row | null>(
+    skipped,
+    "favorites",
+    async () => {
+      const result = await admin.rpc("export_my_saved_items", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -500,6 +515,10 @@ export async function collectExportData(
   }
   // The files of my dailies are linked (they end in a day anyway).
   for (const { bucket, path } of storyFilesToSign(stories)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures of my notes are linked.
+  for (const { bucket, path } of favoriteFilesToSign(favorites)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -553,6 +572,7 @@ export async function collectExportData(
     aiDigest,
     noteExtras,
     stories,
+    favorites,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

@@ -162,16 +162,19 @@ class LaterAvatarBadge extends StatelessWidget {
   }
 }
 
-/// The message in a quiet box, or "Message unavailable" in its place.
+/// The message in a quiet box, or "Message unavailable" (or
+/// [unavailableText]) in its place.
 class LaterMessagePreview extends StatelessWidget {
   const LaterMessagePreview({
     required this.available,
     required this.text,
+    this.unavailableText,
     super.key,
   });
 
   final bool available;
   final String text;
+  final String? unavailableText;
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +199,7 @@ class LaterMessagePreview extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    tr('Message unavailable'),
+                    unavailableText ?? tr('Message unavailable'),
                     style: TextStyle(
                       fontSize: 14,
                       fontStyle: FontStyle.italic,

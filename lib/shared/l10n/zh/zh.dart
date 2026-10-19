@@ -81,6 +81,7 @@ import 'package:wecord/shared/l10n/zh/zh_forms.dart';
 import 'package:wecord/shared/l10n/zh/zh_notes2.dart';
 import 'package:wecord/shared/l10n/zh/zh_captions.dart';
 import 'package:wecord/shared/l10n/zh/zh_stories.dart';
+import 'package:wecord/shared/l10n/zh/zh_favorites2.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -163,6 +164,7 @@ const zhAreas = <Map<String, String>>[
   zhNotes2,
   zhCaptions,
   zhStories,
+  zhFavorites2,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

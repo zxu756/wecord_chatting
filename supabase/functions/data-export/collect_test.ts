@@ -169,6 +169,7 @@ const emptyRpc: Record<string, unknown> = {
   export_my_forms: [],
   export_my_feedback: [],
   export_my_stories: { stories: [], close_friends: [], reports: [] },
+  export_my_saved_items: { folders: [], items: [] },
   export_my_ai_digest: { enabled: false, subscriptions: [] },
   export_my_note_extras: { comments: [], templates: [], published: [] },
 };
@@ -185,6 +186,18 @@ const feedbackAnswer = [{
   screenshot_path: "u-1/s-1.jpg",
   replies: [{ body: "Fixed in 1.4.1", published_at: "2026-10-21T08:00:00Z" }],
 }];
+
+const favoritesAnswer = {
+  folders: [{ id: "f-1", name: "Trips", created_at: "2026-10-20T08:00:00Z" }],
+  items: [{
+    id: "i-1",
+    kind: "note",
+    title: "Packing",
+    body: "tent",
+    saved_at: "2026-10-20T08:00:00Z",
+    images: [{ bucket: "saved-notes", path: "u-1/i-1-0.jpg" }],
+  }],
+};
 
 const storiesAnswer = {
   stories: [{
@@ -468,6 +481,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_stories: storiesAnswer,
+      export_my_saved_items: favoritesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -488,7 +502,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_ai_digest", args: { target_user_id: me } },
     { name: "export_my_note_extras", args: { target_user_id: me } },
     { name: "export_my_stories", args: { target_user_id: me } },
+    { name: "export_my_saved_items", args: { target_user_id: me } },
   ]);
+  assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
+  // The pictures of my notes are linked, never put into the archive.
+  assert("saved-notes/u-1/i-1-0.jpg" in data.attachmentLinks);
   assertEquals(data.aiDigest?.["enabled"], true);
   assertEquals((data.noteExtras?.["comments"] as unknown[]).length, 1);
   assertEquals(data.forms?.length, 1);
@@ -520,6 +538,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_stories: storiesAnswer,
+      export_my_saved_items: favoritesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -617,6 +636,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_stories: storiesAnswer,
+      export_my_saved_items: favoritesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -640,9 +660,11 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.aiDigest, null);
   assertEquals(data.noteExtras, null);
   assertEquals(data.stories, null);
+  assertEquals(data.favorites, null);
   assertEquals(data.skipped.sort(), [
     "daily",
     "daily digest",
+    "favorites",
     "feedback",
     "forms",
     "moments",

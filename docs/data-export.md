@@ -37,6 +37,7 @@ pages/moments.html           Moments, friend tags and starred friends
 pages/chains.html            group chains
 pages/notes.html             notes and task lists
 pages/saved.html             saved messages, reminders, scheduled messages
+pages/favorites.html         favorites: folders, tags, links, notes (data/favorites.json)
 pages/wallpapers.html        chat wallpapers
 data/moments.json            settings, friend_choices, posts, comments_you_wrote, posts_you_liked
 data/friend_tags.json        tags (with who is in them), starred_friends
@@ -72,6 +73,7 @@ The rule per section:
 | Notes | notes you made or wrote in (not deleted): title, icon, chat name; only the blocks whose **last editor is you** | blocks last edited by others (so a note you made may be incomplete if others changed lines), notes in chats you never wrote in, deleted notes, version history |
 | Task lists | lists you made or added items to (not deleted): title, chat name; only items **you created**, with who they are assigned to by name | items others created, items assigned to you by others, deleted items |
 | Saved messages | when and where you saved; the text only if you wrote the message | the text of other people's messages |
+| Favorites (folders, tags, kept Moments, posts, links, notes) | folders, tags, remarks, your links and notes whole (with links to note pictures); the words of a message, Moment or post only if you wrote it | other people's words |
 | Reminders | when and where; the text only if you wrote the message | the text of other people's messages |
 | Scheduled messages | everything you scheduled (text, time, status) | |
 | Wallpapers | your choice per chat or default, wallpaper photo you own | |

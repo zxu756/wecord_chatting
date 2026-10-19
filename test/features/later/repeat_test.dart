@@ -459,8 +459,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Weekdays'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('scheduled-edit-save')));
-      await tester.pumpAndSettle();
+      // Saving checks the time against the clock: keep it fixed, or the
+      // message (two days after `now`) is in the past once that day comes.
+      await withClock(Clock.fixed(now), () async {
+        await tester.tap(find.byKey(const ValueKey('scheduled-edit-save')));
+        await tester.pumpAndSettle();
+      });
       expect(repository.messages.single.repeat?.kind, RepeatKind.weekdays);
     });
 
@@ -493,8 +497,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('repeat-done')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('scheduled-edit-save')));
-      await tester.pumpAndSettle();
+      // Saving checks the time against the clock: keep it fixed, or the
+      // message (two days after `now`) is in the past once that day comes.
+      await withClock(Clock.fixed(now), () async {
+        await tester.tap(find.byKey(const ValueKey('scheduled-edit-save')));
+        await tester.pumpAndSettle();
+      });
       expect(repository.messages.single.repeat, isNull);
     });
   });

@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wecord/features/ai/actions/extracted_action.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/voice/captions/caption_protocol.dart';
 import 'package:wecord/features/voice/captions/captions_controller.dart';
+import 'package:wecord/features/voice/captions/recap/meeting_recap_repository.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -146,3 +148,34 @@ void captionsTest(
     await currentCaptionsWorld?.shutdown(tester);
   });
 }
+
+/// A recap service that answers from memory.
+class FakeMeetingRecaps implements MeetingRecapRepository {
+  final asked =
+      <({String conversationId, List<Map<String, Object>> entries})>[];
+  Object? error;
+  var result = const MeetingRecap(
+    title: 'Launch sync',
+    summary: ['The launch is on Friday.', 'Budget is tight.'],
+    decisions: ['Ship on Friday.'],
+    actionItems: [
+      ExtractedAction(title: 'Send the plan', assignees: ['user-2']),
+    ],
+  );
+
+  @override
+  Future<MeetingRecap> recap({
+    required String conversationId,
+    required List<Map<String, Object>> entries,
+    String? language,
+    DateTime? now,
+  }) async {
+    asked.add((conversationId: conversationId, entries: entries));
+    final failure = error;
+    if (failure != null) {
+      throw failure;
+    }
+    return result;
+  }
+}
+

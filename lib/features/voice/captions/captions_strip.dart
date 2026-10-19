@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,8 +26,23 @@ const _maxNamedUnsupported = 2;
 /// settled line is a live region for screen readers (the line still being
 /// spoken is left out, so it does not chatter), and nothing animates when
 /// the system asks for reduced motion.
-class CaptionStrip extends ConsumerWidget {
+class CaptionStrip extends StatelessWidget {
   const CaptionStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // On a wide window the bar stays a comfortable line length.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: const _CaptionStripBody(),
+      ),
+    );
+  }
+}
+
+class _CaptionStripBody extends ConsumerWidget {
+  const _CaptionStripBody();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -277,9 +293,11 @@ class _CaptionLines extends StatelessWidget {
     final lastSettled = settled.isEmpty ? null : settled.last;
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxHeight: (MediaQuery.sizeOf(context).height * 0.34).clamp(
-          120.0,
-          280.0,
+        // Grows with the text size, never past half the screen.
+        maxHeight: math.min(
+          MediaQuery.sizeOf(context).height * 0.5,
+          (MediaQuery.sizeOf(context).height * 0.34).clamp(120.0, 280.0) *
+              math.max(1.0, MediaQuery.textScalerOf(context).scale(1)),
         ),
       ),
       child: ListView(

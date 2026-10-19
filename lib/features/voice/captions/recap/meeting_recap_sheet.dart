@@ -358,9 +358,9 @@ class _Bullet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 3, right: 8),
+            padding: EdgeInsets.only(top: icon == null ? 9 : 3, right: 10),
             child: icon == null
-                ? Text('•', style: TextStyle(fontSize: 15, color: c.muted))
+                ? Icon(Icons.circle, size: 6, color: c.muted)
                 : Icon(icon, size: 17, color: c.muted),
           ),
           Expanded(

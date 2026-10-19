@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wecord/features/ai/actions/extracted_action.dart';
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/notes/notes2_repository.dart';
@@ -21,38 +20,9 @@ import '../../voice_input/fake_voice_recognizer.dart';
 import '../../workspace/workspace_fakes.dart';
 import 'captions_fakes.dart';
 
-class _FakeRecaps implements MeetingRecapRepository {
-  final asked =
-      <({String conversationId, List<Map<String, Object>> entries})>[];
-  Object? error;
-  var result = const MeetingRecap(
-    title: 'Launch sync',
-    summary: ['The launch is on Friday.', 'Budget is tight.'],
-    decisions: ['Ship on Friday.'],
-    actionItems: [
-      ExtractedAction(title: 'Send the plan', assignees: ['user-2']),
-    ],
-  );
-
-  @override
-  Future<MeetingRecap> recap({
-    required String conversationId,
-    required List<Map<String, Object>> entries,
-    String? language,
-    DateTime? now,
-  }) async {
-    asked.add((conversationId: conversationId, entries: entries));
-    final failure = error;
-    if (failure != null) {
-      throw failure;
-    }
-    return result;
-  }
-}
-
 class _Rig {
   _Rig({bool host = true, FakeVoiceRecognizer? recognizer, bool ai = true})
-    : recaps = _FakeRecaps(),
+    : recaps = FakeMeetingRecaps(),
       notes = FakeNotesRepository(),
       notes2 = FakeNotes2Repository() {
     world = CaptionsWorld(
@@ -68,7 +38,7 @@ class _Rig {
     );
   }
 
-  final _FakeRecaps recaps;
+  final FakeMeetingRecaps recaps;
   final FakeNotesRepository notes;
   final FakeNotes2Repository notes2;
   late final CaptionsWorld world;

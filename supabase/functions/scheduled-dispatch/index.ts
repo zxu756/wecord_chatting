@@ -1,7 +1,8 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
 // events about to start, tasks that came due, likes and comments on
-// Moments, new-login alerts, and answers to circle join requests. The same
+// Moments, new-login alerts, answers to circle join requests, urgent messages
+// (with their one second push) and "please confirm the announcement". The same
 // tick removes the files of expired disappearing messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -17,7 +18,6 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { dropQuietPushes } from "../push/quiet_hours.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import { cleanUpExpired } from "../expire-messages/cleanup.ts";
@@ -34,6 +34,11 @@ import {
 } from "./logic.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
+import {
+  audibleTargets,
+  type UrgentPushRow,
+  urgentRowTarget,
+} from "./urgent.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -184,6 +189,37 @@ Deno.serve(async (request) => {
     ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
   );
 
+  // "Please confirm the announcement" (the owner or an admin asked): a
+  // normal push, held back by quiet hours like the others.
+  const { data: announcementAcks, error: announcementAcksError } = await admin
+    .rpc("claim_announcement_ack_pushes");
+  if (announcementAcksError) {
+    // Not fatal: the other pushes still go out.
+    console.error(
+      "claim_announcement_ack_pushes failed",
+      announcementAcksError.message,
+    );
+  }
+  targets.push(
+    ...((announcementAcks ?? []) as UrgentPushRow[]).map(urgentRowTarget),
+  );
+
+  // Urgent messages, first push and the one second push after 10 minutes
+  // without a confirmation. They break through quiet hours (and, in the
+  // claim, Do Not Disturb and mutes), so they skip the quiet hours filter
+  // below.
+  const { data: urgent, error: urgentError } = await admin.rpc(
+    "claim_urgent_pushes",
+  );
+  if (urgentError) {
+    // Not fatal: the other pushes still go out (the rows are claimed again
+    // on the next wake-up).
+    console.error("claim_urgent_pushes failed", urgentError.message);
+  }
+  const urgentTargets = ((urgent ?? []) as UrgentPushRow[]).map(
+    urgentRowTarget,
+  );
+
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.
   try {
@@ -193,10 +229,12 @@ Deno.serve(async (request) => {
   }
 
   // Quiet hours hold back what is not for the recipient's exceptions (the
-  // inbox entries were written above and do not depend on this).
-  const audible = await dropQuietPushes(
+  // inbox entries were written above and do not depend on this). Urgent
+  // messages are not held back.
+  const audible = await audibleTargets(
     admin,
     targets,
+    urgentTargets,
     Math.floor(Date.now() / 1000),
   );
   // Times in the text are written for each subscriber's zone and language.

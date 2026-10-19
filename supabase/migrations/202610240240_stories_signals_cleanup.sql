@@ -19,11 +19,12 @@
 --     those with an open report (kept at most 30 days past the end, so the
 --     admins can look), and clears old report copies.
 --   * claim_story_media / finish_story_media  hand the queue to the function.
---   * pg_cron: 'wecord-purge-expired-stories' every five minutes in SQL, and,
---     when the project has pg_net and the vault secrets project_url and
---     service_role_key (as for expire-messages), 'wecord-expire-story-files'
---     every five minutes calling the Edge Function. Without pg_cron nothing
---     is scheduled and the functions can be called by any scheduler.
+--   * pg_cron: 'wecord-purge-expired-stories' every five minutes in SQL, and
+--     'wecord-expire-story-files' every five minutes, which calls
+--     wake_expire_stories(): that posts to the Edge Function with the Vault
+--     secrets wecord_functions_url and wecord_dispatch_secret (the secret is
+--     the bearer token, like scheduled-dispatch). Without pg_cron nothing is
+--     scheduled and the functions can be called by any scheduler.
 --
 -- Account deletion. prepare_account_deletion (202610160017) keeps the profile
 -- as "Deleted User", so the foreign keys never fire. A trigger on
@@ -235,68 +236,78 @@ grant execute on function public.purge_expired_stories(integer) to service_role;
 grant execute on function public.claim_story_media(integer) to service_role;
 grant execute on function public.finish_story_media(text[]) to service_role;
 
+-- Wakes the expire-stories function the way the rest of the project wakes its
+-- functions (wake_scheduled_dispatch, 202610210430): with the Vault secrets
+-- wecord_functions_url and wecord_dispatch_secret, the secret as the bearer
+-- token. Quietly does nothing where Vault or pg_net, or a secret, is missing.
+create or replace function public.wake_expire_stories()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  functions_url text;
+  dispatch_secret text;
+begin
+  select d.decrypted_secret
+  into functions_url
+  from vault.decrypted_secrets d
+  where d.name = 'wecord_functions_url';
+  select d.decrypted_secret
+  into dispatch_secret
+  from vault.decrypted_secrets d
+  where d.name = 'wecord_dispatch_secret';
+
+  if functions_url is null or dispatch_secret is null then
+    return;
+  end if;
+
+  perform net.http_post(
+    url := rtrim(functions_url, '/') || '/expire-stories',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || dispatch_secret
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 5000
+  );
+exception when others then
+  null;
+end;
+$$;
+
+revoke execute on function public.wake_expire_stories() from public, anon, authenticated;
+grant execute on function public.wake_expire_stories() to service_role;
+
 -- Scheduling, only where pg_cron can be used. Reads skip ended dailies either
--- way, so a project without it still hides them at once.
+-- way, so a project without it still hides them at once. Both jobs are always
+-- created; the secrets are checked when the job runs.
 do $$
 begin
   if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
     create extension if not exists pg_cron;
     perform cron.unschedule(jobid)
     from cron.job
-    where jobname = 'wecord-purge-expired-stories';
+    where jobname in (
+      'wecord-purge-expired-stories',
+      'wecord-expire-story-files'
+    );
     perform cron.schedule(
       'wecord-purge-expired-stories',
       '*/5 * * * *',
       'select public.purge_expired_stories(1000)'
     );
+    perform cron.schedule(
+      'wecord-expire-story-files',
+      '*/5 * * * *',
+      'select public.wake_expire_stories()'
+    );
   else
-    raise notice 'pg_cron is not available: call purge_expired_stories() from another scheduler';
+    raise notice 'pg_cron is not available: call purge_expired_stories() and wake_expire_stories() from another scheduler';
   end if;
 exception when others then
-  raise notice 'Could not schedule the daily purge with pg_cron: %', sqlerrm;
-end;
-$$;
-
--- File removal needs the Edge Function (see 202610170020 for the same job
--- that removes the files of expired messages).
-do $$
-begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron')
-    and exists (select 1 from pg_available_extensions where name = 'pg_net')
-    and exists (select 1 from pg_namespace where nspname = 'vault')
-  then
-    create extension if not exists pg_net;
-    if exists (
-      select 1 from vault.decrypted_secrets where name = 'project_url'
-    ) and exists (
-      select 1 from vault.decrypted_secrets where name = 'service_role_key'
-    ) then
-      perform cron.unschedule(jobid)
-      from cron.job
-      where jobname = 'wecord-expire-story-files';
-      perform cron.schedule(
-        'wecord-expire-story-files',
-        '*/5 * * * *',
-        $job$
-        select net.http_post(
-          url := (select decrypted_secret from vault.decrypted_secrets where name = 'project_url')
-            || '/functions/v1/expire-stories',
-          headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || (
-              select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'
-            )
-          ),
-          body := '{}'::jsonb
-        )
-        $job$
-      );
-    else
-      raise notice 'Add vault secrets project_url and service_role_key to schedule expire-stories';
-    end if;
-  end if;
-exception when others then
-  raise notice 'Could not schedule expire-stories: %', sqlerrm;
+  raise notice 'Could not schedule the daily jobs with pg_cron: %', sqlerrm;
 end;
 $$;
 

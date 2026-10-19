@@ -256,7 +256,7 @@
 - **回复**：底部回复框和 6 个快速表情。回复 = 给作者的一条私聊文字消息（`send_story_reply`，遵守仅好友私信和拉黑规则，重试同一 `client_id` 返回同一条），消息附件 `story_ref`；聊天里在气泡上方显示缩略图和「回复了你的日常」，日常结束后显示「这条日常已结束」。快速表情是对日常的一次回应（每人一个，可改可撤），不发私聊消息，作者在「谁看过」里看到。
 - **谁看过**：只有作者能看（`list_story_viewers`，其他人调用被拒绝；表本身任何人都不能直接读）；列表里有表情，已被删好友 / 拉黑 / 账号已删的人不显示；自己的日常上有查看数和表情数、删除按钮。
 - **存储**：私有桶 `stories`（路径 `<作者id>/<日常id>.jpg|-t.jpg|-v.mp4`，每个文件 ≤20MB）；读取权限由 `story_visible_to` 决定，只有作者能写、能删自己的文件夹。
-- **过期清理**：不改 `run_later_dispatch()`，有自己的任务——pg_cron `wecord-purge-expired-stories`（每 5 分钟，SQL 删除过期的日常，触发器把文件登记进清理队列）和 `wecord-expire-story-files`（每 5 分钟，用 Vault 里的 `project_url`、`service_role_key` 调用 Edge Function `expire-stories` 删除存储文件；没有这两个密钥或没有 pg_cron 时迁移会跳过，函数自己也会先清理再删文件，可用任何调度器调用）。
+- **过期清理**：不改 `run_later_dispatch()`，有自己的任务——pg_cron `wecord-purge-expired-stories`（每 5 分钟，SQL 删除过期的日常，触发器把文件登记进清理队列）和 `wecord-expire-story-files`（每 5 分钟调 `wake_expire_stories()`，它用 Vault 里已有的 `wecord_functions_url`、`wecord_dispatch_secret` 以 `Authorization: Bearer <DISPATCH_SECRET>` 唤醒 Edge Function `expire-stories` 删除存储文件，和 `scheduled-dispatch` 同一套；任务有 pg_cron 就总会创建，密钥在运行时检查，取不到就什么都不做；没有 pg_cron 时迁移跳过，可用任何调度器调用）。
 - **实时**：私有通道 `stories:<用户id>`（只传「有变化」，不传内容），客户端收到后重新读取排行；回到前台也会刷新。
 - **删除账号**：触发器（`profiles.deleted_at`）删除其日常、看过记录、表情和密友名单，文件进清理队列，`delete-account` 函数同时清空 `stories` 桶里的用户文件夹。
 - **数据导出**：`export_my_stories` 导出还在展示的日常（说明、受众、查看人数、文件链接）、密友名单和自己提交的日常举报；不含「谁看过」。

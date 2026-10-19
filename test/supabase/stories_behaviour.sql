@@ -861,6 +861,14 @@ select public.finish_story_media((select array_agg(object_path) from public.stor
 select pg_temp.check('the queue is empty after finishing',
   (select count(*) = 0 from public.story_media_cleanup));
 
+-- Waking the function does nothing without the Vault secrets, and is not for people.
+select pg_temp.root();
+select public.wake_expire_stories();
+select pg_temp.act_as('b1');
+select pg_temp.refused('only the service role wakes expire-stories',
+  'select public.wake_expire_stories()', '42501');
+select pg_temp.root();
+
 -- ============================================================= export
 select pg_temp.root();
 select pg_temp.check('the export holds only the person''s dailies',

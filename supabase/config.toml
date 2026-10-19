@@ -510,9 +510,9 @@ entrypoint = "./functions/expire-messages/index.ts"
 
 [functions.expire-stories]
 enabled = true
-# Called by a scheduler with the service role key as the bearer token, which
-# the function compares itself; removes the files of dailies that have ended.
-# Users never call it.
+# Called by the database (pg_cron through pg_net) with the shared secret
+# DISPATCH_SECRET as the bearer token, which the function compares itself;
+# removes the files of dailies that have ended. Users never call it.
 verify_jwt = false
 entrypoint = "./functions/expire-stories/index.ts"
 

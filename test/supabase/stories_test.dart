@@ -123,6 +123,13 @@ void main() {
   test('the end of a daily has its own jobs and leaves the dispatch alone', () {
     expect(cleanup, contains("'wecord-purge-expired-stories'"));
     expect(cleanup, contains("'wecord-expire-story-files'"));
+    // The wake-up uses the project's own Vault secrets, and the job is made
+    // whether or not they exist yet.
+    expect(cleanup, contains("'wecord_functions_url'"));
+    expect(cleanup, contains("'wecord_dispatch_secret'"));
+    expect(cleanup, contains("'select public.wake_expire_stories()'"));
+    expect(cleanup, isNot(contains('project_url')));
+    expect(cleanup, isNot(contains('service_role_key')));
     expect(cleanup, contains("pg_available_extensions where name = 'pg_cron'"));
     for (final sql in [schema, visibility, rpcs, reports, cleanup, export]) {
       expect(sql, isNot(contains('function public.run_later_dispatch')));
@@ -193,7 +200,7 @@ void main() {
       final stories = File(
         'supabase/functions/expire-stories/index.ts',
       ).readAsStringSync();
-      expect(stories, contains('SUPABASE_SERVICE_ROLE_KEY'));
+      expect(stories, contains('DISPATCH_SECRET'));
       expect(stories, contains('unauthorized'));
     },
   );

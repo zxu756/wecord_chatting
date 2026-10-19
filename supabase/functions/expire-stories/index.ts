@@ -3,12 +3,14 @@
 // The dailies themselves are deleted in SQL (purge_expired_stories, run by
 // pg_cron every five minutes); Storage objects can only be removed through
 // the Storage API, so a trigger queues the files of every deleted daily and
-// this function, called with the service role key as the bearer token (a
-// pg_net cron job, a scheduler of your choice), claims them, removes them
+// this function, called with the shared secret DISPATCH_SECRET as the bearer
+// token (the pg_cron job wecord-expire-story-files through
+// wake_expire_stories(), or a scheduler of your choice), claims them, removes them
 // and confirms. It also runs the purge itself first, so it alone is enough
 // on a project without pg_cron. Reading already stopped at the end of a daily
 // (story_visible_to), this only frees the space.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isAuthorized } from "./auth.ts";
 import { cleanUpStories, StoryCleanupError } from "./cleanup.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -22,15 +24,18 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405);
   }
+  const secret = Deno.env.get("DISPATCH_SECRET") ?? "";
+  if (secret === "") {
+    return json({ error: "not_configured" }, 500);
+  }
+  // Only the database calls this; users never do.
+  if (!isAuthorized(request.headers.get("Authorization"), secret)) {
+    return json({ error: "unauthorized" }, 401);
+  }
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
     return json({ error: "not_configured" }, 500);
-  }
-  // Only the service role may call this; users never do.
-  const authorization = request.headers.get("Authorization") ?? "";
-  if (authorization.replace(/^Bearer\s+/i, "") !== serviceRoleKey) {
-    return json({ error: "unauthorized" }, 401);
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {

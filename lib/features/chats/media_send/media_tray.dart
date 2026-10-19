@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/chats/media_send/media_draft.dart';
 import 'package:wecord/features/chats/media_send/media_tray_controller.dart';
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
@@ -57,6 +58,22 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
 
   MediaTrayController get _controller =>
       ref.read(mediaTrayProvider(widget.conversationId).notifier);
+
+  /// Asks for what the pictures show, for people who can't see them.
+  Future<void> _describe(List<DraftAttachment> items) async {
+    final texts = await showImageAltSheet(
+      context,
+      pictures: [
+        for (final item in items)
+          AltPicture(id: item.id, picture: item.thumbnail, current: item.alt),
+      ],
+    );
+    if (texts != null) {
+      for (final MapEntry(:key, :value) in texts.entries) {
+        _controller.setAlt(key, value);
+      }
+    }
+  }
 
   /// "3 photos", "1 video", "2 files", "4 items".
   static String titleFor(List<DraftAttachment> items, int loading) {
@@ -239,6 +256,18 @@ class _MediaTrayState extends ConsumerState<MediaTray> {
               ],
             ),
           ),
+          if (state.describable.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DescribeRow(
+              described: state.describable
+                  .where((item) => item.alt != null)
+                  .length,
+              total: state.describable.length,
+              onPressed: state.isPreparing
+                  ? null
+                  : () => unawaited(_describe(state.describable)),
+            ),
+          ],
           if (widget.allowViewOnce && state.canViewOnce) ...[
             const SizedBox(height: 8),
             _ViewOnceRow(
@@ -458,6 +487,16 @@ class _TrayThumb extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (item.canDescribe)
+                    Positioned(
+                      left: 4,
+                      bottom: 4,
+                      child: ImageAltBadge(
+                        key: ValueKey('media-tray-alt-${item.id}'),
+                        described: item.alt != null,
+                        compact: true,
+                      ),
+                    ),
                   if (item.overLimit)
                     Positioned.fill(
                       child: IgnorePointer(
@@ -620,6 +659,76 @@ class _Notice extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Describe pictures": opens the sheet that asks what each picture shows,
+/// and says how many have a description.
+class _DescribeRow extends StatelessWidget {
+  const _DescribeRow({
+    required this.described,
+    required this.total,
+    required this.onPressed,
+  });
+
+  final int described;
+  final int total;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final label = total == 1 ? tr('Describe picture') : tr('Describe pictures');
+    final status = described == 0
+        ? null
+        : total == 1
+        ? tr('Described')
+        : tr('{done} of {total} described', {
+            'done': described,
+            'total': total,
+          });
+    return WeCordPressable(
+      key: const ValueKey('media-tray-describe'),
+      onPressed: onPressed,
+      semanticLabel: status == null ? label : '$label, $status',
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.md),
+      ),
+      builder: (context, states) => Container(
+        constraints: const BoxConstraints(minHeight: 36),
+        child: Row(
+          children: [
+            Icon(
+              Icons.short_text_rounded,
+              size: 20,
+              color: described == total ? c.accentText : c.muted,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: c.ink,
+                ),
+              ),
+            ),
+            if (status != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                status,
+                key: const ValueKey('media-tray-describe-status'),
+                style: TextStyle(fontSize: 12, color: c.muted),
+              ),
+            ],
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
+          ],
+        ),
       ),
     );
   }

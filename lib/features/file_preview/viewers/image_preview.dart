@@ -249,7 +249,8 @@ class _ImagePreviewState extends ConsumerState<ImagePreview>
     // a tap that shows or hides the viewer's controls.
     return Semantics(
       container: true,
-      label: file.name,
+      // The sender's description when there is one, else the file's name.
+      label: file.alt ?? file.name,
       image: true,
       hint: tr('Tap to show or hide the controls'),
       onTap: widget.onTap,

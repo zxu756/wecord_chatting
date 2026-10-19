@@ -19,6 +19,7 @@ import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
 import 'package:wecord/features/circles/mod_tools/mod_notes_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_extras_repository.dart';
@@ -1016,6 +1017,7 @@ class _MemberRow extends ConsumerWidget {
           : PresenceDot(
               key: ValueKey('member-online-${profile.id}'),
               semanticLabel: (presence ?? PresenceStatus.online).label,
+              shape: presenceShapeOf(presence ?? PresenceStatus.online),
               color: presenceColor,
               size: avatarSize < 30
                   ? 10

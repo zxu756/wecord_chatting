@@ -81,6 +81,10 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
             presence: conversationType == ConversationType.direct
                 ? presenceColor
                 : null,
+            presenceShape: presenceShapeOf(peerPresence),
+            presenceLabel: conversationType == ConversationType.direct
+                ? presenceLabelOf(peerPresence)
+                : null,
             ringColor: desktop ? c.panel : tokens.glass.solidFill,
           );
     final memberLine = _memberLine(

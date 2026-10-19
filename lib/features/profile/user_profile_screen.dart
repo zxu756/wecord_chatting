@@ -327,6 +327,8 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
                     presence == null || presence == PresenceStatus.invisible
                     ? null
                     : presenceColor(context, presence),
+                presenceShape: presenceShapeOf(presence),
+                presenceLabel: presenceLabelOf(presence),
               ),
               trailing: status == null
                   ? null

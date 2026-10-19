@@ -36,6 +36,7 @@ class OutboxMedia {
     this.originalMimeType,
     this.originalQuality = false,
     this.viewOnce = false,
+    this.alt,
   });
 
   factory OutboxMedia.fromJson(Map<String, dynamic> json) {
@@ -55,6 +56,7 @@ class OutboxMedia {
       originalMimeType: json['original_mime_type'] as String?,
       originalQuality: json['original_quality'] == true,
       viewOnce: json['view_once'] == true,
+      alt: cleanImageAlt(json['alt']),
     );
   }
 
@@ -93,6 +95,9 @@ class OutboxMedia {
   /// picture, so nothing of it shows before it is opened.
   final bool viewOnce;
 
+  /// What a picture shows, in the sender's words; sent with the picture.
+  final String? alt;
+
   /// The storage bucket: pictures and everything else live apart.
   String get bucket =>
       kind == OutboxMediaKind.image ? 'chat-images' : 'chat-files';
@@ -123,6 +128,7 @@ class OutboxMedia {
         width: width,
         height: height,
         blurhash: blurhash,
+        alt: alt,
       ).toJson(),
       _ => FileAttachment(
         bucket: bucket,
@@ -154,6 +160,7 @@ class OutboxMedia {
       'original_mime_type': ?originalMimeType,
       if (originalQuality) 'original_quality': true,
       if (viewOnce) 'view_once': true,
+      'alt': ?alt,
     };
   }
 }

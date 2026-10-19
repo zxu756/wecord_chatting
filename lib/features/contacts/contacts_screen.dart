@@ -407,7 +407,7 @@ class _FriendsSection extends ConsumerWidget {
                   _PersonRow(
                     key: ValueKey('friend-${friend.id}'),
                     profile: friend,
-                    presence: presenceColor(context, presence(friend.id)),
+                    presence: presence(friend.id),
                     onTap: () => context.push('/profile/${friend.id}'),
                     trailing: _FriendActions(
                       profile: friend,
@@ -677,7 +677,9 @@ class _PersonRow extends StatelessWidget {
   final Widget? trailing;
   final Widget? below;
   final VoidCallback? onTap;
-  final Color? presence;
+
+  /// Null while offline.
+  final PresenceStatus? presence;
 
   /// Requests show the name people chose, not the alias.
   final bool showAlias;
@@ -708,7 +710,9 @@ class _PersonRow extends StatelessWidget {
               ProfileAvatar(
                 name: name,
                 avatarUrl: profile.avatarUrl,
-                presence: presence,
+                presence: presenceColor(context, presence),
+                presenceShape: presenceShapeOf(presence),
+                presenceLabel: presenceLabelOf(presence),
               ),
               const SizedBox(width: 12),
               Expanded(

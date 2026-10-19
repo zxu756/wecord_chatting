@@ -39,6 +39,7 @@ class DraftAttachment {
     this.height,
     this.source,
     this.edits,
+    this.alt,
   });
 
   /// Tells drafts apart in the tray (a file may be added twice).
@@ -65,7 +66,15 @@ class DraftAttachment {
   /// What was done in the photo editor, to open it again where it was left.
   final EditorDocument? edits;
 
+  /// What the picture shows, written by the sender for people who can't see
+  /// it; null when none was written.
+  final String? alt;
+
   bool get isEdited => source != null;
+
+  /// A picture that can be given a description (not one too big to send).
+  bool get canDescribe =>
+      kind == DraftKind.image && thumbnail != null && !overLimit;
 
   /// A still picture the photo editor can open (not an animated GIF).
   bool get canEdit =>
@@ -85,6 +94,7 @@ class DraftAttachment {
     int? height,
     XFile? source,
     EditorDocument? edits,
+    Object? alt = _keepAlt,
   }) {
     return DraftAttachment(
       id: id ?? this.id,
@@ -98,6 +108,7 @@ class DraftAttachment {
       height: height ?? this.height,
       source: source ?? this.source,
       edits: edits ?? this.edits,
+      alt: identical(alt, _keepAlt) ? this.alt : alt as String?,
     );
   }
 
@@ -109,6 +120,8 @@ class DraftAttachment {
   /// upload takes a while.
   bool get isLarge => size > 20 * 1024 * 1024;
 }
+
+const _keepAlt = Object();
 
 var _draftCounter = 0;
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
+import 'package:wecord/shared/ui/avatars.dart' show PresenceShape;
 
 /// The dot on the corner of an avatar: green for Online, a crescent for
 /// Idle, a bar for Do Not Disturb and a hollow ring for offline (null) and
@@ -70,6 +71,21 @@ class PresenceIndicator extends StatelessWidget {
     );
   }
 }
+
+/// The shape that stands for [status] on an avatar's presence dot, next to
+/// its color (null means offline).
+PresenceShape presenceShapeOf(PresenceStatus? status) => switch (status) {
+  PresenceStatus.online => PresenceShape.solid,
+  PresenceStatus.idle => PresenceShape.crescent,
+  PresenceStatus.doNotDisturb => PresenceShape.bar,
+  PresenceStatus.invisible || null => PresenceShape.ring,
+};
+
+/// [status] in words, for a presence dot's screen reader label.
+String presenceLabelOf(PresenceStatus? status) =>
+    status == null || status == PresenceStatus.invisible
+    ? tr('Offline')
+    : status.label;
 
 /// The colour that stands for [status]; null means offline.
 Color presenceColor(BuildContext context, PresenceStatus? status) {

@@ -74,7 +74,14 @@ String avatarInitial(String name) {
   return trimmed.characters.first.toUpperCase();
 }
 
-/// A presence dot with a ring cut out of whatever it sits on.
+/// What a presence dot looks like besides its color, so that status doesn't
+/// rest on color alone: a plain dot for online, a crescent for idle, a bar
+/// for do not disturb and a hollow ring for offline.
+enum PresenceShape { solid, crescent, bar, ring }
+
+/// A presence dot with a ring cut out of whatever it sits on. With a
+/// [shape] other than [PresenceShape.solid] a notch is cut out of the dot
+/// too, in the ring's color.
 class PresenceDot extends StatelessWidget {
   const PresenceDot({
     required this.color,
@@ -82,10 +89,14 @@ class PresenceDot extends StatelessWidget {
     this.ringColor,
     this.ringWidth,
     this.semanticLabel,
+    this.shape = PresenceShape.solid,
     super.key,
   });
 
   final Color color;
+
+  /// The notch that tells the status apart without its color.
+  final PresenceShape shape;
 
   /// What the dot says to a screen reader ("Online"); without one the dot
   /// is skipped.
@@ -101,18 +112,46 @@ class PresenceDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ring = ringWidth ?? (size * 0.22).clamp(2.0, 4.0);
+    final ringTone = ringColor ?? context.tokens.colors.panel;
+    final inner = size - 2 * ring;
+    Widget notch(double diameter) => Container(
+      width: diameter,
+      height: diameter,
+      decoration: BoxDecoration(color: ringTone, shape: BoxShape.circle),
+    );
+    final Widget? cutout = switch (shape) {
+      PresenceShape.solid => null,
+      // A bite out of the top left makes a crescent.
+      PresenceShape.crescent => Align(
+        alignment: Alignment.topLeft,
+        child: notch(inner * 0.6),
+      ),
+      PresenceShape.bar => Center(
+        child: Container(
+          width: inner * 0.7,
+          height: (inner * 0.25).clamp(1.5, 4),
+          decoration: BoxDecoration(
+            color: ringTone,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+      PresenceShape.ring => Center(child: notch(inner * 0.45)),
+    };
     final dot = Container(
       width: size,
       height: size,
+      clipBehavior: cutout == null ? Clip.none : Clip.antiAlias,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
         border: Border.all(
-          color: ringColor ?? context.tokens.colors.panel,
+          color: ringTone,
           width: ring,
           strokeAlign: BorderSide.strokeAlignInside,
         ),
       ),
+      child: cutout,
     );
     return semanticLabel == null
         ? ExcludeSemantics(child: dot)
@@ -134,6 +173,7 @@ class PersonAvatar extends StatelessWidget {
     this.badge,
     this.semanticLabel,
     this.presenceLabel,
+    this.presenceShape = PresenceShape.solid,
     this.onImageError,
     super.key,
   });
@@ -147,6 +187,9 @@ class PersonAvatar extends StatelessWidget {
 
   /// Presence color (tokens.colors.success / warning / danger / faint).
   final Color? presence;
+
+  /// The notch in the presence dot that tells the status without its color.
+  final PresenceShape presenceShape;
 
   /// The color around the presence dot: what the avatar sits on.
   final Color? ringColor;
@@ -219,6 +262,7 @@ class PersonAvatar extends StatelessWidget {
                 size: (size * 0.27).clamp(10.0, 22.0),
                 ringColor: ringColor,
                 semanticLabel: presenceLabel,
+                shape: presenceShape,
               ));
     // The picture is skipped (or named by [semanticLabel]); the corner keeps
     // its own words, e.g. "Online".

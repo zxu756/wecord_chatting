@@ -15,7 +15,11 @@ import 'package:wecord/shared/ui/spoken.dart';
 
 /// What a screen reader says for a picture in a message: a readable file
 /// name when there is one, otherwise "Image from {sender}".
-String messageImageDescription(String path, String senderName) {
+String messageImageDescription(String path, String senderName, {String? alt}) {
+  // What the sender wrote about the picture beats a guess from its name.
+  if (alt != null && alt.trim().isNotEmpty) {
+    return tr('Image: {name}', {'name': _oneLine(alt)});
+  }
   final base = path.split('/').last;
   final dot = base.lastIndexOf('.');
   final stem = dot > 0 ? base.substring(0, dot) : base;
@@ -63,7 +67,11 @@ String messageSpokenContent(ChatMessage message, {required String senderName}) {
     ),
     MessageType.text => _oneLine(plainTextFromMarkdown(body)),
     MessageType.image => [
-      messageImageDescription(message.imageAttachment?.path ?? '', senderName),
+      messageImageDescription(
+        message.imageAttachment?.path ?? '',
+        senderName,
+        alt: message.imageAttachment?.alt,
+      ),
       if (body.isNotEmpty) plainTextFromMarkdown(body),
     ].join(', '),
     MessageType.file => [

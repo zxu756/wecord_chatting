@@ -79,6 +79,8 @@ class SettingsAccountCard extends ConsumerWidget {
                 avatarUrl: profile.avatarUrl,
                 size: 58,
                 presence: presenceColor(context, presence),
+                presenceShape: presenceShapeOf(presence),
+                presenceLabel: presenceLabelOf(presence),
               ),
               const SizedBox(width: 14),
               Expanded(

@@ -245,6 +245,7 @@ class PreviewFile {
     this.sentAt,
     this.width,
     this.height,
+    this.alt,
   });
 
   factory PreviewFile.fromFileAttachment(
@@ -282,6 +283,7 @@ class PreviewFile {
       size: attachment.size,
       width: attachment.width,
       height: attachment.height,
+      alt: attachment.alt,
       messageId: messageId,
       conversationId: conversationId,
       senderName: senderName,
@@ -382,6 +384,9 @@ class PreviewFile {
   final int? width;
   final int? height;
 
+  /// What a picture shows, as its sender described it.
+  final String? alt;
+
   PreviewKind get kind => previewKindFor(name: name, mimeType: mimeType);
 
   String get extension => fileExtensionOf(name);
@@ -408,6 +413,7 @@ class PreviewFile {
       size: size,
       width: width,
       height: height,
+      alt: alt,
       messageId: this.messageId ?? messageId,
       conversationId: this.conversationId ?? conversationId,
       senderName: this.senderName ?? senderName,

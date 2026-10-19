@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/file_message.dart';
 import 'package:wecord/features/chats/media_cache.dart';
@@ -485,6 +486,17 @@ class _MediaTileState extends ConsumerState<MediaTile> {
             bottom: 6,
             child: _Chip(text: formatFileSize(video.size)),
           ),
+        if (_image?.alt != null && !isPending && !widget.compact)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: ImageAltBadge(
+              key: ValueKey('album-alt-${_message.id}'),
+              onPressed: () =>
+                  unawaited(showImageAltReader(context, _image!.alt!)),
+              semanticLabel: tr('Picture description'),
+            ),
+          ),
         if (isPending && entry != null)
           _PendingOverlay(
             entry: entry,
@@ -494,7 +506,12 @@ class _MediaTileState extends ConsumerState<MediaTile> {
           ),
       ],
     );
-    final label = video != null ? tr('Video') : tr('Image');
+    final alt = _image?.alt;
+    final label = video != null
+        ? tr('Video')
+        : alt != null
+        ? tr('Image: {name}', {'name': alt})
+        : tr('Image');
     if (isPending) {
       return Semantics(label: label, child: tile);
     }

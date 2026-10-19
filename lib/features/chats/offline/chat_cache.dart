@@ -38,8 +38,60 @@ abstract interface class ChatCache {
 
   Future<void> writeOutbox(String userId, List<Map<String, dynamic>> entries);
 
+  /// What [userId]'s offline copy takes, in bytes: the conversation list,
+  /// each conversation's messages and the outbox.
+  Future<ChatCacheSizes> measure(String userId);
+
+  /// Forgets cached messages of [conversationId]: just [ids], or all of
+  /// them when [ids] is null. The conversation list and the outbox stay.
+  Future<void> removeMessages(
+    String userId,
+    String conversationId, {
+    Set<String>? ids,
+  });
+
+  /// Forgets the conversation list and every conversation's cached
+  /// messages, but not the outbox (messages that are still waiting to be
+  /// sent are not a cache).
+  Future<void> clearMessages(String userId);
+
+  /// Forgets the cached messages that have expired by [now] (disappearing
+  /// messages) and returns their rows, so what was kept for them can go too.
+  Future<List<Map<String, dynamic>>> removeExpired(String userId, DateTime now);
+
   /// Forgets everything, for every user.
   Future<void> clear();
+}
+
+/// How many bytes a user's offline copy of chats takes.
+class ChatCacheSizes {
+  const ChatCacheSizes({
+    this.conversationList = 0,
+    this.outbox = 0,
+    this.messages = const {},
+  });
+
+  final int conversationList;
+  final int outbox;
+
+  /// Bytes of cached messages by conversation id.
+  final Map<String, int> messages;
+
+  int get messagesTotal => messages.values.fold(0, (sum, size) => sum + size);
+
+  /// What clearing the cache would free: not the outbox.
+  int get clearable => conversationList + messagesTotal;
+}
+
+/// Whether a cached message row has expired by [now] (a disappearing
+/// message whose time is up).
+bool cachedRowExpired(Map<String, dynamic> row, DateTime now) {
+  final value = row['expires_at'];
+  if (value is! String) {
+    return false;
+  }
+  final expiresAt = DateTime.tryParse(value);
+  return expiresAt != null && !expiresAt.isAfter(now);
 }
 
 /// The cache the app uses. Off by default (tests and platforms without
@@ -82,6 +134,25 @@ class NoChatCache implements ChatCache {
     String userId,
     List<Map<String, dynamic>> entries,
   ) async {}
+
+  @override
+  Future<ChatCacheSizes> measure(String userId) async => const ChatCacheSizes();
+
+  @override
+  Future<void> removeMessages(
+    String userId,
+    String conversationId, {
+    Set<String>? ids,
+  }) async {}
+
+  @override
+  Future<void> clearMessages(String userId) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> removeExpired(
+    String userId,
+    DateTime now,
+  ) async => const [];
 
   @override
   Future<void> clear() async {}
@@ -196,6 +267,98 @@ class KeyValueChatCache implements ChatCache {
       return store.delete(_outboxKey(userId));
     }
     return store.write(_outboxKey(userId), jsonEncode(entries));
+  }
+
+  static int _bytes(String text) => utf8.encode(text).length;
+
+  @override
+  Future<ChatCacheSizes> measure(String userId) async {
+    final messagesPrefix = _messagesKey(userId, '');
+    final messages = <String, int>{};
+    for (final key in await store.keys()) {
+      if (!key.startsWith(messagesPrefix)) {
+        continue;
+      }
+      final text = await store.read(key);
+      if (text != null) {
+        messages[key.substring(messagesPrefix.length)] = _bytes(text);
+      }
+    }
+    final conversations = await store.read(_conversationsKey(userId));
+    final outbox = await store.read(_outboxKey(userId));
+    return ChatCacheSizes(
+      conversationList: conversations == null ? 0 : _bytes(conversations),
+      outbox: outbox == null ? 0 : _bytes(outbox),
+      messages: messages,
+    );
+  }
+
+  @override
+  Future<void> removeMessages(
+    String userId,
+    String conversationId, {
+    Set<String>? ids,
+  }) async {
+    final key = _messagesKey(userId, conversationId);
+    if (ids == null) {
+      return store.delete(key);
+    }
+    final rows = await _readList(key);
+    if (rows == null) {
+      return;
+    }
+    final kept = [
+      for (final row in rows)
+        if (!ids.contains(row['id'])) row,
+    ];
+    if (kept.length == rows.length) {
+      return;
+    }
+    return kept.isEmpty
+        ? store.delete(key)
+        : store.write(key, jsonEncode(kept));
+  }
+
+  @override
+  Future<void> clearMessages(String userId) async {
+    final prefix = _messagesKey(userId, '');
+    for (final key in await store.keys()) {
+      if (key.startsWith(prefix)) {
+        await store.delete(key);
+      }
+    }
+    await store.delete(_conversationsKey(userId));
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> removeExpired(
+    String userId,
+    DateTime now,
+  ) async {
+    final prefix = _messagesKey(userId, '');
+    final removed = <Map<String, dynamic>>[];
+    for (final key in await store.keys()) {
+      if (!key.startsWith(prefix)) {
+        continue;
+      }
+      final rows = await _readList(key);
+      if (rows == null) {
+        continue;
+      }
+      final kept = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        (cachedRowExpired(row, now) ? removed : kept).add(row);
+      }
+      if (kept.length == rows.length) {
+        continue;
+      }
+      if (kept.isEmpty) {
+        await store.delete(key);
+      } else {
+        await store.write(key, jsonEncode(kept));
+      }
+    }
+    return removed;
   }
 
   @override

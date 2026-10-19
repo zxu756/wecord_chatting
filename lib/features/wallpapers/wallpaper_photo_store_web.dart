@@ -57,6 +57,24 @@ class KeyValueWallpaperPhotoStore implements WallpaperPhotoStore {
   }
 
   @override
+  Future<int> totalBytes() async {
+    try {
+      final store = await _resolve();
+      if (store == null) {
+        return 0;
+      }
+      var total = 0;
+      for (final key in await store.keys()) {
+        // Base64 text: three bytes of photo for every four characters.
+        total += ((await store.read(key))?.length ?? 0) * 3 ~/ 4;
+      }
+      return total;
+    } on Object {
+      return 0;
+    }
+  }
+
+  @override
   Future<void> clear() async {
     try {
       await (await _resolve())?.clear();

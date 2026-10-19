@@ -70,6 +70,21 @@ class FileWallpaperPhotoStore implements WallpaperPhotoStore {
   }
 
   @override
+  Future<int> totalBytes() async {
+    var total = 0;
+    try {
+      await for (final entity in (await _dir()).list(recursive: true)) {
+        if (entity is File) {
+          total += await entity.length();
+        }
+      }
+    } on Object {
+      // Counts what could be read.
+    }
+    return total;
+  }
+
+  @override
   Future<void> clear() async {
     try {
       final directory = await _dir();

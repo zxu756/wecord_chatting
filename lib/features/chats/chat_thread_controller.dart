@@ -8,6 +8,8 @@ import 'package:wecord/features/chats/message_window.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
+import 'package:wecord/features/storage/local_storage_service.dart';
+import 'package:wecord/features/storage/storage_providers.dart';
 import 'package:wecord/shared/models/chat_status.dart';
 import 'package:wecord/shared/models/message.dart';
 
@@ -62,6 +64,7 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
   late ChatsRepository _repository;
   MessageHistorySource? _source;
   ChatCache _cache = const NoChatCache();
+  LocalStorageService? _storage;
   String? _userId;
 
   var _window = MessageWindow.empty;
@@ -118,6 +121,7 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
     final source = repository as MessageHistorySource;
     _source = source;
     _cache = ref.watch(chatCacheProvider);
+    _storage = ref.read(localStorageServiceProvider);
     _userId = ref.watch(authRepositoryProvider).currentUser?.id;
     _writes = CacheWriteScheduler();
 
@@ -261,10 +265,109 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
       return const [];
     }
     try {
-      return await _cache.readMessages(userId, _conversationId);
+      final rows = await _cache.readMessages(userId, _conversationId);
+      // A disappearing message whose time ran out while the app was closed
+      // is gone, and so is what was kept for it.
+      final now = DateTime.now().toUtc();
+      final expired = [
+        for (final row in rows)
+          if (cachedRowExpired(row, now)) row,
+      ];
+      if (expired.isEmpty) {
+        return rows;
+      }
+      _forget(expired);
+      unawaited(
+        _cache
+            .removeMessages(
+              userId,
+              _conversationId,
+              ids: {for (final row in expired) row['id'] as String},
+            )
+            .catchError((Object _) {}),
+      );
+      return [
+        for (final row in rows)
+          if (!cachedRowExpired(row, now)) row,
+      ];
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Forgets what this device kept for messages that are gone, recalled or
+  /// expired: the text read from their pictures, transcripts, downloaded
+  /// files and previews.
+  void _forget(Iterable<Map<String, dynamic>> rows) {
+    final storage = _storage;
+    if (storage == null || rows.isEmpty) {
+      return;
+    }
+    final gone = rows.toList();
+    unawaited(() async {
+      for (final row in gone) {
+        try {
+          await storage.forgetMessage(row);
+        } catch (_) {
+          // Only a cache.
+        }
+      }
+    }());
+  }
+
+  /// Notes which of the cached [incoming] rows were recalled or expired
+  /// since they were last seen, before [incoming] replaces them.
+  void _forgetRetired(Iterable<Map<String, dynamic>> incoming) {
+    final now = DateTime.now().toUtc();
+    final retired = <Map<String, dynamic>>[];
+    for (final row in incoming) {
+      final previous = _rows[row['id']];
+      if (previous == null || previous['recalled_at'] != null) {
+        continue;
+      }
+      if (row['recalled_at'] != null || cachedRowExpired(row, now)) {
+        retired.add(previous);
+      }
+    }
+    _forget(retired);
+  }
+
+  /// Notes which loaded rows the server no longer has: those as new as the
+  /// oldest of [fresh] that are not among them (deleted, or expired and
+  /// swept).
+  void _forgetMissing(List<Map<String, dynamic>> fresh) {
+    if (fresh.isEmpty) {
+      return;
+    }
+    final ids = {for (final row in fresh) row['id']};
+    String? floor;
+    for (final row in fresh) {
+      final at = row['created_at'];
+      if (at is String && (floor == null || at.compareTo(floor) < 0)) {
+        floor = at;
+      }
+    }
+    if (floor == null) {
+      return;
+    }
+    final lowest = DateTime.tryParse(floor);
+    if (lowest == null) {
+      return;
+    }
+    _forget([
+      for (final row in _rows.values)
+        if (!ids.contains(row['id']) &&
+            _createdAtOrAfter(row['created_at'], lowest))
+          row,
+    ]);
+  }
+
+  static bool _createdAtOrAfter(Object? value, DateTime floor) {
+    if (value is! String) {
+      return false;
+    }
+    final at = DateTime.tryParse(value);
+    return at != null && !at.isBefore(floor);
   }
 
   void _scheduleCacheWrite() {
@@ -513,6 +616,8 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
       final rows = results[0] as List<Map<String, dynamic>>;
       _readMarkers = results[1] as List<ConversationReadMarker>;
       if (_window.isLive) {
+        _forgetRetired(rows);
+        _forgetMissing(rows);
         _addRows(rows);
         _window = _window.syncWithLatest(_parse(rows));
         _pruneRows();
@@ -553,6 +658,9 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
         }
       case ThreadEventKind.messageDeleted:
         if (messageId != null && _window.contains(messageId)) {
+          _forget([
+            _rows[messageId] ?? {'id': messageId},
+          ]);
           _window = _window.remove([messageId]);
           _rows.remove(messageId);
           _emit();
@@ -627,6 +735,7 @@ class ChatThreadController extends AsyncNotifier<ChatThreadData> {
           return;
         }
         final found = {for (final row in rows) row['id']};
+        _forgetRetired(rows);
         _addRows(rows);
         _window = _window.upsert(_parse(rows)).remove([
           for (final id in fetchIds)

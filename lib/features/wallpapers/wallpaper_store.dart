@@ -73,6 +73,9 @@ abstract interface class WallpaperPhotoStore {
 
   /// Forgets every photo (the person signed out).
   Future<void> clear();
+
+  /// How many bytes the photos take on this device.
+  Future<int> totalBytes();
 }
 
 class InMemoryWallpaperPhotoStore implements WallpaperPhotoStore {
@@ -96,6 +99,10 @@ class InMemoryWallpaperPhotoStore implements WallpaperPhotoStore {
 
   @override
   Future<void> clear() async => photos.clear();
+
+  @override
+  Future<int> totalBytes() async =>
+      photos.values.fold<int>(0, (sum, bytes) => sum + bytes.length);
 }
 
 final wallpaperSettingsStoreProvider = Provider<WallpaperSettingsStore>(

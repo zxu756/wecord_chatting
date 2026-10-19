@@ -101,8 +101,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 3. 数据库：`supabase db push --linked --yes`。如果迁移编号早于线上最新的，加 `--include-all`。
 4. 函数：`supabase functions deploy <名字>`。
 5. 网页：`sh tool/deploy_web.sh`，然后对比线上和本地 `main.dart.js` 的哈希。
-6. iPhone：`flutter build ios --release --dart-define-from-file=.env`，再用 `xcrun devicectl device install app --device 00008120-000208820A44C01E build/ios/iphoneos/Runner.app` 安装。手机锁屏时会报 4016 错误，等我解锁。
-7. Mac：`flutter build macos --release --dart-define-from-file=.env`。
+6. iPhone：`flutter build ios --release --dart-define-from-file=.env --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)`，再用 `xcrun devicectl device install app --device 00008120-000208820A44C01E build/ios/iphoneos/Runner.app` 安装。手机锁屏时会报 4016 错误，等我解锁。
+7. Mac：`flutter build macos --release --dart-define-from-file=.env --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)`。
 8. `git push origin wecord-foundation`。
 9. 用中文告诉我结果，附上截图。
 

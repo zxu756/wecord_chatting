@@ -110,10 +110,10 @@
 4. 函数：`supabase functions deploy <名字>`。不带登录令牌的新函数，先在 `supabase/config.toml` 里设 `verify_jwt = false`（路线图 8.5）。
 5. 网页：`sh tool/deploy_web.sh`，然后对比线上和本地 `main.dart.js` 的哈希。
 6. iPhone：
-   - 构建：`flutter build ios --release --dart-define-from-file=.env`。
+   - 构建：`flutter build ios --release --dart-define-from-file=.env --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)`。
    - 安装：`xcrun devicectl device install app --device 00008120-000208820A44C01E build/ios/iphoneos/Runner.app`。
    - 手机锁屏时会报 4016 错误，等我解锁。
-7. Mac：`flutter build macos --release --dart-define-from-file=.env`。
+7. Mac：`flutter build macos --release --dart-define-from-file=.env --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)`。
 8. `git push origin wecord-foundation`。
 9. 更新文档（路线图 8.6）：
    - 把新功能写进 `docs/WECORD_FEATURES.md`；

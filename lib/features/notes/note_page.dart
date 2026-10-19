@@ -1,22 +1,35 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:wecord/features/ai/note_assist/note_assist_sheet.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart'
     show GlassMenuEntry, globalRectOf, showGlassMenu;
 import 'package:wecord/features/chats/message_reactions.dart';
 import 'package:wecord/features/chats/offline/outbox.dart' show newClientId;
+import 'package:wecord/features/notes/export/note_file_exporter.dart';
+import 'package:wecord/features/notes/export/note_pdf.dart';
+import 'package:wecord/features/notes/note_comments_controller.dart';
+import 'package:wecord/features/notes/note_comments_panel.dart';
 import 'package:wecord/features/notes/note_editor.dart';
 import 'package:wecord/features/notes/note_editor_controller.dart';
+import 'package:wecord/features/notes/note_editor_extras.dart';
 import 'package:wecord/features/notes/note_history.dart';
 import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/notes/note_publish_sheet.dart';
 import 'package:wecord/features/notes/note_sync.dart';
+import 'package:wecord/features/notes/note_templates.dart';
 import 'package:wecord/features/notes/note_text_ops.dart';
+import 'package:wecord/features/notes/notes2_repository.dart';
 import 'package:wecord/features/notes/notes_repository.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// One note, open for reading and (where allowed) editing together with the
@@ -57,6 +70,7 @@ class NotePage extends ConsumerStatefulWidget {
 
 class _NotePageState extends ConsumerState<NotePage> {
   late final NoteEditorController _controller;
+  late final NoteCommentsController _comments;
   final _titleController = TextEditingController();
   final _titleFocus = FocusNode(debugLabel: 'note title');
   final _editorKey = GlobalKey<NoteEditorState>();
@@ -76,6 +90,12 @@ class _NotePageState extends ConsumerState<NotePage> {
       drafts: widget.draftStore,
     )..addListener(_onController);
     unawaited(_controller.open());
+    _comments = NoteCommentsController(
+      repository: ref.read(notes2RepositoryProvider),
+      noteId: widget.noteId,
+      newId: newClientId,
+    )..addListener(_onController);
+    unawaited(_comments.open());
   }
 
   String _selfName(String? userId) {
@@ -111,6 +131,9 @@ class _NotePageState extends ConsumerState<NotePage> {
 
   @override
   void dispose() {
+    _comments
+      ..removeListener(_onController)
+      ..dispose();
     _controller
       ..removeListener(_onController)
       ..dispose();
@@ -134,6 +157,189 @@ class _NotePageState extends ConsumerState<NotePage> {
       messenger?.showSnackBar(
         SnackBar(content: Text(tr('Could not share the note.'))),
       );
+    }
+  }
+
+  // ----------------------------------------------- comments, AI, export --
+
+  List<GroupMember> get _members =>
+      ref.read(conversationMembersProvider(widget.conversationId)).value ??
+      const [];
+
+  void _startComment(NoteCommentTarget target) {
+    unawaited(
+      showNewNoteComment(
+        context,
+        members: _members,
+        quote: target.quote,
+        onSubmit: (body, mentions) async {
+          await _comments.add(
+            body,
+            blockId: target.blockId,
+            anchorStart: target.start,
+            anchorEnd: target.end,
+            anchorText: target.quote,
+            mentions: mentions,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openComments([String? blockId]) {
+    unawaited(
+      showNoteComments(
+        context,
+        controller: _comments,
+        members: _members,
+        canComment: _comments.canComment,
+        focusBlockId: blockId,
+      ),
+    );
+  }
+
+  Future<void> _startAssist(NoteAssistTarget target) async {
+    final apply = await showNoteAssistSheet(
+      context,
+      noteId: widget.noteId,
+      target: target,
+    );
+    final editor = _editorKey.currentState;
+    if (apply == null || !mounted || editor == null) {
+      return;
+    }
+    // A version to come back to: the answer goes in as ordinary edits.
+    try {
+      await _controller.flush();
+      await ref
+          .read(notesRepositoryProvider)
+          .createVersion(widget.noteId, label: tr('Before the AI'));
+    } on Object {
+      // The edit is worth more than the bookmark.
+    }
+    if (!mounted) {
+      return;
+    }
+    final blockId = target.blockId;
+    final start = target.start;
+    final end = target.end;
+    if (apply.replace && blockId != null && start != null && end != null) {
+      editor.replaceRange(
+        blockId,
+        start,
+        end,
+        apply.result.blocks.map((block) => block.text).join(' '),
+      );
+    } else {
+      editor.insertBlocksAfter(target.replaceBlockId ?? blockId, [
+        for (final block in apply.result.blocks) block.toInsert(),
+      ], removeBlockId: target.replaceBlockId);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _exportMarkdown() async {
+    final meta = _controller.meta;
+    final blocks = _controller.engine.blocks;
+    final markdown = noteToMarkdown(meta?.title ?? '', blocks);
+    final outcome = await ref
+        .read(noteFileExporterProvider)
+        .export(
+          fileName: noteExportFileName(meta?.title ?? '', 'md'),
+          bytes: Uint8List.fromList(utf8.encode('$markdown\n')),
+          mimeType: 'text/markdown',
+        );
+    if (mounted && outcome == NoteExportOutcome.failed) {
+      _toast(tr('Could not export the note.'));
+    }
+  }
+
+  /// A picture of the note for the PDF: its signed link, downloaded.
+  Future<ui.Image?> _loadPicture(NoteBlock block) async {
+    final path = block.props['path'];
+    if (path is! String) {
+      return null;
+    }
+    try {
+      final url = await ref.read(notesRepositoryProvider).imageUrl(path);
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        return null;
+      }
+      final codec = await ui.instantiateImageCodec(
+        response.bodyBytes,
+        targetWidth: 1200,
+      );
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    final meta = _controller.meta;
+    final title = meta?.title ?? '';
+    final progress = ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(tr('Making the PDF…')),
+        duration: const Duration(seconds: 30),
+      ),
+    );
+    try {
+      final bytes = await buildNotePdf(
+        title: title,
+        icon: meta?.icon ?? NoteMeta.defaultIcon,
+        blocks: _controller.engine.blocks,
+        loadPicture: _loadPicture,
+        untitled: tr('Untitled'),
+      );
+      progress?.close();
+      final outcome = await ref
+          .read(noteFileExporterProvider)
+          .export(
+            fileName: noteExportFileName(title, 'pdf'),
+            bytes: bytes,
+            mimeType: 'application/pdf',
+          );
+      if (mounted && outcome == NoteExportOutcome.failed) {
+        _toast(tr('Could not export the note.'));
+      }
+    } on Object {
+      progress?.close();
+      if (mounted) {
+        _toast(tr('Could not export the note.'));
+      }
+    }
+  }
+
+  Future<void> _saveTemplate() async {
+    final name = await askTemplateName(
+      context,
+      initial: _controller.meta?.title ?? '',
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(notes2RepositoryProvider)
+          .saveTemplate(widget.noteId, name);
+      ref.invalidate(noteTemplatesProvider);
+      if (mounted) {
+        _toast(tr('Saved as a template.'));
+      }
+    } on Object {
+      if (mounted) {
+        _toast(tr('Could not save the template.'));
+      }
     }
   }
 
@@ -226,6 +432,27 @@ class _NotePageState extends ConsumerState<NotePage> {
               ),
             ),
           GlassMenuEntry(
+            icon: Icons.public_rounded,
+            label: tr('Publish to the web…'),
+            onSelected: () =>
+                unawaited(showNotePublishSheet(context, noteId: widget.noteId)),
+          ),
+          GlassMenuEntry(
+            icon: Icons.bookmark_add_outlined,
+            label: tr('Save as a template…'),
+            onSelected: () => unawaited(_saveTemplate()),
+          ),
+          GlassMenuEntry(
+            icon: Icons.description_outlined,
+            label: tr('Export as a Markdown file'),
+            onSelected: () => unawaited(_exportMarkdown()),
+          ),
+          GlassMenuEntry(
+            icon: Icons.picture_as_pdf_outlined,
+            label: tr('Export as a PDF'),
+            onSelected: () => unawaited(_exportPdf()),
+          ),
+          GlassMenuEntry(
             icon: Icons.copy_all_rounded,
             label: tr('Copy as Markdown'),
             onSelected: () {
@@ -301,6 +528,15 @@ class _NotePageState extends ConsumerState<NotePage> {
         controller: _controller,
         members: members,
         autofocus: widget.autofocus && _controller.canEdit,
+        extras: NoteEditorExtras(
+          comments: _comments,
+          canComment: _comments.canComment,
+          onComment: _startComment,
+          onOpenComments: _openComments,
+          onAssist: _controller.canEdit
+              ? (target) => unawaited(_startAssist(target))
+              : null,
+        ),
         padding: EdgeInsets.fromLTRB(
           widget.embedded ? 16 : 20,
           8,
@@ -328,6 +564,8 @@ class _NotePageState extends ConsumerState<NotePage> {
       embedded: widget.embedded,
       onBack: widget.onBack,
       onShare: _share,
+      commentCount: _comments.openCount,
+      onComments: _openComments,
       onHistory: () => unawaited(
         showNoteHistory(
           context,
@@ -364,8 +602,14 @@ class _NoteHeader extends StatelessWidget {
     required this.onShare,
     required this.onHistory,
     required this.onMenu,
+    required this.commentCount,
+    required this.onComments,
     this.onBack,
   });
+
+  /// Unresolved comment threads, shown on the comments button.
+  final int commentCount;
+  final VoidCallback onComments;
 
   final NoteEditorController controller;
   final bool embedded;
@@ -449,6 +693,16 @@ class _NoteHeader extends StatelessWidget {
               size: size,
               variant: WeCordButtonVariant.ghost,
               onPressed: onShare,
+            ),
+            WeCordIconButton(
+              key: const ValueKey('note-comments-button'),
+              tooltip: tr('Comments'),
+              icon: Icons.mode_comment_outlined,
+              iconSize: 20,
+              size: size,
+              variant: WeCordButtonVariant.ghost,
+              badgeCount: commentCount > 0 ? commentCount : null,
+              onPressed: onComments,
             ),
             WeCordIconButton(
               tooltip: tr('Version history'),

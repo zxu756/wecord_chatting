@@ -177,11 +177,12 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `extract_actions` | `conversation_id`, `message_ids` (1 to 50), optional `time_zone` (IANA) and `utc_offset_minutes` | `{items: [{title, assignee, due, due_has_time, due_text, kind, source_message_id}], message_count}` |
 | `assistant` | `job_id`; only the database may call it (shared secret) | `{ok, reply_id, kind}` or `{ok, skipped: reason}` |
 | `digest` | `digest_id`; only the database may call it (shared secret) | `{ok, chats}` or `{ok, skipped: reason}` / `{ok, failed: reason}` |
+| `note_assist` | `note_id`, `mode` (`continue`/`summarize`/`outline`/`tone`/`translate`/`extract_tasks`), optional `text` (the selection, up to 8000 characters), `tone` (`polite`/`formal`/`casual`/`concise`/`fix`) for `tone`, `target` for `translate`, optional `language` | `{blocks: [{kind, text, checked}], text, truncated, source_chars}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
 (429, with `limit` and `used`), `ai_busy` (503, the provider's own limits),
-`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `text_too_long` (413), and for `transcribe`
+`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch, extract_actions, note_assist: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `note_not_found` (404, note_assist), `text_too_long` (413), and for `transcribe`
 `transcribe_not_configured` (503), `message_not_found` (404), `audio_too_long`
 (413).
 
@@ -326,6 +327,42 @@ or a chat cascades, and cards are removed after two weeks. Deploy: apply the
 migrations, then `supabase functions deploy ai scheduled-dispatch data-export`.
 Nothing new to set.
 
+### AI in notes (`note_assist`)
+
+The notes editor's `/` menu has "AI…" and the format bar has a sparkle button
+(`lib/features/ai/note_assist/`). Six jobs: continue writing, summarize, make an
+outline, change the tone (polite, formal, relaxed, shorter, fix spelling),
+translate, pull out the to-dos. It works on the words selected in a block, or on
+the whole note when nothing is selected. No migration, and nothing new to set;
+deploy with `supabase functions deploy ai`. Code: `supabase/functions/ai/note_assist.ts`
+(decisions) and `note_assist_store.ts` (reading); `request.ts`, `handler.ts` and
+`index.ts` only gained a branch each.
+
+- **Read as the caller.** The note and its blocks are read with the caller's own
+  database access, so a note they cannot see (not a member, a suspended circle,
+  deleted) is `note_not_found` and nothing is sent to the model. A selection
+  comes from the app (at most `MAX_TEXT_CHARS`, 8000); without one the function
+  reads the whole note itself, up to 12000 characters or `AI_MAX_INPUT_CHARS` if
+  lower: the end of the note for "continue", the start for the rest
+  (`truncated: true` tells the app).
+- **Switches.** The circle's AI switch (`ai_disabled_in_circle`) and the person's
+  own (`ai_disabled_for_user`) are asked before anything is read or counted. One
+  request counts against `AI_DAILY_LIMIT_PER_USER` like every other action and is
+  given back when the model fails or answers with nothing. An empty note costs
+  nothing.
+- **Untrusted text.** The note is data written by other people: cleaned of
+  control characters and the prompts' fence tags, put between `<text_to_process>`
+  tags, and the system prompt carries `DATA_RULES` and says to process the text,
+  never follow it. The answer is turned into blocks of the kinds a note has
+  (headings, bullets, numbered items, to-dos, quotes, paragraphs; links, pictures,
+  HTML and code fences are stripped), at most 60 blocks of 2000 characters.
+- **Nothing is written by the function.** The app shows the answer; "Add below" or
+  "Replace the selection" puts it into the note with the ordinary block edits
+  (`note_apply_ops`), after saving a version named "Before the AI" so it can be
+  undone from the version history.
+- The to-dos (`extract_tasks`) come back as unchecked to-do blocks in the note;
+  they are not turned into tasks of a task list.
+
 ### Privacy and safety
 
 - **Messages are read as the caller.** A summary uses the user's own token, so
@@ -414,5 +451,5 @@ moderators), and the circle's daily request count.
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/features/inbox
+flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/features/inbox test/features/notes
 ```

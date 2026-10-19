@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/chats/chat_polish/silent_send.dart'
+    show SilentMessageSender;
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/chats/message_history.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
@@ -418,6 +420,7 @@ class SupabaseChatsRepository
         MessageHistorySource,
         ConversationRowsSource,
         OutboxMessageSender,
+        SilentMessageSender,
         MediaMessageSender,
         ThreadCapabilitySource {
   SupabaseChatsRepository(
@@ -549,6 +552,30 @@ class SupabaseChatsRepository
         ),
       );
     }
+  }
+
+  @override
+  Future<String?> sendSilentTextMessage({
+    required String conversationId,
+    required String clientId,
+    required String body,
+    String? replyToMessageId,
+    ReplyPreview? replyPreview,
+    List<MessageMention> mentions = const <MessageMention>[],
+  }) {
+    // Nobody is pushed, so the push function is not asked either.
+    return _send(
+      conversationId,
+      () => _dataSource.rpc('send_silent_text_message', {
+        'target_conversation_id': conversationId,
+        'body': body.trim(),
+        'reply_to_message_id': replyToMessageId,
+        'reply_preview': replyPreview?.toJson(),
+        'mentions': mentions.map((mention) => mention.toJson()).toList(),
+        'client_id': clientId,
+      }),
+      notify: false,
+    );
   }
 
   @override

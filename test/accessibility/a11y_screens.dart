@@ -45,6 +45,7 @@ import 'qr_pat_a11y_screens.dart';
 import 'moments_a11y_screens.dart';
 import 'quiet_hours_a11y_screens.dart';
 import 'chat_folders_a11y_screens.dart';
+import 'chat_polish_a11y_screens.dart';
 import 'privacy2_a11y_screens.dart';
 import 'reports_legal_a11y_screens.dart';
 import 'admin_a11y_screens.dart';
@@ -64,6 +65,7 @@ import 'profile_extras_a11y_screens.dart';
 import 'mod_tools_a11y_screens.dart';
 import 'urgent_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
+import 'notes2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -800,6 +802,8 @@ final allA11yScreens = <A11yScreen>[
   ...onboardingGuideA11yScreens,
   ...digestA11yScreens,
   ...profileExtrasA11yScreens,
+  ...chatPolishA11yScreens,
+  ...notes2A11yScreens,
   ...urgentA11yScreens,
   ...modToolsA11yScreens,
 ];

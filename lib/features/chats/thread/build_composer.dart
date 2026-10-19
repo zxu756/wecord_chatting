@@ -89,7 +89,8 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                 onComposerKey: _handleComposerKey,
                 replyPreviewText: _replyingTo == null
                     ? null
-                    : replyPreviewBody(_replyingTo!, localized: true),
+                    : _activeReplyQuote?.text ??
+                          replyPreviewBody(_replyingTo!, localized: true),
                 isEditing: _editingMessage != null,
                 onChanged: _handleComposerChanged,
                 onSend: _sendMessage,
@@ -156,6 +157,9 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                               changeWallpaper: openWallpaper,
                               pickSticker: _pickAndSendSticker,
                               pickGif: _pickAndSendGif,
+                              sendSilently: _canSendSilently
+                                  ? _sendSilently
+                                  : null,
                             ),
                           ),
                         ),
@@ -168,6 +172,19 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                 onStartVoiceRecording: _startVoiceRecording,
                 onCancelVoiceRecording: _cancelVoiceRecording,
                 onSendVoiceRecording: _sendVoiceRecording,
+                isVoicePaused: _isVoicePaused,
+                onToggleVoicePause: _voiceRecorder is PausableVoiceRecorder
+                    ? _toggleVoicePause
+                    : null,
+                onTrimVoiceRecording:
+                    _isVoicePaused && _voiceRecorder is PausableVoiceRecorder
+                    ? _trimVoiceRecording
+                    : null,
+                voiceTrimLabel: _voiceTrim == null
+                    ? null
+                    : tr('Keeps {time}', {
+                        'time': voiceTrimTime(_voiceTrim!.lengthMs),
+                      }),
                 onCancelReply: _cancelReply,
                 onCancelEdit: _cancelEdit,
                 // What is left above the keyboard, so a short phone keeps

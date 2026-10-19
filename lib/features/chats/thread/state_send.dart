@@ -108,7 +108,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
     try {
       final replyPreview = replyingTo == null
           ? null
-          : replyPreviewForMessage(replyingTo);
+          : replyPreviewForMessage(replyingTo, quote: _activeReplyQuote);
       // Mentions point into the body as sent, after emoji become tokens.
       final encodedBody = _encodeCustomEmoji(messageBody);
       await ref
@@ -164,7 +164,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
     final replyingTo = _replyingTo;
     final replyPreview = replyingTo == null
         ? null
-        : replyPreviewForMessage(replyingTo);
+        : replyPreviewForMessage(replyingTo, quote: _activeReplyQuote);
     // Mentions point into the body as sent, after emoji become tokens.
     final encodedBody = _encodeCustomEmoji(messageBody);
     final entry = outbox.enqueue(
@@ -326,12 +326,18 @@ extension _ThreadSendState on _ChatThreadScreenState {
     _voiceTicks = 0;
     _voiceStartedAt = DateTime.now();
     _voiceSecondsLeft.value = null;
+    _isVoicePaused = false;
+    _voicePausedAt = null;
+    _voicePausedTotal = Duration.zero;
+    _voiceTrim = null;
     _voiceTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      // A paused recording does not run toward the limit.
+      if (_isVoicePaused) {
+        return;
+      }
       _voiceTicks += 1;
       final startedAt = _voiceStartedAt;
-      final clock = startedAt == null
-          ? 0
-          : DateTime.now().difference(startedAt).inSeconds;
+      final clock = startedAt == null ? 0 : _voiceActiveElapsed().inSeconds;
       final elapsed = clock > _voiceTicks ? clock : _voiceTicks;
       final left = maxVoiceRecordingSeconds - elapsed;
       if (left > voiceCountdownSeconds) {
@@ -351,6 +357,8 @@ extension _ThreadSendState on _ChatThreadScreenState {
     _voiceTimer = null;
     _voiceStartedAt = null;
     _voiceSecondsLeft.value = null;
+    _isVoicePaused = false;
+    _voicePausedAt = null;
   }
 
   Future<void> _cancelVoiceRecording() async {
@@ -362,6 +370,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
     try {
       await _voiceRecorder.cancel();
     } finally {
+      _voiceTrim = null;
       if (mounted) {
         setState(() {
           _isRecordingVoice = false;
@@ -382,10 +391,11 @@ extension _ThreadSendState on _ChatThreadScreenState {
     });
 
     try {
-      final recording = await _voiceRecorder.stop();
-      if (recording == null) {
+      final stopped = await _voiceRecorder.stop();
+      if (stopped == null) {
         return;
       }
+      final recording = _applyVoiceTrim(stopped);
       await ref
           .read(chatsRepositoryProvider)
           .sendVoiceMessage(
@@ -417,6 +427,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
         });
       }
     } finally {
+      _voiceTrim = null;
       if (mounted) {
         setState(() {
           _isRecordingVoice = false;

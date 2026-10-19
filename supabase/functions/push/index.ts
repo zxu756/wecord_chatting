@@ -18,6 +18,7 @@
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { dropQuietPushes } from "./quiet_hours.ts";
+import { dropSilentPushes } from "./silent_messages.ts";
 import { writeTimesForTargets } from "./time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "./webpush.ts";
 
@@ -174,11 +175,19 @@ Deno.serve(async (request) => {
     return json({ error: "lookup_failed" }, 500);
   }
 
+  // A message sent silently is told to nobody (it is still in the chats).
+  const claimed = await dropSilentPushes(
+    admin,
+    (data ?? []) as PushTarget[],
+    isMomentsPush || isTaskPush || isReadReminderPush
+      ? null
+      : (messageId as string),
+  );
   // Quiet hours hold back what is not for the recipient's exceptions (the
   // inbox is written elsewhere and does not depend on this).
   const audible = await dropQuietPushes(
     admin,
-    (data ?? []) as PushTarget[],
+    claimed,
     Math.floor(Date.now() / 1000),
     isMomentsPush || isTaskPush || isReadReminderPush
       ? null

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ import 'package:wecord/features/voice/soundboard_sheet.dart';
 import 'package:wecord/features/voice/stage_channel_view.dart';
 import 'package:wecord/features/voice/voice_call.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
+import 'package:wecord/features/voice/voice_polish.dart';
+import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/features/voice/voice_ui.dart';
@@ -125,6 +128,12 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
     );
     final stageLive =
         widget.isStage && watchStage(ref, widget.circleId, channelId) != null;
+    // What the channel says about itself (E6); stages have none.
+    final channelStatus = widget.isStage
+        ? null
+        : ref
+              .watch(voiceChannelStatusesProvider(widget.circleId))
+              .value?[channelId];
     final chatBuilder = widget.chatBuilder;
     final unread = chatBuilder == null
         ? 0
@@ -263,43 +272,80 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                 statusColor = c.muted;
               }
               return VoiceRoom(
-                header: _RoomHeader(
-                  title: widget.channelName,
-                  status: status,
-                  statusColor: statusColor,
-                  isStage: widget.isStage,
-                  onBack: widget.onBack,
-                  actions: [
-                    if (chatBuilder != null && !connected)
-                      VoiceHeaderButton(
-                        key: const ValueKey('voice-chat-button'),
-                        icon: chatIcon,
-                        tooltip: chatTooltip,
-                        selected: showPanel,
-                        badgeCount: chatBadge,
-                        badgeKey: chatBadgeKey,
-                        onPressed: () => _toggleChat(wide),
-                      ),
-                    if (connected)
-                      VoiceHeaderButton(
-                        key: const ValueKey('voice-call-link-button'),
-                        icon: Icons.link_rounded,
-                        tooltip: tr('Copy call link'),
-                        onPressed: () => showCallLinkSheet(
-                          context,
-                          target: CallLinkTarget.channel(channelId),
-                          name: widget.channelName,
-                        ),
-                      ),
-                    for (final action in widget.actions)
-                      VoiceHeaderButton(
-                        icon: action.isSelected == true
-                            ? action.selectedIcon ?? action.icon
-                            : action.icon,
-                        tooltip: action.tooltip,
-                        selected: action.isSelected == true,
-                        onPressed: action.onPressed,
-                      ),
+                header: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RoomHeader(
+                      title: widget.channelName,
+                      status: connected && session.audioOnly
+                          ? tr('{status} · Audio only', {'status': status})
+                          : status,
+                      statusColor: statusColor,
+                      isStage: widget.isStage,
+                      channelStatus: channelStatus,
+                      onEditStatus: connected && !widget.isStage
+                          ? () => unawaited(
+                              showVoiceStatusSheet(
+                                context,
+                                ref,
+                                circleId: widget.circleId,
+                                channelId: channelId,
+                                current: channelStatus,
+                              ),
+                            )
+                          : null,
+                      onBack: widget.onBack,
+                      actions: [
+                        if (connected)
+                          VoiceHeaderButton(
+                            key: const ValueKey('voice-audio-only-button'),
+                            icon: session.audioOnly
+                                ? Icons.videocam_off_rounded
+                                : Icons.videocam_outlined,
+                            tooltip: session.audioOnly
+                                ? tr('Receive video again')
+                                : tr('Audio only'),
+                            selected: session.audioOnly,
+                            onPressed: () => runVoiceAction(
+                              context,
+                              () => ref
+                                  .read(voiceSessionProvider.notifier)
+                                  .setAudioOnly(!session.audioOnly),
+                            ),
+                          ),
+                        if (chatBuilder != null && !connected)
+                          VoiceHeaderButton(
+                            key: const ValueKey('voice-chat-button'),
+                            icon: chatIcon,
+                            tooltip: chatTooltip,
+                            selected: showPanel,
+                            badgeCount: chatBadge,
+                            badgeKey: chatBadgeKey,
+                            onPressed: () => _toggleChat(wide),
+                          ),
+                        if (connected)
+                          VoiceHeaderButton(
+                            key: const ValueKey('voice-call-link-button'),
+                            icon: Icons.link_rounded,
+                            tooltip: tr('Copy call link'),
+                            onPressed: () => showCallLinkSheet(
+                              context,
+                              target: CallLinkTarget.channel(channelId),
+                              name: widget.channelName,
+                            ),
+                          ),
+                        for (final action in widget.actions)
+                          VoiceHeaderButton(
+                            icon: action.isSelected == true
+                                ? action.selectedIcon ?? action.icon
+                                : action.icon,
+                            tooltip: action.tooltip,
+                            selected: action.isSelected == true,
+                            onPressed: action.onPressed,
+                          ),
+                      ],
+                    ),
+                    if (connected) const VoiceQualityBanner(),
                   ],
                 ),
                 controls: controls,
@@ -409,6 +455,8 @@ class _RoomHeader extends StatelessWidget {
     required this.statusColor,
     required this.isStage,
     required this.actions,
+    this.channelStatus,
+    this.onEditStatus,
     this.onBack,
   });
 
@@ -417,6 +465,13 @@ class _RoomHeader extends StatelessWidget {
   final Color statusColor;
   final bool isStage;
   final List<Widget> actions;
+
+  /// What the channel says about itself, under the title.
+  final String? channelStatus;
+
+  /// Opens the box to change the status; null where the person is not in
+  /// the channel.
+  final VoidCallback? onEditStatus;
   final VoidCallback? onBack;
 
   @override
@@ -473,6 +528,50 @@ class _RoomHeader extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (onEditStatus != null)
+                  WeCordPressable(
+                    key: const ValueKey('voice-status-button'),
+                    onPressed: onEditStatus,
+                    hint: tr('Channel status'),
+                    shape: const StadiumBorder(),
+                    pressedScale: 0.98,
+                    builder: (context, states) => Padding(
+                      padding: EdgeInsets.only(
+                        left: touch ? 25 : 24,
+                        top: 1,
+                        bottom: 1,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              channelStatus ?? tr('Add a status'),
+                              key: const ValueKey('voice-channel-status'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: channelStatus == null
+                                    ? c.faint
+                                    : c.muted,
+                                decoration: channelStatus == null
+                                    ? TextDecoration.underline
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(Icons.edit_outlined, size: 13, color: c.muted),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (channelStatus != null)
+                  VoiceChannelStatusText(
+                    text: channelStatus!,
+                    padding: EdgeInsets.only(left: touch ? 25 : 24, top: 1),
+                  ),
               ],
             ),
           ),
@@ -1061,6 +1160,20 @@ class _ParticipantTile extends StatelessWidget {
         name: name,
         child: const SizedBox.shrink(),
       ),
+      // Your own connection, on your own tile (E6).
+      topRight: participant.isLocal
+          ? Consumer(
+              builder: (context, ref, _) => VoiceQualityBadge(
+                quality:
+                    ref.watch(
+                      voiceSessionProvider.select(
+                        (session) => session?.quality,
+                      ),
+                    ) ??
+                    VoiceConnectionQuality.unknown,
+              ),
+            )
+          : null,
       child: camera != null
           ? camera(context)
           // Above the name label at the bottom.
@@ -1107,6 +1220,7 @@ class _Tile extends StatelessWidget {
     this.labelIconColor,
     this.labelIconKey,
     this.overlay,
+    this.topRight,
     super.key,
   });
 
@@ -1122,6 +1236,9 @@ class _Tile extends StatelessWidget {
 
   /// Drawn over everything else in the tile (floating reactions).
   final Widget? overlay;
+
+  /// A small badge in the tile's top right corner.
+  final Widget? topRight;
 
   @override
   Widget build(BuildContext context) {
@@ -1197,6 +1314,7 @@ class _Tile extends StatelessWidget {
               ),
             ),
           ),
+          if (topRight != null) Positioned(top: 8, right: 8, child: topRight!),
           ?overlay,
         ],
       ),

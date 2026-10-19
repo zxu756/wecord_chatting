@@ -378,6 +378,7 @@ ChatMessage phoneMessage(
   MessageThreadSummary? threadSummary,
   List<MessageMention> mentions = const [],
   String conversationId = 'dm-1',
+  bool silent = false,
 }) {
   return ChatMessage(
     id: id,
@@ -385,6 +386,7 @@ ChatMessage phoneMessage(
     senderId: sender.id,
     type: type,
     body: body,
+    silent: silent,
     attachment: attachment,
     replyPreview: replyPreview,
     forwardPreview: forwardPreview,

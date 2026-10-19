@@ -95,7 +95,7 @@ void main() {
 
     expect(presence.savedShowOnline, [false]);
     expect(switchValue(tester, showOnline), isFalse);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, 2000));
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
     await tester.pumpAndSettle();
     expect(
       find.descendant(of: tile, matching: find.text('Invisible')),

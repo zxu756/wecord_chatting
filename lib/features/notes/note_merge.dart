@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/notes/note_table.dart';
 
 /// The one contiguous change that turns a text into another: [removed]
 /// characters at [start] are replaced by [inserted].
@@ -330,13 +331,22 @@ NoteBlock mergeBlocks({
       }
     }
   }
+  // A table merges cell by cell (note_table.dart), not property by property.
+  final mergedProps =
+      mine.kind == NoteBlockKind.table && theirs.kind == NoteBlockKind.table
+      ? mergeTableProps(
+          base: origin.props,
+          mine: mine.props,
+          theirs: theirs.props,
+        )
+      : props;
   return NoteBlock(
     id: mine.id,
     pos: pick(origin.pos, mine.pos, theirs.pos),
     kind: pick(origin.kind, mine.kind, theirs.kind),
     text: merged.text,
     marks: merged.marks,
-    props: props,
+    props: mergedProps,
     rev: theirs.rev,
     deleted: false,
   );

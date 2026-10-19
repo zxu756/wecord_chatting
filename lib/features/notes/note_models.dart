@@ -13,7 +13,10 @@ enum NoteBlockKind {
   quote('quote'),
   code('code'),
   divider('divider'),
-  image('image');
+  image('image'),
+
+  /// A grid of cells kept in the block's props (see note_table.dart).
+  table('table');
 
   const NoteBlockKind(this.value);
 
@@ -29,7 +32,7 @@ enum NoteBlockKind {
   }
 
   /// Blocks that carry text the reader types.
-  bool get hasText => this != divider && this != image;
+  bool get hasText => this != divider && this != image && this != table;
 
   /// Blocks that continue as the same kind on Enter.
   bool get isListItem => this == bullet || this == numbered || this == todo;
@@ -59,6 +62,9 @@ class NoteMark {
   static const strike = 's';
   static const code = 'c';
   static const linkPrefix = 'l:';
+
+  /// Drawn only (never stored): the words an open comment is about.
+  static const highlight = 'h';
   static const mentionPrefix = 'm:';
 
   final int start;
@@ -130,7 +136,8 @@ class NoteBlock {
   final List<NoteMark> marks;
 
   /// Kind specific: `checked` for todos, `lang` for code, `path`, `name`,
-  /// `width` and `height` for pictures.
+  /// `width` and `height` for pictures, `header`, `cols` and `rows` for
+  /// tables.
   final Map<String, Object?> props;
 
   /// The server's revision of this block; 0 for blocks not stored yet.

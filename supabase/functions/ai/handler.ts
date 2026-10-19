@@ -20,6 +20,7 @@ import { complete, ProviderError } from "./provider.ts";
 import { type AssistantStore, runAssistantJob } from "./assistant.ts";
 import { type ActionStore, runExtractActions } from "./extract_actions.ts";
 import { type DigestStore, runDigest } from "./digest.ts";
+import { type NoteAssistStore, runNoteAssist } from "./note_assist.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
@@ -162,6 +163,9 @@ export interface AiDeps {
   /// The daily digest's runs (see digest.ts); service calls only. Without it
   /// the `digest` action answers 503.
   digest?: DigestStore;
+  /// What note_assist reads (see note_assist.ts). Without it that action
+  /// answers 503.
+  noteAssist?: NoteAssistStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -272,6 +276,11 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "extract_actions") {
     const result = await runExtractActions(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+
+  if (parsed.action === "note_assist") {
+    const result = await runNoteAssist(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 

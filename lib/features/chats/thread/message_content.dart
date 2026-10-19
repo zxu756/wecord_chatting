@@ -151,6 +151,8 @@ class _MessageContent extends StatelessWidget {
           body: _displayBodyForReplyPreview(message.replyPreview!),
           foregroundColor: textColor,
           cards: cards,
+          quoted: _showsQuote(message.replyPreview!),
+          onOpen: _openRepliedMessage(context, message.replyPreview!),
         ),
         const SizedBox(height: 6),
       ],
@@ -187,6 +189,7 @@ class _MessageContent extends StatelessWidget {
             card: cards,
             messageId: isPendingMessageId(message.id) ? null : message.id,
             conversationId: message.conversationId,
+            autoplayNext: true,
           ),
         ),
       );
@@ -333,11 +336,36 @@ class _MessageContent extends StatelessWidget {
     );
   }
 
+  /// The reply quotes a part of the message, and the message is still
+  /// there.
+  bool _showsQuote(ReplyPreview preview) =>
+      preview.quote != null &&
+      messagesById[preview.messageId]?.recalledAt == null &&
+      preview.body.isNotEmpty;
+
+  /// Tapping the quote shows the message it answers; null where the list
+  /// cannot jump or the message is deleted.
+  VoidCallback? _openRepliedMessage(
+    BuildContext context,
+    ReplyPreview preview,
+  ) {
+    final jump = MessageJumpScope.maybeOf(context);
+    if (jump == null ||
+        preview.body.isEmpty ||
+        messagesById[preview.messageId]?.recalledAt != null) {
+      return null;
+    }
+    return () => unawaited(jump(preview.messageId));
+  }
+
   String _displayBodyForReplyPreview(ReplyPreview preview) {
     final referencedMessage = messagesById[preview.messageId];
     // The server empties the quote when the original is deleted.
     if (referencedMessage?.recalledAt != null || preview.body.isEmpty) {
       return tr('Message deleted');
+    }
+    if (preview.quote case final quote?) {
+      return quote.text;
     }
     return switch (preview.type) {
       MessageType.text => plainTextFromMarkdown(preview.body),
@@ -423,12 +451,20 @@ class _QuotedReplyPreview extends StatelessWidget {
     required this.body,
     required this.foregroundColor,
     this.cards = false,
+    this.quoted = false,
+    this.onOpen,
   });
 
   final String senderName;
   final String body;
   final Color foregroundColor;
   final bool cards;
+
+  /// [body] is a part of the message picked by the sender (A9).
+  final bool quoted;
+
+  /// Shows the message the reply answers.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +493,7 @@ class _QuotedReplyPreview extends StatelessWidget {
           ),
           Text(
             body,
-            maxLines: 2,
+            maxLines: quoted ? 3 : 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12.5,
@@ -468,8 +504,21 @@ class _QuotedReplyPreview extends StatelessWidget {
         ],
       ),
     );
+    final openable = onOpen == null
+        ? quote
+        : WeCordPressable(
+            key: const ValueKey('reply-quote-open'),
+            onPressed: onOpen,
+            pressedScale: 0.99,
+            hint: tr('Go to the message this answers'),
+            minTapSize: Size.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            builder: (context, states) => quote,
+          );
     if (!cards) {
-      return quote;
+      return openable;
     }
     // Cards point at the quoted message with a small elbow.
     return Row(
@@ -480,7 +529,7 @@ class _QuotedReplyPreview extends StatelessWidget {
         Flexible(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: quote,
+            child: openable,
           ),
         ),
       ],

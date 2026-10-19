@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/notes/note_block_views.dart';
 import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/notes/note_table.dart';
+import 'package:wecord/features/notes/note_table_view.dart';
 import 'package:wecord/features/notes/note_text_controller.dart';
 import 'package:wecord/features/notes/note_text_ops.dart';
 import 'package:wecord/features/notes/notes_repository.dart';
@@ -415,9 +417,22 @@ class _VersionPreview extends ConsumerWidget {
 
 /// Blocks drawn read only, without any editing machinery.
 class NoteBlocksPreview extends StatelessWidget {
-  const NoteBlocksPreview({required this.blocks, super.key});
+  const NoteBlocksPreview({
+    required this.blocks,
+    this.imageBuilder,
+    this.onOpenLink,
+    super.key,
+  });
+
+  /// Makes links tappable (the page on the web); without it they are only
+  /// drawn.
+  final void Function(String url)? onOpenLink;
 
   final List<NoteBlock> blocks;
+
+  /// Draws a picture block; without it a picture is a gray line with its
+  /// name (a version in the history does not load the files).
+  final Widget Function(BuildContext context, NoteBlock block)? imageBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +448,13 @@ class NoteBlocksPreview extends StatelessWidget {
               NoteBlockKind.divider => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Divider(height: 1, color: c.line),
+              ),
+              NoteBlockKind.table => NoteTableReadOnly(
+                table: NoteTable.fromProps(block.props),
+              ),
+              NoteBlockKind.image when imageBuilder != null => imageBuilder!(
+                context,
+                block,
               ),
               NoteBlockKind.image => Container(
                 height: 64,
@@ -493,13 +515,11 @@ class NoteBlocksPreview extends StatelessWidget {
                               )
                             : null,
                       ),
-                      child: Text.rich(
-                        buildNoteSpan(
-                          context,
-                          block.text,
-                          block.marks,
-                          noteTextStyle(context, block),
-                        ),
+                      child: NoteLinkedText(
+                        text: block.text,
+                        marks: block.marks,
+                        style: noteTextStyle(context, block),
+                        onOpenLink: onOpenLink,
                       ),
                     ),
                   ),

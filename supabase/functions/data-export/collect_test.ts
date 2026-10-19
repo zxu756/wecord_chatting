@@ -169,6 +169,7 @@ const emptyRpc: Record<string, unknown> = {
   export_my_forms: [],
   export_my_feedback: [],
   export_my_ai_digest: { enabled: false, subscriptions: [] },
+  export_my_note_extras: { comments: [], templates: [], published: [] },
 };
 
 const feedbackAnswer = [{
@@ -379,6 +380,12 @@ const momentsAnswer = {
   tags: [{ id: "t-1", name: "Family", friends: [] }],
   stars: [{ friend: { id: "u-2" } }],
 };
+const noteExtrasAnswer = {
+  comments: [{ id: "nc-1", body: "looks good" }],
+  templates: [],
+  published: [],
+};
+
 const digestAnswer = {
   enabled: true,
   deliver_at: "08:00",
@@ -414,6 +421,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
+      export_my_note_extras: noteExtrasAnswer,
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -430,8 +438,10 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_forms", args: { target_user_id: me } },
     { name: "export_my_feedback", args: { target_user_id: me } },
     { name: "export_my_ai_digest", args: { target_user_id: me } },
+    { name: "export_my_note_extras", args: { target_user_id: me } },
   ]);
   assertEquals(data.aiDigest?.["enabled"], true);
+  assertEquals((data.noteExtras?.["comments"] as unknown[]).length, 1);
   assertEquals(data.forms?.length, 1);
   assertEquals(data.feedback?.length, 1);
   // The screenshot of my feedback is linked, never put into the archive.
@@ -457,6 +467,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
+      export_my_note_extras: noteExtrasAnswer,
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -550,6 +561,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
+      export_my_note_extras: noteExtrasAnswer,
     },
     objects: { "moments/u-1/cover-1.jpg": new Uint8Array([1]) },
   });
@@ -569,11 +581,13 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.forms, null);
   assertEquals(data.feedback, null);
   assertEquals(data.aiDigest, null);
+  assertEquals(data.noteExtras, null);
   assertEquals(data.skipped.sort(), [
     "daily digest",
     "feedback",
     "forms",
     "moments",
+    "note comments and templates",
     "notes, lists and more",
   ]);
   assertEquals(data.messages.length, 2);

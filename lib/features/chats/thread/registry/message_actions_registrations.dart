@@ -6,6 +6,7 @@
 // 100, 200, ... 1700; pick an `order` between two of them to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
+import 'package:wecord/features/chats/chat_polish/quote_reply.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
@@ -23,6 +24,7 @@ final List<MessageActionContribution> messageActionExtensions = [
   addToStickersAction,
   makeTasksAction,
   askAssistantAction,
+  quoteReplyAction,
   urgentMessageAction,
 ];
 

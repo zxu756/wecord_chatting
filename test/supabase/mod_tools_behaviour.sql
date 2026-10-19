@@ -142,6 +142,11 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610230630_support_links.sql
 \i supabase/migrations/202610230640_friend_source.sql
 \i supabase/migrations/202610230650_mutuals.sql
+\i supabase/migrations/202610240300_notes_tables.sql
+\i supabase/migrations/202610240310_note_comments.sql
+\i supabase/migrations/202610240320_note_templates.sql
+\i supabase/migrations/202610240330_note_publish.sql
+\i supabase/migrations/202610240340_notes2_account.sql
 \i supabase/migrations/202610240400_urgent_schema.sql
 \i supabase/migrations/202610240410_urgent_rpcs.sql
 \i supabase/migrations/202610240420_announcement_ack_rpcs.sql
@@ -149,6 +154,8 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610240440_scheduled_recurrence_schema.sql
 \i supabase/migrations/202610240450_scheduled_recurrence_next.sql
 \i supabase/migrations/202610240460_dispatch_urgent.sql
+\i supabase/migrations/202610240500_quote_and_silent.sql
+\i supabase/migrations/202610240510_voice_channel_status.sql
 \i supabase/migrations/202610240600_feature_flags.sql
 \i supabase/migrations/202610240610_feature_flags_admin.sql
 \i supabase/migrations/202610240620_announcements.sql

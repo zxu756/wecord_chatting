@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:wecord/features/notes/note_merge.dart';
 import 'package:wecord/features/notes/note_models.dart';
@@ -21,6 +22,28 @@ class NoteTextController extends TextEditingController {
   void Function(String text, List<NoteMark> marks)? onUserChange;
 
   List<NoteMark> get marks => _marks;
+
+  /// Stretches drawn highlighted without being part of the text's
+  /// formatting (the words open comments are about). Never stored or sent.
+  List<NoteMark> get highlights => _highlights;
+  var _highlights = const <NoteMark>[];
+
+  set highlights(List<NoteMark> value) {
+    if (value.length == _highlights.length) {
+      var same = true;
+      for (var i = 0; i < value.length; i++) {
+        if (value[i] != _highlights[i]) {
+          same = false;
+          break;
+        }
+      }
+      if (same) {
+        return;
+      }
+    }
+    _highlights = value;
+    notifyListeners();
+  }
 
   @override
   set value(TextEditingValue newValue) {
@@ -227,18 +250,29 @@ class NoteTextController extends TextEditingController {
     final composing = withComposing && value.composing.isValid
         ? value.composing
         : TextRange.empty;
-    return buildNoteSpan(context, text, _marks, style, composing: composing);
+    return buildNoteSpan(
+      context,
+      text,
+      _highlights.isEmpty ? _marks : [..._marks, ..._highlights],
+      style,
+      composing: composing,
+    );
   }
 }
 
 /// [text] with its [marks] drawn: bold, italic, strike, code, links and
 /// mentions. [composing] is underlined (an input method's pending text).
+///
+/// [recognizerFor] makes links tappable: it is asked for the address of each
+/// stretch of link and answers what listens to the tap (the caller disposes
+/// of them).
 TextSpan buildNoteSpan(
   BuildContext context,
   String text,
   List<NoteMark> marks,
   TextStyle? style, {
   TextRange composing = TextRange.empty,
+  GestureRecognizer? Function(String url)? recognizerFor,
 }) {
   final c = context.tokens.colors;
   if (text.isEmpty) {
@@ -268,6 +302,7 @@ TextSpan buildNoteSpan(
     var segmentStyle = const TextStyle();
     final decorations = <TextDecoration>[];
     Color? background;
+    GestureRecognizer? recognizer;
     for (final type in types) {
       if (type == NoteMark.bold) {
         segmentStyle = segmentStyle.copyWith(fontWeight: FontWeight.w800);
@@ -284,12 +319,18 @@ TextSpan buildNoteSpan(
       } else if (type.startsWith(NoteMark.linkPrefix)) {
         segmentStyle = segmentStyle.copyWith(color: c.accentText);
         decorations.add(TextDecoration.underline);
+        recognizer ??= recognizerFor?.call(
+          type.substring(NoteMark.linkPrefix.length),
+        );
       } else if (type.startsWith(NoteMark.mentionPrefix)) {
         segmentStyle = segmentStyle.copyWith(
           color: c.accentText,
           fontWeight: FontWeight.w700,
         );
         background = c.accentSoft;
+      } else if (type == NoteMark.highlight) {
+        // Comments are quiet: a yellow wash, not an alarm.
+        background ??= c.warningSoft;
       }
     }
     if (!composing.isCollapsed &&
@@ -305,7 +346,72 @@ TextSpan buildNoteSpan(
     if (background != null) {
       segmentStyle = segmentStyle.copyWith(backgroundColor: background);
     }
-    spans.add(TextSpan(text: text.substring(from, to), style: segmentStyle));
+    spans.add(
+      TextSpan(
+        text: text.substring(from, to),
+        style: segmentStyle,
+        recognizer: recognizer,
+      ),
+    );
   }
   return TextSpan(style: style, children: spans);
+}
+
+/// Read-only formatted text whose links open when tapped ([onOpenLink]; with
+/// none they are only drawn).
+class NoteLinkedText extends StatefulWidget {
+  const NoteLinkedText({
+    required this.text,
+    required this.marks,
+    required this.style,
+    this.onOpenLink,
+    super.key,
+  });
+
+  final String text;
+  final List<NoteMark> marks;
+  final TextStyle style;
+  final void Function(String url)? onOpenLink;
+
+  @override
+  State<NoteLinkedText> createState() => _NoteLinkedTextState();
+}
+
+class _NoteLinkedTextState extends State<NoteLinkedText> {
+  final _recognizers = <TapGestureRecognizer>[];
+
+  void _disposeRecognizers() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _disposeRecognizers();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _disposeRecognizers();
+    final open = widget.onOpenLink;
+    return Text.rich(
+      buildNoteSpan(
+        context,
+        widget.text,
+        widget.marks,
+        widget.style,
+        recognizerFor: open == null
+            ? null
+            : (url) {
+                final recognizer = TapGestureRecognizer()
+                  ..onTap = () => open(url);
+                _recognizers.add(recognizer);
+                return recognizer;
+              },
+      ),
+    );
+  }
 }

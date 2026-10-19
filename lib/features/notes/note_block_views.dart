@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/notes/note_table.dart';
+import 'package:wecord/features/notes/note_table_view.dart';
 import 'package:wecord/features/notes/note_text_controller.dart';
 import 'package:wecord/features/notes/notes_repository.dart';
 import 'package:wecord/shared/api/signed_url_refresh.dart';
@@ -98,6 +100,10 @@ class NoteBlockRow extends ConsumerWidget {
     this.onMenu,
     this.onTapBlock,
     this.onLastBlockTap,
+    this.onTableChanged,
+    this.newId,
+    this.commentCount = 0,
+    this.onComments,
     super.key,
   });
 
@@ -116,6 +122,17 @@ class NoteBlockRow extends ConsumerWidget {
 
   /// Set on the last block: tapping the space under it.
   final VoidCallback? onLastBlockTap;
+
+  /// A table block was edited: its new props.
+  final void Function(Map<String, Object?> props)? onTableChanged;
+
+  /// Ids for the rows and columns a table gets.
+  final String Function()? newId;
+
+  /// Open comments on this block, shown as a small chip at its right edge
+  /// that opens them ([onComments]).
+  final int commentCount;
+  final VoidCallback? onComments;
 
   Color _peerColor(NotePeer peer) => WeCordAvatarColors.forSeed(peer.userId);
 
@@ -158,6 +175,16 @@ class NoteBlockRow extends ConsumerWidget {
             ),
           ),
         );
+      case NoteBlockKind.table:
+        body = Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: NoteTableEditor(
+            table: NoteTable.fromProps(block.props),
+            readOnly: readOnly || onTableChanged == null,
+            onChanged: (table) => onTableChanged?.call(table.toProps()),
+            newId: newId ?? () => block.id.substring(0, 6),
+          ),
+        );
       default:
         body = _TextBlock(
           block: block,
@@ -197,6 +224,8 @@ class NoteBlockRow extends ConsumerWidget {
             children: [
               if (!touch) handle,
               Expanded(child: body),
+              if (commentCount > 0 && onComments != null)
+                NoteCommentChip(count: commentCount, onPressed: onComments!),
               if (focused) const SizedBox(width: 4),
             ],
           ),
@@ -725,8 +754,37 @@ class NoteFormatBar extends StatelessWidget {
     required this.onImage,
     required this.onMention,
     required this.onMore,
+    this.onComment,
+    this.onAssist,
     super.key,
-  });
+  }) : commentOnly = false;
+
+  /// The bar of someone who can read and comment but not edit: one button.
+  const NoteFormatBar.commentOnly({
+    required VoidCallback this.onComment,
+    super.key,
+  }) : kind = null,
+       isActive = _never,
+       onToggleMark = _ignoreMark,
+       onLink = _ignore,
+       onKind = _ignoreKind,
+       onImage = _ignore,
+       onMention = _ignore,
+       onMore = _ignore,
+       onAssist = null,
+       commentOnly = true;
+
+  static bool _never(String type) => false;
+  static void _ignore() {}
+  static void _ignoreMark(String type) {}
+  static void _ignoreKind(NoteBlockKind kind) {}
+
+  /// Comment on the selected words (or the block): null hides the button.
+  final VoidCallback? onComment;
+
+  /// Ask the AI about the selection or the note: null hides the button.
+  final VoidCallback? onAssist;
+  final bool commentOnly;
 
   final NoteBlockKind? kind;
   final bool Function(String type) isActive;
@@ -774,74 +832,117 @@ class NoteFormatBar extends StatelessWidget {
       color: c.line,
     );
 
-    final buttons = SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Row(
-        children: [
-          mark(NoteMark.bold, Icons.format_bold_rounded, tr('Bold'), 'B'),
-          mark(NoteMark.italic, Icons.format_italic_rounded, tr('Italic'), 'I'),
-          mark(
-            NoteMark.strike,
-            Icons.format_strikethrough_rounded,
-            tr('Strikethrough'),
-          ),
-          mark(NoteMark.code, Icons.code_rounded, tr('Inline code'), 'E'),
-          WeCordIconButton(
-            icon: Icons.link_rounded,
-            tooltip: '${tr('Link')} (${shortcut}K)',
-            size: 36,
-            iconSize: 19,
-            variant: WeCordButtonVariant.ghost,
-            onPressed: onLink,
-          ),
-          divider,
-          block(NoteBlockKind.heading1, Icons.title_rounded, tr('Heading')),
-          block(
-            NoteBlockKind.bullet,
-            Icons.format_list_bulleted_rounded,
-            tr('Bulleted list'),
-          ),
-          block(
-            NoteBlockKind.numbered,
-            Icons.format_list_numbered_rounded,
-            tr('Numbered list'),
-          ),
-          block(NoteBlockKind.todo, Icons.check_box_outlined, tr('To-do list')),
-          block(NoteBlockKind.quote, Icons.format_quote_rounded, tr('Quote')),
-          block(
-            NoteBlockKind.code,
-            Icons.data_object_rounded,
-            tr('Code block'),
-          ),
-          divider,
-          WeCordIconButton(
-            icon: Icons.image_outlined,
-            tooltip: tr('Add picture'),
-            size: 36,
-            iconSize: 19,
-            variant: WeCordButtonVariant.ghost,
-            onPressed: onImage,
-          ),
-          WeCordIconButton(
-            icon: Icons.alternate_email_rounded,
-            tooltip: tr('Mention someone'),
-            size: 36,
-            iconSize: 19,
-            variant: WeCordButtonVariant.ghost,
-            onPressed: onMention,
-          ),
-          WeCordIconButton(
-            icon: Icons.more_horiz_rounded,
-            tooltip: tr('Block options'),
-            size: 36,
-            iconSize: 19,
-            variant: WeCordButtonVariant.ghost,
-            onPressed: onMore,
-          ),
-        ],
-      ),
+    Widget commentButton() => WeCordIconButton(
+      icon: Icons.add_comment_outlined,
+      tooltip: tr('Comment on the selection'),
+      size: 36,
+      iconSize: 19,
+      variant: WeCordButtonVariant.ghost,
+      onPressed: onComment,
     );
+
+    final buttons = commentOnly
+        ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [commentButton()],
+          )
+        : SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                if (onAssist != null) ...[
+                  WeCordIconButton(
+                    icon: Icons.auto_awesome_rounded,
+                    tooltip: tr('Ask the AI'),
+                    size: 36,
+                    iconSize: 19,
+                    variant: WeCordButtonVariant.ghost,
+                    onPressed: onAssist,
+                  ),
+                  divider,
+                ],
+                mark(NoteMark.bold, Icons.format_bold_rounded, tr('Bold'), 'B'),
+                mark(
+                  NoteMark.italic,
+                  Icons.format_italic_rounded,
+                  tr('Italic'),
+                  'I',
+                ),
+                mark(
+                  NoteMark.strike,
+                  Icons.format_strikethrough_rounded,
+                  tr('Strikethrough'),
+                ),
+                mark(NoteMark.code, Icons.code_rounded, tr('Inline code'), 'E'),
+                WeCordIconButton(
+                  icon: Icons.link_rounded,
+                  tooltip: '${tr('Link')} (${shortcut}K)',
+                  size: 36,
+                  iconSize: 19,
+                  variant: WeCordButtonVariant.ghost,
+                  onPressed: onLink,
+                ),
+                divider,
+                block(
+                  NoteBlockKind.heading1,
+                  Icons.title_rounded,
+                  tr('Heading'),
+                ),
+                block(
+                  NoteBlockKind.bullet,
+                  Icons.format_list_bulleted_rounded,
+                  tr('Bulleted list'),
+                ),
+                block(
+                  NoteBlockKind.numbered,
+                  Icons.format_list_numbered_rounded,
+                  tr('Numbered list'),
+                ),
+                block(
+                  NoteBlockKind.todo,
+                  Icons.check_box_outlined,
+                  tr('To-do list'),
+                ),
+                block(
+                  NoteBlockKind.quote,
+                  Icons.format_quote_rounded,
+                  tr('Quote'),
+                ),
+                block(
+                  NoteBlockKind.code,
+                  Icons.data_object_rounded,
+                  tr('Code block'),
+                ),
+                divider,
+                WeCordIconButton(
+                  icon: Icons.image_outlined,
+                  tooltip: tr('Add picture'),
+                  size: 36,
+                  iconSize: 19,
+                  variant: WeCordButtonVariant.ghost,
+                  onPressed: onImage,
+                ),
+                WeCordIconButton(
+                  icon: Icons.alternate_email_rounded,
+                  tooltip: tr('Mention someone'),
+                  size: 36,
+                  iconSize: 19,
+                  variant: WeCordButtonVariant.ghost,
+                  onPressed: onMention,
+                ),
+                if (onComment != null) commentButton(),
+                WeCordIconButton(
+                  icon: Icons.more_horiz_rounded,
+                  tooltip: tr('Block options'),
+                  size: 36,
+                  iconSize: 19,
+                  variant: WeCordButtonVariant.ghost,
+                  onPressed: onMore,
+                ),
+              ],
+            ),
+          );
 
     if (touch) {
       return Padding(
@@ -1014,3 +1115,56 @@ String _normalizedUrl(String value) {
 
 /// Exposed for tests: the URL a link dialog answer is turned into.
 String normalizedLinkUrl(String value) => _normalizedUrl(value);
+
+/// "💬 2": the open comments on a block, at its right edge. Tapping it opens
+/// them. Gray (not red): a comment is not something that needs the reader.
+class NoteCommentChip extends StatelessWidget {
+  const NoteCommentChip({
+    required this.count,
+    required this.onPressed,
+    super.key,
+  });
+
+  final int count;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 4),
+      child: WeCordPressable(
+        key: const ValueKey('note-comment-chip'),
+        onPressed: onPressed,
+        semanticLabel: tr('{count} comments on this block', {
+          'count': '$count',
+        }),
+        tooltip: tr('Comments'),
+        builder: (context, states) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: ShapeDecoration(
+            color: states.contains(WidgetState.hovered)
+                ? c.raisedStrong
+                : c.raised,
+            shape: const StadiumBorder(),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.mode_comment_outlined, size: 14, color: c.muted),
+              const SizedBox(width: 4),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: c.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

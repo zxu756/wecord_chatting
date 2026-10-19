@@ -36,6 +36,7 @@ import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/profile/support_links.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
+import 'package:wecord/features/voice/voice_polish.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -448,6 +449,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         ? ref.watch(voiceChannelUserLimitsProvider(_circleId)).value ??
               const <String, int>{}
         : const <String, int>{};
+    final voiceStatuses = hasVoice
+        ? ref.watch(voiceChannelStatusesProvider(_circleId)).value ??
+              const <String, String>{}
+        : const <String, String>{};
     final voiceModeration = hasVoice ? VoiceModeration.forCircle(detail) : null;
     final wide = isWideLayout(MediaQuery.sizeOf(context).width);
     final showVoicePanel = ref.watch(voiceSessionProvider) != null && wide;
@@ -615,6 +620,7 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                 members: voiceMembers,
                 speaking: voiceSpeakingUserIds(session, channel.id),
                 joined: session?.channelId == channel.id,
+                voiceStatus: voiceStatuses[channel.id],
                 trailing: limitBadge,
                 onTap: () => widget.onSelectChannel(channel),
                 onContextMenu: contextMenu,
@@ -649,6 +655,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           channelRow,
+                          if (voiceStatuses[channel.id] case final status?)
+                            VoiceChannelStatusText(text: status),
                           VoiceChannelMembers(
                             channelId: channel.id,
                             members: voiceMembers,
@@ -1568,6 +1576,7 @@ class CircleVoiceLiveCard extends StatelessWidget {
     required this.joined,
     required this.onTap,
     this.trailing,
+    this.voiceStatus,
     this.onContextMenu,
     this.longPressOpensMenu = true,
     super.key,
@@ -1575,6 +1584,9 @@ class CircleVoiceLiveCard extends StatelessWidget {
 
   final CircleChannel channel;
   final List<VoiceMemberState> members;
+
+  /// What the channel says about itself (E6), shown in place of the names.
+  final String? voiceStatus;
   final Set<String> speaking;
 
   /// Whether the current user is in this channel.
@@ -1595,7 +1607,7 @@ class CircleVoiceLiveCard extends StatelessWidget {
     ];
     final status = speakers.isNotEmpty
         ? tr('{name} is speaking', {'name': speakers.first.name})
-        : members.map((member) => member.name).join(', ');
+        : voiceStatus ?? members.map((member) => member.name).join(', ');
     final action = joined
         ? tr('Joined')
         : tr('{count} · Join', {'count': members.length});

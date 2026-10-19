@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:wecord/features/lists/list_models.dart';
+import 'package:wecord/features/lists/task_field_format.dart';
 import 'package:wecord/features/notes/note_block_views.dart' show NoteCheckBox;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/group.dart';
@@ -209,23 +210,40 @@ class TaskMeta extends StatelessWidget {
   const TaskMeta({
     required this.item,
     required this.members,
+    this.fields = const [],
+    this.subtasks,
     this.now,
     super.key,
   });
 
   final TaskItem item;
   final List<GroupMember> members;
+
+  /// The list's own fields; the values the task has are shown as chips.
+  final List<TaskFieldDef> fields;
+
+  /// How many subtasks are done and how many there are, when it has any.
+  final ({int done, int total})? subtasks;
   final DateTime? now;
 
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
+    final values = [
+      for (final def in fields)
+        if (formatTaskFieldValue(def, item.custom[def.id], members)
+            case final text?)
+          (def: def, text: text),
+    ];
     final hasAnything =
         item.dueAt != null ||
         item.priority != TaskPriority.none ||
         item.details.isNotEmpty ||
         item.sourceMessageId != null ||
-        item.assignees.isNotEmpty;
+        item.assignees.isNotEmpty ||
+        item.recurrence != null ||
+        values.isNotEmpty ||
+        (subtasks != null && subtasks!.total > 0);
     if (!hasAnything) {
       return const SizedBox.shrink();
     }
@@ -237,11 +255,39 @@ class TaskMeta extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (item.dueAt != null) DueChip(item: item, now: now),
+          if (item.recurrence != null)
+            Semantics(
+              label: item.recurrence!.label,
+              excludeSemantics: true,
+              child: Icon(Icons.repeat_rounded, size: 15, color: c.muted),
+            ),
+          if (subtasks != null && subtasks!.total > 0)
+            TaskChip(
+              icon: Icons.checklist_rounded,
+              label: '${subtasks!.done}/${subtasks!.total}',
+              color: subtasks!.done == subtasks!.total ? c.successText : null,
+            ),
           if (item.priority != TaskPriority.none)
             TaskChip(
               icon: Icons.flag_rounded,
               label: item.priority.label,
               color: priorityColor(c, item.priority),
+            ),
+          for (final entry in values.take(3))
+            TaskChip(
+              icon: taskFieldIcon(entry.def.type),
+              label: entry.def.type == TaskFieldType.number
+                  ? '${entry.def.name}: ${entry.text}'
+                  : entry.text,
+            ),
+          if (values.length > 3)
+            Text(
+              '+${values.length - 3}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: c.muted,
+              ),
             ),
           if (item.details.isNotEmpty)
             Icon(Icons.notes_rounded, size: 15, color: c.faint),
@@ -263,6 +309,8 @@ class TaskRow extends StatelessWidget {
     required this.onOpen,
     required this.onToggleDone,
     this.canEdit = true,
+    this.fields = const [],
+    this.subtasks,
     this.now,
     super.key,
   });
@@ -272,6 +320,8 @@ class TaskRow extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onToggleDone;
   final bool canEdit;
+  final List<TaskFieldDef> fields;
+  final ({int done, int total})? subtasks;
   final DateTime? now;
 
   @override
@@ -329,7 +379,13 @@ class TaskRow extends StatelessWidget {
                         decorationColor: c.muted,
                       ),
                     ),
-                    TaskMeta(item: item, members: members, now: now),
+                    TaskMeta(
+                      item: item,
+                      members: members,
+                      fields: fields,
+                      subtasks: subtasks,
+                      now: now,
+                    ),
                   ],
                 ),
               ),
@@ -355,6 +411,8 @@ class TaskCard extends StatelessWidget {
     required this.onToggleDone,
     this.canEdit = true,
     this.lifted = false,
+    this.fields = const [],
+    this.subtasks,
     this.now,
     super.key,
   });
@@ -364,6 +422,8 @@ class TaskCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback? onToggleDone;
   final bool canEdit;
+  final List<TaskFieldDef> fields;
+  final ({int done, int total})? subtasks;
 
   /// Drawn as picked up (the drag feedback).
   final bool lifted;
@@ -428,7 +488,13 @@ class TaskCard extends StatelessWidget {
                         decorationColor: c.muted,
                       ),
                     ),
-                    TaskMeta(item: item, members: members, now: now),
+                    TaskMeta(
+                      item: item,
+                      members: members,
+                      fields: fields,
+                      subtasks: subtasks,
+                      now: now,
+                    ),
                   ],
                 ),
               ),
@@ -436,6 +502,77 @@ class TaskCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// An icon, a label and a value on one line of a task's sheet. At large
+/// text sizes the label sits above the value instead of beside it, so a
+/// long label never breaks mid-word.
+class TaskLabelValueLine extends StatelessWidget {
+  const TaskLabelValueLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.trailing,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final Widget value;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final large = MediaQuery.textScalerOf(context).scale(1) > 1.25;
+    final labelText = Text(
+      label,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: c.muted,
+      ),
+    );
+    if (large) {
+      return Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 20, color: c.muted),
+                    const SizedBox(width: 12),
+                    Expanded(child: labelText),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 32),
+                  child: Align(alignment: Alignment.centerLeft, child: value),
+                ),
+              ],
+            ),
+          ),
+          ?trailing,
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: c.muted),
+        const SizedBox(width: 12),
+        SizedBox(width: 92, child: labelText),
+        Expanded(
+          child: Align(alignment: Alignment.centerLeft, child: value),
+        ),
+        ?trailing,
+      ],
     );
   }
 }

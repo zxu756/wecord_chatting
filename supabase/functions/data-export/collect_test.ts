@@ -171,6 +171,7 @@ const emptyRpc: Record<string, unknown> = {
   export_my_stories: { stories: [], close_friends: [], reports: [] },
   export_my_ai_digest: { enabled: false, subscriptions: [] },
   export_my_note_extras: { comments: [], templates: [], published: [] },
+  export_my_task_extras: { lists: [] },
 };
 
 const feedbackAnswer = [{
@@ -470,6 +471,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
+      export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -488,9 +490,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_ai_digest", args: { target_user_id: me } },
     { name: "export_my_note_extras", args: { target_user_id: me } },
     { name: "export_my_stories", args: { target_user_id: me } },
+    { name: "export_my_task_extras", args: { target_user_id: me } },
   ]);
   assertEquals(data.aiDigest?.["enabled"], true);
   assertEquals((data.noteExtras?.["comments"] as unknown[]).length, 1);
+  assertEquals((data.taskExtras?.["lists"] as unknown[]).length, 1);
   assertEquals(data.forms?.length, 1);
   assertEquals(data.feedback?.length, 1);
   assertEquals((data.stories?.["stories"] as unknown[] | undefined)?.length, 1);
@@ -522,6 +526,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
+      export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -619,6 +624,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
+      export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
     },
     objects: { "moments/u-1/cover-1.jpg": new Uint8Array([1]) },
   });
@@ -640,6 +646,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.aiDigest, null);
   assertEquals(data.noteExtras, null);
   assertEquals(data.stories, null);
+  assertEquals(data.taskExtras, null);
   assertEquals(data.skipped.sort(), [
     "daily",
     "daily digest",
@@ -648,6 +655,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "moments",
     "note comments and templates",
     "notes, lists and more",
+    "task list fields",
   ]);
   assertEquals(data.messages.length, 2);
   assertEquals(data.files, []);

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
@@ -97,6 +99,234 @@ enum TaskPriority {
   };
 }
 
+/// What kind of value a list's own field holds.
+enum TaskFieldType {
+  number('number'),
+  select('select'),
+  link('link'),
+  person('person');
+
+  const TaskFieldType(this.value);
+
+  final String value;
+
+  static TaskFieldType? fromValue(Object? value) {
+    for (final type in values) {
+      if (type.value == value) {
+        return type;
+      }
+    }
+    return null;
+  }
+
+  String get label => switch (this) {
+    number => tr('Number'),
+    select => tr('Single choice'),
+    link => tr('Link'),
+    person => trIn('task-field', 'Person'),
+  };
+}
+
+/// One choice of a single-choice field.
+@immutable
+class TaskFieldOption {
+  const TaskFieldOption({required this.id, required this.name});
+
+  factory TaskFieldOption.fromJson(Map<String, dynamic> json) =>
+      TaskFieldOption(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? '',
+      );
+
+  final String id;
+  final String name;
+
+  Map<String, Object?> toJson() => {'id': id, 'name': name};
+
+  @override
+  bool operator ==(Object other) =>
+      other is TaskFieldOption && other.id == id && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
+}
+
+/// A field a list defines for its tasks (up to 20 per list).
+@immutable
+class TaskFieldDef {
+  const TaskFieldDef({
+    required this.id,
+    required this.name,
+    required this.type,
+    this.options = const [],
+  });
+
+  static TaskFieldDef? tryFromJson(Object? json) {
+    if (json is! Map) {
+      return null;
+    }
+    final type = TaskFieldType.fromValue(json['type']);
+    final id = json['id'];
+    if (type == null || id is! String) {
+      return null;
+    }
+    return TaskFieldDef(
+      id: id,
+      name: json['name'] as String? ?? '',
+      type: type,
+      options: [
+        for (final option in (json['options'] as List<dynamic>? ?? const []))
+          if (option is Map)
+            TaskFieldOption.fromJson(Map<String, dynamic>.from(option)),
+      ],
+    );
+  }
+
+  final String id;
+  final String name;
+  final TaskFieldType type;
+
+  /// The choices of a single-choice field.
+  final List<TaskFieldOption> options;
+
+  TaskFieldOption? optionById(Object? id) {
+    for (final option in options) {
+      if (option.id == id) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type.value,
+    if (type == TaskFieldType.select)
+      'options': [for (final option in options) option.toJson()],
+  };
+
+  TaskFieldDef copyWith({
+    String? name,
+    TaskFieldType? type,
+    List<TaskFieldOption>? options,
+  }) => TaskFieldDef(
+    id: id,
+    name: name ?? this.name,
+    type: type ?? this.type,
+    options: options ?? this.options,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is TaskFieldDef &&
+      other.id == id &&
+      other.name == name &&
+      other.type == type &&
+      listEquals(other.options, options);
+
+  @override
+  int get hashCode => Object.hash(id, name, type, Object.hashAll(options));
+}
+
+/// How often a repeating task comes back.
+enum TaskRepeatUnit {
+  daily('daily'),
+  weekly('weekly'),
+  monthly('monthly'),
+  yearly('yearly');
+
+  const TaskRepeatUnit(this.value);
+
+  final String value;
+
+  static TaskRepeatUnit? fromValue(Object? value) {
+    for (final unit in values) {
+      if (unit.value == value) {
+        return unit;
+      }
+    }
+    return null;
+  }
+}
+
+/// A repeat rule: every [interval] days, weeks, months or years, counted
+/// from the task's date. [tzOffset] (minutes east of UTC) says where "the
+/// day" is, so an all-day task stays on the day the person set.
+@immutable
+class TaskRecurrence {
+  const TaskRecurrence({required this.unit, this.interval = 1, this.tzOffset});
+
+  static TaskRecurrence? tryFromJson(Object? json) {
+    var map = json;
+    if (map is String && map.startsWith('{')) {
+      try {
+        map = jsonDecode(map);
+      } on Object {
+        return null;
+      }
+    }
+    if (map is! Map) {
+      return null;
+    }
+    final unit = TaskRepeatUnit.fromValue(map['freq']);
+    if (unit == null) {
+      return null;
+    }
+    return TaskRecurrence(
+      unit: unit,
+      interval: ((map['interval'] as num?)?.toInt() ?? 1).clamp(1, 99),
+      tzOffset: (map['tz_offset'] as num?)?.toInt(),
+    );
+  }
+
+  /// A rule for a task set up here, counting days in this device's time zone.
+  factory TaskRecurrence.here(TaskRepeatUnit unit, {int interval = 1}) =>
+      TaskRecurrence(
+        unit: unit,
+        interval: interval,
+        tzOffset: DateTime.now().timeZoneOffset.inMinutes,
+      );
+
+  final TaskRepeatUnit unit;
+  final int interval;
+  final int? tzOffset;
+
+  Map<String, Object?> toJson() => {
+    'freq': unit.value,
+    'interval': interval,
+    'tz_offset': ?tzOffset,
+  };
+
+  /// "Every day", "Every 2 weeks".
+  String get label {
+    if (interval == 1) {
+      return switch (unit) {
+        TaskRepeatUnit.daily => tr('Every day'),
+        TaskRepeatUnit.weekly => tr('Every week'),
+        TaskRepeatUnit.monthly => tr('Every month'),
+        TaskRepeatUnit.yearly => tr('Every year'),
+      };
+    }
+    final args = {'count': interval};
+    return switch (unit) {
+      TaskRepeatUnit.daily => tr('Every {count} days', args),
+      TaskRepeatUnit.weekly => tr('Every {count} weeks', args),
+      TaskRepeatUnit.monthly => tr('Every {count} months', args),
+      TaskRepeatUnit.yearly => tr('Every {count} years', args),
+    };
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is TaskRecurrence &&
+      other.unit == unit &&
+      other.interval == interval;
+
+  @override
+  int get hashCode => Object.hash(unit, interval);
+}
+
 enum TaskListView {
   list('list'),
   board('board');
@@ -118,6 +348,7 @@ class TaskList {
     required this.title,
     required this.icon,
     required this.statuses,
+    this.fieldDefs = const [],
     this.defaultView = TaskListView.list,
     this.createdBy,
     this.canEdit = false,
@@ -134,6 +365,10 @@ class TaskList {
         for (final status in (json['statuses'] as List<dynamic>? ?? const []))
           TaskStatus.fromJson(Map<String, dynamic>.from(status as Map)),
       ],
+      fieldDefs: [
+        for (final def in (json['field_defs'] as List<dynamic>? ?? const []))
+          ?TaskFieldDef.tryFromJson(def),
+      ],
       defaultView: TaskListView.fromValue(json['default_view']),
       createdBy: json['created_by'] as String?,
       canEdit: json['can_edit'] == true,
@@ -148,10 +383,22 @@ class TaskList {
   final String title;
   final String icon;
   final List<TaskStatus> statuses;
+
+  /// The list's own fields, in the order they are shown.
+  final List<TaskFieldDef> fieldDefs;
   final TaskListView defaultView;
   final String? createdBy;
   final bool canEdit;
   final bool canManage;
+
+  TaskFieldDef? fieldById(String id) {
+    for (final def in fieldDefs) {
+      if (def.id == id) {
+        return def;
+      }
+    }
+    return null;
+  }
 
   TaskStatus? statusById(String id) {
     for (final status in statuses) {
@@ -174,6 +421,7 @@ class TaskList {
     String? title,
     String? icon,
     List<TaskStatus>? statuses,
+    List<TaskFieldDef>? fieldDefs,
     TaskListView? defaultView,
   }) {
     return TaskList(
@@ -182,6 +430,7 @@ class TaskList {
       title: title ?? this.title,
       icon: icon ?? this.icon,
       statuses: statuses ?? this.statuses,
+      fieldDefs: fieldDefs ?? this.fieldDefs,
       defaultView: defaultView ?? this.defaultView,
       createdBy: createdBy,
       canEdit: canEdit,
@@ -255,6 +504,9 @@ class TaskItem {
     this.completedAt,
     this.assignees = const [],
     this.deleted = false,
+    this.custom = const {},
+    this.parentId,
+    this.recurrence,
   });
 
   factory TaskItem.fromJson(Map<String, dynamic> json) {
@@ -277,7 +529,28 @@ class TaskItem {
           '$id',
       ],
       deleted: json['deleted'] == true || json['deleted_at'] != null,
+      custom: _customFrom(json['custom']),
+      parentId: json['parent_id'] as String?,
+      recurrence: TaskRecurrence.tryFromJson(json['recurrence']),
     );
+  }
+
+  static Map<String, Object?> _customFrom(Object? raw) {
+    var value = raw;
+    if (value is String && value.startsWith('{')) {
+      try {
+        value = jsonDecode(value);
+      } on Object {
+        return const {};
+      }
+    }
+    if (value is! Map) {
+      return const {};
+    }
+    return {
+      for (final entry in value.entries)
+        if (entry.value != null) '${entry.key}': entry.value as Object?,
+    };
   }
 
   final String id;
@@ -302,6 +575,18 @@ class TaskItem {
   final List<String> assignees;
   final bool deleted;
 
+  /// The values of the list's own fields, by field id: a number, the id of a
+  /// choice, a link or a user id.
+  final Map<String, Object?> custom;
+
+  /// The task this is a subtask of (one level only).
+  final String? parentId;
+
+  /// How the task repeats, when it does.
+  final TaskRecurrence? recurrence;
+
+  bool get isSubtask => parentId != null;
+
   bool get isDone => completedAt != null;
 
   /// Not finished and past its date.
@@ -325,6 +610,9 @@ class TaskItem {
     List<String>? assignees,
     Object? completedAt = _keep,
     bool? deleted,
+    Map<String, Object?>? custom,
+    Object? parentId = _keep,
+    Object? recurrence = _keep,
   }) {
     return TaskItem(
       id: id,
@@ -344,6 +632,13 @@ class TaskItem {
           : completedAt as DateTime?,
       assignees: assignees ?? this.assignees,
       deleted: deleted ?? this.deleted,
+      custom: custom ?? this.custom,
+      parentId: identical(parentId, _keep)
+          ? this.parentId
+          : parentId as String?,
+      recurrence: identical(recurrence, _keep)
+          ? this.recurrence
+          : recurrence as TaskRecurrence?,
     );
   }
 

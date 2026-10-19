@@ -132,6 +132,12 @@ export interface ExportData {
    * read, absent in older callers.
    */
   stories?: Json | null;
+  /**
+   * The fields of my task lists, their values on the tasks I made, subtasks
+   * and repeat rules (export_my_task_extras, migration 202610250130); null
+   * when it could not be read, absent in older callers.
+   */
+  taskExtras?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -662,6 +668,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.stories) {
     out.push({ path: "data/stories.json", value: storiesJson(data) });
+  }
+  if (data.taskExtras) {
+    out.push({ path: "data/task_extras.json", value: data.taskExtras });
   }
   const extras = data.extras;
   if (extras) {
@@ -1218,6 +1227,67 @@ ${section("Reports you filed", reports, "No reports.")}`,
   );
 }
 
+/** Task lists 2.0: fields, subtasks and repeat rules of my tasks (D7). */
+export function buildTaskExtrasHtml(data: ExportData): string {
+  const extras = isObject(data.taskExtras) ? data.taskExtras : {};
+  const repeatLabel = (rule: unknown): string => {
+    if (!isObject(rule)) return "";
+    const unit =
+      { daily: "day", weekly: "week", monthly: "month", yearly: "year" }[
+        str(rule["freq"]) ?? ""
+      ];
+    const every = Number(rule["interval"] ?? 1);
+    return unit
+      ? `repeats every ${every === 1 ? "" : `${every} `}${unit}${
+        every === 1 ? "" : "s"
+      }`
+      : "";
+  };
+  const lists = objects(extras["lists"]).map((list) => {
+    const fields = objects(list["fields"]).map((field) =>
+      str(field["name"]) ?? ""
+    )
+      .filter((name) => name !== "").join(", ");
+    const items = objects(list["items"]).map((item) => {
+      const values = objects(item["values"]).map((value) => {
+        const raw = value["value"];
+        const shown = isObject(raw) ? personName(raw) : String(raw ?? "");
+        return `${str(value["field"]) ?? ""}: ${shown}`;
+      }).join(" · ");
+      const notes = [
+        item["parent_id"] ? "subtask" : "",
+        repeatLabel(item["repeat"]),
+        values,
+      ].filter((part) => part !== "").join(" · ");
+      return `<div class="body">${escapeHtml(str(item["title"]) ?? "")}${
+        notes ? ` <span class="muted">— ${escapeHtml(notes)}</span>` : ""
+      }</div>`;
+    }).join("");
+    return entry(
+      null,
+      `<div><strong>${escapeHtml(str(list["title"]) || "Untitled")}</strong> ${
+        tag(
+          list["created_by_me"] === true
+            ? "you made it"
+            : "made by someone else",
+        )
+      }</div><div class="muted">in ${
+        escapeHtml(conversationName(data, list["conversation_id"]))
+      }${fields ? ` · fields: ${escapeHtml(fields)}` : ""}</div>${
+        items || '<div class="muted">(no tasks of yours)</div>'
+      }`,
+    );
+  }).join("");
+  return page(
+    "Task list fields — your WeCord data",
+    `${backLink()}<h1>Task list fields, subtasks and repeats</h1>
+<p class="muted">What the lists you use store beyond the title and date: their
+own fields, the values on the tasks you created, which tasks are subtasks and
+which repeat.</p>
+${section("Task lists", lists, "No task lists.")}`,
+  );
+}
+
 /** My feedback with the link to each screenshot. */
 function feedbackJson(data: ExportData): Json[] {
   const ref = fileRefs(data);
@@ -1503,6 +1573,18 @@ export function buildSectionPages(
       content: buildStoriesHtml(data),
     });
   }
+  if (data.taskExtras) {
+    out.push({
+      path: "pages/task_extras.html",
+      label: "Task list fields, subtasks and repeats",
+      summary: `${
+        objects(
+          isObject(data.taskExtras) ? data.taskExtras["lists"] : null,
+        ).length
+      } lists`,
+      content: buildTaskExtrasHtml(data),
+    });
+  }
   if (data.aiDigest) {
     const followed = objects(
       isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
@@ -1599,6 +1681,7 @@ data/note_extras.json The comments you wrote on notes, your note templates
 data/stories.json     Your dailies still up, close friends and reports.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
+data/task_extras.json Fields, values, subtasks and repeats of those items.
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json
 data/wallpapers.json  Your chat wallpapers.
 files/                Your own photos, videos, covers and wallpapers that

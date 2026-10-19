@@ -241,8 +241,9 @@ class _BoardColumnState extends State<_BoardColumn> {
     super.dispose();
   }
 
+  /// The tasks of the column; subtasks show on their task's card.
   List<TaskItem> _cards() =>
-      widget.controller.itemsIn(widget.status.id, manualOrder: true);
+      widget.controller.rootsIn(widget.status.id, manualOrder: true);
 
   int _indexFor(Offset point, List<TaskItem> cards) {
     final centers = <double>[];
@@ -300,6 +301,8 @@ class _BoardColumnState extends State<_BoardColumn> {
             statuses: widget.statuses,
             members: widget.members,
             width: widget.cardWidth,
+            fields: widget.controller.list?.fieldDefs ?? const [],
+            subtasks: widget.controller.subtaskProgress(item.id),
             canEdit: widget.canEdit,
             touch: touch,
             onOpen: () => widget.onOpen(item),
@@ -308,7 +311,7 @@ class _BoardColumnState extends State<_BoardColumn> {
             onMoveTo: (statusId) => widget.controller.moveItem(
               item.id,
               statusId,
-              widget.controller.itemsIn(statusId, manualOrder: true).length,
+              widget.controller.rootsIn(statusId, manualOrder: true).length,
             ),
             onDragStarted: () => setState(() => _draggingId = item.id),
             onDragEnd: () {
@@ -496,6 +499,8 @@ class _DraggableCard extends StatelessWidget {
     required this.statuses,
     required this.members,
     required this.width,
+    required this.fields,
+    required this.subtasks,
     required this.canEdit,
     required this.touch,
     required this.onOpen,
@@ -510,6 +515,8 @@ class _DraggableCard extends StatelessWidget {
   final List<TaskStatus> statuses;
   final List<GroupMember> members;
   final double width;
+  final List<TaskFieldDef> fields;
+  final ({int done, int total}) subtasks;
   final bool canEdit;
   final bool touch;
   final VoidCallback onOpen;
@@ -523,6 +530,8 @@ class _DraggableCard extends StatelessWidget {
     final card = TaskCard(
       item: item,
       members: members,
+      fields: fields,
+      subtasks: subtasks,
       canEdit: canEdit,
       onOpen: onOpen,
       onToggleDone: onToggleDone,
@@ -550,6 +559,8 @@ class _DraggableCard extends StatelessWidget {
           child: TaskCard(
             item: item,
             members: members,
+            fields: fields,
+            subtasks: subtasks,
             lifted: true,
             onOpen: null,
             onToggleDone: null,

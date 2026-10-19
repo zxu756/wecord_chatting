@@ -153,7 +153,7 @@ class TaskListController extends ChangeNotifier {
         dropped = true;
         continue;
       }
-      _pending[id] = {...entry.value, ...?_pending[id]};
+      _pending[id] = mergeTaskPatch(entry.value, _pending[id] ?? const {});
     }
     if (dropped) {
       _persist();
@@ -259,6 +259,101 @@ class TaskListController extends ChangeNotifier {
     return sorted..sort(_compare);
   }
 
+  /// Whether [item] is shown as a subtask under a task of this list (its
+  /// task may have been deleted meanwhile; then it stands on its own).
+  bool isNested(TaskItem item) {
+    final parent = item.parentId;
+    return parent != null && itemById(parent) != null;
+  }
+
+  /// The subtasks of [parentId], in the order they were put in.
+  List<TaskItem> subtasksOf(String parentId) {
+    return [
+      for (final item in items)
+        if (item.parentId == parentId) item,
+    ]..sort((a, b) {
+      final byPos = a.pos.compareTo(b.pos);
+      return byPos != 0 ? byPos : a.id.compareTo(b.id);
+    });
+  }
+
+  /// How many of [parentId]'s subtasks are done, and how many there are.
+  ({int done, int total}) subtaskProgress(String parentId) {
+    final subtasks = subtasksOf(parentId);
+    return (
+      done: subtasks.where((item) => item.isDone).length,
+      total: subtasks.length,
+    );
+  }
+
+  /// The subtasks of [parentId] the filter shows: all of them when the task
+  /// itself matches, else the ones that do.
+  List<TaskItem> visibleSubtasks(TaskItem parent) {
+    final subtasks = subtasksOf(parent.id);
+    if (filter == TaskFilter.all || _matches(parent)) {
+      return subtasks;
+    }
+    return [
+      for (final item in subtasks)
+        if (_matches(item)) item,
+    ];
+  }
+
+  /// The tasks of a status that stand on their own (not subtasks), after
+  /// the filter and sort: those that match, and those with a subtask that
+  /// does. For the list and the board, which show subtasks under their task.
+  List<TaskItem> rootsIn(String statusId, {bool manualOrder = false}) {
+    final sorted = [
+      for (final item in items)
+        if (item.status == statusId &&
+            !isNested(item) &&
+            (_matches(item) ||
+                subtasksOf(item.id).any((child) => _matches(child))))
+          item,
+    ];
+    if (manualOrder) {
+      return sorted..sort((a, b) {
+        final byPos = a.pos.compareTo(b.pos);
+        return byPos != 0 ? byPos : a.id.compareTo(b.id);
+      });
+    }
+    return sorted..sort(_compare);
+  }
+
+  /// The tasks with a date on [day] (local), after the filter, by time.
+  List<TaskItem> itemsDueOn(DateTime day) {
+    return [
+      for (final item in items)
+        if (_matches(item) &&
+            item.dueAt != null &&
+            item.dueAt!.year == day.year &&
+            item.dueAt!.month == day.month &&
+            item.dueAt!.day == day.day)
+          item,
+    ]..sort(_compare);
+  }
+
+  /// The tasks with a date, by local day: for the dots of the calendar.
+  Map<DateTime, List<TaskItem>> dueByDay() {
+    final byDay = <DateTime, List<TaskItem>>{};
+    for (final item in items) {
+      final due = item.dueAt;
+      if (due == null || !_matches(item)) {
+        continue;
+      }
+      byDay
+          .putIfAbsent(DateTime(due.year, due.month, due.day), () => [])
+          .add(item);
+    }
+    return byDay;
+  }
+
+  /// The tasks without a date, after the filter.
+  List<TaskItem> get undated => [
+    for (final item in items)
+      if (item.dueAt == null && _matches(item)) item,
+  ]..sort(_compare);
+
   /// How many items a filter would show, for the chips.
   int count(TaskFilter which) {
     final saved = filter;
@@ -279,11 +374,16 @@ class TaskListController extends ChangeNotifier {
     bool dueHasTime = false,
     TaskPriority priority = TaskPriority.none,
     String? details,
+    String? parentId,
+    TaskRecurrence? recurrence,
   }) {
     final list = _list!;
     final status = statusId ?? list.statuses.first.id;
-    final column = items.where((item) => item.status == status).toList()
-      ..sort((a, b) => a.pos.compareTo(b.pos));
+    final column =
+        items
+            .where((item) => item.status == status && item.parentId == parentId)
+            .toList()
+          ..sort((a, b) => a.pos.compareTo(b.pos));
     final item = TaskItem(
       id: newId(),
       listId: list.id,
@@ -297,6 +397,8 @@ class TaskListController extends ChangeNotifier {
       createdBy: currentUserId,
       createdAt: _clock(),
       assignees: assignees,
+      parentId: parentId,
+      recurrence: dueAt == null || parentId != null ? null : recurrence,
     );
     _items[item.id] = item;
     _creating.add(item.id);
@@ -311,6 +413,8 @@ class TaskListController extends ChangeNotifier {
       },
       if (priority != TaskPriority.none) 'priority': priority.value,
       if (details != null && details.isNotEmpty) 'details': details,
+      'parent_id': ?parentId,
+      'recurrence': ?item.recurrence?.toJson(),
     };
     _persist();
     notifyListeners();
@@ -319,15 +423,17 @@ class TaskListController extends ChangeNotifier {
   }
 
   /// Changes some fields of an item: `title`, `details`, `status`,
-  /// `priority`, `due_at` (a UTC ISO string or null), `due_has_time`, `pos`
-  /// and `assignees` (user ids).
+  /// `priority`, `due_at` (a UTC ISO string or null), `due_has_time`, `pos`,
+  /// `assignees` (user ids), `custom` (the list's own fields: `{field id:
+  /// value}`, null clears one value), `parent_id` (null makes it a task
+  /// again) and `recurrence` (a repeat rule's JSON, or null).
   void patchItem(String id, Map<String, Object?> fields) {
     final item = _items[id];
     if (item == null || fields.isEmpty) {
       return;
     }
     _items[id] = _apply(item, fields);
-    _pending[id] = {...?_pending[id], ...fields};
+    _pending[id] = mergeTaskPatch(_pending[id], fields);
     _persist();
     notifyListeners();
     _scheduleFlush();
@@ -360,10 +466,15 @@ class TaskListController extends ChangeNotifier {
     if (item == null) {
       return;
     }
+    // A task moves among tasks, a subtask among subtasks.
+    final nested = isNested(item);
     final column =
         [
           for (final other in items)
-            if (other.status == statusId && other.id != id) other,
+            if (other.status == statusId &&
+                other.id != id &&
+                isNested(other) == nested)
+              other,
         ]..sort((a, b) {
           final byPos = a.pos.compareTo(b.pos);
           return byPos != 0 ? byPos : a.id.compareTo(b.id);
@@ -468,6 +579,26 @@ class TaskListController extends ChangeNotifier {
           next = next.copyWith(
             assignees: [for (final id in value! as List) '$id'],
           );
+        case 'custom':
+          final merged = {...next.custom};
+          for (final field in (value! as Map).entries) {
+            if (field.value == null) {
+              merged.remove('${field.key}');
+            } else {
+              merged['${field.key}'] = field.value;
+            }
+          }
+          next = next.copyWith(custom: merged);
+        case 'parent_id':
+          next = next.copyWith(parentId: value, recurrence: null);
+        case 'recurrence':
+          next = next.copyWith(
+            recurrence: next.parentId != null
+                ? null
+                : value is TaskRecurrence
+                ? value
+                : TaskRecurrence.tryFromJson(value),
+          );
       }
     }
     return next;
@@ -486,6 +617,9 @@ class TaskListController extends ChangeNotifier {
       while (_pending.isNotEmpty && !_disposed) {
         final id = _pending.keys.first;
         final fields = {...?_pending[id], 'id': id};
+        if (fields['custom'] is Map) {
+          fields['custom'] = {...fields['custom']! as Map};
+        }
         final list = _list;
         if (list == null) {
           break;
@@ -497,12 +631,7 @@ class TaskListController extends ChangeNotifier {
           // Fields changed while this was in flight stay waiting.
           final current = _pending[id];
           if (current != null) {
-            for (final key in fields.keys) {
-              if (identical(current[key], fields[key]) ||
-                  current[key] == fields[key]) {
-                current.remove(key);
-              }
-            }
+            removeSentFromTaskPatch(current, fields);
             if (current.isEmpty) {
               _pending.remove(id);
             }
@@ -639,6 +768,59 @@ class TaskListController extends ChangeNotifier {
       }());
     }
     super.dispose();
+  }
+}
+
+/// [older] with [newer] on top, field by field. The list's own fields
+/// (`custom`) merge value by value, so two changes to different fields made
+/// before the first was sent both go out.
+Map<String, Object?> mergeTaskPatch(
+  Map<String, Object?>? older,
+  Map<String, Object?> newer,
+) {
+  final merged = {...?older, ...newer};
+  final before = older?['custom'];
+  final after = newer['custom'];
+  if (before is Map && after is Map) {
+    merged['custom'] = <String, Object?>{
+      for (final entry in before.entries) '${entry.key}': entry.value,
+      for (final entry in after.entries) '${entry.key}': entry.value,
+    };
+  }
+  return merged;
+}
+
+bool _sameValue(Object? a, Object? b) {
+  if (a is Map && b is Map) {
+    return mapEquals(a, b);
+  }
+  if (a is List && b is List) {
+    return listEquals(a, b);
+  }
+  return a == b;
+}
+
+/// Takes out of [pending] what was sent in [sent] and has not been changed
+/// since (a field changed while the request was on its way stays).
+void removeSentFromTaskPatch(
+  Map<String, Object?> pending,
+  Map<String, Object?> sent,
+) {
+  for (final key in sent.keys) {
+    if (key == 'custom' && pending['custom'] is Map && sent['custom'] is Map) {
+      final waiting = pending['custom']! as Map;
+      for (final entry in (sent['custom']! as Map).entries.toList()) {
+        if (waiting.containsKey(entry.key) &&
+            _sameValue(waiting[entry.key], entry.value)) {
+          waiting.remove(entry.key);
+        }
+      }
+      if (waiting.isEmpty) {
+        pending.remove('custom');
+      }
+    } else if (_sameValue(pending[key], sent[key])) {
+      pending.remove(key);
+    }
   }
 }
 

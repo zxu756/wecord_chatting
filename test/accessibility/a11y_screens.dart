@@ -72,6 +72,7 @@ import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
 import '../mobile/phone_test_support.dart';
+import 'tasks2_a11y_screens.dart';
 
 /// One screen to check: how to reach it and the screen it needs.
 class A11yScreen {
@@ -810,4 +811,5 @@ final allA11yScreens = <A11yScreen>[
   ...urgentA11yScreens,
   ...captionsA11yScreens,
   ...modToolsA11yScreens,
+  ...tasks2A11yScreens,
 ];

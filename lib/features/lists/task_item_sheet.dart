@@ -6,7 +6,10 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/lists/lists_repository.dart';
+import 'package:wecord/features/lists/task_field_widgets.dart';
 import 'package:wecord/features/lists/task_list_controller.dart';
+import 'package:wecord/features/lists/task_recurrence_sheet.dart';
+import 'package:wecord/features/lists/task_subtasks.dart';
 import 'package:wecord/features/lists/task_widgets.dart';
 import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -72,6 +75,10 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
   Timer? _detailsTimer;
   var _filled = false;
 
+  /// The task shown: the one the sheet was opened for, or one of its
+  /// subtasks (and back).
+  late String _itemId = widget.itemId;
+
   @override
   void initState() {
     super.initState();
@@ -99,19 +106,36 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
 
   void _commitTitle() {
     _titleTimer?.cancel();
-    final item = widget.controller.itemById(widget.itemId);
+    final item = widget.controller.itemById(_itemId);
     final text = _title.text.trim();
     if (item != null && text.isNotEmpty && text != item.title) {
-      widget.controller.patchItem(widget.itemId, {'title': text});
+      widget.controller.patchItem(_itemId, {'title': text});
     }
   }
 
   void _commitDetails() {
     _detailsTimer?.cancel();
-    final item = widget.controller.itemById(widget.itemId);
+    final item = widget.controller.itemById(_itemId);
     if (item != null && _details.text != item.details) {
-      widget.controller.patchItem(widget.itemId, {'details': _details.text});
+      widget.controller.patchItem(_itemId, {'details': _details.text});
     }
+  }
+
+  /// Shows another task of the list (a subtask, or the task it belongs to).
+  void _openTask(String id) {
+    _commitTitle();
+    _commitDetails();
+    setState(() {
+      _itemId = id;
+      _filled = false;
+    });
+    // The other task starts at its top.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final scroll = widget.scrollController;
+      if (scroll != null && scroll.hasClients) {
+        scroll.jumpTo(0);
+      }
+    });
   }
 
   Future<void> _pickDue(TaskItem item) async {
@@ -123,10 +147,45 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
     if (result == null) {
       return;
     }
-    widget.controller.patchItem(widget.itemId, {
+    widget.controller.patchItem(_itemId, {
       'due_at': result.due?.toUtc().toIso8601String(),
       'due_has_time': result.hasTime,
+      // A repeat counts from the date: no date, no repeat.
+      if (result.due == null && item.recurrence != null) 'recurrence': null,
     });
+  }
+
+  Future<void> _pickRepeat(TaskItem item) async {
+    final result = await showTaskRecurrenceSheet(
+      context,
+      current: item.recurrence,
+    );
+    if (result == null) {
+      return;
+    }
+    final rule = result.rule;
+    widget.controller.patchItem(_itemId, {
+      // A repeat needs a date: today when the task has none.
+      if (rule != null && item.dueAt == null) ...{
+        'due_at': endOfDay(DateTime.now()).toUtc().toIso8601String(),
+        'due_has_time': false,
+      },
+      'recurrence': rule?.toJson(),
+    });
+  }
+
+  Future<void> _editField(TaskItem item, TaskFieldDef def) async {
+    final edit = await editTaskFieldValue(
+      context,
+      def: def,
+      current: item.custom[def.id],
+      members: widget.members,
+    );
+    if (edit.changed) {
+      widget.controller.patchItem(_itemId, {
+        'custom': {def.id: edit.value},
+      });
+    }
   }
 
   Future<void> _pickAssignees(TaskItem item) async {
@@ -136,7 +195,7 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
       selected: item.assignees,
     );
     if (picked != null) {
-      widget.controller.patchItem(widget.itemId, {'assignees': picked});
+      widget.controller.patchItem(_itemId, {'assignees': picked});
     }
   }
 
@@ -184,7 +243,7 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    final item = widget.controller.itemById(widget.itemId);
+    final item = widget.controller.itemById(_itemId);
     final list = widget.controller.list;
     if (item == null || list == null) {
       return Center(
@@ -203,6 +262,9 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
         byId[id]?.profile.displayName ?? tr('Someone'),
     ];
     final selfId = ref.watch(authRepositoryProvider).currentUser?.id;
+    final parentTask = item.parentId == null
+        ? null
+        : widget.controller.itemById(item.parentId!);
 
     Widget row({
       required IconData icon,
@@ -227,26 +289,7 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(WeCordRadii.lg),
           ),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: c.muted),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 92,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: c.muted,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Align(alignment: Alignment.centerLeft, child: value),
-              ),
-            ],
-          ),
+          child: TaskLabelValueLine(icon: icon, label: label, value: value),
         ),
       );
     }
@@ -260,6 +303,19 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
         24 + MediaQuery.viewInsetsOf(context).bottom,
       ),
       children: [
+        if (parentTask != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: WeCordButton(
+              key: const ValueKey('task-parent'),
+              label: tr('Subtask of {title}', {'title': parentTask.title}),
+              icon: Icons.chevron_left_rounded,
+              variant: WeCordButtonVariant.secondary,
+              size: WeCordButtonSize.small,
+              onPressed: () => _openTask(parentTask.id),
+            ),
+          ),
+        if (parentTask != null) const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -382,6 +438,22 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
                 )
               : DueChip(item: item),
         ),
+        if (item.parentId == null && (canEdit || item.recurrence != null))
+          row(
+            icon: Icons.repeat_rounded,
+            label: tr('Repeat'),
+            onTap: () => unawaited(_pickRepeat(item)),
+            value: Text(
+              item.recurrence?.label ?? tr('Does not repeat'),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: item.recurrence == null
+                    ? FontWeight.w400
+                    : FontWeight.w600,
+                color: item.recurrence == null ? c.subtle : c.ink,
+              ),
+            ),
+          ),
         if (canEdit)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
@@ -410,6 +482,21 @@ class _TaskItemSheetState extends ConsumerState<TaskItemSheet> {
               item.priority.label,
               style: TextStyle(fontSize: 15, color: c.ink),
             ),
+          ),
+        for (final def in list.fieldDefs)
+          TaskFieldRow(
+            def: def,
+            value: item.custom[def.id],
+            members: widget.members,
+            canEdit: canEdit,
+            onEdit: () => unawaited(_editField(item, def)),
+          ),
+        if (item.parentId == null)
+          TaskSubtasksSection(
+            controller: widget.controller,
+            parent: item,
+            canEdit: canEdit,
+            onOpen: (subtask) => _openTask(subtask.id),
           ),
         const SizedBox(height: 8),
         Padding(

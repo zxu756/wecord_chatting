@@ -1,4 +1,5 @@
 import 'package:wecord/features/later/reminders_repository.dart';
+import 'package:wecord/features/later/schedule_repeat.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/push/push_gateway.dart';
@@ -11,6 +12,9 @@ class FakeScheduledMessagesRepository implements ScheduledMessagesRepository {
 
   final List<ScheduledMessage> messages;
   final created = <({String conversationId, String body, DateTime sendAt})>[];
+
+  /// The repeat of each message made, in order (null: sent once).
+  final createdRepeats = <ScheduleRepeat?>[];
   final sentNow = <String>[];
   final deleted = <String>[];
   var _next = 0;
@@ -30,17 +34,20 @@ class FakeScheduledMessagesRepository implements ScheduledMessagesRepository {
     required String body,
     required DateTime sendAt,
     List<Map<String, dynamic>> mentions = const [],
+    ScheduleRepeat? repeat,
   }) async {
     if (failWith case final error?) {
       throw error;
     }
     created.add((conversationId: conversationId, body: body, sendAt: sendAt));
+    createdRepeats.add(repeat);
     final message = ScheduledMessage(
       id: 'scheduled-${_next++}',
       conversationId: conversationId,
       body: body,
       sendAt: sendAt.toUtc(),
       mentions: mentions,
+      repeat: repeat?.startingAt(sendAt),
     );
     messages.add(message);
     return message;
@@ -52,6 +59,7 @@ class FakeScheduledMessagesRepository implements ScheduledMessagesRepository {
     required String body,
     required DateTime sendAt,
     required List<Map<String, dynamic>> mentions,
+    ScheduleRepeat? repeat,
   }) async {
     if (failWith case final error?) {
       throw error;
@@ -63,6 +71,7 @@ class FakeScheduledMessagesRepository implements ScheduledMessagesRepository {
       body: body,
       sendAt: sendAt.toUtc(),
       mentions: mentions,
+      repeat: repeat?.startingAt(sendAt),
     );
     messages[index] = updated;
     return updated;

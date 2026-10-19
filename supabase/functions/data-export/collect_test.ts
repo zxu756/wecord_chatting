@@ -167,9 +167,23 @@ const emptyRpc: Record<string, unknown> = {
     wallpapers: [],
   },
   export_my_forms: [],
+  export_my_feedback: [],
   export_my_ai_digest: { enabled: false, subscriptions: [] },
   export_my_note_extras: { comments: [], templates: [], published: [] },
 };
+
+const feedbackAnswer = [{
+  id: "fb-1",
+  message: "The send button is hidden",
+  app_version: "1.4.0",
+  platform: "web",
+  status: "closed",
+  created_at: "2026-10-20T08:00:00Z",
+  replied_at: "2026-10-21T08:00:00Z",
+  screenshot_bucket: "feedback-screenshots",
+  screenshot_path: "u-1/s-1.jpg",
+  replies: [{ body: "Fixed in 1.4.1", published_at: "2026-10-21T08:00:00Z" }],
+}];
 
 const me = "u-1";
 const world: Record<string, Row[] | Error> = {
@@ -405,6 +419,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_moments: momentsAnswer,
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
+      export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -421,12 +436,16 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_moments", args: { target_user_id: me } },
     { name: "export_my_extras", args: { target_user_id: me } },
     { name: "export_my_forms", args: { target_user_id: me } },
+    { name: "export_my_feedback", args: { target_user_id: me } },
     { name: "export_my_ai_digest", args: { target_user_id: me } },
     { name: "export_my_note_extras", args: { target_user_id: me } },
   ]);
   assertEquals(data.aiDigest?.["enabled"], true);
   assertEquals((data.noteExtras?.["comments"] as unknown[]).length, 1);
   assertEquals(data.forms?.length, 1);
+  assertEquals(data.feedback?.length, 1);
+  // The screenshot of my feedback is linked, never put into the archive.
+  assert("feedback-screenshots/u-1/s-1.jpg" in data.attachmentLinks);
   // The picture I attached to an answer is linked, not fetched.
   assert("chat-images/g-1/forms/f-1/a.jpg" in data.attachmentLinks);
   assertEquals(data.moments?.posts.length, 1);
@@ -446,6 +465,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_moments: momentsAnswer,
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
+      export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -498,6 +518,7 @@ Deno.test("files past the total or count cap are linked, not dropped", async () 
       export_my_moments: momentsAnswer,
       export_my_extras: extrasAnswer,
       export_my_forms: [],
+      export_my_feedback: [],
     },
       objects,
     });
@@ -538,6 +559,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_moments: momentsAnswer,
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
+      export_my_feedback: feedbackAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -557,10 +579,12 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.moments, null);
   assertEquals(data.extras, null);
   assertEquals(data.forms, null);
+  assertEquals(data.feedback, null);
   assertEquals(data.aiDigest, null);
   assertEquals(data.noteExtras, null);
   assertEquals(data.skipped.sort(), [
     "daily digest",
+    "feedback",
     "forms",
     "moments",
     "note comments and templates",

@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/announcements/announcement_card.dart';
+import 'package:wecord/features/announcements/announcement_models.dart';
+import 'package:wecord/features/announcements/announcements_providers.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/chats/events/chat_event_reminder_card.dart';
@@ -35,6 +38,9 @@ import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/notes/note_comment_notifications.dart';
 import 'package:wecord/features/notes/notes2_models.dart';
 import 'package:wecord/features/privacy/security_alerts.dart';
+import 'package:wecord/features/urgent/urgent_inbox.dart';
+import 'package:wecord/features/urgent/urgent_models.dart';
+import 'package:wecord/features/urgent/urgent_repository.dart';
 import 'package:wecord/features/workspace/task_notification_card.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -83,8 +89,11 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
+  final official = ref.watch(announcementsUnreadProvider);
   final digests = ref.watch(aiDigestsUnreadProvider);
   final noteComments = ref.watch(noteCommentNotificationsUnreadProvider);
+  // Urgent messages and announcements waiting for a confirmation (A7).
+  final toConfirm = ref.watch(pendingConfirmationCountProvider);
   return unread +
       requests +
       reminders +
@@ -95,8 +104,10 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       security +
       joinAnswers +
       readReminders +
+      official +
       digests +
-      noteComments;
+      noteComments +
+      toConfirm;
 });
 
 /// Which notifications the inbox shows.
@@ -113,8 +124,14 @@ enum InboxFilter {
   /// Answers to requests to join circles, and requests still waiting.
   circles,
 
+  /// Notices from the WeCord team, and its answers to feedback (K6, K7).
+  official,
+
   /// The daily digest of the chats the person follows.
   digest,
+
+  /// Urgent messages and group announcements waiting for a confirmation.
+  confirm,
 }
 
 /// Mentions of and replies to the current user and reminders that came
@@ -142,9 +159,12 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(securityAlertsProvider)
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
+      ..invalidate(announcementsProvider)
       ..invalidate(aiDigestsProvider)
       ..invalidate(birthdaysTodayProvider)
       ..invalidate(noteCommentNotificationsProvider)
+      ..invalidate(pendingUrgentsProvider(null))
+      ..invalidate(pendingAnnouncementAcksProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -217,6 +237,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final joinRequests =
         ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
     final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
+    final announcements =
+        ref.watch(announcementsProvider).value ?? const <Announcement>[];
+    final unreadOfficial = ref.watch(announcementsUnreadProvider);
+    final showOfficial =
+        _filter == InboxFilter.all || _filter == InboxFilter.official;
     // Friends whose birthday is today, under the Friends chip.
     final birthdays =
         _filter == InboxFilter.all || _filter == InboxFilter.friends
@@ -291,7 +316,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.friends ||
       InboxFilter.security ||
       InboxFilter.circles ||
-      InboxFilter.digest => const <InboxItem>[],
+      InboxFilter.official ||
+      InboxFilter.digest ||
+      InboxFilter.confirm => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
@@ -303,6 +330,19 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         ? ref.watch(aiDigestsProvider).value ?? const <AiDigest>[]
         : const <AiDigest>[];
     final unreadDigests = ref.watch(aiDigestsUnreadProvider);
+    // Urgent messages and announcements to confirm: on top, under All and
+    // their own chip.
+    final showConfirm =
+        _filter == InboxFilter.all || _filter == InboxFilter.confirm;
+    final pendingUrgents = showConfirm
+        ? ref.watch(pendingUrgentsProvider(null)).value ??
+              const <PendingUrgent>[]
+        : const <PendingUrgent>[];
+    final pendingAnnouncements = showConfirm
+        ? ref.watch(pendingAnnouncementAcksProvider).value ??
+              const <PendingAnnouncementAck>[]
+        : const <PendingAnnouncementAck>[];
+    final toConfirm = ref.watch(pendingConfirmationCountProvider);
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -362,6 +402,40 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ),
       data: (_) {
         final cards = <Widget>[
+          // Notices from the team first: maintenance, changes to the terms.
+          if (showOfficial)
+            for (final notice in announcements)
+              AnnouncementCard(announcement: notice),
+          for (final urgent in pendingUrgents)
+            UrgentInboxCard(
+              urgent: urgent,
+              place: conversationPlaceLabel(
+                conversations[urgent.conversationId],
+                circles,
+              ),
+              onOpen: () => openMessage(
+                context,
+                ref,
+                conversationId: urgent.conversationId,
+                messageId: urgent.messageId,
+                conversation: conversations[urgent.conversationId],
+              ),
+            ),
+          for (final pending in pendingAnnouncements)
+            AnnouncementAckCard(
+              pending: pending,
+              onOpen: () {
+                final conversation = conversations[pending.conversationId];
+                if (conversation != null) {
+                  openConversation(context, conversation);
+                } else {
+                  openPage(
+                    context,
+                    '${ChatsScreen.path}/${pending.conversationId}',
+                  );
+                }
+              },
+            ),
           if (showSecurity)
             for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
           if (showJoinRequests)
@@ -604,7 +678,14 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         unseenJoinAnswers,
                       ),
                       const SizedBox(width: 6),
+                      chip(
+                        InboxFilter.official,
+                        tr('Official'),
+                        unreadOfficial,
+                      ),
                       chip(InboxFilter.digest, tr('Digest'), unreadDigests),
+                      const SizedBox(width: 6),
+                      chip(InboxFilter.confirm, tr('To confirm'), toConfirm),
                     ],
                   ),
                 ),
@@ -1075,9 +1156,18 @@ class _EmptyInbox extends StatelessWidget {
                     )
                   : filter == InboxFilter.circles
                   ? tr('Answers to your requests to join circles show up here.')
+                  : filter == InboxFilter.official
+                  ? tr(
+                      'Notices from the WeCord team, and its answers to your '
+                      'feedback, show up here.',
+                    )
                   : filter == InboxFilter.digest
                   ? tr(
                       'Your daily digest shows up here. Set it up in Settings, under AI.',
+                    )
+                  : filter == InboxFilter.confirm
+                  ? tr(
+                      'Urgent messages and announcements that ask you to confirm show up here.',
                     )
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',

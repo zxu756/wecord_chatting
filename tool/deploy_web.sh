@@ -25,7 +25,12 @@ for tool in flutter npx; do
   fi
 done
 
-flutter build web --release --dart-define-from-file=.env
+# The app version (feature-flag minimum versions, "What's new") comes from
+# pubspec.yaml, without the build number.
+app_version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+
+flutter build web --release --dart-define-from-file=.env \
+  --dart-define=APP_VERSION="$app_version"
 
 # Stamp the build's version into the service worker (web/wecord_sw.js). It is
 # a hash of every built file except the worker itself, so it only changes when

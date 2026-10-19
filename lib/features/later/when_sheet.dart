@@ -1,6 +1,8 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:wecord/features/later/later_time.dart';
+import 'package:wecord/features/later/schedule_repeat.dart';
+import 'package:wecord/features/notifications/device_time_zone.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -39,12 +41,17 @@ Future<DateTime?> showWhenSheet(
   required List<QuickWhen> Function(DateTime now) picks,
   DateTime? initial,
   String? subtitle,
+  ValueNotifier<ScheduleRepeat?>? repeat,
 }) {
   return showWeCordSheet<DateTime>(
     context,
     title: title,
-    builder: (context, _) =>
-        WhenSheet(picks: picks, initial: initial, subtitle: subtitle),
+    builder: (context, _) => WhenSheet(
+      picks: picks,
+      initial: initial,
+      subtitle: subtitle,
+      repeat: repeat,
+    ),
   );
 }
 
@@ -55,10 +62,15 @@ class WhenSheet extends StatefulWidget {
     this.initial,
     this.subtitle,
     this.customPicker,
+    this.repeat,
     super.key,
   });
 
   final List<QuickWhen> Function(DateTime now) picks;
+
+  /// When given, the sheet has a "Repeat" row; what the user picks there is
+  /// put in this notifier (the time is still what the sheet returns).
+  final ValueNotifier<ScheduleRepeat?>? repeat;
 
   /// The time a custom pick starts from (when editing).
   final DateTime? initial;
@@ -145,6 +157,33 @@ class _WhenSheetState extends State<WhenSheet> {
                 ),
               ],
             ),
+            if (widget.repeat case final repeat?) ...[
+              const SizedBox(height: 12),
+              SettingsGroup(
+                color: c.well,
+                children: [
+                  ValueListenableBuilder<ScheduleRepeat?>(
+                    valueListenable: repeat,
+                    builder: (context, current, _) => SettingsRow(
+                      key: const ValueKey('when-repeat'),
+                      icon: Icons.repeat_rounded,
+                      title: tr('Repeat'),
+                      value: repeatKindLabel(current?.kind),
+                      onTap: () async {
+                        final choice = await showRepeatSheet(
+                          context,
+                          current: current,
+                          zone: deviceTimeZone(),
+                        );
+                        if (choice != null) {
+                          repeat.value = choice.repeat;
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (_error case final error?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),

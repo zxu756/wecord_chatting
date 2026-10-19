@@ -8,6 +8,7 @@ import 'package:wecord/features/auth/two_factor.dart';
 import 'package:wecord/features/notifications/local_notification_service.dart';
 import 'package:wecord/features/notifications/notification_preferences_repository.dart';
 import 'package:wecord/features/notifications/quiet_hours_screen.dart';
+import 'package:wecord/features/urgent/urgent_settings_screen.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/presence/presence_status_sheet.dart';
@@ -730,7 +731,9 @@ class _NotificationSettingsGroupsState
           ],
         ),
         const SizedBox(height: 12),
-        const SettingsGroup(children: [QuietHoursSettingsRow()]),
+        const SettingsGroup(
+          children: [QuietHoursSettingsRow(), UrgentSettingsRow()],
+        ),
         const SizedBox(height: 12),
         SettingsGroup(
           footer: _errorText,

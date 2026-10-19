@@ -248,68 +248,76 @@ class SettingsRow extends StatelessWidget {
               : c.ink.withValues(alpha: 0),
           constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                SettingsIconTile(
-                  icon: icon!,
-                  tone: destructive ? SettingsTone.danger : tone,
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: destructive ? c.dangerText : c.ink,
-                      ),
-                    ),
-                    if (subtitle != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          subtitle!,
-                          style: TextStyle(fontSize: 12.5, color: c.muted),
+          child: LayoutBuilder(
+            builder: (context, row) => Row(
+              children: [
+                if (icon != null) ...[
+                  SettingsIconTile(
+                    icon: icon!,
+                    tone: destructive ? SettingsTone.danger : tone,
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: destructive ? c.dangerText : c.ink,
                         ),
                       ),
-                  ],
-                ),
-              ),
-              if (value != null) ...[
-                const SizedBox(width: 8),
-                Text(
-                  value!,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: c.muted,
+                      if (subtitle != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            subtitle!,
+                            style: TextStyle(fontSize: 12.5, color: c.muted),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ],
-              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-              if (isToggle) ...[
-                const SizedBox(width: 8),
-                // The row handles taps and semantics; the switch only shows.
-                ExcludeSemantics(
-                  child: IgnorePointer(
-                    child: WeCordSwitch(
-                      value: switchValue,
-                      onChanged: onSwitch == null ? null : (_) {},
+                if (value != null) ...[
+                  const SizedBox(width: 8),
+                  // A long value (a date and time at a large text size) wraps
+                  // within half the row instead of pushing past its edge.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: row.maxWidth / 2),
+                    child: Text(
+                      value!,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: c.muted,
+                      ),
                     ),
                   ),
-                ),
+                ],
+                if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+                if (isToggle) ...[
+                  const SizedBox(width: 8),
+                  // The row handles taps and semantics; the switch only shows.
+                  ExcludeSemantics(
+                    child: IgnorePointer(
+                      child: WeCordSwitch(
+                        value: switchValue,
+                        onChanged: onSwitch == null ? null : (_) {},
+                      ),
+                    ),
+                  ),
+                ],
+                if (chevron) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
+                ],
               ],
-              if (chevron) ...[
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right_rounded, size: 20, color: c.faint),
-              ],
-            ],
+            ),
           ),
         );
       },

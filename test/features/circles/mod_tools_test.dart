@@ -26,7 +26,6 @@ Widget _app(
   Widget home,
   JoinRpc rpc, {
   List<Override> overrides = const [],
-  Size? size,
 }) {
   return ProviderScope(
     retry: noProviderRetry,

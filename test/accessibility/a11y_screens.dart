@@ -66,6 +66,7 @@ import 'stories_a11y_screens.dart';
 import 'mod_tools_a11y_screens.dart';
 import 'urgent_a11y_screens.dart';
 import 'captions_a11y_screens.dart';
+import 'ai_ask_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import 'notes2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
@@ -810,4 +811,5 @@ final allA11yScreens = <A11yScreen>[
   ...urgentA11yScreens,
   ...captionsA11yScreens,
   ...modToolsA11yScreens,
+  ...aiAskA11yScreens,
 ];

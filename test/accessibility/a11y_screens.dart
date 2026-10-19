@@ -69,6 +69,7 @@ import 'captions_a11y_screens.dart';
 import 'ai_ask_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import 'notes2_a11y_screens.dart';
+import 'favorites2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -814,4 +815,5 @@ final allA11yScreens = <A11yScreen>[
   ...modToolsA11yScreens,
   ...aiAskA11yScreens,
   ...tasks2A11yScreens,
+  ...favoritesA11yScreens,
 ];

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
+import 'package:wecord/features/later/saved_actions.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
@@ -554,6 +558,8 @@ class MomentCard extends ConsumerWidget {
                 count: post.commentCount,
                 onPressed: onComment,
               ),
+              const SizedBox(width: 4),
+              _SaveButton(post: post),
               const Spacer(),
               if (mine)
                 WeCordIconButton(
@@ -579,6 +585,34 @@ class MomentCard extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Keeps the Moment in Saved, or takes it out again.
+class _SaveButton extends ConsumerWidget {
+  const _SaveButton({required this.post});
+
+  final MomentPost post;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.tokens.colors;
+    final saved = isSavedTarget(ref, SavedKind.moment, post.id);
+    return _ActionButton(
+      key: ValueKey('moment-save-${post.id}'),
+      icon: saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+      color: saved ? c.accentText : c.muted,
+      label: saved ? tr('Remove from Saved') : tr('Save for later'),
+      count: 0,
+      onPressed: () => unawaited(
+        toggleSavedTarget(
+          context,
+          ref,
+          kind: SavedKind.moment,
+          targetId: post.id,
+        ),
       ),
     );
   }

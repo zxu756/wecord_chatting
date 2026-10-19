@@ -7,6 +7,8 @@ import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/later/saved_actions.dart';
+import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -17,7 +19,7 @@ import 'package:wecord/shared/models/report_reason.dart';
 import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-enum _PostAction { delete, report }
+enum _PostAction { save, delete, report }
 
 class CirclePostTile extends ConsumerWidget {
   const CirclePostTile({
@@ -32,13 +34,21 @@ class CirclePostTile extends ConsumerWidget {
   Future<void> _showActions(
     BuildContext context,
     WidgetRef ref,
-    Offset? position,
-  ) async {
+    Offset? position, {
+    required bool saved,
+  }) async {
     final canDelete = post.isOwnPost || post.canManagePost;
     final action = await showCircleActionMenu<_PostAction>(
       context,
       position: position,
       items: [
+        CircleMenuItem(
+          value: _PostAction.save,
+          icon: saved
+              ? Icons.bookmark_remove_outlined
+              : Icons.bookmark_border_rounded,
+          label: saved ? tr('Remove from Saved') : tr('Save for later'),
+        ),
         if (canDelete)
           CircleMenuItem(
             value: _PostAction.delete,
@@ -59,6 +69,13 @@ class CirclePostTile extends ConsumerWidget {
       return;
     }
     switch (action) {
+      case _PostAction.save:
+        await toggleSavedTarget(
+          context,
+          ref,
+          kind: SavedKind.circlePost,
+          targetId: post.id,
+        );
       case _PostAction.delete:
         await _deletePost(context, ref);
       case _PostAction.report:
@@ -75,6 +92,7 @@ class CirclePostTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
+    final saved = isSavedTarget(ref, SavedKind.circlePost, post.id);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
       decoration: BoxDecoration(
@@ -129,6 +147,7 @@ class CirclePostTile extends ConsumerWidget {
                       context,
                       ref,
                       box?.localToGlobal(box.size.bottomRight(Offset.zero)),
+                      saved: saved,
                     );
                   },
                 ),

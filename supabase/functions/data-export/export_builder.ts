@@ -138,6 +138,12 @@ export interface ExportData {
    * when it could not be read, absent in older callers.
    */
   taskExtras?: Json | null;
+  /**
+   * My favorites: the folders and everything I kept, with where it is filed,
+   * its tags and remark (export_my_saved_items, migration 202610250430);
+   * null when it could not be read, absent in older callers.
+   */
+  favorites?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -671,6 +677,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.taskExtras) {
     out.push({ path: "data/task_extras.json", value: data.taskExtras });
+  }
+  if (data.favorites) {
+    out.push({ path: "data/favorites.json", value: favoritesJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -1288,6 +1297,104 @@ ${section("Task lists", lists, "No task lists.")}`,
   );
 }
 
+const SAVED_NOTES_BUCKET = "saved-notes";
+
+/** The pictures of my notes: links, never put into the archive. */
+export function favoriteFilesToSign(
+  favorites: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const item of objects(favorites?.["items"])) {
+    for (const image of objects(item["images"])) {
+      const path = image["path"];
+      if (typeof path === "string") {
+        seen.set(`${SAVED_NOTES_BUCKET}/${path}`, {
+          bucket: SAVED_NOTES_BUCKET,
+          path,
+        });
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+/** My favorites with a link to each picture of a note. */
+function favoritesJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const favorites = isObject(data.favorites) ? data.favorites : {};
+  return {
+    folders: objects(favorites["folders"]),
+    items: objects(favorites["items"]).map((item) => ({
+      ...item,
+      images: item["images"] === undefined
+        ? undefined
+        : objects(item["images"]).map((image) => ({
+          file: ref(SAVED_NOTES_BUCKET, image["path"]),
+        })),
+    })),
+  };
+}
+
+const favoriteKindLabels: Record<string, string> = {
+  message: "Message",
+  moment: "Moment",
+  circle_post: "Circle post",
+  link: "Link",
+  note: "Note",
+  text: "Text",
+};
+
+export function buildFavoritesHtml(data: ExportData): string {
+  const ref = fileRefs(data);
+  const favorites = isObject(data.favorites) ? data.favorites : {};
+  const folders = objects(favorites["folders"]).map((folder) =>
+    `<div class="row">${escapeHtml(str(folder["name"]) ?? "")}</div>`
+  ).join("");
+  const items = objects(favorites["items"]).map((item) => {
+    const kind = str(item["kind"]) ?? "";
+    const label = favoriteKindLabels[kind] ?? kind;
+    const title = str(item["title"]);
+    const url = str(item["url"]);
+    const tags = Array.isArray(item["tags"])
+      ? item["tags"].filter((t): t is string => typeof t === "string")
+        .map(tag).join(" ")
+      : "";
+    const folder = str(item["folder"]);
+    const pictures = objects(item["images"]).map((image, n) =>
+      fileHtml(ref(SAVED_NOTES_BUCKET, image["path"]), `Picture ${n + 1}`, true)
+    ).join("");
+    const written = kind === "message" || kind === "moment" ||
+        kind === "circle_post"
+      ? (item["text"] === undefined
+        ? '<div class="muted">Written by someone else: not included.</div>'
+        : text(item["text"]))
+      : "";
+    const link = url
+      ? `<div><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></div>`
+      : "";
+    return entry(
+      str(item["saved_at"]),
+      `<div class="muted">${escapeHtml(label)}${
+        folder ? ` · ${escapeHtml(folder)}` : ""
+      }${item["done_at"] ? " · done" : ""}</div>${
+        title ? `<div class="body"><b>${escapeHtml(title)}</b></div>` : ""
+      }${link}${text(item["body"])}${written}${pictures}${
+        text(item["remark"])
+      }${tags ? `<div>${tags}</div>` : ""}`,
+    );
+  }).join("");
+  return page(
+    "Favorites — your WeCord data",
+    `${backLink()}<h1>Favorites</h1>
+<p class="muted">What you kept, with its folder, tags and remark. The words of
+messages, Moments and circle posts are included only when you wrote them.
+Your links, notes and text are whole. Links to note pictures work until this
+export expires.</p>
+${section("Folders", folders, "No folders.")}
+${section("Kept", items, "Nothing kept.")}`,
+  );
+}
+
 /** My feedback with the link to each screenshot. */
 function feedbackJson(data: ExportData): Json[] {
   const ref = fileRefs(data);
@@ -1585,6 +1692,16 @@ export function buildSectionPages(
       content: buildTaskExtrasHtml(data),
     });
   }
+  if (data.favorites) {
+    const items = objects(data.favorites["items"]).length;
+    const folders = objects(data.favorites["folders"]).length;
+    out.push({
+      path: "pages/favorites.html",
+      label: "Favorites",
+      summary: `${items} kept · ${folders} folder${folders === 1 ? "" : "s"}`,
+      content: buildFavoritesHtml(data),
+    });
+  }
   if (data.aiDigest) {
     const followed = objects(
       isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
@@ -1679,6 +1796,8 @@ data/ai_digest.json   Your daily digest settings and the chats you follow.
 data/note_extras.json The comments you wrote on notes, your note templates
                       and the pages you published (without their links).
 data/stories.json     Your dailies still up, close friends and reports.
+data/favorites.json   Your favorites: folders, tags, links, notes and what
+                      you kept (other people's words are not copied).
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/task_extras.json Fields, values, subtasks and repeats of those items.

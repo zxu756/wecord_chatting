@@ -13,11 +13,12 @@ import {
   type ExportConversation,
   type ExportData,
   type ExportExtras,
+  exportFileZipPath,
   type ExportFriend,
   type ExportMessage,
   type ExportMoments,
   type ExportStage,
-  exportFileZipPath,
+  favoriteFilesToSign,
   feedbackFilesToSign,
   formFilesToSign,
   type Json,
@@ -107,13 +108,18 @@ export async function collectExportData(
   }, null);
 
   const settings: Record<string, unknown> = {};
-  const privacy = await tryRead<Row[]>(skipped, "privacy settings", async () =>
-    rows(
-      await admin.from("user_privacy_settings").select("*").eq(
-        "user_id",
-        userId,
+  const privacy = await tryRead<Row[]>(
+    skipped,
+    "privacy settings",
+    async () =>
+      rows(
+        await admin.from("user_privacy_settings").select("*").eq(
+          "user_id",
+          userId,
+        ),
       ),
-    ), []);
+    [],
+  );
   if (privacy[0]) settings["privacy"] = privacy[0];
   const circleNotifications = await tryRead<Row[]>(
     skipped,
@@ -139,18 +145,30 @@ export async function collectExportData(
   const friendIds = friendships.map((row) =>
     row["user_low_id"] === userId ? row["user_high_id"] : row["user_low_id"]
   ).filter((id): id is string => typeof id === "string");
-  const requests = await tryRead<Row[]>(skipped, "friend requests", async () =>
-    rows(
-      await admin.from("friend_requests").select("*").or(
-        `requester_id.eq.${userId},receiver_id.eq.${userId}`,
+  const requests = await tryRead<Row[]>(
+    skipped,
+    "friend requests",
+    async () =>
+      rows(
+        await admin.from("friend_requests").select("*").or(
+          `requester_id.eq.${userId},receiver_id.eq.${userId}`,
+        ),
       ),
-    ), []);
-  const blocks = await tryRead<Row[]>(skipped, "blocked users", async () =>
-    rows(await admin.from("blocks").select("*").eq("blocker_id", userId)), []);
+    [],
+  );
+  const blocks = await tryRead<Row[]>(
+    skipped,
+    "blocked users",
+    async () =>
+      rows(await admin.from("blocks").select("*").eq("blocker_id", userId)),
+    [],
+  );
 
   const otherIds = new Set<string>(friendIds);
   for (const block of blocks) {
-    if (typeof block["blocked_id"] === "string") otherIds.add(block["blocked_id"]);
+    if (typeof block["blocked_id"] === "string") {
+      otherIds.add(block["blocked_id"]);
+    }
   }
   for (const request of requests) {
     for (const key of ["requester_id", "receiver_id"]) {
@@ -203,22 +221,34 @@ export async function collectExportData(
   }));
 
   await stage("conversations");
-  const memberships = await tryRead<Row[]>(skipped, "conversations", async () =>
-    rows(
-      await admin.from("conversation_members").select("*").eq(
-        "user_id",
-        userId,
+  const memberships = await tryRead<Row[]>(
+    skipped,
+    "conversations",
+    async () =>
+      rows(
+        await admin.from("conversation_members").select("*").eq(
+          "user_id",
+          userId,
+        ),
       ),
-    ), []);
+    [],
+  );
   const conversationIds = memberships.map((row) => row["conversation_id"])
     .filter((id): id is string => typeof id === "string");
   const conversationRows = new Map<string, Row>();
   for (const batch of chunk(conversationIds, 100)) {
-    const found = await tryRead<Row[]>(skipped, "conversations", async () =>
-      rows(
-        await admin.from("conversations").select("id, type, title, created_at")
-          .in("id", batch),
-      ), []);
+    const found = await tryRead<Row[]>(
+      skipped,
+      "conversations",
+      async () =>
+        rows(
+          await admin.from("conversations").select(
+            "id, type, title, created_at",
+          )
+            .in("id", batch),
+        ),
+      [],
+    );
     for (const row of found) conversationRows.set(row["id"] as string, row);
   }
   // Direct chats are named after the other person.
@@ -227,17 +257,27 @@ export async function collectExportData(
     conversationRows.get(id)?.["type"] === "direct"
   );
   for (const batch of chunk(directIds, 100)) {
-    const found = await tryRead<Row[]>(skipped, "direct chats", async () =>
-      rows(
-        await admin.from("conversation_members").select(
-          "conversation_id, user_id",
-        ).in("conversation_id", batch).neq("user_id", userId),
-      ), []);
+    const found = await tryRead<Row[]>(
+      skipped,
+      "direct chats",
+      async () =>
+        rows(
+          await admin.from("conversation_members").select(
+            "conversation_id, user_id",
+          ).in("conversation_id", batch).neq("user_id", userId),
+        ),
+      [],
+    );
     for (const row of found) {
-      directPeers.set(row["conversation_id"] as string, row["user_id"] as string);
+      directPeers.set(
+        row["conversation_id"] as string,
+        row["user_id"] as string,
+      );
     }
   }
-  const missingPeers = [...directPeers.values()].filter((id) => !people.has(id));
+  const missingPeers = [...directPeers.values()].filter((id) =>
+    !people.has(id)
+  );
   for (const batch of chunk(missingPeers, 200)) {
     const found = await tryRead<Row[]>(skipped, "people", async () =>
       rows(
@@ -275,8 +315,13 @@ export async function collectExportData(
   ];
   const circleNames = new Map<string, string>();
   for (const batch of chunk(circleIds, 100)) {
-    const found = await tryRead<Row[]>(skipped, "circle names", async () =>
-      rows(await admin.from("circles").select("id, name").in("id", batch)), []);
+    const found = await tryRead<Row[]>(
+      skipped,
+      "circle names",
+      async () =>
+        rows(await admin.from("circles").select("id, name").in("id", batch)),
+      [],
+    );
     for (const row of found) {
       circleNames.set(row["id"] as string, row["name"] as string);
     }
@@ -289,7 +334,8 @@ export async function collectExportData(
     const peerProfile = peer ? people.get(peer) : undefined;
     const kind = text(row?.["type"]) ?? "unknown";
     const name = kind === "direct"
-      ? text(peerProfile?.["display_name"]) ?? text(peerProfile?.["username"]) ??
+      ? text(peerProfile?.["display_name"]) ??
+        text(peerProfile?.["username"]) ??
         "Direct message"
       : channel
       ? `#${text(channel["name"]) ?? "channel"}`
@@ -342,15 +388,26 @@ export async function collectExportData(
   }, undefined);
 
   await stage("circles");
-  const circleMemberships = await tryRead<Row[]>(skipped, "circles", async () =>
-    rows(await admin.from("circle_members").select("*").eq("user_id", userId)),
-    []);
+  const circleMemberships = await tryRead<Row[]>(
+    skipped,
+    "circles",
+    async () =>
+      rows(
+        await admin.from("circle_members").select("*").eq("user_id", userId),
+      ),
+    [],
+  );
   const memberCircleIds = circleMemberships.map((row) => row["circle_id"])
     .filter((id): id is string => typeof id === "string");
   const memberCircleNames = new Map<string, string>();
   for (const batch of chunk(memberCircleIds, 100)) {
-    const found = await tryRead<Row[]>(skipped, "circle names", async () =>
-      rows(await admin.from("circles").select("id, name").in("id", batch)), []);
+    const found = await tryRead<Row[]>(
+      skipped,
+      "circle names",
+      async () =>
+        rows(await admin.from("circles").select("id, name").in("id", batch)),
+      [],
+    );
     for (const row of found) {
       memberCircleNames.set(row["id"] as string, row["name"] as string);
     }
@@ -498,6 +555,20 @@ export async function collectExportData(
     null,
   );
 
+  // What I kept: folders, tags, links, notes (export_my_saved_items).
+  const favorites = await tryRead<Row | null>(
+    skipped,
+    "favorites",
+    async () => {
+      const result = await admin.rpc("export_my_saved_items", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -517,12 +588,20 @@ export async function collectExportData(
   for (const { bucket, path } of storyFilesToSign(stories)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
+  // The pictures of my notes are linked.
+  for (const { bucket, path } of favoriteFilesToSign(favorites)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
   // fit; the rest is linked.
   let files: ExportBlob[] = [];
   await tryRead(skipped, "photos and videos", async () => {
     const wanted = ownedFiles(userId, moments, extras);
-    const fetched = await fetchOwnFiles(admin, wanted, options.fileLimits ?? {});
+    const fetched = await fetchOwnFiles(
+      admin,
+      wanted,
+      options.fileLimits ?? {},
+    );
     files = fetched.blobs;
     for (const { bucket, path } of fetched.leftOver) {
       byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
@@ -569,6 +648,7 @@ export async function collectExportData(
     noteExtras,
     stories,
     taskExtras,
+    favorites,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),
@@ -653,6 +733,8 @@ async function fetchOwnFiles(
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
   return out;
 }

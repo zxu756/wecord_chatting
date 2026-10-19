@@ -120,6 +120,12 @@ export interface ExportData {
    * 202610230540); null when it could not be read, absent in older callers.
    */
   aiDigest?: Json | null;
+  /**
+   * The dailies still up, my close friends and my reports of dailies
+   * (export_my_stories, migration 202610240250); null when it could not be
+   * read, absent in older callers.
+   */
+  stories?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -639,6 +645,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   if (data.aiDigest) {
     out.push({ path: "data/ai_digest.json", value: data.aiDigest });
   }
+  if (data.stories) {
+    out.push({ path: "data/stories.json", value: storiesJson(data) });
+  }
   const extras = data.extras;
   if (extras) {
     out.push({ path: "data/chains.json", value: extras.chains });
@@ -1027,6 +1036,100 @@ export function feedbackFilesToSign(
   return [...seen.values()];
 }
 
+const STORIES_BUCKET = "stories";
+
+/** The files of my dailies: links, never put into the archive. */
+export function storyFilesToSign(
+  stories: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const story of objects(stories?.["stories"])) {
+    for (const key of ["path", "poster_path", "thumb_path"]) {
+      const path = story[key];
+      if (typeof path === "string") {
+        seen.set(`${STORIES_BUCKET}/${path}`, { bucket: STORIES_BUCKET, path });
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+const audienceLabels: Record<string, string> = {
+  friends: "All friends",
+  close: "Close friends",
+  private: "Only you",
+  only: "Only some friends",
+  except: "All friends except some",
+};
+
+/** My dailies with links to their files; the close friends and reports. */
+function storiesJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const stories = isObject(data.stories) ? data.stories : {};
+  return {
+    dailies: objects(stories["stories"]).map((story) => {
+      const { path, poster_path: poster, thumb_path: thumb, ...rest } = story;
+      delete rest["bucket"];
+      return {
+        ...rest,
+        file: ref(STORIES_BUCKET, path),
+        poster: poster ? ref(STORIES_BUCKET, poster) : null,
+        thumbnail: ref(STORIES_BUCKET, thumb),
+      };
+    }),
+    close_friends: objects(stories["close_friends"]),
+    reports_you_filed: objects(stories["reports"]),
+  };
+}
+
+export function buildStoriesHtml(data: ExportData): string {
+  const ref = fileRefs(data);
+  const stories = isObject(data.stories) ? data.stories : {};
+  const dailies = objects(stories["stories"]).map((story) => {
+    const kind = str(story["media_kind"]) === "video" ? "Video" : "Photo";
+    const picture = fileHtml(
+      ref(STORIES_BUCKET, story["thumb_path"]),
+      `${kind} thumbnail`,
+      true,
+    );
+    const media = fileHtml(ref(STORIES_BUCKET, story["path"]), kind, false);
+    const audience = audienceLabels[str(story["audience"]) ?? ""] ?? "";
+    const viewers = Number(story["viewer_count"] ?? 0);
+    const ends = readableTime(str(story["expires_at"]));
+    return entry(
+      str(story["created_at"]),
+      `${text(story["caption"])}${picture}${media}<div class="muted">${
+        escapeHtml(audience)
+      } · ${viewers} viewer${viewers === 1 ? "" : "s"}, ends ${
+        escapeHtml(ends)
+      }</div>`,
+    );
+  }).join("");
+  const close = objects(stories["close_friends"]).map((person) =>
+    `<div class="row">${
+      escapeHtml(str(person["name"]) ?? personName(person))
+    }</div>`
+  ).join("");
+  const reports = objects(stories["reports"]).map((report) =>
+    entry(
+      str(report["created_at"]),
+      `<div class="body">${escapeHtml(str(report["reason"]) ?? "")}</div>${
+        text(report["details"])
+      }<div class="muted">${escapeHtml(str(report["status"]) ?? "")}</div>`,
+    )
+  ).join("");
+  return page(
+    "Daily — your WeCord data",
+    `${backLink()}<h1>Daily</h1>
+<p class="muted">The dailies you have up now (a daily ends 24 hours after you
+post it), your close friends and the dailies you reported. Who viewed a daily
+is not listed. Links to the files work until this export expires.</p>
+${section("Your dailies", dailies, "No dailies up.")}
+${section("Close friends", close, "No close friends.")}
+${section("Reports you filed", reports, "No reports.")}`,
+  );
+}
+
 /** My feedback with the link to each screenshot. */
 function feedbackJson(data: ExportData): Json[] {
   const ref = fileRefs(data);
@@ -1233,6 +1336,14 @@ export function buildSectionPages(
       content: buildFeedbackHtml(data),
     });
   }
+  if (data.stories) {
+    out.push({
+      path: "pages/stories.html",
+      label: "Daily",
+      summary: `${objects(data.stories["stories"]).length} up now`,
+      content: buildStoriesHtml(data),
+    });
+  }
   if (data.aiDigest) {
     const followed = objects(
       isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
@@ -1305,6 +1416,7 @@ data/chains.json      Group chains you started or joined (your own line).
 data/forms.json       Forms you made or answered (your own answers).
 data/feedback.json    Feedback you sent and the replies you got.
 data/ai_digest.json   Your daily digest settings and the chats you follow.
+data/stories.json     Your dailies still up, close friends and reports.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json

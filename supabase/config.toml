@@ -508,6 +508,14 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/expire-messages/index.ts"
 
+[functions.expire-stories]
+enabled = true
+# Called by a scheduler with the service role key as the bearer token, which
+# the function compares itself; removes the files of dailies that have ended.
+# Users never call it.
+verify_jwt = false
+entrypoint = "./functions/expire-stories/index.ts"
+
 [functions.sessions]
 enabled = true
 # Signed-in users sign out their own devices; the function acts as the

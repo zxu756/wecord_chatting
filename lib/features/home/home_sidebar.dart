@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/notifications/quiet_hours_indicator.dart';
@@ -15,6 +17,7 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/home/conversation_preview.dart';
 import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/features/home/phone_home.dart' show userPanelName;
 import 'package:wecord/features/home/phone_messages_panel.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
@@ -23,7 +26,11 @@ import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/note_to_self/note_to_self.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
 import 'package:wecord/features/moments/moments_widgets.dart';
+import 'package:wecord/features/stories/stories_providers.dart';
+import 'package:wecord/features/stories/story_composer_screen.dart';
+import 'package:wecord/features/stories/story_ring.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/settings/settings_providers.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/shell/quick_switcher.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -197,8 +204,18 @@ class HomeSidebar extends ConsumerWidget {
                       label: tr('Moments'),
                       selected: section == HomeSection.moments,
                       onTap: () => openPage(context, MomentsScreen.path),
-                      trailing: MomentsUnseenAvatar(ringColor: c.sidebar),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Friends with a new daily, ringed in the accent
+                          // color (a tap watches it).
+                          const StoryRingCluster(),
+                          const SizedBox(width: 6),
+                          MomentsUnseenAvatar(ringColor: c.sidebar),
+                        ],
+                      ),
                     ),
+                  if (wide) const DailySidebarRow(),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 12, 2, 2),
                     child: Row(
@@ -675,6 +692,55 @@ class _DirectMessageRow extends ConsumerWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// "Daily" in the desktop sidebar, under Moments: a click posts a daily, and
+/// when you have some up your own ringed avatar at its end watches them.
+class DailySidebarRow extends ConsumerWidget {
+  const DailySidebarRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId = ref.watch(storiesUserIdProvider);
+    final mine = userId == null
+        ? null
+        : ref.watch(storyTrayEntryProvider(userId));
+    final profile = ref.watch(currentProfileProvider).value;
+    return SidebarNavRow(
+      key: const ValueKey('home-daily'),
+      icon: Icons.add_a_photo_outlined,
+      label: trIn('Stories', 'Daily'),
+      onTap: () => unawaited(openStoryComposer(context, ref)),
+      trailing: mine == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Semantics(
+                button: true,
+                label: tr('Watch your daily'),
+                excludeSemantics: true,
+                child: GestureDetector(
+                  key: const ValueKey('home-daily-mine'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => openStoriesOf(context, ref, mine.authorId),
+                  child: Tooltip(
+                    message: tr('Watch your daily'),
+                    child: StoryRing(
+                      entry: mine,
+                      gap: 1.5,
+                      stroke: 2,
+                      child: ResolvedAvatar(
+                        name: userPanelName(profile),
+                        avatarUrl: profile?.avatarUrl,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }

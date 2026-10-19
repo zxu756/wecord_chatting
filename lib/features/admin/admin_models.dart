@@ -38,7 +38,8 @@ enum ReportKind {
   user('user'),
   circle('circle'),
   post('post'),
-  message('message');
+  message('message'),
+  story('story');
 
   const ReportKind(this.value);
 
@@ -58,6 +59,7 @@ enum ReportKind {
     circle => tr('Circles'),
     post => tr('Posts'),
     message => trIn('Admin', 'Messages'),
+    story => tr('Dailies'),
   };
 
   String get singular => switch (this) {
@@ -65,6 +67,7 @@ enum ReportKind {
     circle => tr('Circle'),
     post => trIn('Admin', 'Post'),
     message => tr('Message'),
+    story => trIn('Stories', 'Daily'),
   };
 }
 
@@ -89,6 +92,7 @@ enum ReportResolution {
   duplicate('duplicate'),
   contentRemoved('content_removed'),
   messageDeleted('message_deleted'),
+  storyDeleted('story_deleted'),
   userSuspended('user_suspended'),
   circleDelisted('circle_delisted'),
   circleSuspended('circle_suspended'),
@@ -112,6 +116,7 @@ enum ReportResolution {
     duplicate => trIn('Admin', 'Duplicate'),
     contentRemoved => tr('Content removed'),
     messageDeleted => tr('Message deleted'),
+    storyDeleted => tr('Daily deleted'),
     userSuspended => tr('Person suspended'),
     circleDelisted => tr('Circle delisted'),
     circleSuspended => tr('Circle suspended'),

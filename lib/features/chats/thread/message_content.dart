@@ -142,6 +142,12 @@ class _MessageContent extends StatelessWidget {
         CrosspostOrigin(crosspost: crosspost, foregroundColor: textColor),
       if (message.interaction case final interaction?)
         InteractionOrigin(interaction: interaction, foregroundColor: textColor),
+      if (message.storyRef case final storyRef?)
+        StoryReplyOrigin(
+          message: message,
+          reference: storyRef,
+          foregroundColor: textColor,
+        ),
       if (message.replyPreview != null) ...[
         _QuotedReplyPreview(
           senderName: message.replyPreview!.senderName,

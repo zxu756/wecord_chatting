@@ -18,6 +18,9 @@ enum MomentVisibility {
   /// Every friend.
   friends('friends'),
 
+  /// The author's close friends (dailies only; Moments never use it).
+  close('close'),
+
   /// Only the author.
   private('private'),
 
@@ -572,6 +575,7 @@ String momentAudienceLabel(
 
   return switch (audience.visibility) {
     MomentVisibility.friends => tr('Friends'),
+    MomentVisibility.close => tr('Close friends'),
     MomentVisibility.private => tr('Only me'),
     MomentVisibility.only =>
       audience.isComplete

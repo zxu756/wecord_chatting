@@ -13,25 +13,40 @@ import 'package:wecord/shared/ui/ui.dart';
 /// Who can see a Moment: everyone, only the person, or lists of friends and
 /// tags to share with or hide from. Resolves to the choice, or null when
 /// dismissed.
+///
+/// [onEditCloseFriends] adds the "Close friends" choice (the Daily has it,
+/// Moments do not) with a way to edit that list.
 Future<MomentAudience?> showMomentAudienceSheet(
   BuildContext context, {
   required MomentAudience current,
+  VoidCallback? onEditCloseFriends,
 }) {
   return showWeCordSheet<MomentAudience>(
     context,
     title: tr('Who can see this'),
     detents: const [0.62, 0.94],
     initialDetent: 0.94,
-    builder: (context, scrollController) =>
-        MomentAudienceSheet(current: current, scroll: scrollController),
+    builder: (context, scrollController) => MomentAudienceSheet(
+      current: current,
+      scroll: scrollController,
+      onEditCloseFriends: onEditCloseFriends,
+    ),
   );
 }
 
 class MomentAudienceSheet extends ConsumerStatefulWidget {
-  const MomentAudienceSheet({required this.current, this.scroll, super.key});
+  const MomentAudienceSheet({
+    required this.current,
+    this.scroll,
+    this.onEditCloseFriends,
+    super.key,
+  });
 
   final MomentAudience current;
   final ScrollController? scroll;
+
+  /// Not null: the sheet offers "Close friends" and this edits the list.
+  final VoidCallback? onEditCloseFriends;
 
   @override
   ConsumerState<MomentAudienceSheet> createState() =>
@@ -113,6 +128,13 @@ class _MomentAudienceSheetState extends ConsumerState<MomentAudienceSheet> {
                       tr('Friends'),
                       tr('All your friends'),
                     ),
+                    if (widget.onEditCloseFriends != null)
+                      option(
+                        MomentVisibility.close,
+                        Icons.favorite_border_rounded,
+                        tr('Close friends'),
+                        tr('Only the friends on your close friends list'),
+                      ),
                     option(
                       MomentVisibility.private,
                       Icons.lock_outline_rounded,
@@ -133,6 +155,23 @@ class _MomentAudienceSheetState extends ConsumerState<MomentAudienceSheet> {
                     ),
                   ],
                 ),
+                if (_visibility == MomentVisibility.close &&
+                    widget.onEditCloseFriends != null) ...[
+                  const SizedBox(height: 12),
+                  SettingsGroup(
+                    color: c.well,
+                    separatorIndent: 58,
+                    children: [
+                      SettingsRow(
+                        key: const ValueKey('audience-edit-close-friends'),
+                        icon: Icons.edit_outlined,
+                        tone: SettingsTone.accent,
+                        title: tr('Edit close friends'),
+                        onTap: widget.onEditCloseFriends,
+                      ),
+                    ],
+                  ),
+                ],
                 if (listMode) ...[
                   SettingsSectionHeader(tr('Tags')),
                   if (tags.tags.isEmpty)

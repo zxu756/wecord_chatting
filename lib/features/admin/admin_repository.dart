@@ -29,12 +29,17 @@ class AdminRepository {
   }) async {
     // Reports of messages in direct chats and groups have a queue of their
     // own (migration 202610220120).
-    final rows = kind == ReportKind.message
-        ? await _rpc('admin_list_message_reports', {
-            'status_filter': status.value,
-            'page_size': pageSize,
-            'before_created_at': before?.toUtc().toIso8601String(),
-          })
+    final rows = kind == ReportKind.message || kind == ReportKind.story
+        ? await _rpc(
+            kind == ReportKind.story
+                ? 'admin_list_story_reports'
+                : 'admin_list_message_reports',
+            {
+              'status_filter': status.value,
+              'page_size': pageSize,
+              'before_created_at': before?.toUtc().toIso8601String(),
+            },
+          )
         : await _rpc('admin_list_reports', {
             'kind_filter': kind?.value,
             'status_filter': status.value,
@@ -47,14 +52,34 @@ class AdminRepository {
   Future<AdminReportDetail> reportDetail(
     String reportId, {
     bool message = false,
+    bool story = false,
   }) async {
     return AdminReportDetail.fromJson(
       rpcObject(
-        await _rpc(message ? 'admin_get_message_report' : 'admin_get_report', {
-          'target_report_id': reportId,
-        }),
+        await _rpc(
+          story
+              ? 'admin_get_story_report'
+              : message
+              ? 'admin_get_message_report'
+              : 'admin_get_report',
+          {'target_report_id': reportId},
+        ),
       ),
     );
+  }
+
+  /// Closes a report of a daily (migration 202610240230): [action] is
+  /// 'dismiss', 'delete_story' or 'suspend' (after the person was suspended).
+  Future<void> resolveStoryReport({
+    required String reportId,
+    required String action,
+    String note = '',
+  }) async {
+    await _rpc('admin_resolve_story_report', {
+      'target_report_id': reportId,
+      'action': action,
+      'note': note.trim(),
+    });
   }
 
   /// Closes a report of a message: [action] is 'dismiss', 'delete_message'

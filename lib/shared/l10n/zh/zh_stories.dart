@@ -1,0 +1,91 @@
+// Chinese for the Daily (日常, the 24-hour photos and videos), close friends
+// (密友), replying to a daily, and reporting one. "Stories|…" entries are the
+// word "Daily" where the same English means something else elsewhere.
+const zhStories = <String, String>{
+  'Stories|Daily': '日常',
+  'Dailies': '日常',
+  // The row of friends and the sidebar.
+  'Post a daily': '发布日常',
+  'Your daily': '我的日常',
+  'Watch your daily': '查看我的日常',
+  'Daily. Post a daily.': '日常。发布一条日常。',
+  'Daily. Watch your daily. Hold to post another.': '日常。查看我的日常，长按再发布一条。',
+  '{name}: new daily. Opens the daily.': '{name}：有新日常。点按查看。',
+  '{name}: daily. Opens the daily.': '{name}：有日常。点按查看。',
+  'New daily from {name}': '{name} 发布了新日常',
+  // Posting.
+  'New daily': '发布日常',
+  'Take a photo': '拍照',
+  'Record a video': '录制视频',
+  'Up to 15 seconds': '最长 15 秒',
+  'Photo from library': '从相册选择照片',
+  'Video from library': '从相册选择视频',
+  'Up to 15 seconds and 20 MB': '最长 15 秒、20 MB',
+  'Could not use that file. Try another.': '无法使用这个文件，请换一个。',
+  'That video is longer than 15 seconds. Choose a shorter one.':
+      '这段视频超过 15 秒，请选择更短的视频。',
+  'That video is bigger than 20 MB. Choose a smaller one.':
+      '这段视频超过 20 MB，请选择更小的视频。',
+  'Add a caption': '添加文字说明',
+  'Your photo': '你的照片',
+  'Choose your close friends first.': '请先选择你的密友。',
+  'Your daily is up.': '日常已发布。',
+  'A daily disappears after 24 hours. You can see who viewed it; nobody else can.':
+      '日常 24 小时后消失。只有你能看到谁看过。',
+  // Close friends.
+  'Close friends': '密友',
+  'Only the friends on your close friends list': '只有密友名单里的好友可以看到',
+  'Edit close friends': '编辑密友名单',
+  'Only the friends you choose see a daily shared with close friends. They are not told about the list.':
+      '只有你选择的好友能看到分享给密友的日常。他们不会知道这份名单。',
+  'You have no friends to choose from yet.': '你还没有可以选择的好友。',
+  'Save ({count})': '保存（{count}）',
+  'Could not save the list. Try again.': '无法保存名单，请重试。',
+  // Watching.
+  'Reply sent': '回复已发送',
+  'Could not send the reply. Try again.': '无法发送回复，请重试。',
+  'Could not send the reaction. Try again.': '无法发送表情，请重试。',
+  'This daily is no longer available.': '这条日常已不可查看。',
+  'Could not load this daily.': '无法加载这条日常。',
+  'Delete daily': '删除日常',
+  'Delete this daily?': '删除这条日常？',
+  'It disappears for everyone right away.': '它会立刻对所有人消失。',
+  'Could not delete the daily. Try again.': '无法删除日常，请重试。',
+  "{name}'s daily, {index} of {count}": '{name} 的日常，第 {index} 条，共 {count} 条',
+  'Next daily': '下一条日常',
+  'Previous daily': '上一条日常',
+  'Daily {index} of {count}': '第 {index} 条日常，共 {count} 条',
+  '1 view': '1 次查看',
+  '{count} views': '{count} 次查看',
+  '{count}m ago': '{count} 分钟前',
+  '{count}h ago': '{count} 小时前',
+  'Ends soon': '即将结束',
+  'Ends in {count}m': '{count} 分钟后结束',
+  'Ends in {count}h': '{count} 小时后结束',
+  // Who viewed.
+  'Viewed by': '谁看过',
+  'Could not load who viewed this.': '无法加载查看记录。',
+  'Nobody has viewed this yet.': '还没有人看过。',
+  'Only you can see this list.': '只有你能看到这份名单。',
+  '{name}, viewed {when}': '{name}，{when}查看',
+  '{name}, viewed {when}, reacted {emoji}': '{name}，{when}查看，回应了 {emoji}',
+  // Replies in the chat.
+  'You replied to a daily': '你回复了一条日常',
+  'Replied to your daily': '回复了你的日常',
+  'This daily has ended': '这条日常已结束',
+  'Reply to a daily: {text}': '回复日常：{text}',
+  // Reporting.
+  'Report daily': '举报日常',
+  'This daily cannot be reported.': '无法举报这条日常。',
+  // The admin console.
+  'Daily deleted': '日常已删除',
+  'Daily is live': '日常仍在展示',
+  'Daily has ended': '日常已结束',
+  'Kind': '类型',
+  'The reported daily': '被举报的日常',
+  'The daily has ended or was deleted.': '这条日常已结束或已被删除。',
+  'The daily was deleted.': '日常已删除。',
+  '{actor} deleted a reported daily: {title}': '{actor} 删除了被举报的日常：{title}',
+  '{actor} suspended the author of a reported daily': '{actor} 封停了被举报日常的作者',
+  '{actor} dismissed a daily report': '{actor} 驳回了一条日常举报',
+};

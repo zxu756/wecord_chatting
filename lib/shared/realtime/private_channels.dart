@@ -32,6 +32,10 @@ String liveLocationTopic(String shareId) => 'live-location:$shareId';
 /// What a person is told about Moments changing.
 String momentsTopic(String userId) => 'moments:$userId';
 
+/// What a person is told about dailies changing (migration
+/// 202610240240_stories_signals_cleanup.sql).
+String storiesTopic(String userId) => 'stories:$userId';
+
 /// The options of a broadcast or presence channel. [presenceKey] identifies
 /// this client in the channel's presence state (its user id).
 RealtimeChannelConfig privateChannelConfig({String? presenceKey}) {

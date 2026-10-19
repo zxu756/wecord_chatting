@@ -159,6 +159,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
   var _volumes = <String, double>{};
   final _reactions = StreamController<VoiceReaction>.broadcast();
   final _reactionReceiver = ReactionReceiver();
+  final _dataMessages = StreamController<VoiceDataMessage>.broadcast();
 
   void _onEvent(lk.RoomEvent event) {
     switch (event) {
@@ -192,6 +193,17 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
         );
         if (reaction != null && !_reactions.isClosed) {
           _reactions.add(reaction);
+        } else if (topic != null &&
+            topic != reactionTopic &&
+            participant != null &&
+            !_dataMessages.isClosed) {
+          _dataMessages.add(
+            VoiceDataMessage(
+              senderId: participant.identity,
+              topic: topic,
+              data: data,
+            ),
+          );
         }
       case lk.LocalTrackPublishedEvent(:final publication)
           when publication.kind == lk.TrackType.AUDIO:
@@ -276,6 +288,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       microphoneEnabled: participant.isMicrophoneEnabled(),
       cameraEnabled: camera != null,
       screenShareEnabled: screen != null,
+      captionsHost: participant.attributes[captionHostAttribute] == '1',
       cameraView: camera == null
           ? null
           : (context) =>
@@ -313,6 +326,22 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       encodeReaction(emoji),
       reliable: true,
       topic: reactionTopic,
+    );
+  }
+
+  @override
+  Stream<VoiceDataMessage> get dataMessages => _dataMessages.stream;
+
+  @override
+  Future<void> publishData(
+    List<int> data, {
+    required String topic,
+    bool reliable = true,
+  }) async {
+    await _room.localParticipant?.publishData(
+      data,
+      reliable: reliable,
+      topic: topic,
     );
   }
 
@@ -585,6 +614,7 @@ class LiveKitVoiceCall extends ChangeNotifier implements VoiceCall {
       _filter?.removeListener(_filterChanged);
       disposeRemoteAudioVolumes();
       unawaited(_reactions.close());
+      unawaited(_dataMessages.close());
       _room.removeListener(_changed);
       await _listener.dispose();
       await _room.dispose();

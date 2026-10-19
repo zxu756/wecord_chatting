@@ -193,6 +193,19 @@ Deno.serve(async (request) => {
   const serverDeaf = channel?.server_deaf === true;
   const stage = channel?.kind === "stage";
   const stageSpeaker = channel?.stage_speaker === true;
+  // Who may turn captions on (E1) is decided here and written into the
+  // signed token, where nobody in the room can fake it. A failed lookup just
+  // means no.
+  let captionsHost = false;
+  {
+    const { data: hosts, error: hostError } = await userClient.rpc(
+      "can_current_user_host_captions",
+      channel
+        ? { target_channel_id: channel.channel_id }
+        : { target_call_id: (voice as CallAccess).call_id },
+    );
+    captionsHost = !hostError && hosts === true;
+  }
   const claims = buildClaims({
     apiKey: config.apiKey,
     identity: user.id,
@@ -203,6 +216,7 @@ Deno.serve(async (request) => {
     nowSeconds: Math.floor(Date.now() / 1000),
     publishSources: publishSourcesFor({ serverMute, serverDeaf }),
     canPublish: canPublishIn({ kind: channel?.kind, stageSpeaker }),
+    captionsHost,
   });
   return json({
     url: config.url,

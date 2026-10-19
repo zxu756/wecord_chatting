@@ -21,6 +21,7 @@ import { type AssistantStore, runAssistantJob } from "./assistant.ts";
 import { type ActionStore, runExtractActions } from "./extract_actions.ts";
 import { type DigestStore, runDigest } from "./digest.ts";
 import { type NoteAssistStore, runNoteAssist } from "./note_assist.ts";
+import { runMeetingRecap } from "./meeting_recap.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
@@ -281,6 +282,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
 
   if (parsed.action === "note_assist") {
     const result = await runNoteAssist(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+  if (parsed.action === "meeting_recap") {
+    const result = await runMeetingRecap(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 

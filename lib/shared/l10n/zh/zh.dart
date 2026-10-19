@@ -79,6 +79,7 @@ import 'package:wecord/shared/l10n/zh/zh_insights.dart';
 import 'package:wecord/shared/l10n/zh/zh_mod_tools.dart';
 import 'package:wecord/shared/l10n/zh/zh_forms.dart';
 import 'package:wecord/shared/l10n/zh/zh_notes2.dart';
+import 'package:wecord/shared/l10n/zh/zh_captions.dart';
 import 'package:wecord/shared/l10n/zh/zh_stories.dart';
 
 /// Every area's map, for checks.
@@ -160,6 +161,7 @@ const zhAreas = <Map<String, String>>[
   zhModTools,
   zhChatPolish,
   zhNotes2,
+  zhCaptions,
   zhStories,
 ];
 

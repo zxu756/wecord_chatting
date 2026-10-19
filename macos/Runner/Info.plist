@@ -29,9 +29,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>WeCord uses your location to send it to a chat, and to share it live for as long as you choose. Sharing pauses when WeCord is closed.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>WeCord uses the microphone to record voice messages, to talk in voice channels and to type what you say.</string>
+	<string>WeCord uses the microphone to record voice messages, to talk in voice channels, to type what you say and to make captions of what you say in a call.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>WeCord uses speech recognition to turn a voice message into text and to type what you say when you ask it to. It runs on your Mac whenever it can.</string>
+	<string>WeCord uses speech recognition to turn a voice message into text, to type what you say when you ask it to, and to make captions of what you say in a call when captions are on and you share yours. It runs on your Mac whenever it can. Only the text is shared with the call, never your voice.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>WeCord uses the camera for video in voice channels, to scan QR codes and to take photos and videos for your daily.</string>
 	<key>NSMainNibFile</key>

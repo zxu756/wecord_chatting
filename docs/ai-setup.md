@@ -178,11 +178,12 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `assistant` | `job_id`; only the database may call it (shared secret) | `{ok, reply_id, kind}` or `{ok, skipped: reason}` |
 | `digest` | `digest_id`; only the database may call it (shared secret) | `{ok, chats}` or `{ok, skipped: reason}` / `{ok, failed: reason}` |
 | `note_assist` | `note_id`, `mode` (`continue`/`summarize`/`outline`/`tone`/`translate`/`extract_tasks`), optional `text` (the selection, up to 8000 characters), `tone` (`polite`/`formal`/`casual`/`concise`/`fix`) for `tone`, `target` for `translate`, optional `language` | `{blocks: [{kind, text, checked}], text, truncated, source_chars}` |
+| `meeting_recap` | `conversation_id`, `entries` (1 to 2000 sentences `{speaker, text, at?}`), optional `language`, `time_zone`, `utc_offset_minutes` | `{title, summary, decisions, action_items, truncated, line_count, speaker_count}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
 (429, with `limit` and `used`), `ai_busy` (503, the provider's own limits),
-`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch, extract_actions, note_assist: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `note_not_found` (404, note_assist), `text_too_long` (413), and for `transcribe`
+`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch, extract_actions, note_assist, meeting_recap: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `note_not_found` (404, note_assist), `text_too_long` (413), and for `transcribe`
 `transcribe_not_configured` (503), `message_not_found` (404), `audio_too_long`
 (413).
 
@@ -362,6 +363,56 @@ deploy with `supabase functions deploy ai`. Code: `supabase/functions/ai/note_as
   undone from the version history.
 - The to-dos (`extract_tasks`) come back as unchecked to-do blocks in the note;
   they are not turned into tasks of a task list.
+
+### Call recap (`meeting_recap`)
+
+When captions were on in a call (roadmap E1), the person who turned them on can
+ask for a recap when they turn them off or leave. The app sends the sentences the
+people in the call chose to share; the function answers with the minutes: a
+title, the key points, the decisions and the to-dos. The app saves them as a note
+in the conversation and posts the note card; the to-dos open the "To-dos from the
+chat" review sheet (F4), so tasks are only made when the person confirms. No new
+secret. Deploy with `supabase functions deploy ai`; captions themselves also need
+the migration `202610240100_call_captions_host.sql` and `supabase functions deploy
+livekit-token` (see "Who may turn captions on" below). Code:
+`supabase/functions/ai/meeting_recap.ts` (decisions) and `meeting_recap_request.ts`
+(reading the request); `request.ts`, `handler.ts` and `index.ts` only gained a
+branch each. It reuses the to-do rules of `extract_actions.ts`.
+
+Request: `{action: "meeting_recap", conversation_id, entries: [{speaker, text, at?}],
+language?, time_zone?, utc_offset_minutes?}` with at most 2000 sentences of 600
+characters; `speaker` is a user id and `at` the seconds since captions started.
+Answer: `{title, summary: [...], decisions: [...], action_items: [item, ...],
+truncated, line_count, speaker_count}`, where an item has the shape `extract_actions`
+returns (`source_message_id` is always null).
+
+- **Names come from the database.** A sentence carries its speaker's user id and
+  the function writes that member's own name in front of it (`Someone` for an id
+  that is no member), so the app cannot put words in a named person's mouth in the
+  prompt. To-do assignees are members of the conversation or nobody.
+- **Switches and limits.** The circle's AI switch (`ai_disabled_in_circle`) and
+  the person's own (`ai_disabled_for_user`) are asked first; the caller must be a
+  member of the conversation (else `conversation_not_found`); a request counts
+  against `AI_DAILY_LIMIT_PER_USER` and is given back when the model fails. A
+  transcript with nothing in it costs nothing.
+- **Untrusted text.** The transcript is data: cleaned of control characters and
+  the prompts' fence tags, put between `<transcript>` tags, with `DATA_RULES` in
+  the system prompt. A transcript longer than `AI_MAX_INPUT_CHARS` keeps its start
+  and its end (`truncated: true`).
+- **Nothing is recorded or stored.** The function answers and forgets. Captions
+  are made on each person's device from their own microphone and shared as text;
+  only people who chose to share are in the transcript, and the transcript only
+  lives in the host's memory until they ask for the recap.
+
+### Who may turn captions on (`livekit-token`)
+
+`livekit-token` asks `can_current_user_host_captions` when it mints a token and
+writes the participant attribute `cap=1` into the signed token for people who may:
+members who may mute members in a voice channel or stage, either person in a
+one-to-one call, and the starter and the owner / admins of a group call. The apps
+accept "captions are on" only from a participant with that attribute. Deploy order:
+migration, then `supabase functions deploy livekit-token`. Tokens minted before
+that (and clients on an older function) simply have nobody who may start captions.
 
 ### Privacy and safety
 

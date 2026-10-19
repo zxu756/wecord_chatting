@@ -226,8 +226,11 @@ final class TranscribePlugin: NSObject, FlutterPlugin {
 ///
 /// * `capabilities {locale}` → `{supported, available, onDevice, locale,
 ///   authorization, microphone}`. Never asks for permission.
-/// * `start {locale, allowServer}` → null once listening. Asks for speech
-///   recognition and microphone permission the first time. Fails with
+/// * `start {locale, allowServer, inCall?}` → null once listening. Asks for
+///   speech recognition and microphone permission the first time. `inCall`
+///   (captions, roadmap E1) is for a voice call that already owns the
+///   microphone and the audio session: the recognizer listens alongside it
+///   and leaves the audio session exactly as the call set it. Fails with
 ///   `unsupported_locale`, `unavailable`, `needs_server`, `not_authorized`
 ///   (speech recognition), `mic_denied`, `busy` or `failed`.
 /// * `stop` ends the audio; the recognizer then reports its last result.
@@ -245,6 +248,7 @@ final class VoiceInputPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var session = 0
   private var running = false
   private var lastLevel = Date.distantPast
+  private var inCall = false
   private var configObserver: NSObjectProtocol?
   #if os(iOS)
     private var previousCategory: AVAudioSession.Category?
@@ -287,7 +291,9 @@ final class VoiceInputPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     case "capabilities":
       result(VoiceInputPlugin.capabilities(locale: locale))
     case "start":
-      start(locale: locale, allowServer: args["allowServer"] as? Bool ?? false, result: result)
+      start(
+        locale: locale, allowServer: args["allowServer"] as? Bool ?? false,
+        inCall: args["inCall"] as? Bool ?? false, result: result)
     case "stop":
       request?.endAudio()
       stopEngine()
@@ -388,7 +394,9 @@ final class VoiceInputPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
   }
 
-  private func start(locale: String, allowServer: Bool, result: @escaping FlutterResult) {
+  private func start(
+    locale: String, allowServer: Bool, inCall: Bool, result: @escaping FlutterResult
+  ) {
     if running {
       result(FlutterError(code: "busy", message: "Already listening", details: nil))
       return
@@ -415,6 +423,7 @@ final class VoiceInputPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       return
     }
     running = true
+    self.inCall = inCall
     requestSpeech { [weak self] speechOk in
       guard let self = self else { return }
       guard speechOk else {
@@ -455,13 +464,17 @@ final class VoiceInputPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     self.request = request
 
     #if os(iOS)
-      let audioSession = AVAudioSession.sharedInstance()
-      previousCategory = audioSession.category
-      previousMode = audioSession.mode
-      previousOptions = audioSession.categoryOptions
-      try audioSession.setCategory(
-        .playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-      try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+      // In a call the call owns the audio session (its category, mode and
+      // echo cancellation): captions only listen alongside it.
+      if !inCall {
+        let audioSession = AVAudioSession.sharedInstance()
+        previousCategory = audioSession.category
+        previousMode = audioSession.mode
+        previousOptions = audioSession.categoryOptions
+        try audioSession.setCategory(
+          .playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+      }
     #endif
 
     let input = engine.inputNode

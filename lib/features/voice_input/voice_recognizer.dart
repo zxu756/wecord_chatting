@@ -34,9 +34,14 @@ abstract interface class VoiceRecognizer {
   /// time). A language that only a server can recognize needs
   /// [allowServer]; without it this throws a [VoiceInputException] with
   /// `needsServer`.
+  ///
+  /// [inCall] is for captions in a voice call: the call already owns the
+  /// microphone and the audio session, so the recognizer listens alongside
+  /// it and leaves the audio session as it is.
   Future<VoiceSession> start({
     required String locale,
     required bool allowServer,
+    bool inCall = false,
   });
 }
 
@@ -56,6 +61,7 @@ class UnsupportedVoiceRecognizer implements VoiceRecognizer {
   Future<VoiceSession> start({
     required String locale,
     required bool allowServer,
+    bool inCall = false,
   }) => Future.error(
     const VoiceInputException(VoiceInputFailure.unsupportedLanguage),
   );
@@ -113,6 +119,7 @@ class NativeVoiceRecognizer implements VoiceRecognizer {
   Future<VoiceSession> start({
     required String locale,
     required bool allowServer,
+    bool inCall = false,
   }) async {
     _listen();
     final session = _NativeSession(_channel, () {
@@ -125,6 +132,7 @@ class NativeVoiceRecognizer implements VoiceRecognizer {
       await _channel.invokeMethod<void>('start', {
         'locale': locale,
         'allowServer': allowServer,
+        if (inCall) 'inCall': true,
       });
     } on PlatformException catch (error) {
       _active = null;

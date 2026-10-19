@@ -6,6 +6,8 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
+import 'package:wecord/features/voice/captions/captions_sheets.dart';
+import 'package:wecord/features/voice/captions/captions_strip.dart';
 import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
 import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
@@ -110,6 +112,7 @@ class DirectCallBar extends ConsumerWidget {
                                           : null,
                                     ),
                                   ),
+                                  const CaptionsButton(size: 36),
                                   VoiceControlButton(
                                     key: const ValueKey(
                                       'voice-call-link-button',
@@ -144,6 +147,7 @@ class DirectCallBar extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                            const CaptionStrip(),
                             Padding(
                               padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
                               child: VoiceCallControls(session: session),

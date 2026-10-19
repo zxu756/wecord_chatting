@@ -80,7 +80,16 @@ export interface LiveKitClaims {
   nbf: number;
   exp: number;
   video: VideoGrant;
+  /// Participant attributes the room's other participants can read; only
+  /// this server can set them, so they can be believed (see
+  /// [CAPTIONS_HOST_ATTRIBUTE]).
+  attributes?: Record<string, string>;
 }
+
+/// The participant attribute that says its owner may turn captions on in
+/// the room (E1). The apps only accept "captions are on" from a participant
+/// that carries it, so nobody can start captions by sending a message.
+export const CAPTIONS_HOST_ATTRIBUTE = "cap";
 
 /// How long a token may be used to join; LiveKit keeps a joined
 /// participant connected past it.
@@ -107,6 +116,8 @@ export function buildClaims(options: {
   nowSeconds: number;
   publishSources?: string[] | null;
   canPublish?: boolean;
+  /// The person may turn captions on (see [CAPTIONS_HOST_ATTRIBUTE]).
+  captionsHost?: boolean;
 }): LiveKitClaims {
   const canPublish = options.canPublish ?? true;
   const video: VideoGrant = {
@@ -119,7 +130,7 @@ export function buildClaims(options: {
   if (canPublish && options.publishSources) {
     video.canPublishSources = options.publishSources;
   }
-  return {
+  const claims: LiveKitClaims = {
     iss: options.apiKey,
     sub: options.identity,
     name: options.name,
@@ -127,6 +138,10 @@ export function buildClaims(options: {
     exp: options.nowSeconds + TOKEN_TTL_SECONDS,
     video,
   };
+  if (options.captionsHost === true) {
+    claims.attributes = { [CAPTIONS_HOST_ATTRIBUTE]: "1" };
+  }
+  return claims;
 }
 
 /// How long a server-side admin token lives: one request.

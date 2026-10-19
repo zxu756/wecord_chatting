@@ -7,6 +7,7 @@ import {
   buildClaims,
   callRoomName,
   canPublishIn,
+  CAPTIONS_HOST_ATTRIBUTE,
   enforcementRequest,
   liveKitHttpUrl,
   parseCallId,
@@ -290,4 +291,37 @@ Deno.test("a stage's audience only listens; its speakers publish", () => {
     "SCREEN_SHARE",
     "SCREEN_SHARE_AUDIO",
   ]);
+});
+
+Deno.test("a token carries the captions attribute only for someone who may host", async () => {
+  const base = {
+    apiKey: "APIkey",
+    identity: userId,
+    name: "Ada",
+    room: channelId,
+    nowSeconds: 1_700_000_000,
+  };
+  assertEquals(CAPTIONS_HOST_ATTRIBUTE, "cap");
+  assertEquals(buildClaims(base).attributes, undefined);
+  assertEquals(
+    buildClaims({ ...base, captionsHost: false }).attributes,
+    undefined,
+  );
+  const host = buildClaims({ ...base, captionsHost: true });
+  assertEquals(host.attributes, { cap: "1" });
+  // The attribute is inside the signed part: it cannot be added afterwards.
+  const jwt = await signJwt(host, "secret");
+  const payload = await verifyJwt(jwt, "secret");
+  assertEquals(payload?.attributes, { cap: "1" });
+  const [header, , signature] = (await signJwt(buildClaims(base), "secret"))
+    .split(".");
+  const forged = base64UrlEncode(
+    new TextEncoder().encode(
+      JSON.stringify({ ...buildClaims(base), attributes: { cap: "1" } }),
+    ),
+  );
+  assertEquals(
+    await verifyJwt(`${header}.${forged}.${signature}`, "secret"),
+    null,
+  );
 });

@@ -39,6 +39,15 @@
 //     extract_tasks; `text` is the selection (up to 8000 characters), else the
 //     whole note is read as the caller; see note_assist.ts. Counts against the
 //     same daily limit; honours the circle's and the person's AI switches.
+//   meeting_recap {conversation_id, entries: [{speaker, text, at?}], language?,
+//     time_zone?, utc_offset_minutes?}
+//     -> {title, summary: [...], decisions: [...], action_items: [item, ...],
+//     truncated, line_count, speaker_count}. The minutes of a call whose
+//     captions were on (E1), from the sentences the people in it chose to
+//     share: key points, decisions and to-dos in the shape of extract_actions;
+//     speakers are named from the conversation's members, not from the app;
+//     see meeting_recap.ts. Nothing is recorded or stored. Counts against the
+//     same daily limit; honours the circle's and the person's AI switches.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the

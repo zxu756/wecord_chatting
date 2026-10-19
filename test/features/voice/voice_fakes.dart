@@ -300,6 +300,9 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   /// Everyone else in the room.
   List<VoiceCallParticipant> remotes = const [];
   bool localSpeaking = false;
+
+  /// The current user's token says they may turn captions on.
+  bool localCaptionsHost = false;
   VoiceConnectionQuality connectionQuality = VoiceConnectionQuality.good;
   VoiceNoiseMode mode = VoiceNoiseMode.standard;
 
@@ -319,6 +322,28 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
 
   /// The emoji the current user sent.
   final sentReactions = <String>[];
+
+  final _data = StreamController<VoiceDataMessage>.broadcast();
+
+  /// What the current user published, as `topic` and the decoded text.
+  final published = <({String topic, List<int> data, bool reliable})>[];
+
+  /// Simulates [userId] sending a data message.
+  void receiveData(String userId, String topic, List<int> data) {
+    _data.add(VoiceDataMessage(senderId: userId, topic: topic, data: data));
+  }
+
+  @override
+  Stream<VoiceDataMessage> get dataMessages => _data.stream;
+
+  @override
+  Future<void> publishData(
+    List<int> data, {
+    required String topic,
+    bool reliable = true,
+  }) async {
+    published.add((topic: topic, data: data, reliable: reliable));
+  }
 
   /// Simulates [userId] sending [emoji].
   void receiveReaction(String userId, String emoji) {
@@ -340,6 +365,7 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
       userId: localUserId,
       name: localName,
       isLocal: true,
+      captionsHost: localCaptionsHost,
       isSpeaking: localSpeaking,
       microphoneEnabled: _microphone,
       cameraEnabled: camera,

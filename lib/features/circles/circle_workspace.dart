@@ -15,6 +15,8 @@ import 'package:wecord/features/circles/circle_forum_view.dart';
 import 'package:wecord/features/circles/circle_invite_sheet.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
+import 'package:wecord/features/circles/mod_tools/mod_notes_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -872,6 +874,14 @@ class CircleMemberList extends ConsumerWidget {
                             member: member,
                           )
                         : null,
+                    onModNotes: detail.canNoteAbout(member)
+                        ? () => openModNotes(
+                            context,
+                            circleId: detail.circle.id,
+                            userId: member.profile.id,
+                            name: member.displayName,
+                          )
+                        : null,
                     onKick: detail.canKick(member)
                         ? () => kickCircleMember(
                             context,
@@ -934,6 +944,7 @@ class _MemberRow extends ConsumerWidget {
     this.roleColor,
     this.onChangeNickname,
     this.onManageRoles,
+    this.onModNotes,
     this.onKick,
     this.onTimeOut,
     this.onRemoveTimeout,
@@ -963,6 +974,8 @@ class _MemberRow extends ConsumerWidget {
   final VoidCallback? onManageRoles;
 
   /// Null when the current user may not kick this member.
+  /// Null when the current user may not write notes about this member.
+  final VoidCallback? onModNotes;
   final VoidCallback? onKick;
   final VoidCallback? onTimeOut;
   final VoidCallback? onRemoveTimeout;
@@ -1142,6 +1155,12 @@ class _MemberRow extends ConsumerWidget {
             icon: CircleIcons.roles,
             label: tr('Manage roles'),
           ),
+        if (onModNotes != null)
+          CircleMenuItem(
+            value: _MemberAction.modNotes,
+            icon: Icons.sticky_note_2_outlined,
+            label: tr('Moderator notes'),
+          ),
         if (onTimeOut != null)
           CircleMenuItem(
             value: _MemberAction.timeOut,
@@ -1180,6 +1199,8 @@ class _MemberRow extends ConsumerWidget {
         onChangeNickname?.call();
       case _MemberAction.roles:
         onManageRoles?.call();
+      case _MemberAction.modNotes:
+        onModNotes?.call();
       case _MemberAction.timeOut:
         onTimeOut?.call();
       case _MemberAction.removeTimeout:
@@ -1198,6 +1219,7 @@ enum _MemberAction {
   profile,
   nickname,
   roles,
+  modNotes,
   timeOut,
   removeTimeout,
   kick,

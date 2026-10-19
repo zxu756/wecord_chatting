@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -23,6 +24,8 @@ import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
+import 'package:wecord/features/circles/mod_tools/raid_protection.dart';
 import 'package:wecord/features/circles/onboarding/guide_page.dart';
 import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -860,6 +863,19 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           icon: Icons.history,
           label: tr('Audit log'),
         ),
+      if (detail.canModerateMembers)
+        CircleMenuItem(
+          value: _CircleMenuAction.memberTools,
+          icon: Icons.manage_accounts_outlined,
+          label: tr('Members'),
+        ),
+      if (detail.canRunSafetyActions)
+        CircleMenuItem(
+          value: _CircleMenuAction.safetyActions,
+          icon: Icons.shield_outlined,
+          label: tr('Safety actions'),
+          tone: SettingsTone.warning,
+        ),
     ];
     // Leaving (or handing the circle on) stands apart, without a title.
     final account = <CircleMenuItem<_CircleMenuAction>>[
@@ -909,6 +925,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleAuditLogScreen(context, detail.circle.id);
       case _CircleMenuAction.bans:
         openCircleBansScreen(context, detail.circle.id);
+      case _CircleMenuAction.memberTools:
+        openMemberToolsScreen(context, detail.circle.id);
+      case _CircleMenuAction.safetyActions:
+        unawaited(showCircleSafetyActions(context, detail.circle.id));
       case _CircleMenuAction.autoMod:
         openCircleAutoModScreen(context, detail);
       case _CircleMenuAction.aiGuard:
@@ -1179,6 +1199,8 @@ enum _CircleMenuAction {
   changeCircleAvatar,
   transferOwnership,
   leave,
+  memberTools,
+  safetyActions,
 }
 
 enum _CategoryMenuAction { rename, delete }

@@ -17,6 +17,8 @@ import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
+import 'package:wecord/features/circles/mod_tools/mod_tools_repository.dart';
+import 'package:wecord/features/circles/mod_tools/raid_alert_card.dart';
 import 'package:wecord/features/chats/thread/footer_widgets.dart';
 import 'package:wecord/features/chats/thread/message_sender.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';

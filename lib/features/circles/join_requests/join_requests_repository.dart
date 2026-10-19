@@ -9,10 +9,12 @@ import 'package:wecord/shared/models/circle_role.dart';
 extension JoinRequestPermissions on CircleDetail {
   bool get canReviewJoinRequests => can(CirclePermission.kickMembers);
 
-  /// Whether the Review page has something for this member: held messages
-  /// or join requests.
+  /// Whether the Review page has something for this member: held messages,
+  /// join requests, ban appeals or a lockdown to end.
   bool get canOpenReview =>
-      can(CirclePermission.manageMessages) || canReviewJoinRequests;
+      can(CirclePermission.manageMessages) ||
+      canReviewJoinRequests ||
+      can(CirclePermission.banMembers);
 
   /// Whether this member can make an invite that skips review: both
   /// create_invites and kick_members.

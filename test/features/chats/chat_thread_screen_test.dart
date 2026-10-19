@@ -1248,6 +1248,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      // The menu has grown (Reply to part of text): give it room.
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.longPress(find.text('Outgoing'));
       await tester.pumpAndSettle();
       expect(find.text('Message info'), findsOneWidget);
@@ -2332,6 +2336,9 @@ void main() {
 
       await tester.longPress(find.text('mine https://example.com'));
       await tester.pumpAndSettle();
+      // The menu scrolls on a short screen.
+      await tester.ensureVisible(find.text('Remove embed'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Remove embed'));
       await tester.pumpAndSettle();
 
@@ -3280,6 +3287,9 @@ void main() {
     expect(find.text('Copy'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
 
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(find.text('Delete'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 

@@ -45,6 +45,7 @@ import 'qr_pat_a11y_screens.dart';
 import 'moments_a11y_screens.dart';
 import 'quiet_hours_a11y_screens.dart';
 import 'chat_folders_a11y_screens.dart';
+import 'chat_polish_a11y_screens.dart';
 import 'privacy2_a11y_screens.dart';
 import 'reports_legal_a11y_screens.dart';
 import 'admin_a11y_screens.dart';
@@ -799,5 +800,6 @@ final allA11yScreens = <A11yScreen>[
   ...onboardingGuideA11yScreens,
   ...digestA11yScreens,
   ...profileExtrasA11yScreens,
+  ...chatPolishA11yScreens,
   ...urgentA11yScreens,
 ];

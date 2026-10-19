@@ -122,6 +122,27 @@ class FakeVoiceRepository implements VoiceRepository {
     setLimits[channelId] = limit;
   }
 
+  /// The channel status lines [listChannelStatuses] answers, by circle id.
+  final channelStatuses = <String, Map<String, String>>{};
+
+  /// What [setChannelStatus] was asked, by channel id.
+  final setStatuses = <String, String>{};
+
+  @override
+  Future<Map<String, String>> listChannelStatuses(String circleId) async {
+    return channelStatuses[circleId] ?? const {};
+  }
+
+  @override
+  Future<String?> setChannelStatus({
+    required String channelId,
+    required String status,
+  }) async {
+    setStatuses[channelId] = status;
+    final tidy = status.trim().replaceAll(RegExp(r'\s+'), ' ');
+    return tidy.isEmpty ? null : tidy;
+  }
+
   @override
   Future<VoiceConnectionDetails> fetchConnectionDetails(
     String channelId,
@@ -266,6 +287,7 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   String? screenSource;
   bool screen = false;
   bool remoteAudio = true;
+  bool audioOnly = false;
   var disconnects = 0;
 
   /// What the microphone was started or last restarted with.
@@ -402,6 +424,12 @@ class FakeVoiceCall extends ChangeNotifier implements VoiceCall {
   @override
   Future<void> setRemoteAudioEnabled(bool enabled) async {
     remoteAudio = enabled;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setAudioOnly(bool enabled) async {
+    audioOnly = enabled;
     notifyListeners();
   }
 

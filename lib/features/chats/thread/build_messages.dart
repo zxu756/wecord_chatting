@@ -244,6 +244,11 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                   : null,
             );
           }
+          // Quoted replies in the bubble can jump to the message they answer.
+          final scopedBubble = MessageJumpScope(
+            onJump: _scrollToMessage,
+            child: bubble,
+          );
           final swipeable =
               touch &&
                   canSend &&
@@ -257,9 +262,9 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                   // all sit on the left and swipe right.
                   towardsEnd: cards || !message.isSentBy(currentUserId),
                   onReply: () => _startReply(message),
-                  child: bubble,
+                  child: scopedBubble,
                 )
-              : bubble;
+              : scopedBubble;
           final framed = pendingEntry == null
               ? swipeable
               : PendingMessageFrame(
@@ -278,7 +283,7 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                               .read(outboxProvider.notifier)
                               .editAndResendMedia(pendingEntry),
                         ),
-                  child: bubble,
+                  child: scopedBubble,
                 );
           final highlightedRow = AnimatedContainer(
             duration: WeCordMotion.durationOf(
@@ -435,6 +440,8 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
                 child: list,
               ),
             ),
+            // Wishes in new messages let emoji fall once (A12).
+            MessageEffectsOverlay(messages: data.messages),
             if (showJumpToNewReplies)
               Positioned(
                 right: 16,

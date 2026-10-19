@@ -103,6 +103,7 @@ class ChatMessage {
     this.album,
     this.expiresAt,
     this.reviewState,
+    this.silent = false,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -151,6 +152,7 @@ class ChatMessage {
       attachmentGroupId: json['attachment_group_id'] as String?,
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
       reviewState: MessageReviewState.maybeFromJson(json['review_state']),
+      silent: json['silent'] == true,
     );
   }
 
@@ -230,6 +232,9 @@ class ChatMessage {
   /// Set while the circle's AI guard checks or holds the message: only its
   /// author and moderators see it then. Null for every message others see.
   final MessageReviewState? reviewState;
+
+  /// Sent without a push: nobody's device was told about it.
+  final bool silent;
 
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
@@ -462,6 +467,7 @@ class ChatMessage {
       reviewState: identical(reviewState, _sentinel)
           ? this.reviewState
           : reviewState as MessageReviewState?,
+      silent: silent,
     );
   }
 }
@@ -585,6 +591,7 @@ class ReplyPreview {
     required this.senderName,
     required this.body,
     required this.type,
+    this.quote,
   });
 
   factory ReplyPreview.fromJson(Map<String, dynamic> json) {
@@ -593,6 +600,7 @@ class ReplyPreview {
       senderName: json['sender_name'] as String,
       body: json['body'] as String,
       type: MessageType.fromJson(json['type'] as String),
+      quote: ReplyQuote.maybeFromJson(json['quote']),
     );
   }
 
@@ -601,13 +609,71 @@ class ReplyPreview {
   final String body;
   final MessageType type;
 
+  /// The part of the message the reply answers, when the sender picked one.
+  /// The server checked that it is in the message.
+  final ReplyQuote? quote;
+
   Map<String, dynamic> toJson() {
     return {
       'message_id': messageId,
       'sender_name': senderName,
       'body': body,
       'type': type.toJson(),
+      if (quote != null) 'quote': quote!.toJson(),
     };
+  }
+}
+
+/// A piece of text picked from the message a reply answers (A9).
+class ReplyQuote {
+  const ReplyQuote({required this.text, this.start, this.end});
+
+  /// The longest quote the server keeps.
+  static const maxLength = 500;
+
+  /// Null unless [value] is an object with some text.
+  static ReplyQuote? maybeFromJson(Object? value) {
+    if (value is! Map<String, dynamic>) {
+      return null;
+    }
+    final text = value['text'];
+    if (text is! String || text.isEmpty) {
+      return null;
+    }
+    final start = value['start'];
+    final end = value['end'];
+    return ReplyQuote(
+      text: text,
+      start: start is int ? start : null,
+      end: end is int ? end : null,
+    );
+  }
+
+  final String text;
+
+  /// Where the text starts and ends in the message body (UTF-16 offsets),
+  /// when known. Checked against the body before it is used.
+  final int? start;
+  final int? end;
+
+  Map<String, dynamic> toJson() {
+    return {'text': text, 'start': ?start, 'end': ?end};
+  }
+
+  /// Where the quote sits in [body], or null when it is not there.
+  (int, int)? locateIn(String body) {
+    final from = start;
+    final to = end;
+    if (from != null &&
+        to != null &&
+        from >= 0 &&
+        to <= body.length &&
+        from < to &&
+        body.substring(from, to) == text) {
+      return (from, to);
+    }
+    final index = body.indexOf(text);
+    return index < 0 ? null : (index, index + text.length);
   }
 }
 

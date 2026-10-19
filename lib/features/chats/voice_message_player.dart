@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chats/chat_polish/chat_polish_settings.dart';
+import 'package:wecord/features/chats/chat_polish/voice_playback.dart';
+import 'package:wecord/features/chats/chat_thread_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/transcribe/transcribe_models.dart';
 import 'package:wecord/features/transcribe/transcript_view.dart';
@@ -22,6 +26,7 @@ class VoiceMessagePlayer extends ConsumerStatefulWidget {
     this.card = false,
     this.messageId,
     this.conversationId,
+    this.autoplayNext = false,
     super.key,
   });
 
@@ -33,6 +38,10 @@ class VoiceMessagePlayer extends ConsumerStatefulWidget {
   /// sending) leaves out transcribing.
   final String? messageId;
   final String? conversationId;
+
+  /// When it ends, the next voice message in the chat that has not been
+  /// played is asked to start (A10). Only chats do this.
+  final bool autoplayNext;
 
   /// How many audio players bubbles have made, for tests: none until a
   /// voice message is played.
@@ -53,6 +62,10 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
   var _isPrepared = false;
   var _hasError = false;
 
+  /// Who this player is to the others: the message, or the file of a voice
+  /// message that has no id yet.
+  String get _key => widget.messageId ?? widget.attachment.path;
+
   AudioPlayer _ensurePlayer() {
     final existing = _player;
     if (existing != null) {
@@ -67,8 +80,61 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
       }
       unawaited(player.seek(Duration.zero));
       unawaited(player.pause());
+      _finished();
     });
     return player;
+  }
+
+  /// Played to the end: heard, and the next one may follow.
+  void _finished() {
+    if (!mounted) {
+      return;
+    }
+    final playback = ref.read(voicePlaybackProvider.notifier);
+    playback.finished(_key);
+    final messageId = widget.messageId;
+    final conversationId = widget.conversationId;
+    if (!widget.autoplayNext ||
+        messageId == null ||
+        conversationId == null ||
+        !ref.read(voiceAutoplayProvider)) {
+      return;
+    }
+    final thread = chatThreadProvider(conversationId);
+    if (!ref.exists(thread)) {
+      return;
+    }
+    final next = nextUnheardVoiceMessageId(
+      ref.read(thread).value?.messages ?? const [],
+      messageId,
+      ref.read(voicePlaybackProvider).heard,
+      currentUserId: ref.read(authRepositoryProvider).currentUser?.id,
+    );
+    if (next != null) {
+      playback.requestPlay(next);
+    }
+  }
+
+  /// Another message started: this one stops.
+  void _otherStarted(String? playingId) {
+    final player = _player;
+    if (player == null || playingId == _key || !player.playing) {
+      return;
+    }
+    ref.read(voicePlaybackProvider.notifier).paused(_key, player.position);
+    unawaited(player.pause());
+  }
+
+  /// The message before this one ended and asks this one to go on.
+  void _requested(VoiceAutoplayRequest? request) {
+    if (request == null || request.messageId != widget.messageId) {
+      return;
+    }
+    ref.read(voicePlaybackProvider.notifier).clearRequest();
+    if (_player?.playing ?? false) {
+      return;
+    }
+    unawaited(_togglePlayback(false));
   }
 
   @override
@@ -94,8 +160,13 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
       return;
     }
 
+    final playback = ref.read(voicePlaybackProvider.notifier);
     if (isPlaying) {
-      await _player?.pause();
+      final player = _player;
+      if (player != null) {
+        playback.paused(_key, player.position);
+      }
+      await player?.pause();
       return;
     }
 
@@ -111,7 +182,14 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
             .createVoiceUrl(widget.attachment);
         await player.setUrl(url);
         _isPrepared = true;
+        // Where it was left, if this message was heard in part before.
+        final left = ref.read(voicePlaybackProvider).positions[_key];
+        if (left != null) {
+          await player.seek(left);
+        }
       }
+      await player.setSpeed(ref.read(voicePlaybackSpeedProvider));
+      playback.started(_key);
       await player.play();
     } catch (_) {
       if (mounted) {
@@ -135,6 +213,24 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
     final foreground = widget.foregroundColor ?? c.ink;
     // The button inverts the bubble: ink on light bubbles, light on ink.
     final buttonIcon = foreground == c.ink ? c.onInk : c.ink;
+    ref.listen(
+      voicePlaybackProvider.select((state) => state.playingId),
+      (previous, next) => _otherStarted(next),
+    );
+    ref.listen(
+      voicePlaybackProvider.select((state) => state.request),
+      (previous, next) => _requested(next),
+    );
+    ref.listen(
+      voicePlaybackSpeedProvider,
+      (previous, speed) =>
+          unawaited(_player?.setSpeed(speed) ?? Future.value()),
+    );
+    final speed = ref.watch(voicePlaybackSpeedProvider);
+    // Left in the middle: the wave shows where.
+    final hasLeftOff = ref.watch(
+      voicePlaybackProvider.select((state) => state.positions[_key] != null),
+    );
     final messageId = widget.messageId;
     final request = messageId == null
         ? null
@@ -198,7 +294,7 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
             ),
             const SizedBox(width: 10),
             Flexible(
-              child: isPlaying
+              child: isPlaying || hasLeftOff
                   ? StreamBuilder<Duration>(
                       stream: _player?.positionStream,
                       builder: (context, position) {
@@ -223,6 +319,15 @@ class _VoiceMessagePlayerState extends ConsumerState<VoiceMessagePlayer> {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+            if (isPlaying || speed != 1) ...[
+              const SizedBox(width: 6),
+              _SpeedChip(
+                speed: speed,
+                color: foreground,
+                onPressed: () =>
+                    ref.read(voicePlaybackSpeedProvider.notifier).cycle(),
+              ),
+            ],
             if (request != null) ...[
               const SizedBox(width: 2),
               TranscribeButton(request: request, color: foreground),
@@ -335,4 +440,45 @@ String _formatDuration(int durationMs) {
   final minutes = duration.inMinutes;
   final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
   return '$minutes:$seconds';
+}
+
+/// The speed button of a playing voice message: "1×", "1.5×", "2×".
+class _SpeedChip extends StatelessWidget {
+  const _SpeedChip({
+    required this.speed,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final double speed;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = voiceSpeedLabel(speed);
+    return WeCordPressable(
+      key: const ValueKey('voice-speed-chip'),
+      onPressed: onPressed,
+      semanticLabel: tr('Playback speed {speed}', {'speed': label}),
+      tooltip: tr('Playback speed'),
+      shape: const StadiumBorder(),
+      builder: (context, states) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(WeCordRadii.pill),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: color,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+    );
+  }
 }

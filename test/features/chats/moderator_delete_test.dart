@@ -97,6 +97,11 @@ void main() {
     await tester.longPress(find.text('Buy cheap stuff'));
     await tester.pumpAndSettle();
     expect(find.text('Delete'), findsNothing);
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('message-moderator-delete')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('message-moderator-delete')));
     await tester.pumpAndSettle();
     expect(
@@ -109,6 +114,9 @@ void main() {
     expect(chats.recalledMessageIds, isEmpty);
 
     await tester.longPress(find.text('Buy cheap stuff'));
+    await tester.pumpAndSettle();
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(find.text('Delete message'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete message'));
     await tester.pumpAndSettle();
@@ -123,6 +131,9 @@ void main() {
       find.byKey(const ValueKey('message-moderator-delete')),
       findsNothing,
     );
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(find.text('Delete'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     expect(chats.recalledMessageIds, ['m1', 'm2']);
@@ -171,6 +182,11 @@ void main() {
     await tester.pump();
 
     await tester.longPress(find.text('Deploy done'));
+    await tester.pumpAndSettle();
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('message-moderator-delete')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('message-moderator-delete')));
     await tester.pumpAndSettle();

@@ -36,6 +36,10 @@ import 'package:wecord/features/forms/form_card.dart';
 import 'package:wecord/features/forms/form_models.dart';
 import 'package:wecord/features/chats/automod_alert_card.dart';
 import 'package:wecord/features/chats/chat_profile_panel.dart';
+import 'package:wecord/features/chats/chat_polish/message_effects.dart';
+import 'package:wecord/features/chats/chat_polish/quote_reply.dart';
+import 'package:wecord/features/chats/chat_polish/silent_send.dart';
+import 'package:wecord/features/chats/chat_polish/voice_trim.dart';
 import 'package:wecord/features/chats/chat_thread_header.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/chats/chat_thread_controller.dart';
@@ -173,6 +177,7 @@ part 'thread/message_content.dart';
 part 'thread/selection_mode.dart';
 part 'thread/state_attachments.dart';
 part 'thread/state_composer.dart';
+part 'thread/state_chat_polish.dart';
 part 'thread/state_composer_menu.dart';
 part 'thread/state_header.dart';
 part 'thread/state_list.dart';
@@ -318,6 +323,15 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _voiceTicks = 0;
   DateTime? _voiceStartedAt;
 
+  /// A recording that is paused (A10) and how long it has been paused, so
+  /// the 9 minute limit counts the sound only.
+  var _isVoicePaused = false;
+  DateTime? _voicePausedAt;
+  var _voicePausedTotal = Duration.zero;
+
+  /// What to keep of the recording, when it was trimmed before sending.
+  VoiceTrimRange? _voiceTrim;
+
   /// Seconds left of the recording once they are down to
   /// [voiceCountdownSeconds]; null before. Only the countdown listens, so
   /// the screen does not rebuild every second.
@@ -326,6 +340,10 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   String? _sendError;
   String? _lastMarkedMessageId;
   ChatMessage? _replyingTo;
+
+  /// The part of [_replyingTo]'s text the reply quotes (A9), with the
+  /// message it was picked from; only used while that message is replied to.
+  ({String messageId, ReplyQuote quote})? _replyQuoteFor;
   ChatMessage? _editingMessage;
   var _isSearchingMessages = false;
   var _messageSearchQuery = '';

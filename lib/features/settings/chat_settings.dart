@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chat_folders/chat_folders_screen.dart';
+import 'package:wecord/features/chats/chat_polish/chat_polish_settings.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
 import 'package:wecord/features/stickers/sticker_management_screen.dart';
 import 'package:wecord/features/voice_input/voice_input_settings.dart';
@@ -34,6 +35,28 @@ class ChatSettingsGroup extends ConsumerWidget {
             onChanged: (value) =>
                 unawaited(ref.read(showVoiceInputProvider.notifier).set(value)),
           ),
+        SettingsRow.toggle(
+          key: const ValueKey('voice-autoplay-switch'),
+          icon: Icons.queue_music_rounded,
+          title: tr('Play voice messages one after another'),
+          subtitle: tr(
+            'When one ends, the next voice message you have not heard starts.',
+          ),
+          value: ref.watch(voiceAutoplayProvider),
+          onChanged: (value) =>
+              unawaited(ref.read(voiceAutoplayProvider.notifier).set(value)),
+        ),
+        SettingsRow.toggle(
+          key: const ValueKey('keyword-effects-switch'),
+          icon: Icons.celebration_outlined,
+          title: tr('Keyword effects'),
+          subtitle: tr(
+            'Confetti and other effects when a message holds a wish like "Happy birthday". They are off when animations are reduced.',
+          ),
+          value: ref.watch(keywordEffectsProvider),
+          onChanged: (value) =>
+              unawaited(ref.read(keywordEffectsProvider.notifier).set(value)),
+        ),
         SettingsRow(
           key: const ValueKey('chat-folders-tile'),
           icon: Icons.folder_copy_outlined,

@@ -20,6 +20,7 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { dropSilentPushes } from "../push/silent_messages.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import { cleanUpExpired } from "../expire-messages/cleanup.ts";
@@ -277,8 +278,10 @@ Deno.serve(async (request) => {
   // messages are not held back.
   const audible = await audibleTargets(
     admin,
-    targets,
-    urgentTargets,
+    // Messages sent silently (a silent scheduled message, for one) are told
+    // to nobody.
+    await dropSilentPushes(admin, targets),
+    await dropSilentPushes(admin, urgentTargets),
     Math.floor(Date.now() / 1000),
   );
   // Times in the text are written for each subscriber's zone and language.

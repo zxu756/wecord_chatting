@@ -147,6 +147,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Meet at 7?'));
     await tester.pumpAndSettle();
+    // The menu scrolls on a short screen.
+    await tester.ensureVisible(find.byKey(const ValueKey('message-select')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('message-select')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('I can make it'), warnIfMissed: false);

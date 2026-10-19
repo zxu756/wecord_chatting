@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/contact_cards/contact_card_models.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -16,7 +17,7 @@ import 'package:wecord/shared/ui/ui.dart';
 Future<void> openContactCard(BuildContext context, ContactCard card) async {
   final userId = card.userId;
   if (card.isUser && userId != null) {
-    await showUserProfileSheet(context, userId);
+    await showUserProfileSheet(context, userId, source: FriendSource.card);
     return;
   }
   final code = card.inviteCode;

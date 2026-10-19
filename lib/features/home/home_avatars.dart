@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -119,6 +121,94 @@ class _ResolvedAvatarState extends ConsumerState<ResolvedAvatar> {
               size: (widget.size * 0.3).clamp(12.0, 17.0),
             )
           : null,
+    );
+  }
+}
+
+/// A friend's status as a small speech bubble above their avatar in the
+/// friends row (Instagram Notes style): the emoji and the first
+/// [FriendStatus.maxBubbleChars] characters, up to two lines. A tap opens
+/// the chat and starts a reply to it ([onPressed]).
+class StatusBubble extends StatelessWidget {
+  const StatusBubble({
+    required this.status,
+    required this.name,
+    required this.onPressed,
+    super.key,
+  });
+
+  /// The most the bubble is tall: two short lines and its padding.
+  static const height = 40.0;
+
+  /// The dot under the bubble and its gap.
+  static const tailHeight = 8.0;
+
+  /// The room a row has to give a bubble.
+  static const room = height + tailHeight;
+
+  final FriendStatus status;
+
+  /// Who it is from, as the viewer knows them.
+  final String name;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return WeCordPressable(
+      key: ValueKey('status-bubble-${status.userId}'),
+      onPressed: onPressed,
+      tooltip: tr('Reply to {name}\'s status', {'name': name}),
+      semanticLabel: tr('{name}: {status}. Reply to the status.', {
+        'name': name,
+        'status': status.fullLabel,
+      }),
+      excludeSemantics: true,
+      pressedScale: 0.95,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
+      ),
+      builder: (context, states) {
+        final hovered =
+            states.contains(WidgetState.hovered) ||
+            states.contains(WidgetState.pressed);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              constraints: const BoxConstraints(
+                maxHeight: height,
+                maxWidth: 78,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: hovered ? c.raisedStrong : c.raised,
+                borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              ),
+              child: Text(
+                status.bubbleLabel,
+                key: ValueKey('status-bubble-text-${status.userId}'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, height: 1.25, color: c.ink),
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -1),
+              child: Container(
+                width: 7,
+                height: 7,
+                margin: const EdgeInsets.only(top: 1),
+                decoration: BoxDecoration(
+                  color: hovered ? c.raisedStrong : c.raised,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

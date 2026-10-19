@@ -14,7 +14,7 @@
 | 客户端 | Flutter + Riverpod 3 + go_router；约 607 个 Dart 文件、17.5 万行 |
 | 后端 | Supabase（Postgres + RLS + Realtime + Storage + Edge Functions + pg_cron + pg_net + Vault），项目 `zpfternchrwboweellka` |
 | 数据库 | 147 个迁移（`supabase/migrations/`），几乎所有业务规则都在 SQL（RLS + security definer 函数）里强制执行 |
-| Edge Functions | 16 个：`ai`、`bot-api`、`bots`、`chat-event-reminders`、`data-export`、`delete-account`、`expire-messages`、`gif-search`、`link-preview`、`livekit-token`、`office-preview`、`push`、`scheduled-dispatch`、`sessions`、`sound-upload`、`webhook` |
+| Edge Functions | 17 个：`ai`、`bot-api`、`bots`、`chat-event-reminders`、`data-export`、`delete-account`、`expire-messages`、`expire-stories`、`gif-search`、`link-preview`、`livekit-token`、`office-preview`、`push`、`scheduled-dispatch`、`sessions`、`sound-upload`、`webhook` |
 | 外部服务 | LiveKit Cloud（语音/视频）、Gotenberg on Google Cloud Run（Office→PDF 预览）、GIPHY（GIF 搜索）、OpenCode Go（AI，OpenAI 兼容接口，可切换）、OpenStreetMap/Nominatim/Overpass（地图，可配置）、Krisp（降噪，LiveKit 插件） |
 | 测试 | 278 个测试文件、约 3822 个测试（单元 + 组件 + 无障碍守卫 + SQL 行为脚本 + Deno 测试），上线前全量通过 |
 | 语言 | 中文（简体）+ 英文；`tr()` 翻译体系，覆盖率测试保证不漏翻 |
@@ -31,8 +31,8 @@
 - **退出登录**：退出当前设备；会先停止实时位置共享、注销推送。
 - **设备管理**（设置 → 隐私与安全 → 设备）：列出所有登录中的会话（设备名、平台、应用版本、最近活跃），可单独登出某台设备或「登出其他所有设备」；不显示 IP 和位置。
 - **新登录提醒**：新设备首次登记时（`user_devices` 新增一行，令牌刷新不算；首次登录不提醒），其他设备收到推送（按订阅的语言和时区），通知页「安全」芯片出现卡片（设备名、平台、时间，不含 IP 和位置）；「是我本人」关闭提醒，「不是我」通过 `sessions` 函数登出那台设备并引导修改密码。
-- **删除账号**：二次确认后永久删除；连带清理头像、横幅、聊天背景照片、朋友圈图片/视频等存储文件。
-- **导出我的数据**：一键生成 ZIP（index.html + 各分区页面 + `data/*.json`），带真实进度条；内容包括资料、好友、自己发的消息、朋友圈（含自己的照片/视频）、好友标签和星标、接龙、笔记、任务清单、收藏、提醒、定时消息、聊天背景。只导出自己写的内容，绝不包含别人的私有内容。24 小时限一次，过期文件自动清理。
+- **删除账号**：二次确认后永久删除；连带清理头像、横幅、聊天背景照片、朋友圈图片/视频、日常的照片/视频等存储文件。
+- **导出我的数据**：一键生成 ZIP（index.html + 各分区页面 + `data/*.json`），带真实进度条；内容包括资料、好友、自己发的消息、朋友圈（含自己的照片/视频）、还在展示的日常（文件给下载链接）和密友名单、好友标签和星标、接龙、笔记、任务清单、收藏、提醒、定时消息、聊天背景。只导出自己写的内容，绝不包含别人的私有内容。24 小时限一次，过期文件自动清理。
 - **个人资料**：头像、横幅、显示名、用户名、简介、代词、自定义状态（emoji + 文字 + 过期时间）；头像/横幅上传前自动压缩（512px / 1600px）并去掉 GPS 等元数据，动图头像原样保留。
 - **资料可见范围**：简介、横幅、代词可设为所有人 / 好友 / 仅自己等；服务器在所有读取路径强制执行（含聊天成员列表、置顶、回应列表、投票名单等），被拉黑者看不到。
 - **状态气泡与状态可见范围**：自定义状态可选「所有人（默认，和以前一样）/ 所有好友 / 星标好友 / 仅自己」（状态弹窗里的「谁可以看」）。手机首页快捷行里，好友当前有效的状态显示成头像上方的小气泡（emoji + 最多 12 个字，超出用省略号，最多两行）；点气泡会打开私聊，输入框里预填「回复了你的状态：“…”」（不会自动发送）。过期的状态不显示；被对方拉黑、在可见范围外的人读不到（服务器在 `custom_status()` 里统一判断，所有返回状态的地方都遵守；`status_emoji/status_text/status_expires_at` 原始列不再允许客户端直接读，好友气泡走 `list_friend_statuses()`）。
@@ -44,8 +44,8 @@
 
 ## 2. 导航与主界面
 
-- **手机端**：左侧圈子栏 + 消息列表；顶部快捷行（添加好友、收藏、朋友圈、最近联系人）；底部用户面板（头像、状态、通知铃铛）。
-- **电脑端（≥840 宽）**：圈子栏 + 侧栏（好友、通知、收藏、朋友圈、私信列表）+ 主内容 + 可拖拽调宽的右侧面板（资料 / 成员 / 笔记与清单）；macOS 标题栏留白适配。
+- **手机端**：左侧圈子栏 + 消息列表；顶部快捷行（添加好友、收藏、日程、朋友圈、日常、最近联系人；有日常的好友头像带强调色环，点一下直接看）；底部用户面板（头像、状态、通知铃铛）。
+- **电脑端（≥840 宽）**：圈子栏 + 侧栏（好友、通知、收藏、朋友圈〔旁边是有新日常的好友头像环〕、日常、私信列表）+ 主内容 + 可拖拽调宽的右侧面板（资料 / 成员 / 笔记与清单）；macOS 标题栏留白适配。
 - **快速切换器**：⌘K / Ctrl+K 搜索并跳转到任意会话、频道、笔记。
 - **键盘快捷键**：上一个/下一个会话、Esc 取消回复或编辑并标记已读、空输入框按 ↑ 编辑上一条、跳到输入框、打开焦点消息菜单、显示快捷键帮助。
 - **设置**：手机为整页，电脑为独立设置窗口（左侧导航，记住上次所在分区）。分区：我的资料、隐私与安全、外观、聊天、语音与视频、AI、通知、键盘快捷键、语言、账号。
@@ -106,7 +106,7 @@
 
 ## 6. 消息：查看与操作
 
-- **消息菜单**（长按 / 右键 / 悬停「更多」）：回复、回应、复制、编辑、转发、添加到表情（图片、GIF、贴纸）、置顶、收藏（稍后看）、提醒我、创建任务、开话题、选择（多选）、翻译、转文字、复制图片中的文字、删除/撤回。（消息级举报尚未实现，只能举报用户和公开圈子。）
+- **消息菜单**（长按 / 右键 / 悬停「更多」）：回复、回应、复制、编辑、转发、添加到表情（图片、GIF、贴纸）、置顶、收藏（稍后看）、提醒我、创建任务、开话题、选择（多选）、翻译、转文字、复制图片中的文字、删除/撤回。
 - **撤回 / 删除**：撤回自己的消息（附带内容一并从存储擦除）；版主可删除他人消息。
 - **转发**：单条转发到其他会话（显示「转发自 xxx」）。
 - **多选**：进入多选模式后可批量转发、合并转发、收藏、复制、删除（只能删自己的，或你是版主）；最多 100 条；电脑上 Shift 连选、Esc 退出。
@@ -259,6 +259,21 @@
 - **推送与通知**：别人赞、评论、回复你的帖子或评论时推送（新帖不推送，和微信一致）；通知页有「朋友圈」分类。
 - **安全**：照片和视频按帖子可见范围控制读取权限；拉黑、删好友立即失去访问；图片缩略图 480px。
 
+## 13b. 日常（Daily，24 小时动态）+ 密友
+
+- **是什么**：比朋友圈更轻的照片或短视频（视频 ≤15 秒、≤20MB），24 小时后消失；朋友看到可以直接回复到私聊。朋友圈是长期的，日常是 24 小时的，两者并存；「精选」（把日常收进资料）暂不做。
+- **入口**：手机首页快捷行有「日常」格（没有日常时是发布入口；有日常时显示你的头像环，点一下看、长按再发一条）；有新日常的好友头像外加**强调色环**（不用红色，和状态气泡并存，已看完的变成淡细环），点头像直接看，长按进私聊。电脑侧栏「朋友圈」一行旁显示最多 3 个有新日常的好友头像环，下面一行「日常」发布。
+- **发布**：拍照 / 从相册选照片 → 照片编辑器（涂鸦、文字、马赛克、裁剪）→ 说明文字（200 字）+ 谁可以看 → 发布；视频不进编辑器。手机有「拍照」「录视频」，电脑和网页只有相册。发布用客户端生成的 id，失败重试不会发两条；每人同时最多 50 条。
+- **谁可以看**：复用朋友圈观众模型——所有好友 / **密友** / 仅自己 / 部分可见 / 不给谁看（选好友或标签，标签实时读取）。「不让他看我的朋友圈」的好友也看不到你的日常；拉黑或删好友立即失效（什么都不复制）；过期后谁都看不到，作者也不行；账号被删除的人的日常看不到。**密友**是自己的一份好友名单（`story_close_friends`），在「谁可以看」里选「密友」后点「编辑密友名单」；名单只有自己能读，删好友或拉黑会自动移出，重新加好友不会自动恢复。
+- **查看**：全屏、顶部分段进度条（照片 5 秒，视频播到结束）、点右侧下一条 / 点左侧上一条、长按暂停、下滑关闭、电脑上 ← → 切换、Esc 关闭；写回复时自动暂停；看完一个人接着看下一个有新日常的好友；从第一条没看过的开始。**减少动态效果**：不自动前进（点按切换）、视频等你点播放、下滑关闭不做位移动画。
+- **回复**：底部回复框和 6 个快速表情。回复 = 给作者的一条私聊文字消息（`send_story_reply`，遵守仅好友私信和拉黑规则，重试同一 `client_id` 返回同一条），消息附件 `story_ref`；聊天里在气泡上方显示缩略图和「回复了你的日常」，日常结束后显示「这条日常已结束」。快速表情是对日常的一次回应（每人一个，可改可撤），不发私聊消息，作者在「谁看过」里看到。
+- **谁看过**：只有作者能看（`list_story_viewers`，其他人调用被拒绝；表本身任何人都不能直接读）；列表里有表情，已被删好友 / 拉黑 / 账号已删的人不显示；自己的日常上有查看数和表情数、删除按钮。
+- **存储**：私有桶 `stories`（路径 `<作者id>/<日常id>.jpg|-t.jpg|-v.mp4`，每个文件 ≤20MB）；读取权限由 `story_visible_to` 决定，只有作者能写、能删自己的文件夹。
+- **过期清理**：不改 `run_later_dispatch()`，有自己的任务——pg_cron `wecord-purge-expired-stories`（每 5 分钟，SQL 删除过期的日常，触发器把文件登记进清理队列）和 `wecord-expire-story-files`（每 5 分钟调 `wake_expire_stories()`，它用 Vault 里已有的 `wecord_functions_url`、`wecord_dispatch_secret` 以 `Authorization: Bearer <DISPATCH_SECRET>` 唤醒 Edge Function `expire-stories` 删除存储文件，和 `scheduled-dispatch` 同一套；任务有 pg_cron 就总会创建，密钥在运行时检查，取不到就什么都不做；没有 pg_cron 时迁移跳过，可用任何调度器调用）。
+- **实时**：私有通道 `stories:<用户id>`（只传「有变化」，不传内容），客户端收到后重新读取排行；回到前台也会刷新。
+- **删除账号**：触发器（`profiles.deleted_at`）删除其日常、看过记录、表情和密友名单，文件进清理队列，`delete-account` 函数同时清空 `stories` 桶里的用户文件夹。
+- **数据导出**：`export_my_stories` 导出还在展示的日常（说明、受众、查看人数、文件链接）、密友名单和自己提交的日常举报；不含「谁看过」。
+
 ## 14. 位置
 
 - **发送位置**：聊天「+」→「位置」，地图选点（拖动、附近地点、搜索），发送带静态地图预览的位置卡片；点开看完整地图，可「在地图中打开」（Apple 地图 / Google 地图 / OSM）、复制地址。
@@ -281,6 +296,7 @@
 - **用户反馈（K7）**：设置 →「反馈与帮助」：文字（最多 2000 字）加可选截图。截图先缩到 1600 像素并去掉元数据，提交前能预览，可用照片编辑器的马赛克/模糊/涂画遮住隐私，再上传到**私有**桶 `feedback-screenshots`（路径 `<user_id>/<uuid>.jpg`，每人最多 20 个文件，只有本人能写/删，本人和平台管理员能读）。自动附版本和平台，不带任何聊天内容。每人每小时最多 5 条。运营后台「反馈」标签（owner/moderator/support 都能看）按待处理/已关闭/全部查看，详情显示截图（短时效签名链接）和已有回复；回复以官方通知（只发给该用户的卡片，无推送）送达，可选回复后关闭。账号删除时反馈、回复和已读标记由 `profiles.deleted_at` 上的触发器清掉，截图由 `delete-account` 函数清掉；数据导出带上自己的反馈和收到的回复（`export_my_feedback`，截图给签名链接）。
 - **消息举报（A1）**：消息菜单（长按 / 右键）里的「举报」（自己的消息、已撤回的消息和系统通知不显示）。弹层有原因单选、补充说明、「附带上下文」（默认开：同时提交前后各最多 5 条你自己看得到的消息）、「同时拉黑」开关和社区准则链接；每人每天最多 20 条新举报，同一条消息重复举报返回第一条。举报时保存快照（正文、附件元数据、发送者、时间；阅后即焚媒体只留占位，附件路径一律不存），消息之后被撤回或过期也能处理。**圈子里的举报**进本圈「审核」页的「用户举报」分组（红色计数并入审核徽标；`count_message_reviews` 把待处理举报也算进去），有 `manage_messages` 的版主可以：忽略、删除消息、禁言（1 小时 / 1 天 / 1 周）、封禁，分别复用 `recall_message`、`timeout_circle_member`、`ban_circle_member`（各自检查权限，并写入圈子审计日志，另有 `report_dismiss` / `report_resolve` 条目）。**私聊和群聊的举报**进运营后台「消息」标签（`admin_list/get/resolve_message_report`，动作：无违规、删除消息、封禁发送者后关闭；写入 `admin_audit_log`）。被举报的人看不到举报，也不会出现在任何列表和计数里（即使他自己是版主或管理员）。`snapshot`、`context` 不能通过表 API 读取，只有处理人通过函数读到；处理完 90 天后由每日的 `purge_old_client_errors()` 一并清除。运营后台看不到私聊里的图片（只有文件名等元数据）。
 - **社区准则、隐私政策、服务条款与年龄声明（G10）**：三个页面 `/legal/guidelines`、`/legal/privacy`、`/legal/terms`（登录前也能打开；内容是随应用打包的 Markdown，`assets/legal/<名称>.<en|zh>.md`，中英两版，每页开头有「草稿——待所有者确认」提示，文本待所有者确认）。隐私政策写明实际数据流：Supabase、LiveKit、OpenCode Go（仅用 AI 功能时）、Gotenberg、OpenStreetMap/Nominatim、GIPHY、网页推送、客户端错误报告、数据导出和删除账号。注册页必须勾选「我已满 13 岁，并同意服务条款和社区准则」，服务器记录 `profiles.accepted_terms_at` 和 `age_confirmed_at`（服务器时间）；最低年龄是唯一的常量 `minimumAge`（`lib/features/legal/minimum_age.dart`，所有者 2026-10-18 确认 13+，不做青少年模式）。老用户每次启动在顶部看到一个不挡操作的横幅（勾选并「同意」后记录，「暂不」只在本次启动内隐藏）。设置 →「关于 WeCord」列出三份文本、应用版本和开源许可页。
+- **日常举报（B1）**：看日常时菜单里的「举报」，弹层同消息举报（原因、补充说明、同时拉黑；每人每天最多 20 条），进运营后台「日常」标签（`admin_list/get/resolve_story_report`，动作：无违规、删除日常、封禁作者后关闭，写入 `admin_audit_log`）。日常 24 小时就结束，所以举报保存快照（说明文字、类型、作者、时间、文件名）；有未处理举报的日常，文件最多多保留 30 天，管理员只在举报未处理期间能读到它的文件；处理 90 天后清除快照。
 - **其他**：拉黑、举报用户、举报公开圈子、两步验证、设备管理、资料可见范围、删除账号、数据导出。
 
 ## 16. 通知与推送
@@ -339,7 +355,7 @@
 - **版本号**：`pubspec.yaml` 的 `version`（不含 `+` 后的构建号）在构建时作为 `APP_VERSION` 传入（`tool/deploy_web.sh` 已自动传），用于功能开关的最低版本和「本次更新」弹窗。发新版时改 `pubspec.yaml` 的版本，并在 `lib/features/announcements/whats_new_content.dart` 加对应条目。
 - **数据库**：`supabase db push --linked --yes`（编号早于线上最新的迁移需加 `--include-all`）。
 - **Edge Functions**：`supabase functions deploy <name>`。
-- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，AI 守护清扫（`wecord-ai-guard-sweep`）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）等任务。
+- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，日常过期清理（`wecord-purge-expired-stories` 删行、`wecord-expire-story-files` 删文件，每 5 分钟），AI 守护清扫（`wecord-ai-guard-sweep`）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）等任务。
 - **已设置的密钥（只列名字）**：`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`DISPATCH_SECRET`、`GIPHY_API_KEY`、`GOTENBERG_URL/USERNAME/PASSWORD`、`LIVEKIT_URL/API_KEY/API_SECRET`、`VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT`。
 - **工具脚本**（`tool/`）：`deploy_web.sh`、`setup_later_dispatch.sh`、`setup_web_push.sh`、`errors_report.sh`、`generate_web_icons.py`、各功能的截图测试 `tool/screenshots/*`、端到端脚本 `tool/e2e/`。
 - **文档**（`docs/`）：`ai-setup.md`、`bot-api.md`、`chat-events.md`、`data-export.md`、`error-reports.md`、`file-preview-converter.md`、`location.md`、`design/wecord-design-language.md`、`design/calls-more.md`。

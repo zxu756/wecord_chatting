@@ -139,7 +139,7 @@
 
 | 编号 | 功能 | 量 | 标记 | 批次 |
 |---|---|---|---|---|
-| B1 | 日常（24 小时动态）+ 密友 | L | | 4 |
+| B1 | 日常（24 小时动态）+ 密友 | L | | 4 ✅ 2026-10-19 |
 | B2 | 朋友圈 2.0 | M | | 6 |
 | B3 | 收藏 2.0 | M | | 5 |
 | B4 | 状态气泡 | S | | 3 ✅ 2026-10-19 |
@@ -621,7 +621,7 @@
     - `story_views`：`story_id, viewer_id, viewed_at`。
     - `story_reactions`。
   - **可见性函数 `story_visible_to(story, viewer)`**：复用朋友圈 `moments_post_visible_to` 的观众模型；拉黑或删好友后立即失效。
-  - **存储与清理**：私有桶 `stories`；过期清理接到 `run_later_dispatch()` 的清理阶段。
+  - **存储与清理**：私有桶 `stories`；过期清理**没有**接到 `run_later_dispatch()`（避免与同批重写它的包互相覆盖），而是独立的 pg_cron 任务 `wecord-purge-expired-stories` + `wecord-expire-story-files`（唤醒 Edge Function `expire-stories` 删存储文件）。已于 2026-10-19 完成（第 4 批 4-2 包，迁移 `202610240200`–`202610240250`）。
   - **回复**：回复日常 = 发一条带 `story_ref` 附件的私聊消息，显示缩略图和「回复了你的日常」。
   - **客户端（查看）**：
     - 手机首页快捷好友行：有新日常的好友头像外加一圈强调色环（**不用红色**）。

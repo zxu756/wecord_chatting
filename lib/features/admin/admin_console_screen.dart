@@ -43,6 +43,7 @@ const _queueKinds = [
   ReportKind.circle,
   ReportKind.post,
   ReportKind.message,
+  ReportKind.story,
 ];
 
 class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
@@ -147,6 +148,7 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
         builder: (context) => AdminReportScreen(
           reportId: report.id,
           message: report.kind == ReportKind.message,
+          story: report.kind == ReportKind.story,
         ),
       ),
     );

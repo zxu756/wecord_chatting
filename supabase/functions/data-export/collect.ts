@@ -23,6 +23,7 @@ import {
   type Json,
   type OwnedFile,
   ownedFiles,
+  storyFilesToSign,
 } from "./export_builder.ts";
 
 /** The most messages one export carries. */
@@ -468,6 +469,20 @@ export async function collectExportData(
     null,
   );
 
+  // The dailies I still have up and my close friends (export_my_stories).
+  const stories = await tryRead<Row | null>(
+    skipped,
+    "daily",
+    async () => {
+      const result = await admin.rpc("export_my_stories", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -481,6 +496,10 @@ export async function collectExportData(
   }
   // The screenshots I attached to feedback are linked.
   for (const { bucket, path } of feedbackFilesToSign(feedback ?? [])) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The files of my dailies are linked (they end in a day anyway).
+  for (const { bucket, path } of storyFilesToSign(stories)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -533,6 +552,7 @@ export async function collectExportData(
     feedback,
     aiDigest,
     noteExtras,
+    stories,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

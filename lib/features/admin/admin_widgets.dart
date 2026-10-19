@@ -9,6 +9,7 @@ IconData adminKindIcon(ReportKind kind) => switch (kind) {
   ReportKind.circle => Icons.blur_circular_rounded,
   ReportKind.post => Icons.article_outlined,
   ReportKind.message => Icons.chat_bubble_outline_rounded,
+  ReportKind.story => Icons.motion_photos_on_outlined,
 };
 
 SettingsTone adminKindTone(ReportKind kind) => switch (kind) {
@@ -16,6 +17,7 @@ SettingsTone adminKindTone(ReportKind kind) => switch (kind) {
   ReportKind.circle => SettingsTone.success,
   ReportKind.post => SettingsTone.warning,
   ReportKind.message => SettingsTone.neutral,
+  ReportKind.story => SettingsTone.accent,
 };
 
 /// A small rounded state label ("Open", "Suspended until 3 Nov").

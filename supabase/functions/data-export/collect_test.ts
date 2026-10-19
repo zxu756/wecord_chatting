@@ -168,6 +168,7 @@ const emptyRpc: Record<string, unknown> = {
   },
   export_my_forms: [],
   export_my_feedback: [],
+  export_my_stories: { stories: [], close_friends: [], reports: [] },
   export_my_ai_digest: { enabled: false, subscriptions: [] },
   export_my_note_extras: { comments: [], templates: [], published: [] },
 };
@@ -184,6 +185,24 @@ const feedbackAnswer = [{
   screenshot_path: "u-1/s-1.jpg",
   replies: [{ body: "Fixed in 1.4.1", published_at: "2026-10-21T08:00:00Z" }],
 }];
+
+const storiesAnswer = {
+  stories: [{
+    id: "s-1",
+    media_kind: "photo",
+    caption: "Sunrise",
+    audience: "friends",
+    created_at: "2026-10-20T08:00:00Z",
+    expires_at: "2026-10-21T08:00:00Z",
+    viewer_count: 3,
+    bucket: "stories",
+    path: "u-1/s-1.jpg",
+    poster_path: null,
+    thumb_path: "u-1/s-1-t.jpg",
+  }],
+  close_friends: [{ user_id: "u-2", name: "Bart", username: "bart" }],
+  reports: [],
+};
 
 const me = "u-1";
 const world: Record<string, Row[] | Error> = {
@@ -204,11 +223,25 @@ const world: Record<string, Row[] | Error> = {
       user_low_remark: "Bart from work",
       created_at: "2026-03-01T00:00:00Z",
     },
-    { user_low_id: "u-2", user_high_id: "u-3", created_at: "2026-03-02T00:00:00Z" },
+    {
+      user_low_id: "u-2",
+      user_high_id: "u-3",
+      created_at: "2026-03-02T00:00:00Z",
+    },
   ],
   friend_requests: [
-    { requester_id: me, receiver_id: "u-3", status: "pending", created_at: "x" },
-    { requester_id: "u-2", receiver_id: "u-3", status: "pending", created_at: "x" },
+    {
+      requester_id: me,
+      receiver_id: "u-3",
+      status: "pending",
+      created_at: "x",
+    },
+    {
+      requester_id: "u-2",
+      receiver_id: "u-3",
+      status: "pending",
+      created_at: "x",
+    },
   ],
   blocks: [{ blocker_id: me, blocked_id: "u-3", created_at: "y" }],
   conversation_members: [
@@ -224,7 +257,11 @@ const world: Record<string, Row[] | Error> = {
     { id: "c-3", type: "channel", title: null, created_at: "c" },
     { id: "c-9", type: "group", title: "Not mine", created_at: "c" },
   ],
-  circle_channels: [{ conversation_id: "c-3", name: "general", circle_id: "k-1" }],
+  circle_channels: [{
+    conversation_id: "c-3",
+    name: "general",
+    circle_id: "k-1",
+  }],
   circles: [{ id: "k-1", name: "Hikers" }],
   circle_members: [
     { circle_id: "k-1", user_id: me, nickname: "Trail Ada", joined_at: "j2" },
@@ -237,7 +274,12 @@ const world: Record<string, Row[] | Error> = {
       conversation_id: "c-1",
       type: "file",
       body: "plan",
-      attachment: { kind: "file", bucket: "chat-files", path: "c-1/plan.pdf", name: "plan.pdf" },
+      attachment: {
+        kind: "file",
+        bucket: "chat-files",
+        path: "c-1/plan.pdf",
+        name: "plan.pdf",
+      },
       created_at: "2026-10-01T10:00:00Z",
       edited_at: null,
       recalled_at: null,
@@ -276,7 +318,10 @@ Deno.test("collects only the person's own data, with names for chats", async () 
 
   assertEquals(data.user.email, "ada@example.com");
   assertEquals(data.profile?.["username"], "ada");
-  assertEquals(data.settings["privacy"], { user_id: me, show_online_status: false });
+  assertEquals(data.settings["privacy"], {
+    user_id: me,
+    show_online_status: false,
+  });
 
   assertEquals(data.friends.map((f) => [f.username, f.remark]), [
     ["bart", "Bart from work"],
@@ -343,7 +388,9 @@ Deno.test("every query is scoped to the person", async () => {
   ) {
     assert(calls.includes(expected), `missing ${expected}`);
   }
-  assert(calls.some((call) => call.startsWith("friendships.or(user_low_id.eq.u-1")));
+  assert(
+    calls.some((call) => call.startsWith("friendships.or(user_low_id.eq.u-1")),
+  );
 });
 
 Deno.test("a table that cannot be read is skipped, not fatal", async () => {
@@ -420,6 +467,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
+      export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -439,11 +487,16 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_feedback", args: { target_user_id: me } },
     { name: "export_my_ai_digest", args: { target_user_id: me } },
     { name: "export_my_note_extras", args: { target_user_id: me } },
+    { name: "export_my_stories", args: { target_user_id: me } },
   ]);
   assertEquals(data.aiDigest?.["enabled"], true);
   assertEquals((data.noteExtras?.["comments"] as unknown[]).length, 1);
   assertEquals(data.forms?.length, 1);
   assertEquals(data.feedback?.length, 1);
+  assertEquals((data.stories?.["stories"] as unknown[] | undefined)?.length, 1);
+  // My dailies are linked, never put into the archive.
+  assert("stories/u-1/s-1.jpg" in data.attachmentLinks);
+  assert("stories/u-1/s-1-t.jpg" in data.attachmentLinks);
   // The screenshot of my feedback is linked, never put into the archive.
   assert("feedback-screenshots/u-1/s-1.jpg" in data.attachmentLinks);
   // The picture I attached to an answer is linked, not fetched.
@@ -466,6 +519,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
+      export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -512,14 +566,16 @@ Deno.test("files past the total or count cap are linked, not dropped", async () 
     "moments/u-1/p-1-1.jpg": new Uint8Array(2),
     "wallpapers/u-1/w-1.jpg": new Uint8Array(1),
   };
-  const run = async (limits: Parameters<typeof collectExportData>[1]["fileLimits"]) => {
+  const run = async (
+    limits: Parameters<typeof collectExportData>[1]["fileLimits"],
+  ) => {
     const { client } = fakeClient(world, {
       rpc: {
-      export_my_moments: momentsAnswer,
-      export_my_extras: extrasAnswer,
-      export_my_forms: [],
-      export_my_feedback: [],
-    },
+        export_my_moments: momentsAnswer,
+        export_my_extras: extrasAnswer,
+        export_my_forms: [],
+        export_my_feedback: [],
+      },
       objects,
     });
     return await collectExportData(client, {
@@ -560,6 +616,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_extras: extrasAnswer,
       export_my_forms: formsAnswer,
       export_my_feedback: feedbackAnswer,
+      export_my_stories: storiesAnswer,
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
     },
@@ -582,7 +639,9 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.feedback, null);
   assertEquals(data.aiDigest, null);
   assertEquals(data.noteExtras, null);
+  assertEquals(data.stories, null);
   assertEquals(data.skipped.sort(), [
+    "daily",
     "daily digest",
     "feedback",
     "forms",

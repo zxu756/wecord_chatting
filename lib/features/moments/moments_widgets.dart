@@ -674,6 +674,10 @@ class _AudienceChip extends StatelessWidget {
         tr('Hidden from some'),
       ),
       MomentVisibility.friends => (Icons.group_outlined, tr('Friends')),
+      MomentVisibility.close => (
+        Icons.favorite_border_rounded,
+        tr('Close friends'),
+      ),
     };
     return Container(
       key: const ValueKey('moment-audience-chip'),

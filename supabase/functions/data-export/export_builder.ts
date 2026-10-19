@@ -126,6 +126,12 @@ export interface ExportData {
    * could not be read, absent in older callers.
    */
   noteExtras?: Json | null;
+  /**
+   * The dailies still up, my close friends and my reports of dailies
+   * (export_my_stories, migration 202610240250); null when it could not be
+   * read, absent in older callers.
+   */
+  stories?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -261,7 +267,10 @@ export function ownedFiles(
 
 /** `files/moments/<post>-0.jpg` for `moments/<user>/<post>-0.jpg`. */
 export function exportFileZipPath(bucket: string, path: string): string {
-  const name = path.split("/").slice(1).join("-").replace(/[^A-Za-z0-9._-]/g, "_");
+  const name = path.split("/").slice(1).join("-").replace(
+    /[^A-Za-z0-9._-]/g,
+    "_",
+  );
   return `files/${bucket}/${name === "" ? "file" : name}`;
 }
 
@@ -414,9 +423,9 @@ function page(title: string, body: string): string {
 
 function field(label: string, value: string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "";
-  return `<div class="row"><span>${escapeHtml(label)}</span><span class="muted">${
-    escapeHtml(value)
-  }</span></div>`;
+  return `<div class="row"><span>${
+    escapeHtml(label)
+  }</span><span class="muted">${escapeHtml(value)}</span></div>`;
 }
 
 /** The overview page: who you are, how much there is, links to chats. */
@@ -451,8 +460,11 @@ export function buildIndexHtml(
     } · ${count} message${count === 1 ? "" : "s"} from you</span></div>`;
   }).join("");
   const friendRows = data.friends.map((friend) =>
-    `<div class="row"><span>${escapeHtml(friend.displayName || friend.username)
-    } <span class="muted">@${escapeHtml(friend.username)}</span></span><span class="muted">${
+    `<div class="row"><span>${
+      escapeHtml(friend.displayName || friend.username)
+    } <span class="muted">@${
+      escapeHtml(friend.username)
+    }</span></span><span class="muted">${
       escapeHtml(friend.remark ? `“${friend.remark}” · ` : "")
     }${escapeHtml(readableTime(friend.since))}</span></div>`
   ).join("");
@@ -648,6 +660,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   if (data.noteExtras) {
     out.push({ path: "data/note_extras.json", value: data.noteExtras });
   }
+  if (data.stories) {
+    out.push({ path: "data/stories.json", value: storiesJson(data) });
+  }
   const extras = data.extras;
   if (extras) {
     out.push({ path: "data/chains.json", value: extras.chains });
@@ -764,7 +779,11 @@ export function buildMomentsHtml(data: ExportData): string {
             escapeHtml(str(post["link_title"]) ?? link)
           }</a></div>`
           : ""
-      }${str(post["location"]) ? `<div class="muted">📍 ${escapeHtml(str(post["location"])!)}</div>` : ""}${photos}${videoHtml}<div>${
+      }${
+        str(post["location"])
+          ? `<div class="muted">📍 ${escapeHtml(str(post["location"])!)}</div>`
+          : ""
+      }${photos}${videoHtml}<div>${
         tag(visibilityLabels[str(post["visibility"]) ?? ""] ?? "Friends")
       }${who ? ` <span class="muted">${escapeHtml(who)}</span>` : ""}</div>`,
     );
@@ -780,7 +799,9 @@ export function buildMomentsHtml(data: ExportData): string {
           : ""
       }</div>${text(comment["text"])}${
         str(comment["post_text"])
-          ? `<div class="muted">Your post: ${escapeHtml(str(comment["post_text"])!)}</div>`
+          ? `<div class="muted">Your post: ${
+            escapeHtml(str(comment["post_text"])!)
+          }</div>`
           : ""
       }`,
     )
@@ -793,7 +814,9 @@ export function buildMomentsHtml(data: ExportData): string {
     }</span></div>`
   ).join("");
   const choices = moments.friendPrefs.map((pref) =>
-    `<div class="row"><span>${escapeHtml(personName(pref["friend"]))}</span><span class="muted">${
+    `<div class="row"><span>${
+      escapeHtml(personName(pref["friend"]))
+    }</span><span class="muted">${
       [
         pref["hide_mine"] === true ? "can’t see your Moments" : "",
         pref["hide_theirs"] === true ? "their Moments hidden from you" : "",
@@ -801,12 +824,16 @@ export function buildMomentsHtml(data: ExportData): string {
     }</span></div>`
   ).join("");
   const tags = moments.tags.map((t) =>
-    `<div class="row"><span>${escapeHtml(str(t["name"]) ?? "")}</span><span class="muted">${
+    `<div class="row"><span>${
+      escapeHtml(str(t["name"]) ?? "")
+    }</span><span class="muted">${
       escapeHtml(names(t["friends"]) || "nobody yet")
     }</span></div>`
   ).join("");
   const stars = moments.stars.map((s) =>
-    `<div class="row"><span>${escapeHtml(personName(s["friend"]))}</span><span class="muted">${
+    `<div class="row"><span>${
+      escapeHtml(personName(s["friend"]))
+    }</span><span class="muted">${
       escapeHtml(readableTime(str(s["starred_at"])))
     }</span></div>`
   ).join("");
@@ -821,17 +848,31 @@ export.</p>
       field("Visible range", range ? rangeLabels[range] ?? range : null)
     }${
       settings
-        ? fileHtml(ref(MOMENTS_BUCKET, settings["cover_path"]), "Cover photo", false)
+        ? fileHtml(
+          ref(MOMENTS_BUCKET, settings["cover_path"]),
+          "Cover photo",
+          false,
+        )
         : ""
-    }${
-      settings ? "" : '<div class="row muted">Default settings.</div>'
-    }</div>
+    }${settings ? "" : '<div class="row muted">Default settings.</div>'}</div>
 ${section(`Your posts (${moments.posts.length})`, posts, "No posts.")}
-${section(`Comments you wrote (${moments.comments.length})`, comments, "No comments.")}
+${
+      section(
+        `Comments you wrote (${moments.comments.length})`,
+        comments,
+        "No comments.",
+      )
+    }
 ${section(`Posts you liked (${moments.likes.length})`, likes, "No likes.")}
 ${section("Choices for friends", choices, "No special choices.")}
 ${section(`Friend tags (${moments.tags.length})`, tags, "No tags.")}
-${section(`Starred friends (${moments.stars.length})`, stars, "No starred friends.")}`,
+${
+      section(
+        `Starred friends (${moments.stars.length})`,
+        stars,
+        "No starred friends.",
+      )
+    }`,
   );
 }
 
@@ -842,12 +883,18 @@ export function buildChainsHtml(data: ExportData): string {
     return entry(
       str(chain["created_at"]),
       `<div><strong>${escapeHtml(str(chain["title"]) ?? "")}</strong> ${
-        tag(mine ? "you started it" : `started by ${personName(chain["creator"])}`)
+        tag(
+          mine
+            ? "you started it"
+            : `started by ${personName(chain["creator"])}`,
+        )
       }</div><div class="muted">in ${
         escapeHtml(conversationName(data, chain["conversation_id"]))
       }</div>${text(chain["description"])}${
         str(chain["example"])
-          ? `<div class="muted">Example: ${escapeHtml(str(chain["example"])!)}</div>`
+          ? `<div class="muted">Example: ${
+            escapeHtml(str(chain["example"])!)
+          }</div>`
           : ""
       }${
         my
@@ -870,13 +917,20 @@ other people’s lines, and the description of chains you did not start, are not
 export function buildNotesHtml(data: ExportData): string {
   const extras = data.extras!;
   const notes = extras.notes.map((note) => {
-    const blocks = objects(note["blocks"]).map((block) =>
-      text(block["text"])
-    ).join("");
+    const blocks = objects(note["blocks"]).map((block) => text(block["text"]))
+      .join("");
     return entry(
       str(note["updated_at"]),
-      `<div><strong>${escapeHtml(`${str(note["icon"]) ?? ""} ${str(note["title"]) ?? "Untitled"}`)}</strong> ${
-        tag(note["created_by_me"] === true ? "you made it" : "made by someone else")
+      `<div><strong>${
+        escapeHtml(
+          `${str(note["icon"]) ?? ""} ${str(note["title"]) ?? "Untitled"}`,
+        )
+      }</strong> ${
+        tag(
+          note["created_by_me"] === true
+            ? "you made it"
+            : "made by someone else",
+        )
       }</div><div class="muted">in ${
         escapeHtml(conversationName(data, note["conversation_id"]))
       }</div>${blocks || '<div class="muted">(no text of yours)</div>'}`,
@@ -884,26 +938,38 @@ export function buildNotesHtml(data: ExportData): string {
   }).join("");
   const lists = extras.taskLists.map((list) => {
     const items = objects(list["items"]).map((item) =>
-      `<div class="body">${
-        str(item["completed_at"]) ? "☑" : "☐"
-      } ${escapeHtml(str(item["title"]) ?? "")}${
+      `<div class="body">${str(item["completed_at"]) ? "☑" : "☐"} ${
+        escapeHtml(str(item["title"]) ?? "")
+      }${
         str(item["details"])
           ? ` <span class="muted">— ${escapeHtml(str(item["details"])!)}</span>`
           : ""
       }${
         str(item["due_at"])
-          ? ` <span class="muted">due ${escapeHtml(readableTime(str(item["due_at"])))}</span>`
+          ? ` <span class="muted">due ${
+            escapeHtml(readableTime(str(item["due_at"])))
+          }</span>`
           : ""
       }${
         names(item["assigned_to"])
-          ? ` <span class="muted">for ${escapeHtml(names(item["assigned_to"]))}</span>`
+          ? ` <span class="muted">for ${
+            escapeHtml(names(item["assigned_to"]))
+          }</span>`
           : ""
       }</div>`
     ).join("");
     return entry(
       str(list["created_at"]),
-      `<div><strong>${escapeHtml(`${str(list["icon"]) ?? ""} ${str(list["title"]) ?? "Untitled"}`)}</strong> ${
-        tag(list["created_by_me"] === true ? "you made it" : "made by someone else")
+      `<div><strong>${
+        escapeHtml(
+          `${str(list["icon"]) ?? ""} ${str(list["title"]) ?? "Untitled"}`,
+        )
+      }</strong> ${
+        tag(
+          list["created_by_me"] === true
+            ? "you made it"
+            : "made by someone else",
+        )
       }</div><div class="muted">in ${
         escapeHtml(conversationName(data, list["conversation_id"]))
       }</div>${items || '<div class="muted">(no items of yours)</div>'}`,
@@ -926,8 +992,12 @@ export function buildSavedHtml(data: ExportData): string {
   const saved = extras.savedMessages.map((item) =>
     entry(
       str(item["saved_at"]),
-      `<div class="muted">in ${escapeHtml(conversationName(data, item["conversation_id"]))}${
-        str(item["done_at"]) ? ` · done ${escapeHtml(readableTime(str(item["done_at"])))}` : ""
+      `<div class="muted">in ${
+        escapeHtml(conversationName(data, item["conversation_id"]))
+      }${
+        str(item["done_at"])
+          ? ` · done ${escapeHtml(readableTime(str(item["done_at"])))}`
+          : ""
       }</div>${
         item["from_you"] === true
           ? text(item["text"])
@@ -938,9 +1008,9 @@ export function buildSavedHtml(data: ExportData): string {
   const reminders = extras.reminders.map((item) =>
     entry(
       str(item["remind_at"]),
-      `<div class="muted">in ${escapeHtml(conversationName(data, item["conversation_id"]))}${
-        str(item["dismissed_at"]) ? " · dismissed" : ""
-      }</div>${
+      `<div class="muted">in ${
+        escapeHtml(conversationName(data, item["conversation_id"]))
+      }${str(item["dismissed_at"]) ? " · dismissed" : ""}</div>${
         item["from_you"] === true
           ? text(item["text"])
           : '<div class="muted">About a message from someone else (not included).</div>'
@@ -950,9 +1020,9 @@ export function buildSavedHtml(data: ExportData): string {
   const scheduled = extras.scheduledMessages.map((item) =>
     entry(
       str(item["send_at"]),
-      `<div class="muted">to ${escapeHtml(conversationName(data, item["conversation_id"]))} · ${
-        escapeHtml(str(item["status"]) ?? "")
-      }</div>${text(item["text"])}`,
+      `<div class="muted">to ${
+        escapeHtml(conversationName(data, item["conversation_id"]))
+      } · ${escapeHtml(str(item["status"]) ?? "")}</div>${text(item["text"])}`,
     )
   ).join("");
   return page(
@@ -960,9 +1030,21 @@ export function buildSavedHtml(data: ExportData): string {
     `${backLink()}<h1>Saved messages, reminders and scheduled messages</h1>
 <p class="muted">What you saved, set reminders for and scheduled. The text of a
 saved or reminded message is included only when you wrote it.</p>
-${section(`Saved messages (${extras.savedMessages.length})`, saved, "Nothing saved.")}
+${
+      section(
+        `Saved messages (${extras.savedMessages.length})`,
+        saved,
+        "Nothing saved.",
+      )
+    }
 ${section(`Reminders (${extras.reminders.length})`, reminders, "No reminders.")}
-${section(`Scheduled messages (${extras.scheduledMessages.length})`, scheduled, "Nothing scheduled.")}`,
+${
+      section(
+        `Scheduled messages (${extras.scheduledMessages.length})`,
+        scheduled,
+        "Nothing scheduled.",
+      )
+    }`,
   );
 }
 
@@ -982,7 +1064,11 @@ export function buildWallpapersHtml(data: ExportData): string {
       tag(what)
     }</div>${
       kind === "photo"
-        ? fileHtml(ref(WALLPAPERS_BUCKET, wallpaper["photo_path"]), "Wallpaper photo", true)
+        ? fileHtml(
+          ref(WALLPAPERS_BUCKET, wallpaper["photo_path"]),
+          "Wallpaper photo",
+          true,
+        )
         : ""
     }<div class="muted">dim ${String(wallpaper["dim"] ?? "")}${
       wallpaper["blur"] === true ? ", blurred" : ""
@@ -992,7 +1078,9 @@ export function buildWallpapersHtml(data: ExportData): string {
     "Chat wallpapers — your WeCord data",
     `${backLink()}<h1>Chat wallpapers</h1>
 <p class="muted">The wallpapers you chose, for all chats or for one chat.</p>
-<div class="card">${rows || '<div class="row muted">No wallpapers.</div>'}</div>`,
+<div class="card">${
+      rows || '<div class="row muted">No wallpapers.</div>'
+    }</div>`,
   );
 }
 
@@ -1036,6 +1124,100 @@ export function feedbackFilesToSign(
   return [...seen.values()];
 }
 
+const STORIES_BUCKET = "stories";
+
+/** The files of my dailies: links, never put into the archive. */
+export function storyFilesToSign(
+  stories: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const story of objects(stories?.["stories"])) {
+    for (const key of ["path", "poster_path", "thumb_path"]) {
+      const path = story[key];
+      if (typeof path === "string") {
+        seen.set(`${STORIES_BUCKET}/${path}`, { bucket: STORIES_BUCKET, path });
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+const audienceLabels: Record<string, string> = {
+  friends: "All friends",
+  close: "Close friends",
+  private: "Only you",
+  only: "Only some friends",
+  except: "All friends except some",
+};
+
+/** My dailies with links to their files; the close friends and reports. */
+function storiesJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const stories = isObject(data.stories) ? data.stories : {};
+  return {
+    dailies: objects(stories["stories"]).map((story) => {
+      const { path, poster_path: poster, thumb_path: thumb, ...rest } = story;
+      delete rest["bucket"];
+      return {
+        ...rest,
+        file: ref(STORIES_BUCKET, path),
+        poster: poster ? ref(STORIES_BUCKET, poster) : null,
+        thumbnail: ref(STORIES_BUCKET, thumb),
+      };
+    }),
+    close_friends: objects(stories["close_friends"]),
+    reports_you_filed: objects(stories["reports"]),
+  };
+}
+
+export function buildStoriesHtml(data: ExportData): string {
+  const ref = fileRefs(data);
+  const stories = isObject(data.stories) ? data.stories : {};
+  const dailies = objects(stories["stories"]).map((story) => {
+    const kind = str(story["media_kind"]) === "video" ? "Video" : "Photo";
+    const picture = fileHtml(
+      ref(STORIES_BUCKET, story["thumb_path"]),
+      `${kind} thumbnail`,
+      true,
+    );
+    const media = fileHtml(ref(STORIES_BUCKET, story["path"]), kind, false);
+    const audience = audienceLabels[str(story["audience"]) ?? ""] ?? "";
+    const viewers = Number(story["viewer_count"] ?? 0);
+    const ends = readableTime(str(story["expires_at"]));
+    return entry(
+      str(story["created_at"]),
+      `${text(story["caption"])}${picture}${media}<div class="muted">${
+        escapeHtml(audience)
+      } · ${viewers} viewer${viewers === 1 ? "" : "s"}, ends ${
+        escapeHtml(ends)
+      }</div>`,
+    );
+  }).join("");
+  const close = objects(stories["close_friends"]).map((person) =>
+    `<div class="row">${
+      escapeHtml(str(person["name"]) ?? personName(person))
+    }</div>`
+  ).join("");
+  const reports = objects(stories["reports"]).map((report) =>
+    entry(
+      str(report["created_at"]),
+      `<div class="body">${escapeHtml(str(report["reason"]) ?? "")}</div>${
+        text(report["details"])
+      }<div class="muted">${escapeHtml(str(report["status"]) ?? "")}</div>`,
+    )
+  ).join("");
+  return page(
+    "Daily — your WeCord data",
+    `${backLink()}<h1>Daily</h1>
+<p class="muted">The dailies you have up now (a daily ends 24 hours after you
+post it), your close friends and the dailies you reported. Who viewed a daily
+is not listed. Links to the files work until this export expires.</p>
+${section("Your dailies", dailies, "No dailies up.")}
+${section("Close friends", close, "No close friends.")}
+${section("Reports you filed", reports, "No reports.")}`,
+  );
+}
+
 /** My feedback with the link to each screenshot. */
 function feedbackJson(data: ExportData): Json[] {
   const ref = fileRefs(data);
@@ -1074,7 +1256,9 @@ export function buildFeedbackHtml(data: ExportData): string {
     `${backLink()}<h1>Feedback and help</h1>
 <p class="muted">The feedback you sent, with the version and platform it carried,
 and the replies from the WeCord team.</p>
-<div class="card">${items || '<div class="row muted">No feedback.</div>'}</div>`,
+<div class="card">${
+      items || '<div class="row muted">No feedback.</div>'
+    }</div>`,
   );
 }
 
@@ -1102,7 +1286,9 @@ function formsJson(data: ExportData): Json[] {
     return {
       ...form,
       my_responses: objects(form["my_responses"]).map((response) => {
-        const answers = isObject(response["answers"]) ? response["answers"] : {};
+        const answers = isObject(response["answers"])
+          ? response["answers"]
+          : {};
         return {
           ...response,
           readable: questions.map((question) => {
@@ -1209,11 +1395,15 @@ export function buildNoteExtrasHtml(data: ExportData): string {
   const comments = objects(extras["comments"]).map((comment) =>
     entry(
       str(comment["created_at"]),
-      `<div><strong>${escapeHtml(str(comment["note_title"]) || "Untitled note")}</strong> ${
-        comment["reply"] === true ? tag("reply") : ""
-      }${comment["resolved"] === true ? tag("resolved") : ""}</div>${
+      `<div><strong>${
+        escapeHtml(str(comment["note_title"]) || "Untitled note")
+      }</strong> ${comment["reply"] === true ? tag("reply") : ""}${
+        comment["resolved"] === true ? tag("resolved") : ""
+      }</div>${
         str(comment["quoted"])
-          ? `<div class="muted">on “${escapeHtml(str(comment["quoted"]) ?? "")}”</div>`
+          ? `<div class="muted">on “${
+            escapeHtml(str(comment["quoted"]) ?? "")
+          }”</div>`
           : ""
       }${text(comment["body"])}`,
     )
@@ -1221,15 +1411,23 @@ export function buildNoteExtrasHtml(data: ExportData): string {
   const templates = objects(extras["templates"]).map((template) =>
     entry(
       str(template["created_at"]),
-      `<div><strong>${escapeHtml(str(template["name"]) ?? "")}</strong> <span class="muted">${
-        escapeHtml(String(Array.isArray(template["blocks"]) ? template["blocks"].length : 0))
+      `<div><strong>${
+        escapeHtml(str(template["name"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(
+          String(
+            Array.isArray(template["blocks"]) ? template["blocks"].length : 0,
+          ),
+        )
       } blocks</span></div>`,
     )
   ).join("");
   const published = objects(extras["published"]).map((note) =>
     entry(
       str(note["published_at"]),
-      `<div><strong>${escapeHtml(str(note["note_title"]) || "Untitled note")}</strong> ${
+      `<div><strong>${
+        escapeHtml(str(note["note_title"]) || "Untitled note")
+      }</strong> ${
         note["allow_indexing"] === true ? tag("search engines allowed") : ""
       }</div>`,
     )
@@ -1240,11 +1438,17 @@ export function buildNoteExtrasHtml(data: ExportData): string {
 <p class="muted">Only what you wrote. The links of pages you published are
 secret and are not included; withdrawing a page turns its link off.</p>
 <h2>Comments you wrote</h2>
-<div class="card">${comments || '<div class="row muted">No comments.</div>'}</div>
+<div class="card">${
+      comments || '<div class="row muted">No comments.</div>'
+    }</div>
 <h2>Your templates</h2>
-<div class="card">${templates || '<div class="row muted">No templates.</div>'}</div>
+<div class="card">${
+      templates || '<div class="row muted">No templates.</div>'
+    }</div>
 <h2>Pages you published</h2>
-<div class="card">${published || '<div class="row muted">No published pages.</div>'}</div>`,
+<div class="card">${
+      published || '<div class="row muted">No published pages.</div>'
+    }</div>`,
   );
 }
 
@@ -1263,9 +1467,13 @@ export function buildSectionPages(
     out.push({
       path: "pages/moments.html",
       label: "Moments, friend tags and starred friends",
-      summary: `${moments.posts.length} post${moments.posts.length === 1 ? "" : "s"} · ${moments.comments.length} comment${
+      summary: `${moments.posts.length} post${
+        moments.posts.length === 1 ? "" : "s"
+      } · ${moments.comments.length} comment${
         moments.comments.length === 1 ? "" : "s"
-      } · ${moments.likes.length} like${moments.likes.length === 1 ? "" : "s"} · ${moments.tags.length} tag${
+      } · ${moments.likes.length} like${
+        moments.likes.length === 1 ? "" : "s"
+      } · ${moments.tags.length} tag${
         moments.tags.length === 1 ? "" : "s"
       } · ${moments.stars.length} starred`,
       content: buildMomentsHtml(data),
@@ -1287,6 +1495,14 @@ export function buildSectionPages(
       content: buildFeedbackHtml(data),
     });
   }
+  if (data.stories) {
+    out.push({
+      path: "pages/stories.html",
+      label: "Daily",
+      summary: `${objects(data.stories["stories"]).length} up now`,
+      content: buildStoriesHtml(data),
+    });
+  }
   if (data.aiDigest) {
     const followed = objects(
       isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
@@ -1294,7 +1510,9 @@ export function buildSectionPages(
     out.push({
       path: "pages/ai_digest.html",
       label: "Daily digest",
-      summary: `${followed.length} chat${followed.length === 1 ? "" : "s"} followed`,
+      summary: `${followed.length} chat${
+        followed.length === 1 ? "" : "s"
+      } followed`,
       content: buildAiDigestHtml(data),
     });
   }
@@ -1304,9 +1522,11 @@ export function buildSectionPages(
     out.push({
       path: "pages/note_extras.html",
       label: "Note comments, templates and published pages",
-      summary: `${counts("comments")} comment${counts("comments") === 1 ? "" : "s"} · ${
-        counts("templates")
-      } template${counts("templates") === 1 ? "" : "s"} · ${counts("published")} published`,
+      summary: `${counts("comments")} comment${
+        counts("comments") === 1 ? "" : "s"
+      } · ${counts("templates")} template${
+        counts("templates") === 1 ? "" : "s"
+      } · ${counts("published")} published`,
       content: buildNoteExtrasHtml(data),
     });
   }
@@ -1322,7 +1542,9 @@ export function buildSectionPages(
       {
         path: "pages/notes.html",
         label: "Notes and task lists",
-        summary: `${extras.notes.length} note${extras.notes.length === 1 ? "" : "s"} · ${extras.taskLists.length} list${
+        summary: `${extras.notes.length} note${
+          extras.notes.length === 1 ? "" : "s"
+        } · ${extras.taskLists.length} list${
           extras.taskLists.length === 1 ? "" : "s"
         }`,
         content: buildNotesHtml(data),
@@ -1330,7 +1552,8 @@ export function buildSectionPages(
       {
         path: "pages/saved.html",
         label: "Saved messages, reminders and scheduled messages",
-        summary: `${extras.savedMessages.length} saved · ${extras.reminders.length} reminders · ${extras.scheduledMessages.length} scheduled`,
+        summary:
+          `${extras.savedMessages.length} saved · ${extras.reminders.length} reminders · ${extras.scheduledMessages.length} scheduled`,
         content: buildSavedHtml(data),
       },
       {
@@ -1373,6 +1596,7 @@ data/feedback.json    Feedback you sent and the replies you got.
 data/ai_digest.json   Your daily digest settings and the chats you follow.
 data/note_extras.json The comments you wrote on notes, your note templates
                       and the pages you published (without their links).
+data/stories.json     Your dailies still up, close friends and reports.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json

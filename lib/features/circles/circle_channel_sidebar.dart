@@ -23,10 +23,14 @@ import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circle_workspace.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
+import 'package:wecord/features/circles/onboarding/guide_page.dart';
+import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
+import 'package:wecord/features/profile/support_links.dart';
 import 'package:wecord/features/voice/voice_participant_menu.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
@@ -720,6 +724,22 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     final currentMember = detail.currentMember;
     final canManageChannels = detail.canManageChannels;
     final reviewCount = _reviewCount(detail);
+    final hasGuide =
+        ref.read(circleGuideProvider(detail.circle.id)).value?.enabled ?? false;
+    // The circle's support page, for members; hidden on iPhone.
+    String? supportUrl;
+    if (supportLinksAvailable()) {
+      try {
+        supportUrl = await ref
+            .read(circleSupportUrlProvider(detail.circle.id).future)
+            .timeout(const Duration(seconds: 2));
+      } on Object {
+        supportUrl = null;
+      }
+      if (!mounted) {
+        return;
+      }
+    }
     // What members use every day, what runs the circle, what keeps it safe;
     // a section with nothing for this member does not show.
     final everyday = <CircleMenuItem<_CircleMenuAction>>[
@@ -735,6 +755,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         icon: Icons.notifications_outlined,
         label: tr('Notification settings'),
       ),
+      if (supportUrl != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.support,
+          icon: Icons.favorite_border_rounded,
+          label: tr('Support this circle'),
+        ),
       if (currentMember != null)
         CircleMenuItem(
           value: _CircleMenuAction.emojis,
@@ -752,6 +778,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           value: _CircleMenuAction.changeCircleAvatar,
           icon: Icons.face_retouching_natural_outlined,
           label: tr('Change circle avatar'),
+        ),
+      // The circle has a guide (onboarding 2.0): questions or tasks.
+      if (currentMember != null && hasGuide)
+        CircleMenuItem(
+          value: _CircleMenuAction.guide,
+          icon: Icons.explore_outlined,
+          label: tr('Member guide'),
         ),
     ];
     final manage = <CircleMenuItem<_CircleMenuAction>>[
@@ -878,6 +911,13 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleOnboardingSettings(context, detail);
       case _CircleMenuAction.emojis:
         openCircleEmojisScreen(context, detail.circle.id);
+      case _CircleMenuAction.guide:
+        openCircleGuide(
+          context,
+          circleId: detail.circle.id,
+          circleName: detail.circle.name,
+          channels: detail.channels,
+        );
       case _CircleMenuAction.changeNickname:
         widget.onChangeNickname(currentMember!);
       case _CircleMenuAction.changeCircleAvatar:
@@ -892,6 +932,10 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           circleId: detail.circle.id,
           circleName: detail.circle.name,
         );
+      case _CircleMenuAction.support:
+        if (supportUrl != null) {
+          openSupportLink(context, supportUrl);
+        }
       case _CircleMenuAction.transferOwnership:
         transferCircleOwnership(context, detail: detail);
       case _CircleMenuAction.leave:
@@ -1119,8 +1163,10 @@ enum _CircleMenuAction {
   bans,
   autoMod,
   onboarding,
+  guide,
   emojis,
   notificationSettings,
+  support,
   changeNickname,
   changeCircleAvatar,
   transferOwnership,

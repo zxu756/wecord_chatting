@@ -77,3 +77,57 @@ class MessageInteraction {
   final String userName;
   final String? userId;
 }
+
+/// What kind of answer the WeCord AI assistant gave.
+enum AiReplyKind {
+  answer,
+  summary,
+  translation,
+  rewrite,
+  todos;
+
+  static AiReplyKind fromJson(Object? value) {
+    for (final kind in values) {
+      if (kind.name == value) {
+        return kind;
+      }
+    }
+    return AiReplyKind.answer;
+  }
+}
+
+/// The mark on an answer from the WeCord AI assistant (messages.ai_reply):
+/// who asked, what kind of answer it is, and for a to-do list the items it
+/// found (as the `ai` function wrote them; the app reads them with
+/// ExtractedAction.fromJson).
+class MessageAiReply {
+  const MessageAiReply({
+    required this.kind,
+    this.requesterId,
+    this.requesterName = '',
+    this.items = const [],
+  });
+
+  /// Null for anything that is not an ai_reply object.
+  static MessageAiReply? maybeFromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final rawItems = json['items'];
+    return MessageAiReply(
+      kind: AiReplyKind.fromJson(json['kind']),
+      requesterId: json['requester_id'] as String?,
+      requesterName: json['requester_name'] as String? ?? '',
+      items: [
+        if (rawItems is List)
+          for (final item in rawItems)
+            if (item is Map) Map<String, dynamic>.from(item),
+      ],
+    );
+  }
+
+  final AiReplyKind kind;
+  final String? requesterId;
+  final String requesterName;
+  final List<Map<String, dynamic>> items;
+}

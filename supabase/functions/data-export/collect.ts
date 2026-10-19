@@ -439,6 +439,20 @@ export async function collectExportData(
     null,
   );
 
+  // The daily digest I set up: the switch, time and chats (export_my_ai_digest).
+  const aiDigest = await tryRead<Row | null>(
+    skipped,
+    "daily digest",
+    async () => {
+      const result = await admin.rpc("export_my_ai_digest", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -502,6 +516,7 @@ export async function collectExportData(
     extras,
     forms,
     feedback,
+    aiDigest,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

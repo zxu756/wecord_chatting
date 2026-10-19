@@ -100,6 +100,7 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610230300_circle_invite_tracking.sql
 \i supabase/migrations/202610230310_circle_insights_data.sql
 \i supabase/migrations/202610230320_circle_insights_rpc.sql
+\i supabase/migrations/202610230330_insights_skip_system.sql
 \o /dev/null
 
 create temp table failures (msg text);
@@ -525,11 +526,14 @@ begin
     (general_conv, pg_temp.i('ada'), interval '-1 second', null, null, null),
     (general_conv, pg_temp.i('ada'), interval '1 day', null, null, null)
   ) v(conv, who, at_time, recalled, review, hk);
+  -- not counted either: a system notice sent as a member (the welcome card)
+  insert into public.messages (conversation_id, sender_id, type, body, created_at)
+  values (general_conv, pg_temp.i('mia'), 'system', 'm', (d::timestamp at time zone 'UTC') + interval '11 hours 10 minutes');
   alter table public.messages enable trigger user;
 
   perform pg_temp.expect(public.aggregate_circle_insights(d) >= 1, 'aggregate: writes a row for the circle');
   select * into s from public.circle_daily_stats where circle_id = c and day = d;
-  perform pg_temp.expect(s.messages = 10, 'aggregate: 10 messages (recalled, held, removed, bot, webhook and other days left out)');
+  perform pg_temp.expect(s.messages = 10, 'aggregate: 10 messages (recalled, held, removed, bot, webhook, system and other days left out)');
   perform pg_temp.expect(s.active_members = 3, 'aggregate: 3 people spoke');
   perform pg_temp.expect(s.members_total = members_total, 'aggregate: members at the end of the day');
   perform pg_temp.expect(s.joined = 0, 'aggregate: the day''s joins come from the counters, none that day');

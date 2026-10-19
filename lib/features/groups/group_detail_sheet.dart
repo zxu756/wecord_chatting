@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/ai/assistant/group_ai_row.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
@@ -10,6 +11,8 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -214,6 +217,9 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                         ),
                       ),
               ),
+            // The owner decides whether WeCord AI answers in the group.
+            if (detail.currentUserRole == 'owner')
+              AiAssistantGroupRow(conversationId: widget.conversationId),
             SettingsRow(
               key: const ValueKey('group-detail-leave'),
               icon: Icons.logout_rounded,
@@ -256,7 +262,12 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                   member: member,
                   canRemove: _canRemove(detail, member),
                   onOpenProfile: () {
-                    context.push('/profile/${member.profile.id}');
+                    context.push(
+                      userProfileLocation(
+                        member.profile.id,
+                        source: FriendSource.group,
+                      ),
+                    );
                   },
                   onRemove: () => _removeMember(detail, member),
                 ),

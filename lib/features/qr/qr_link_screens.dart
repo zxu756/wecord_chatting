@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/home/home_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
 import 'package:wecord/features/qr/qr_links.dart';
@@ -62,7 +63,9 @@ class _UserQrLinkScreenState extends ConsumerState<UserQrLinkScreen> {
       setState(() => _step = _Step.gone);
       return;
     }
-    context.pushReplacement('${UserProfileScreen.path}/${profile.id}');
+    context.pushReplacement(
+      userProfileLocation(profile.id, source: FriendSource.qr),
+    );
   }
 
   @override

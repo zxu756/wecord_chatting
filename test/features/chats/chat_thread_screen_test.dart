@@ -2174,6 +2174,34 @@ void main() {
     expect(find.text('Pin'), findsNothing);
   });
 
+  testWidgets('a new member card says hello back and is not a bubble', (
+    tester,
+  ) async {
+    final repository = FakeChatsRepository()
+      ..messages = [
+        _message(
+          id: 'message-1',
+          senderId: 'user-9',
+          type: MessageType.system,
+          body: 'Nia joined the circle',
+          attachment: const {
+            'kind': 'newcomer',
+            'user_id': 'user-9',
+            'user_label': 'Nia',
+            'circle_id': 'circle-1',
+          },
+          createdAt: DateTime.utc(2026, 5, 18, 4, 31),
+        ),
+      ];
+
+    await tester.pumpWidget(_app(repository));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('newcomer-card')), findsOneWidget);
+    expect(find.text('Nia joined the circle'), findsOneWidget);
+    expect(find.byKey(const ValueKey('newcomer-say-hello')), findsOneWidget);
+  });
+
   group('link previews', () {
     const examplePreview = LinkPreview(
       url: 'https://example.com/',

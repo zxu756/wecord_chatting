@@ -1,8 +1,9 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
 // events about to start, tasks that came due, likes and comments on
-// Moments, new-login alerts, answers to circle join requests, and the one
-// push of an official notice. The same
+// Moments, new-login alerts, answers to circle join requests, the one push of
+// an official notice, and friends' birthdays (at 9 in the morning of the
+// recipient's device). The same
 // tick removes the files of expired disappearing messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -37,6 +38,8 @@ import {
   type AnnouncementPushRow,
   announcementTarget,
 } from "./announcements.ts";
+import { type DigestPushRow, digestPushTarget } from "./digest.ts";
+import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 
@@ -203,6 +206,27 @@ Deno.serve(async (request) => {
   targets.push(
     ...((notices ?? []) as AnnouncementPushRow[]).map(announcementTarget),
   );
+  // "Your daily digest is ready", once the `ai` function finished a card (it
+  // wakes this function).
+  const { data: digests, error: digestsError } = await admin.rpc(
+    "claim_digest_pushes",
+  );
+  if (digestsError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_digest_pushes failed", digestsError.message);
+  }
+  targets.push(...((digests ?? []) as DigestPushRow[]).map(digestPushTarget));
+  // Friends' birthdays: at 9 in the morning of the recipient's device (the
+  // tick wakes this function while one is due).
+  const { data: birthdays, error: birthdaysError } = await admin.rpc(
+    "claim_birthday_pushes",
+  );
+  if (birthdaysError) {
+    // Not fatal: the other pushes still go out (the reminders are claimed
+    // again on the next wake-up).
+    console.error("claim_birthday_pushes failed", birthdaysError.message);
+  }
+  targets.push(...((birthdays ?? []) as BirthdayPushRow[]).map(birthdayTarget));
 
   // Files of expired disappearing messages. Not a push, but it needs the
   // service role and Storage, so it rides on the same tick.

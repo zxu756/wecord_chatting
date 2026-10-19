@@ -19,6 +19,19 @@
 //     held back from the circle, charges the circle's daily AI limit
 //     (AI_GUARD_DAILY_LIMIT_PER_CIRCLE) and releases or holds the message;
 //     when AI cannot answer it releases the message as "not checked".
+//   assistant {job_id}          -> the @WeCord AI assistant answers a message
+//     that mentioned it: only the database calls it (the same shared secret
+//     and wake-up as guard; see assistant.ts and migrations 202610230400 to
+//     202610230430). Replies as the WeCord AI account, created on first use.
+//   extract_actions {conversation_id, message_ids (<= 50), time_zone?}
+//     -> {items: [{title, assignee, due, due_has_time, due_text, kind,
+//     source_message_id}], message_count}. To-dos and events in chosen
+//     messages; assignees are conversation members only; see
+//     extract_actions.ts.
+//   digest {digest_id}          -> the daily digest of the chats a person
+//     follows: only the database calls it (the same shared secret and wake-up
+//     as guard and assistant; see digest.ts and migrations 202610230500 to
+//     202610230540). Writes one card per person per day for Notifications.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the
@@ -27,6 +40,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleAiRequest } from "./handler.ts";
 import { loadMessages } from "./messages.ts";
+import { createActionStore, createAssistantStore } from "./assistant_store.ts";
+import { createDigestStore } from "./digest_store.ts";
 import { createTranslationStore } from "./translations_store.ts";
 
 Deno.serve(async (request) => {
@@ -179,5 +194,8 @@ Deno.serve(async (request) => {
       return typeof data === "string" ? data : null;
     },
     translations: createTranslationStore(userClient, admin),
+    assistant: createAssistantStore(admin),
+    actions: createActionStore(userClient),
+    digest: createDigestStore(admin),
   });
 });

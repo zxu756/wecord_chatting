@@ -115,6 +115,11 @@ export interface ExportData {
    * 202610240660); null when it could not be read, absent in older callers.
    */
   feedback?: Json[] | null;
+  /**
+   * The daily digest settings (export_my_ai_digest, migration
+   * 202610230540); null when it could not be read, absent in older callers.
+   */
+  aiDigest?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -630,6 +635,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.feedback) {
     out.push({ path: "data/feedback.json", value: feedbackJson(data) });
+  }
+  if (data.aiDigest) {
+    out.push({ path: "data/ai_digest.json", value: data.aiDigest });
   }
   const extras = data.extras;
   if (extras) {
@@ -1158,6 +1166,34 @@ other people’s answers, and who answered a form you made, are not.</p>
   );
 }
 
+/** The daily digest settings: the switch, time, language and chats. */
+export function buildAiDigestHtml(data: ExportData): string {
+  const digest = isObject(data.aiDigest) ? data.aiDigest : {};
+  const chats = objects(digest["subscriptions"]).map((chat) => {
+    const circle = str(chat["circle"]);
+    return entry(
+      str(chat["since"]),
+      `<div><strong>${escapeHtml(str(chat["name"]) ?? "Chat")}</strong>${
+        circle ? ` <span class="muted">in ${escapeHtml(circle)}</span>` : ""
+      }</div>`,
+    );
+  }).join("");
+  const on = digest["enabled"] === true;
+  return page(
+    "Daily digest — your WeCord data",
+    `${backLink()}<h1>Daily digest</h1>
+<p class="muted">A summary of the chats you follow, once a day. The digests
+themselves are short-lived and not included.</p>
+<div class="card"><div class="row">${tag(on ? "on" : "off")} ${
+      escapeHtml(str(digest["deliver_at"]) ?? "")
+    } ${escapeHtml(str(digest["time_zone"]) ?? "")}</div></div>
+<h2>Chats you follow</h2>
+<div class="card">${
+      chats || '<div class="row muted">No chats followed.</div>'
+    }</div>`,
+  );
+}
+
 /** The HTML pages of the new sections, and the index rows that link them. */
 export function buildSectionPages(
   data: ExportData,
@@ -1195,6 +1231,17 @@ export function buildSectionPages(
       label: "Feedback and help",
       summary: `${data.feedback.length}`,
       content: buildFeedbackHtml(data),
+    });
+  }
+  if (data.aiDigest) {
+    const followed = objects(
+      isObject(data.aiDigest) ? data.aiDigest["subscriptions"] : null,
+    );
+    out.push({
+      path: "pages/ai_digest.html",
+      label: "Daily digest",
+      summary: `${followed.length} chat${followed.length === 1 ? "" : "s"} followed`,
+      content: buildAiDigestHtml(data),
     });
   }
   const extras = data.extras;
@@ -1257,6 +1304,7 @@ data/friend_tags.json Your friend tags and starred friends.
 data/chains.json      Group chains you started or joined (your own line).
 data/forms.json       Forms you made or answered (your own answers).
 data/feedback.json    Feedback you sent and the replies you got.
+data/ai_digest.json   Your daily digest settings and the chats you follow.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/saved_messages.json, data/reminders.json, data/scheduled_messages.json

@@ -6,6 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:wecord/features/circles/circle_automod_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/onboarding/guide_editor_screen.dart';
+import 'package:wecord/features/circles/onboarding/guide_models.dart';
+import 'package:wecord/features/circles/onboarding/guide_page.dart';
+import 'package:wecord/features/circles/onboarding/guide_prompts_page.dart';
+import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -111,18 +116,25 @@ class CircleOnboardingRepository {
 
 /// Shows [child] (the circle), with a bar asking to accept the circle's
 /// rules while the current member has not. The rules open on their own
-/// the first time.
+/// the first time. After the rules, a member who joined once the circle had
+/// questions gets them once (onboarding 2.0), and a bar with their progress
+/// through the newcomer tasks stays on top until they are done or put it
+/// away.
 class CircleOnboardingGate extends ConsumerStatefulWidget {
   const CircleOnboardingGate({
     required this.circleId,
     required this.circleName,
     required this.child,
+    this.channels = const [],
     super.key,
   });
 
   final String circleId;
   final String circleName;
   final Widget child;
+
+  /// The circle's channels, for the guide's tasks to open.
+  final List<CircleChannel> channels;
 
   @override
   ConsumerState<CircleOnboardingGate> createState() =>
@@ -131,12 +143,17 @@ class CircleOnboardingGate extends ConsumerStatefulWidget {
 
 class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
   var _shownRules = false;
+  var _shownPrompts = false;
+
+  /// The rules and the welcome are on screen: nothing else opens over them.
+  var _inRulesFlow = false;
 
   @override
   Widget build(BuildContext context) {
     final onboarding = ref
         .watch(circleOnboardingProvider(widget.circleId))
         .value;
+    final guide = ref.watch(circleGuideProvider(widget.circleId)).value;
     final needsAcceptance = onboarding?.needsAcceptance ?? false;
     if (onboarding != null && needsAcceptance && !_shownRules) {
       _shownRules = true;
@@ -146,9 +163,13 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
         }
       });
     }
+    if (onboarding != null && !needsAcceptance) {
+      _askPromptsOnce(guide);
+    }
+    final showGuide = !needsAcceptance && guide != null && guide.showsCard;
     final c = context.tokens.colors;
-    // The same shape with or without the bar, so the circle below keeps
-    // its state when the bar goes away.
+    // The same shape with or without the bars, so the circle below keeps
+    // its state when a bar goes away.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -189,11 +210,23 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
                 ),
               ),
             ),
+          )
+        else if (showGuide)
+          CircleGuideBar(
+            guide: guide,
+            onOpen: () => unawaited(
+              openCircleGuide(
+                context,
+                circleId: widget.circleId,
+                circleName: widget.circleName,
+                channels: widget.channels,
+              ),
+            ),
           ),
         Expanded(
           child: MediaQuery.removePadding(
             context: context,
-            removeTop: needsAcceptance,
+            removeTop: needsAcceptance || showGuide,
             child: widget.child,
           ),
         ),
@@ -201,40 +234,93 @@ class _CircleOnboardingGateState extends ConsumerState<CircleOnboardingGate> {
     );
   }
 
-  Future<void> _openRules(CircleOnboarding onboarding) async {
-    final accepted = await showCircleDialog<bool>(
-      context,
-      builder: (context) => CircleRulesDialog(
-        circleName: widget.circleName,
-        rules: onboarding.rules,
-      ),
-    );
-    if (accepted != true || !mounted) {
+  /// Opens the circle's questions the first time a member who is to be asked
+  /// is here and the rules are out of the way.
+  void _askPromptsOnce(CircleGuide? guide) {
+    if (guide == null || !guide.needsAnswers || _shownPrompts || _inRulesFlow) {
       return;
     }
-    final String? welcome;
-    try {
-      welcome = await ref
-          .read(circleOnboardingRepositoryProvider)
-          .acceptRules(widget.circleId);
-    } catch (_) {
+    _shownPrompts = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text(tr('Could not accept the rules. Try again.'))),
+        unawaited(
+          openGuidePrompts(
+            context,
+            circleId: widget.circleId,
+            circleName: widget.circleName,
+            guide: guide,
+          ),
         );
       }
-      return;
+    });
+  }
+
+  Future<void> _openRules(CircleOnboarding onboarding) async {
+    _inRulesFlow = true;
+    try {
+      await runCircleRulesFlow(
+        context,
+        ref,
+        circleId: widget.circleId,
+        circleName: widget.circleName,
+        onboarding: onboarding,
+      );
+    } finally {
+      _inRulesFlow = false;
     }
     if (!mounted) {
       return;
     }
-    ref.invalidate(circleOnboardingProvider(widget.circleId));
-    await showCircleDialog<void>(
-      context,
-      builder: (context) =>
-          CircleWelcomeDialog(circleName: widget.circleName, message: welcome),
-    );
+    // The questions come right after the rules and the welcome.
+    ref.invalidate(circleGuideProvider(widget.circleId));
+    final guide = await ref.read(circleGuideProvider(widget.circleId).future);
+    if (mounted) {
+      _askPromptsOnce(guide);
+    }
   }
+}
+
+/// Shows the rules of a circle, takes the member's acceptance and shows the
+/// welcome. True when they accepted.
+Future<bool> runCircleRulesFlow(
+  BuildContext context,
+  WidgetRef ref, {
+  required String circleId,
+  required String circleName,
+  required CircleOnboarding onboarding,
+}) async {
+  final accepted = await showCircleDialog<bool>(
+    context,
+    builder: (context) =>
+        CircleRulesDialog(circleName: circleName, rules: onboarding.rules),
+  );
+  if (accepted != true || !context.mounted) {
+    return false;
+  }
+  final String? welcome;
+  try {
+    welcome = await ref
+        .read(circleOnboardingRepositoryProvider)
+        .acceptRules(circleId);
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(tr('Could not accept the rules. Try again.'))),
+      );
+    }
+    return false;
+  }
+  ref.invalidate(circleOnboardingProvider(circleId));
+  ref.invalidate(circleGuideProvider(circleId));
+  if (!context.mounted) {
+    return true;
+  }
+  await showCircleDialog<void>(
+    context,
+    builder: (context) =>
+        CircleWelcomeDialog(circleName: circleName, message: welcome),
+  );
+  return true;
 }
 
 /// The circle's rules, numbered, with a box to tick before accepting.
@@ -440,16 +526,24 @@ class CircleOnboardingSettingsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      data: (onboarding) =>
-          _OnboardingEditor(circleId: detail.circle.id, initial: onboarding),
+      data: (onboarding) => _OnboardingEditor(
+        circleId: detail.circle.id,
+        detail: detail,
+        initial: onboarding,
+      ),
     );
   }
 }
 
 class _OnboardingEditor extends ConsumerStatefulWidget {
-  const _OnboardingEditor({required this.circleId, required this.initial});
+  const _OnboardingEditor({
+    required this.circleId,
+    required this.detail,
+    required this.initial,
+  });
 
   final String circleId;
+  final CircleDetail detail;
   final CircleOnboarding initial;
 
   @override
@@ -649,6 +743,23 @@ class _OnboardingEditorState extends ConsumerState<_OnboardingEditor> {
               maxLines: 6,
               hint: tr('Shown once to members after they accept the rules.'),
             ),
+          ),
+          SettingsSectionHeader(tr('Member guide')),
+          SettingsGroup(
+            footer: tr(
+              'Questions give new members roles, tasks show how far they '
+              'have got, and the greeting announces them in a channel.',
+            ),
+            children: [
+              SettingsRow(
+                key: const ValueKey('onboarding-open-guide'),
+                icon: Icons.explore_outlined,
+                tone: SettingsTone.accent,
+                title: tr('Questions, tasks and greeting'),
+                onTap: () =>
+                    openCircleGuideEditor(context, detail: widget.detail),
+              ),
+            ],
           ),
         ],
       ),

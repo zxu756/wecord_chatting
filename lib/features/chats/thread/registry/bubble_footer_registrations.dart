@@ -7,6 +7,7 @@
 // ... within each placement; pick a number in between to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
+import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer_builtin.dart';
@@ -16,6 +17,8 @@ final List<BubbleFooterEntry> bubbleFooterExtensions = [
   // myFeatureFooterEntry,
   readStatusFooterEntry,
   autoTranslateFooterEntry,
+  aiReplyFooterEntry,
+  assistantRequestFooterEntry,
 ];
 
 /// The slot's registry. Tests can override it to add or drop entries.

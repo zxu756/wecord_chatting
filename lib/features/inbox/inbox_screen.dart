@@ -19,7 +19,14 @@ import 'package:wecord/features/circles/join_requests/join_requests_repository.d
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
+import 'package:wecord/features/profile/birthday_card.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/inbox/digest/digest_card.dart';
+import 'package:wecord/features/inbox/digest/digest_models.dart';
+import 'package:wecord/features/inbox/digest/digest_repository.dart';
+import 'package:wecord/features/profile/profile_insights_blocks.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/inbox/inbox_repository.dart';
 import 'package:wecord/features/later/later_cards.dart';
 import 'package:wecord/features/later/reminders_repository.dart';
@@ -78,6 +85,7 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
   final official = ref.watch(announcementsUnreadProvider);
+  final digests = ref.watch(aiDigestsUnreadProvider);
   return unread +
       requests +
       reminders +
@@ -88,7 +96,8 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       security +
       joinAnswers +
       readReminders +
-      official;
+      official +
+      digests;
 });
 
 /// Which notifications the inbox shows.
@@ -107,6 +116,9 @@ enum InboxFilter {
 
   /// Notices from the WeCord team, and its answers to feedback (K6, K7).
   official,
+
+  /// The daily digest of the chats the person follows.
+  digest,
 }
 
 /// Mentions of and replies to the current user and reminders that came
@@ -135,6 +147,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
       ..invalidate(announcementsProvider)
+      ..invalidate(aiDigestsProvider)
+      ..invalidate(birthdaysTodayProvider)
       ..invalidate(inboxProvider);
     await ref.read(inboxProvider.future);
     ref.invalidate(taskNotificationsProvider);
@@ -153,6 +167,18 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       }
     }
     ref.invalidate(readReminderNoticesProvider);
+  }
+
+  Future<void> _markDigestRead(AiDigest digest) async {
+    if (!digest.isUnread) {
+      return;
+    }
+    try {
+      await ref.read(digestRepositoryProvider).markRead([digest.id]);
+    } catch (_) {
+      // Still unread: it shows again on the next refresh.
+    }
+    ref.invalidate(aiDigestsProvider);
   }
 
   Future<void> _dismissReminder(MessageReminder reminder) async {
@@ -200,6 +226,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
     final unreadOfficial = ref.watch(announcementsUnreadProvider);
     final showOfficial =
         _filter == InboxFilter.all || _filter == InboxFilter.official;
+    // Friends whose birthday is today, under the Friends chip.
+    final birthdays =
+        _filter == InboxFilter.all || _filter == InboxFilter.friends
+        ? ref.watch(birthdaysTodayProvider).value ?? const <BirthdayFriend>[]
+        : const <BirthdayFriend>[];
     final items = inbox.value ?? const <InboxItem>[];
     final firedReminders = ref.watch(firedRemindersProvider);
     final upcomingReminders = [
@@ -243,7 +274,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       InboxFilter.friends ||
       InboxFilter.security ||
       InboxFilter.circles ||
-      InboxFilter.official => const <InboxItem>[],
+      InboxFilter.official ||
+      InboxFilter.digest => const <InboxItem>[],
     };
     final showTasks =
         _filter == InboxFilter.all || _filter == InboxFilter.tasks;
@@ -251,6 +283,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         _filter == InboxFilter.all || _filter == InboxFilter.security;
     final showJoinRequests =
         _filter == InboxFilter.all || _filter == InboxFilter.circles;
+    final digests = _filter == InboxFilter.all || _filter == InboxFilter.digest
+        ? ref.watch(aiDigestsProvider).value ?? const <AiDigest>[]
+        : const <AiDigest>[];
+    final unreadDigests = ref.watch(aiDigestsUnreadProvider);
     final momentNotifications =
         _filter == InboxFilter.all || _filter == InboxFilter.moments
         ? ref.watch(momentNotificationsProvider).value ??
@@ -319,6 +355,20 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           if (showJoinRequests)
             for (final request in joinRequests)
               JoinRequestInboxCard(request: request),
+          for (final digest in digests)
+            AiDigestCard(
+              digest: digest,
+              onOpenChat: (conversationId) {
+                unawaited(_markDigestRead(digest));
+                openMessage(
+                  context,
+                  ref,
+                  conversationId: conversationId,
+                  conversation: conversations[conversationId],
+                );
+              },
+              onMarkRead: () => unawaited(_markDigestRead(digest)),
+            ),
           if (showRequests && invitations.isNotEmpty)
             Column(
               key: const ValueKey('inbox-group-invitations'),
@@ -341,6 +391,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                 ],
               ],
             ),
+          for (final friend in birthdays) BirthdayCard(friend: friend),
           for (final reminder in eventReminders)
             ChatEventReminderCard(
               reminder: reminder,
@@ -536,6 +587,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
                         tr('Official'),
                         unreadOfficial,
                       ),
+                      chip(InboxFilter.digest, tr('Digest'), unreadDigests),
                     ],
                   ),
                 ),
@@ -712,6 +764,7 @@ class _FriendRequestCardState extends ConsumerState<_FriendRequestCard> {
                   '@${requester.username}',
                   style: TextStyle(fontSize: 13, color: c.muted),
                 ),
+                MutualCountLine(userId: requester.id),
                 const SizedBox(height: 10),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
@@ -1009,6 +1062,10 @@ class _EmptyInbox extends StatelessWidget {
                   ? tr(
                       'Notices from the WeCord team, and its answers to your '
                       'feedback, show up here.',
+                    )
+                  : filter == InboxFilter.digest
+                  ? tr(
+                      'Your daily digest shows up here. Set it up in Settings, under AI.',
                     )
                   : tr(
                       'Mentions and replies from the last 30 days show up here.',

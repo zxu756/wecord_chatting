@@ -67,6 +67,7 @@ The rule per section:
 | Starred friends | your stars (names) | anyone else's stars |
 | Group chains | chains you started or joined: title, creator's name, deadline, cap, entry count, state, **your own line**; the description and example only for chains you started | other people's lines, who else joined |
 | Forms | forms you made (title, description, questions, settings, number of answers) or answered (title, questions, **your own answers**, with pictures you attached as links); `pages/forms.html`, `data/forms.json` (migration 202610230130, `export_my_forms`) | other people's answers, who answered a form you made (never for anonymous forms) |
+| Daily digest | whether it is on, the time, language and time zone, and the chats you follow (names only); `pages/ai_digest.html`, `data/ai_digest.json` (migration 202610230540, `export_my_ai_digest`) | the digests themselves (two-week summaries of other people's messages) |
 | Notes | notes you made or wrote in (not deleted): title, icon, chat name; only the blocks whose **last editor is you** | blocks last edited by others (so a note you made may be incomplete if others changed lines), notes in chats you never wrote in, deleted notes, version history |
 | Task lists | lists you made or added items to (not deleted): title, chat name; only items **you created**, with who they are assigned to by name | items others created, items assigned to you by others, deleted items |
 | Saved messages | when and where you saved; the text only if you wrote the message | the text of other people's messages |

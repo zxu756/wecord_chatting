@@ -11,6 +11,8 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/group_qr_sheet.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -260,7 +262,12 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                   member: member,
                   canRemove: _canRemove(detail, member),
                   onOpenProfile: () {
-                    context.push('/profile/${member.profile.id}');
+                    context.push(
+                      userProfileLocation(
+                        member.profile.id,
+                        source: FriendSource.group,
+                      ),
+                    );
                   },
                   onRemove: () => _removeMember(detail, member),
                 ),

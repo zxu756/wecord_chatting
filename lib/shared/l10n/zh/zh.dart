@@ -8,6 +8,7 @@ import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
 import 'package:wecord/shared/l10n/zh/zh_edit_history.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_assistant.dart';
+import 'package:wecord/shared/l10n/zh/zh_digest.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
@@ -39,6 +40,7 @@ import 'package:wecord/shared/l10n/zh/zh_misc_features.dart';
 import 'package:wecord/shared/l10n/zh/zh_multi_select.dart';
 import 'package:wecord/shared/l10n/zh/zh_moments.dart';
 import 'package:wecord/shared/l10n/zh/zh_moments_more.dart';
+import 'package:wecord/shared/l10n/zh/zh_profile_extras.dart';
 import 'package:wecord/shared/l10n/zh/zh_profile_more.dart';
 import 'package:wecord/shared/l10n/zh/zh_leftovers.dart';
 import 'package:wecord/shared/l10n/zh/zh_noise.dart';
@@ -145,6 +147,8 @@ const zhAreas = <Map<String, String>>[
   zhInsights,
   zhForms,
   zhAiAssistant,
+  zhDigest,
+  zhProfileExtras,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

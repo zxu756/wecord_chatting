@@ -12,7 +12,10 @@ import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_banner.dart';
+import 'package:wecord/features/profile/profile_insights_blocks.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/profile/report_user_sheet.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -23,25 +26,43 @@ import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/models/profile_relationship.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
+/// Where to open [userId]'s profile page. [source] says where the person
+/// came from (a scanned code, a member list, ...): if you add them as a
+/// friend from that page, the request remembers it.
+String userProfileLocation(String userId, {FriendSource? source}) {
+  final base = '${UserProfileScreen.path}/$userId';
+  return source == null ? base : '$base?source=${source.wire}';
+}
+
 /// Opens [userId]'s profile card as a sheet over the current page.
-Future<void> showUserProfileSheet(BuildContext context, String userId) {
+Future<void> showUserProfileSheet(
+  BuildContext context,
+  String userId, {
+  FriendSource? source,
+}) {
   return showWeCordSheet<void>(
     context,
     detents: const [0.5, 0.9],
     initialDetent: 0.9,
-    builder: (context, scrollController) =>
-        UserProfileView(userId: userId, scrollController: scrollController),
+    builder: (context, scrollController) => UserProfileView(
+      userId: userId,
+      scrollController: scrollController,
+      source: source,
+    ),
   );
 }
 
 /// Someone's profile (`/profile/:userId`) as a page: the profile card with
 /// a back button over its banner.
 class UserProfileScreen extends StatelessWidget {
-  const UserProfileScreen({required this.userId, super.key});
+  const UserProfileScreen({required this.userId, this.source, super.key});
 
   static const path = '/profile';
 
   final String userId;
+
+  /// Where the person was found, noted on a friend request sent from here.
+  final FriendSource? source;
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +94,7 @@ class UserProfileScreen extends StatelessWidget {
               clipBehavior: wide ? Clip.antiAlias : Clip.none,
               child: Stack(
                 children: [
-                  UserProfileView(userId: userId),
+                  UserProfileView(userId: userId, source: source),
                   if (back != null)
                     Positioned(
                       top: 18,
@@ -105,11 +126,15 @@ class UserProfileView extends ConsumerStatefulWidget {
   const UserProfileView({
     required this.userId,
     this.scrollController,
+    this.source,
     super.key,
   });
 
   final String userId;
   final ScrollController? scrollController;
+
+  /// Where the person was found, noted on a friend request sent from here.
+  final FriendSource? source;
 
   @override
   ConsumerState<UserProfileView> createState() => _UserProfileViewState();
@@ -358,11 +383,19 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
                     _ProfileActions(
                       summary: summary,
                       onMessage: () => _openConversation(profile),
-                      onAddFriend: () => _run(
-                        () => ref
+                      onAddFriend: () => _run(() async {
+                        await ref
                             .read(contactsRepositoryProvider)
-                            .sendFriendRequest(profile.id),
-                      ),
+                            .sendFriendRequest(profile.id);
+                        final source = widget.source;
+                        if (source != null) {
+                          await recordFriendRequestSource(
+                            ref,
+                            profile.id,
+                            source,
+                          );
+                        }
+                      }),
                       onAcceptRequest: () => _run(
                         () => ref
                             .read(contactsRepositoryProvider)
@@ -421,6 +454,11 @@ class _UserProfileViewState extends ConsumerState<UserProfileView> {
                       ),
                     ),
                   ],
+                  ProfileInsightsBlocks(
+                    userId: profile.id,
+                    onOpenGroup: (group) =>
+                        openPage(context, '${ChatsScreen.path}/${group.id}'),
+                  ),
                   if (summary.mutualCircles.isNotEmpty) ...[
                     _Block(
                       key: const ValueKey('mutual-circles'),

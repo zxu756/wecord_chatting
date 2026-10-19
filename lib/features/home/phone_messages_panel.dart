@@ -22,6 +22,8 @@ import 'package:wecord/features/qr/qr_link_handler.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
 import 'package:wecord/features/moments/moments_widgets.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
+import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/custom_status.dart';
@@ -53,6 +55,19 @@ class PhoneMessagesPanel extends ConsumerWidget {
     final requestCount =
         ref.watch(incomingFriendRequestsProvider).value?.length ?? 0;
     final currentUserId = ref.watch(authStateProvider).value?.id;
+    // Friends' status bubbles (asked again when the friends are).
+    final now = DateTime.now();
+    final bubbles = {
+      for (final status
+          in (ref.watch(friendStatusesProvider).value ??
+                  const <String, FriendStatus>{})
+              .values)
+        if (status.isActiveAt(now)) status.userId: status,
+    };
+    final friendIds = {for (final friend in friends) friend.id};
+    final bubbleRoom = bubbles.keys.any(friendIds.contains)
+        ? StatusBubble.room
+        : 0.0;
 
     final directChats = [
       for (final conversation
@@ -131,9 +146,11 @@ class PhoneMessagesPanel extends ConsumerWidget {
         const SliverToBoxAdapter(child: ChatFolderStrip()),
         SliverToBoxAdapter(
           child: SizedBox(
-            // 58 tile + the label, which grows with the text size.
+            // 58 tile + the label, which grows with the text size, and room
+            // for the status bubbles when a friend has one.
             height:
                 86 +
+                bubbleRoom +
                 MediaQuery.textScalerOf(context).scale(12 * 1.3).clamp(16, 80),
             child: ListView.separated(
               key: const ValueKey('phone-friends-row'),
@@ -142,22 +159,31 @@ class PhoneMessagesPanel extends ConsumerWidget {
               itemCount: sortedFriends.length + 4,
               separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
+                // The shortcuts sit lower by the room the bubbles take.
+                Widget lowered(Widget tile) => bubbleRoom == 0
+                    ? tile
+                    : Padding(
+                        padding: EdgeInsets.only(top: bubbleRoom),
+                        child: tile,
+                      );
                 if (index == 0) {
-                  return _AddFriendTile(requestCount: requestCount);
+                  return lowered(_AddFriendTile(requestCount: requestCount));
                 }
                 if (index == 1) {
-                  return const _SavedTile();
+                  return lowered(const _SavedTile());
                 }
                 if (index == 2) {
-                  return const _AgendaTile();
+                  return lowered(const _AgendaTile());
                 }
                 if (index == 3) {
-                  return const _MomentsTile();
+                  return lowered(const _MomentsTile());
                 }
                 final friend = sortedFriends[index - 4];
                 return _FriendTile(
                   friend: friend,
                   presence: presence(friend.id),
+                  bubble: bubbles[friend.id],
+                  bubbleRoom: bubbleRoom,
                 );
               },
             ),
@@ -341,6 +367,7 @@ class _QuickFriendTile extends StatelessWidget {
     required this.leading,
     required this.onPressed,
     this.tooltip,
+    this.width = 62,
     super.key,
   });
 
@@ -348,6 +375,7 @@ class _QuickFriendTile extends StatelessWidget {
   final Widget leading;
   final VoidCallback onPressed;
   final String? tooltip;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +389,7 @@ class _QuickFriendTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(WeCordRadii.lg),
       ),
       builder: (context, states) => SizedBox(
-        width: 62,
+        width: width,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -553,17 +581,30 @@ class _AddFriendTile extends StatelessWidget {
 }
 
 class _FriendTile extends ConsumerWidget {
-  const _FriendTile({required this.friend, required this.presence});
+  const _FriendTile({
+    required this.friend,
+    required this.presence,
+    this.bubble,
+    this.bubbleRoom = 0,
+  });
 
   final Profile friend;
   final PresenceStatus? presence;
 
+  /// Their status, shown as a bubble over the avatar.
+  final FriendStatus? bubble;
+
+  /// The room the row keeps above its tiles for bubbles (0: none shown).
+  final double bubbleRoom;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return _QuickFriendTile(
+    final tile = _QuickFriendTile(
       key: ValueKey('phone-friend-${friend.id}'),
       label: friend.displayLabel,
       tooltip: friend.displayLabel,
+      // A tile with a bubble is wider, so the bubble has room to read.
+      width: bubble == null ? 62 : 78,
       onPressed: () => openDirectMessage(context, ref, friend),
       leading: ResolvedAvatar(
         name: friend.displayLabel,
@@ -573,6 +614,84 @@ class _FriendTile extends ConsumerWidget {
         presence: presence,
       ),
     );
+    if (bubbleRoom == 0) {
+      return tile;
+    }
+    final status = bubble;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: bubbleRoom,
+          width: status == null ? 62 : 78,
+          child: status == null
+              ? null
+              : Align(
+                  alignment: Alignment.bottomCenter,
+                  child: StatusBubble(
+                    status: status,
+                    name: friend.displayLabel,
+                    onPressed: () => replyToFriendStatus(
+                      context,
+                      ref,
+                      friend: friend,
+                      status: status,
+                    ),
+                  ),
+                ),
+        ),
+        tile,
+      ],
+    );
+  }
+}
+
+/// Opens the chat with [friend] with "Replying to your status: ..." ready
+/// in the composer, when nothing is written there yet.
+Future<void> replyToFriendStatus(
+  BuildContext context,
+  WidgetRef ref, {
+  required Profile friend,
+  required FriendStatus status,
+}) {
+  final quote = tr('Replying to your status: "{status}"', {
+    'status': status.fullLabel,
+  });
+  return openChatWithDraft(context, ref, friend: friend, text: '$quote\n');
+}
+
+/// Opens the chat with [friend] with [text] ready in the composer (not sent),
+/// when nothing is written there yet.
+Future<void> openChatWithDraft(
+  BuildContext context,
+  WidgetRef ref, {
+  required Profile friend,
+  required String text,
+}) async {
+  try {
+    final existing = ref
+        .read(conversationsProvider)
+        .value
+        ?.where(
+          (conversation) =>
+              conversation.type == ConversationType.direct &&
+              conversation.directUserId == friend.id,
+        )
+        .firstOrNull;
+    final conversationId =
+        existing?.id ??
+        await ref
+            .read(chatsRepositoryProvider)
+            .getOrCreateDirectConversation(friend.id);
+    final drafts = ref.read(composerDraftsProvider.notifier);
+    if (drafts.draftFor(conversationId)?.hasText != true) {
+      drafts.set(conversationId, ComposerDraft(text: text));
+    }
+  } on Object {
+    // The chat still opens, just without the text.
+  }
+  if (context.mounted) {
+    await openDirectMessage(context, ref, friend);
   }
 }
 

@@ -19,6 +19,7 @@ import {
 import { complete, ProviderError } from "./provider.ts";
 import { type AssistantStore, runAssistantJob } from "./assistant.ts";
 import { type ActionStore, runExtractActions } from "./extract_actions.ts";
+import { type DigestStore, runDigest } from "./digest.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
   audioFileName,
@@ -158,6 +159,9 @@ export interface AiDeps {
   /// What extract_actions reads (see extract_actions.ts). Without it that
   /// action answers 503.
   actions?: ActionStore;
+  /// The daily digest's runs (see digest.ts); service calls only. Without it
+  /// the `digest` action answers 503.
+  digest?: DigestStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -200,9 +204,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   // token (the same DISPATCH_SECRET as scheduled-dispatch). It is the only
   // thing that secret may do here; nobody signed in can use it.
   if (isDispatchAuthorized(authorization, deps.env("DISPATCH_SECRET") ?? "")) {
-    // The same secret also wakes the @WeCord AI assistant (assistant.ts).
+    // The same secret also wakes the @WeCord AI assistant (assistant.ts) and
+    // the daily digest (digest.ts).
     const peeked = await request.clone().json().catch(() => null) as
-      | { action?: unknown; job_id?: unknown }
+      | { action?: unknown; job_id?: unknown; digest_id?: unknown }
       | null;
     if (peeked?.action === "assistant") {
       const parsedJob = parseAiRequest(peeked);
@@ -210,6 +215,14 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
         return json({ error: "invalid_request" }, 400);
       }
       const result = await runAssistantJob(parsedJob.jobId, deps);
+      return json(result.body, result.status);
+    }
+    if (peeked?.action === "digest") {
+      const parsedDigest = parseAiRequest(peeked);
+      if (parsedDigest === null || parsedDigest.action !== "digest") {
+        return json({ error: "invalid_request" }, 400);
+      }
+      const result = await runDigest(parsedDigest.digestId, deps);
       return json(result.body, result.status);
     }
     return await handleGuardRequest(request, deps);
@@ -230,9 +243,12 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
     return json({ error: "invalid_request" }, 400);
   }
 
-  if (parsed.action === "guard" || parsed.action === "assistant") {
-    // Only the database (with the shared secret) may ask for a check or an
-    // assistant answer.
+  if (
+    parsed.action === "guard" || parsed.action === "assistant" ||
+    parsed.action === "digest"
+  ) {
+    // Only the database (with the shared secret) may ask for a check, an
+    // assistant answer or a digest.
     return json({ error: "forbidden" }, 403);
   }
   const config = readAiConfig(deps.env);

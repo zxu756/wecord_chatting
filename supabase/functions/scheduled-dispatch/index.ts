@@ -1,7 +1,8 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
 // events about to start, tasks that came due, likes and comments on
-// Moments, new-login alerts, answers to circle join requests, urgent messages
+// Moments, new-login alerts, answers to circle join requests, friends'
+// birthdays (at 9 in the morning of the recipient's device), urgent messages
 // (with their one second push) and "please confirm the announcement". The same
 // tick removes the files of expired disappearing messages.
 //
@@ -32,6 +33,8 @@ import {
   type TaskReminderRow,
   taskTarget,
 } from "./logic.ts";
+import { type DigestPushRow, digestPushTarget } from "./digest.ts";
+import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -188,6 +191,28 @@ Deno.serve(async (request) => {
   targets.push(
     ...((joinAnswers ?? []) as JoinRequestPushRow[]).map(joinRequestTarget),
   );
+
+  // "Your daily digest is ready", once the `ai` function finished a card (it
+  // wakes this function).
+  const { data: digests, error: digestsError } = await admin.rpc(
+    "claim_digest_pushes",
+  );
+  if (digestsError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_digest_pushes failed", digestsError.message);
+  }
+  targets.push(...((digests ?? []) as DigestPushRow[]).map(digestPushTarget));
+  // Friends' birthdays: at 9 in the morning of the recipient's device (the
+  // tick wakes this function while one is due).
+  const { data: birthdays, error: birthdaysError } = await admin.rpc(
+    "claim_birthday_pushes",
+  );
+  if (birthdaysError) {
+    // Not fatal: the other pushes still go out (the reminders are claimed
+    // again on the next wake-up).
+    console.error("claim_birthday_pushes failed", birthdaysError.message);
+  }
+  targets.push(...((birthdays ?? []) as BirthdayPushRow[]).map(birthdayTarget));
 
   // "Please confirm the announcement" (the owner or an admin asked): a
   // normal push, held back by quiet hours like the others.

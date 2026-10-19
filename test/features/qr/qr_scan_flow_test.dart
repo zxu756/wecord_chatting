@@ -94,7 +94,7 @@ void main() {
       await settle(tester);
 
       expect(qr.resolved, [sampleUserCode]);
-      expect(_location(world), '/profile/user-2');
+      expect(_location(world), '/profile/user-2?source=qr');
       expect(find.byKey(const ValueKey('qr-scanner-sheet')), findsNothing);
       await world.close(tester);
     });
@@ -247,7 +247,7 @@ void main() {
       await settle(tester);
 
       expect(pickedBytes, [1, 2, 3]);
-      expect(_location(world), '/profile/user-2');
+      expect(_location(world), '/profile/user-2?source=qr');
       await world.close(tester);
     });
 
@@ -327,7 +327,7 @@ void main() {
     testWidgets('/u/<code> replaces itself with the profile', (tester) async {
       usePhoneViewport(tester, notchedPhone);
       await world.open(tester, '/u/$sampleUserCode');
-      expect(_location(world), '/profile/user-2');
+      expect(_location(world), '/profile/user-2?source=qr');
       await world.close(tester);
     });
 
@@ -351,7 +351,7 @@ void main() {
       qr.failResolve = null;
       await tester.tap(find.byKey(const ValueKey('qr-link-retry')));
       await settle(tester);
-      expect(_location(world), '/profile/user-2');
+      expect(_location(world), '/profile/user-2?source=qr');
       await world.close(tester);
     });
 

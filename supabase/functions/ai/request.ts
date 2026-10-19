@@ -78,6 +78,9 @@ export type AiRequest =
   /// The @WeCord AI assistant's answer to a queued job, asked by the database
   /// with the shared secret (never by a signed-in user); see assistant.ts.
   | { action: "assistant"; jobId: string }
+  /// The daily digest of a queued run, asked by the database with the shared
+  /// secret (never by a signed-in user); see digest.ts.
+  | { action: "digest"; digestId: string }
   | {
     /// To-dos and events in the messages a person chose (extract_actions.ts).
     action: "extract_actions";
@@ -232,6 +235,13 @@ export function parseAiRequest(body: unknown): AiRequest | null {
         return null;
       }
       return { action: "assistant", jobId };
+    }
+    case "digest": {
+      const digestId = optionalId(fields.digest_id);
+      if (digestId === null || digestId === "invalid") {
+        return null;
+      }
+      return { action: "digest", digestId };
     }
     case "extract_actions": {
       const conversationId = optionalId(fields.conversation_id);

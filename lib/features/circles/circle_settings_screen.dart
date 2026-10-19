@@ -21,6 +21,7 @@ import 'package:wecord/features/circles/insights/insights_screen.dart';
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
 import 'package:wecord/features/circles/join_requests/join_settings_screen.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
+import 'package:wecord/features/profile/support_links_editor.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -63,6 +64,8 @@ class CircleSettingsScreen extends ConsumerWidget {
             if (detail.canManageCircle) ...[
               CircleAiSwitch(circleId: circleId),
               CircleEditWindowSection(circleId: circleId),
+              // Hidden on iPhone (App Store guideline 3.1.1).
+              CircleSupportLinkSection(circleId: circleId),
               CircleTemplateSection(
                 key: ValueKey('circle-template-$circleId'),
                 circleId: circleId,

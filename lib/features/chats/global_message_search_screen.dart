@@ -9,6 +9,7 @@ import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/search/message_jump.dart';
 import 'package:wecord/features/search/message_search_controller.dart';
@@ -1626,7 +1627,10 @@ void _openDiscoveryResult(BuildContext context, DiscoveryResult result) {
       } else if (conversationId != null) {
         openPage(context, '${ChatsScreen.path}/$conversationId');
       } else if (result.type == DiscoveryResultType.contact) {
-        openPage(context, '${UserProfileScreen.path}/${result.id}');
+        openPage(
+          context,
+          userProfileLocation(result.id, source: FriendSource.search),
+        );
       }
   }
 }

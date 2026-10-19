@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
+import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/qr_links.dart';
 import 'package:wecord/features/qr/qr_repository.dart';
@@ -84,7 +85,9 @@ Future<void> _openUserCode(
       );
       return;
     }
-    unawaited(router.push('${UserProfileScreen.path}/${profile.id}'));
+    unawaited(
+      router.push(userProfileLocation(profile.id, source: FriendSource.qr)),
+    );
   } on Object {
     messenger?.showSnackBar(
       SnackBar(content: Text(tr("Couldn't open the QR code. Try again."))),

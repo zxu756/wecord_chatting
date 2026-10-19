@@ -280,6 +280,8 @@ final adminOpsA11yScreens = <A11yScreen>[
   A11yScreen('update-required', (tester, world) async {
     world.extraOverrides = [
       appVersionProvider.overrideWithValue('1.0.0'),
+      // (Not the shared preferences: they live on into the next screens.)
+      featureFlagCacheProvider.overrideWithValue(InMemoryFeatureFlagCache()),
       featureFlagsRepositoryProvider.overrideWithValue(
         const _FlagsRepository(FeatureFlagSnapshot(minVersion: '2.0.0')),
       ),

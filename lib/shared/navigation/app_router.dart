@@ -27,6 +27,8 @@ import 'package:wecord/features/home/home_sidebar.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/legal/legal_document.dart';
 import 'package:wecord/features/legal/legal_screen.dart';
+import 'package:wecord/features/notes/public/public_note.dart';
+import 'package:wecord/features/notes/public/public_note_screen.dart';
 import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
 import 'package:wecord/features/error_reports/redirect_tracking.dart';
 import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
@@ -67,7 +69,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     // has no route after a '#', so its page is found from the address.
     initialLocation:
         (kIsWeb
-            ? callLinkLocationFor(Uri.base) ?? qrLinkLocationFor(Uri.base)
+            ? callLinkLocationFor(Uri.base) ??
+                  qrLinkLocationFor(Uri.base) ??
+                  publicNoteLocationFor(Uri.base)
             : null) ??
         HomeScreen.path,
     refreshListenable: authRouter,
@@ -81,6 +85,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // The policy pages are open to everybody, signed in or not (sign-up
       // links to them).
       if (location.startsWith('${LegalRoutes.prefix}/')) {
+        return null;
+      }
+      // A published note is open to anybody holding its link (the link is
+      // the secret); it needs no sign-in.
+      if (location.startsWith('$publicNoteRoutePrefix/')) {
         return null;
       }
 
@@ -409,6 +418,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => LegalDocumentScreen(
           key: ValueKey('legal-route-${state.pathParameters['slug']}'),
           document: LegalDocument.fromSlug(state.pathParameters['slug'])!,
+        ),
+      ),
+      // A published note, read only, open before sign-in too.
+      GoRoute(
+        path: '$publicNoteRoutePrefix/:token',
+        redirect: (context, state) =>
+            isPublicNoteToken(state.pathParameters['token'] ?? '')
+            ? null
+            : HomeScreen.path,
+        builder: (context, state) => PublicNoteScreen(
+          key: ValueKey('public-note-${state.pathParameters['token']}'),
+          token: state.pathParameters['token']!,
         ),
       ),
     ],

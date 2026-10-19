@@ -1,5 +1,6 @@
 import 'package:wecord/features/notes/note_merge.dart';
 import 'package:wecord/features/notes/note_models.dart';
+import 'package:wecord/features/notes/note_table.dart';
 
 /// What typing a markdown shortcut at the start of a paragraph turns it
 /// into.
@@ -229,6 +230,8 @@ String noteToMarkdown(String title, List<NoteBlock> blocks) {
         buffer.writeln('---');
       case NoteBlockKind.image:
         buffer.writeln('![${block.props['name'] ?? 'picture'}]');
+      case NoteBlockKind.table:
+        buffer.write(tableToMarkdown(NoteTable.fromProps(block.props)));
       case NoteBlockKind.paragraph:
         buffer.writeln(text);
     }
@@ -239,6 +242,27 @@ String noteToMarkdown(String title, List<NoteBlock> blocks) {
     }
   }
   return buffer.toString().trimRight();
+}
+
+/// A table as a GitHub style Markdown table. Pipes and line breaks in a cell
+/// are escaped. A table without a heading row gets an empty one, because
+/// Markdown tables always have one.
+String tableToMarkdown(NoteTable table) {
+  String cell(String text) => text
+      .replaceAll('\\', '\\\\')
+      .replaceAll('|', '\\|')
+      .replaceAll(RegExp(r'\r?\n'), '<br>');
+  String line(List<String> cells) => '| ${cells.map(cell).join(' | ')} |';
+  final rows = table.textRows;
+  final width = table.columns.length;
+  final buffer = StringBuffer();
+  final head = table.header ? rows.first : List.filled(width, '');
+  buffer.writeln(line(head));
+  buffer.writeln('| ${List.filled(width, '---').join(' | ')} |');
+  for (final row in table.header ? rows.skip(1) : rows) {
+    buffer.writeln(line(row));
+  }
+  return buffer.toString();
 }
 
 String _inlineMarkdown(NoteBlock block) {

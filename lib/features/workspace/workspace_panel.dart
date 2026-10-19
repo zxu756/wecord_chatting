@@ -8,6 +8,8 @@ import 'package:wecord/features/lists/lists_repository.dart';
 import 'package:wecord/features/lists/task_list_page.dart';
 import 'package:wecord/features/notes/note_models.dart';
 import 'package:wecord/features/notes/note_page.dart';
+import 'package:wecord/features/notes/note_templates.dart';
+import 'package:wecord/features/notes/notes2_repository.dart';
 import 'package:wecord/features/notes/notes_repository.dart';
 import 'package:wecord/features/workspace/workspace_navigation.dart';
 import 'package:wecord/features/workspace/workspace_providers.dart';
@@ -98,11 +100,27 @@ class WorkspacePanelState extends ConsumerState<WorkspacePanel> {
     if (_creating) {
       return;
     }
+    // How the note starts: blank, a template of the app, or one of mine.
+    final choice = await showNewNoteSheet(context);
+    if (choice == null || !mounted) {
+      return;
+    }
+    final template = choice.template;
     setState(() => _creating = true);
     try {
-      final meta = await ref
-          .read(notesRepositoryProvider)
-          .createNote(widget.conversationId, id: newClientId());
+      final meta = template == null
+          ? await ref
+                .read(notesRepositoryProvider)
+                .createNote(widget.conversationId, id: newClientId())
+          : await ref
+                .read(notes2RepositoryProvider)
+                .createNoteFromBlocks(
+                  widget.conversationId,
+                  title: template.title,
+                  icon: template.icon,
+                  blocks: template.blocks,
+                  id: newClientId(),
+                );
       ref.invalidate(notesListProvider(widget.conversationId));
       if (mounted) {
         setState(() {

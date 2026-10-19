@@ -19,6 +19,27 @@ export const REWRITE_MODES = [
 ] as const;
 export type RewriteMode = (typeof REWRITE_MODES)[number];
 
+/// What the notes editor's AI can do (see note_assist.ts).
+export const NOTE_ASSIST_MODES = [
+  "continue",
+  "summarize",
+  "outline",
+  "tone",
+  "translate",
+  "extract_tasks",
+] as const;
+export type NoteAssistMode = (typeof NOTE_ASSIST_MODES)[number];
+
+/// The tones the notes editor's AI can change a text to.
+export const NOTE_TONES = [
+  "polite",
+  "formal",
+  "casual",
+  "concise",
+  "fix",
+] as const;
+export type NoteTone = (typeof NOTE_TONES)[number];
+
 /// Longest text rewritten or translated in one request.
 export const MAX_TEXT_CHARS = 8_000;
 /// Messages summarized at most.
@@ -93,6 +114,21 @@ export type AiRequest =
     /// when there is no usable zone name (the iPhone and Mac apps do not
     /// know it). Null reads dates as UTC.
     utcOffsetMinutes: number | null;
+  }
+  | {
+    /// The AI in the notes editor (note_assist.ts): continue, summarize,
+    /// outline, change the tone, translate, pull out the to-dos.
+    action: "note_assist";
+    noteId: string;
+    mode: NoteAssistMode;
+    /// The selected text, or null for the whole note.
+    text: string | null;
+    /// For mode "tone".
+    tone: NoteTone | null;
+    /// For mode "translate".
+    target: LanguageCode | null;
+    /// The language to write in, or null for the note's own.
+    language: LanguageCode | null;
   };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
@@ -280,6 +316,59 @@ export function parseAiRequest(body: unknown): AiRequest | null {
             offset >= -840 && offset <= 840
             ? offset
             : null,
+      };
+    }
+    case "note_assist": {
+      const noteId = optionalId(fields.note_id);
+      const mode = fields.mode;
+      if (
+        noteId === null || noteId === "invalid" ||
+        !(NOTE_ASSIST_MODES as readonly unknown[]).includes(mode)
+      ) {
+        return null;
+      }
+      // A selection is optional; an empty one counts as none, a too long
+      // one is a request that is too big.
+      let text: string | null = null;
+      if (typeof fields.text === "string") {
+        if (fields.text.trim() !== "") {
+          text = readText(fields.text);
+          if (text === null) {
+            return null;
+          }
+        }
+      } else if (fields.text !== undefined && fields.text !== null) {
+        return null;
+      }
+      let tone: NoteTone | null = null;
+      if (mode === "tone") {
+        if (!(NOTE_TONES as readonly unknown[]).includes(fields.tone)) {
+          return null;
+        }
+        tone = fields.tone as NoteTone;
+      }
+      let target: LanguageCode | null = null;
+      if (mode === "translate") {
+        if (!isLanguageCode(fields.target)) {
+          return null;
+        }
+        target = fields.target;
+      }
+      let language: LanguageCode | null = null;
+      if (fields.language !== undefined && fields.language !== null) {
+        if (!isLanguageCode(fields.language)) {
+          return null;
+        }
+        language = fields.language;
+      }
+      return {
+        action: "note_assist",
+        noteId,
+        mode: mode as NoteAssistMode,
+        text,
+        tone,
+        target,
+        language,
       };
     }
     default:

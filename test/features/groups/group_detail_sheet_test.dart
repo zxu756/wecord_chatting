@@ -37,6 +37,11 @@ void main() {
       ),
     );
 
+    // The sheet is a list; the owner's "Ask members to confirm" switch sits
+    // above the invite row, so give it the height of a phone.
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

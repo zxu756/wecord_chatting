@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/sheet_rows.dart';
 import 'package:wecord/features/later/later_time.dart';
+import 'package:wecord/features/later/schedule_repeat.dart';
+import 'package:wecord/features/notifications/device_time_zone.dart';
 import 'package:wecord/features/later/scheduled_messages_repository.dart';
 import 'package:wecord/features/later/when_sheet.dart';
 import 'package:wecord/features/push/push_repository.dart';
@@ -181,6 +183,13 @@ class _ScheduledMessagesSheetState
                   now,
                   alwaysUse24HourFormat: use24,
                 ),
+                repeatText: message.repeat == null
+                    ? null
+                    : describeRepeat(
+                        message.repeat!,
+                        localizations,
+                        alwaysUse24HourFormat: use24,
+                      ),
                 busy: _busyId == message.id,
                 onEdit: () => unawaited(_edit(message)),
                 onSendNow: () => unawaited(_sendNow(message)),
@@ -203,10 +212,14 @@ class _ScheduledCard extends StatelessWidget {
     required this.onEdit,
     required this.onSendNow,
     required this.onDelete,
+    this.repeatText,
   });
 
   final ScheduledMessage message;
   final String when;
+
+  /// "Every Monday 9:00 AM", for a repeating message.
+  final String? repeatText;
   final bool busy;
   final VoidCallback onEdit;
   final VoidCallback onSendNow;
@@ -246,6 +259,26 @@ class _ScheduledCard extends StatelessWidget {
               ),
             ],
           ),
+          if (repeatText case final text?) ...[
+            const SizedBox(height: 8),
+            Row(
+              key: ValueKey('scheduled-repeat-${message.id}'),
+              children: [
+                Icon(Icons.repeat_rounded, size: 16, color: c.accentText),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.accentText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             message.body,
@@ -284,7 +317,9 @@ class _ScheduledCard extends StatelessWidget {
               WeCordIconButton(
                 key: ValueKey('scheduled-delete-${message.id}'),
                 icon: Icons.delete_outline_rounded,
-                tooltip: tr('Delete scheduled message'),
+                tooltip: message.isRepeating && !failed
+                    ? tr('Stop repeating')
+                    : tr('Delete scheduled message'),
                 variant: WeCordButtonVariant.ghost,
                 size: 36,
                 onPressed: busy ? null : onDelete,
@@ -318,6 +353,7 @@ class ScheduledEditSheet extends ConsumerStatefulWidget {
 class _ScheduledEditSheetState extends ConsumerState<ScheduledEditSheet> {
   late final _controller = TextEditingController(text: widget.message.body);
   late DateTime _sendAt = widget.message.sendAt.toLocal();
+  late ScheduleRepeat? _repeat = widget.message.repeat;
   var _saving = false;
   String? _error;
 
@@ -336,6 +372,17 @@ class _ScheduledEditSheetState extends ConsumerState<ScheduledEditSheet> {
     );
     if (picked != null && mounted) {
       setState(() => _sendAt = picked);
+    }
+  }
+
+  Future<void> _pickRepeat() async {
+    final choice = await showRepeatSheet(
+      context,
+      current: _repeat,
+      zone: _repeat?.zone ?? deviceTimeZone(),
+    );
+    if (choice != null && mounted) {
+      setState(() => _repeat = choice.repeat);
     }
   }
 
@@ -365,6 +412,7 @@ class _ScheduledEditSheetState extends ConsumerState<ScheduledEditSheet> {
               newBody: body,
               mentions: widget.message.mentions,
             ),
+            repeat: _repeat,
           );
       if (mounted) {
         Navigator.of(context).pop(true);
@@ -418,6 +466,13 @@ class _ScheduledEditSheetState extends ConsumerState<ScheduledEditSheet> {
                     alwaysUse24HourFormat: use24,
                   ),
                   onTap: _pickTime,
+                ),
+                SettingsRow(
+                  key: const ValueKey('scheduled-edit-repeat'),
+                  icon: Icons.repeat_rounded,
+                  title: tr('Repeat'),
+                  value: repeatKindLabel(_repeat?.kind),
+                  onTap: _pickRepeat,
                 ),
               ],
             ),

@@ -142,6 +142,13 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610240230_story_reports.sql
 \i supabase/migrations/202610240240_stories_signals_cleanup.sql
 \i supabase/migrations/202610240250_export_my_stories.sql
+\i supabase/migrations/202610240400_urgent_schema.sql
+\i supabase/migrations/202610240410_urgent_rpcs.sql
+\i supabase/migrations/202610240420_announcement_ack_rpcs.sql
+\i supabase/migrations/202610240430_urgent_pushes.sql
+\i supabase/migrations/202610240440_scheduled_recurrence_schema.sql
+\i supabase/migrations/202610240450_scheduled_recurrence_next.sql
+\i supabase/migrations/202610240460_dispatch_urgent.sql
 \i supabase/migrations/202610240600_feature_flags.sql
 \i supabase/migrations/202610240610_feature_flags_admin.sql
 \i supabase/migrations/202610240620_announcements.sql

@@ -455,17 +455,22 @@ extension _ThreadSendState on _ChatThreadScreenState {
         _showSnackBar(tr("Commands can't be scheduled."));
         return;
     }
+    final repeat = ValueNotifier<ScheduleRepeat?>(null);
     final when = await showWhenSheet(
       context,
       title: tr('Schedule message'),
       picks: schedulePicks,
+      repeat: repeat,
     );
+    final chosenRepeat = repeat.value;
+    repeat.dispose();
     if (when == null || !mounted) {
       return;
     }
     final encodedBody = _encodeCustomEmoji(messageBody);
+    final ScheduledMessage created;
     try {
-      await ref
+      created = await ref
           .read(scheduledMessagesRepositoryProvider)
           .create(
             conversationId: widget.conversationId,
@@ -475,6 +480,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
               for (final mention in _mentionsForBody(encodedBody))
                 mention.toJson(),
             ],
+            repeat: chosenRepeat,
           );
     } catch (error) {
       if (mounted) {
@@ -490,15 +496,29 @@ extension _ThreadSendState on _ChatThreadScreenState {
     _cancelReply();
     _clearComposerAfterCommand();
     ref.invalidate(scheduledMessagesProvider(widget.conversationId));
+    // A repeating message may start later than picked (a weekdays message set
+    // for a Saturday goes out on Monday): say what the server made of it.
+    final firstSend = created.repeat == null ? when : created.sendAt.toLocal();
+    final use24 = MediaQuery.alwaysUse24HourFormatOf(context);
+    final localizations = MaterialLocalizations.of(context);
+    final first = describeWhen(
+      localizations,
+      firstSend,
+      DateTime.now(),
+      alwaysUse24HourFormat: use24,
+    );
+    final savedRepeat = created.repeat;
     _showSnackBar(
-      tr('Scheduled for {time}', {
-        'time': describeWhen(
-          MaterialLocalizations.of(context),
-          when.toLocal(),
-          DateTime.now(),
-          alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-        ),
-      }),
+      savedRepeat == null
+          ? tr('Scheduled for {time}', {'time': first})
+          : tr('Scheduled: {rule}. Next: {time}', {
+              'rule': describeRepeat(
+                savedRepeat,
+                localizations,
+                alwaysUse24HourFormat: use24,
+              ),
+              'time': first,
+            }),
     );
   }
 

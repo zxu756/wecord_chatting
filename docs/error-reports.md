@@ -64,18 +64,51 @@ deletes what is waiting to be sent.
 ## Reading the reports
 
 ```sh
-sh tool/errors_report.sh            # last 24 hours, top 20 fingerprints
+sh tool/errors_report.sh            # last 24 hours, top 20 groups
 sh tool/errors_report.sh 72 50      # last 72 hours, top 50
 sh tool/errors_report.sh --local    # the local database
+sh tool/errors_report.sh --symbolize   # name the frames of release builds
 ```
 
-It runs one read-only `select` through `supabase db query --linked`. For one
-fingerprint's stack and context:
+It runs read-only `select`s through `supabase db query --linked`. For one
+group's stack and context:
 
 ```sh
 supabase db query --linked "select stack, context from public.client_errors \
-  where fingerprint = '<fingerprint>' order by created_at desc limit 1"
+  where group_key = '<group_key>' order by created_at desc limit 1"
 ```
+
+The admin console shows the same groups in its Alerts tab (last 24 hours).
+
+## Groups (K5)
+
+A device fingerprints a problem from the top five frames of its stack, so one
+bug can be several fingerprints. The server adds `group_key` (a trigger on
+`client_errors`; `report_client_errors` is untouched): the kind of report, the
+type of the error (`context.type`, the class name the device sends, or the
+start of the message) and the first frame that is WeCord's own code
+(`package:wecord/...`, no line number). Digits do not count. Groups are
+remembered in `ops_error_groups` for 90 days: when and in which version each
+first showed up. A group with at least 3 reports that was never seen before
+raises an alert (monitoring, K3), once.
+
+## Symbols (K5)
+
+Release builds are made with `--split-debug-info=build/symbols/<version>/<platform>`
+(see "Build and release" in `docs/WECORD_FEATURES.md`). Their stack traces have
+no names, only addresses, and a header with the build id. The device keeps that
+header (`ErrorScrubber.stack`), so:
+
+```sh
+sh tool/errors_report.sh --symbolize 72 30
+```
+
+takes the newest stack of each of the top groups, finds the `.symbols` file
+under `build/symbols/<version>/` that matches, runs `flutter symbolize`, and
+prints the groups again by kind and first WeCord frame. Keep
+`build/symbols/<version>/` for every release you ship; it is in `build/`, never
+committed, and a version without it cannot be read. Web reports are minified
+JavaScript and are not symbolized.
 
 Build with `--dart-define=APP_VERSION=… --dart-define=APP_BUILD=…` so reports
 carry the version and build.

@@ -25,6 +25,15 @@ import { runMeetingRecap } from "./meeting_recap.ts";
 import { type AskStore, runAsk } from "./ask.ts";
 import { runTranslateBatch, type TranslationStore } from "./translate_batch.ts";
 import {
+  type Guard2Store,
+  guardImage,
+  pollGuardText,
+  runGuardItem,
+  syncVisionFlag,
+  visionReady,
+} from "./guard2.ts";
+import { type LinkCheckStore, runLinkCheck } from "./link_check.ts";
+import {
   audioFileName,
   MAX_AUDIO_BYTES,
   readTranscribeConfig,
@@ -84,7 +93,12 @@ export type UncheckedReason =
   | "ai_off"
   | "limit"
   | "error"
-  | "timeout";
+  | "timeout"
+  // Pictures (guard2.ts): vision is off, the model does not take pictures,
+  // or the picture cannot be read.
+  | "vision_off"
+  | "vision_unsupported"
+  | "image_unreadable";
 
 /// What the guard hands in for a message.
 export type GuardResult =
@@ -170,6 +184,12 @@ export interface AiDeps {
   noteAssist?: NoteAssistStore;
   /// What ask reads (see ask.ts). Without it that action answers 503.
   ask?: AskStore;
+  /// AI guard 2.0: polls, pictures, events, notes and tasks (see guard2.ts).
+  /// Without it the guard checks text only.
+  guard2?: Guard2Store;
+  /// What link_check reads (see link_check.ts). Without it that action
+  /// answers 503.
+  linkCheck?: LinkCheckStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -233,6 +253,14 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
       const result = await runDigest(parsedDigest.digestId, deps);
       return json(result.body, result.status);
     }
+    if (peeked?.action === "guard_item") {
+      const parsedItem = parseAiRequest(peeked);
+      if (parsedItem === null || parsedItem.action !== "guard_item") {
+        return json({ error: "invalid_request" }, 400);
+      }
+      const result = await runGuardItem(parsedItem.reviewId, deps);
+      return json(result.body, result.status);
+    }
     return await handleGuardRequest(request, deps);
   }
   const userId = await deps.authenticate(authorization);
@@ -253,7 +281,7 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
 
   if (
     parsed.action === "guard" || parsed.action === "assistant" ||
-    parsed.action === "digest"
+    parsed.action === "digest" || parsed.action === "guard_item"
   ) {
     // Only the database (with the shared secret) may ask for a check, an
     // assistant answer or a digest.
@@ -264,6 +292,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
     return json({ error: "ai_not_configured" }, 503);
   }
   if (parsed.action === "status") {
+    if (deps.guard2 !== undefined) {
+      // Lets the database know whether pictures can be checked.
+      await syncVisionFlag(deps.guard2, visionReady(config, deps.env));
+    }
     return json({
       configured: true,
       daily_limit: config.dailyLimit,
@@ -293,6 +325,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "ask") {
     const result = await runAsk(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+  if (parsed.action === "link_check") {
+    const result = await runLinkCheck(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 
@@ -544,6 +580,26 @@ export async function handleGuardRequest(
     if (config === null) {
       return await release("not_configured");
     }
+    // Polls and pictures (guard2.ts): a poll is read as text, a picture goes
+    // to the vision model, and with vision off it is skipped.
+    const rich = deps.guard2 === undefined
+      ? null
+      : await deps.guard2.messageInfo(messageId);
+    if (rich !== null && rich.type === "image") {
+      const imageResult = await guardImage(claim.circleId, rich, config, deps);
+      if (imageResult.verdict === undefined) {
+        return await release(imageResult.unchecked);
+      }
+      const imageState = await deps.guardFinish(messageId, {
+        verdict: imageResult.verdict,
+      });
+      return json({
+        ok: true,
+        state: imageState,
+        category: imageResult.verdict.category,
+      });
+    }
+
     const { allowed } = await deps.guardConsume(
       claim.circleId,
       config.guardDailyLimit,
@@ -554,7 +610,11 @@ export async function handleGuardRequest(
 
     let verdict: GuardVerdict | null;
     try {
-      const text = guardText(claim.body);
+      const text = guardText(
+        rich !== null && rich.type === "poll"
+          ? pollGuardText(rich)
+          : claim.body,
+      );
       const answer = await complete(config, {
         messages: guardPrompt({ text, domains: extractLinkDomains(text) }),
         maxTokens: 320,

@@ -5,6 +5,12 @@ import {
   parseMeetingRecapRequest,
 } from "./meeting_recap_request.ts";
 import { type AskRequest, parseAskRequest } from "./ask_request.ts";
+import {
+  type GuardItemRequest,
+  type LinkCheckRequest,
+  parseGuardItemRequest,
+  parseLinkCheckRequest,
+} from "./guard2_request.ts";
 
 export const LANGUAGES = {
   en: "English",
@@ -139,7 +145,12 @@ export type AiRequest =
   /// The minutes of a call whose captions were on (meeting_recap.ts).
   | MeetingRecapRequest
   /// A question about the chats a person can read (ask.ts).
-  | AskRequest;
+  | AskRequest
+  /// The AI guard's check of an event, note or task (guard2.ts), asked by the
+  /// database with the shared secret.
+  | GuardItemRequest
+  /// "Ask AI about this link" (link_check.ts).
+  | LinkCheckRequest;
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === "string" &&
@@ -385,6 +396,10 @@ export function parseAiRequest(body: unknown): AiRequest | null {
       return parseMeetingRecapRequest(fields);
     case "ask":
       return parseAskRequest(fields);
+    case "guard_item":
+      return parseGuardItemRequest(fields);
+    case "link_check":
+      return parseLinkCheckRequest(fields);
     default:
       return null;
   }

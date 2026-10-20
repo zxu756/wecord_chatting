@@ -5,6 +5,7 @@
 
 import type { AiConfig } from "./config.ts";
 import type { ChatMessage } from "./prompts.ts";
+import type { VisionMessage } from "./vision.ts";
 
 /// How WeCord introduces itself to providers. Always our own identity.
 export const USER_AGENT = "WeCord/1.0 (+https://wecord.jokebear.fyi)";
@@ -55,7 +56,8 @@ export async function sessionId(
 }
 
 export interface CompletionOptions {
-  messages: ChatMessage[];
+  /// Text messages; the AI guard's picture check also sends a picture.
+  messages: (ChatMessage | VisionMessage)[];
   maxTokens: number;
   /// What the session header is derived from (the conversation id, or the
   /// user's id outside a conversation) and which feature is calling.

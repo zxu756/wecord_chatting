@@ -520,6 +520,8 @@ IconData circleAuditIcon(String action) {
     'guard_flag' => Icons.flag_outlined,
     'guard_approve' => Icons.check_circle_outline,
     'guard_remove' => Icons.delete_outline,
+    'guard_item_flag' => Icons.flag_outlined,
+    'guard_item_dismiss' => Icons.check_circle_outline,
     'onboarding_update' => Icons.rule,
     'onboarding_roles' => Icons.badge_outlined,
     'join_request_approve' => Icons.how_to_reg_outlined,
@@ -821,6 +823,17 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     ),
     'guard_remove' => (
       tr('{actor} removed a message by {target} from the review queue'),
+      {},
+    ),
+    'guard_item_flag' => switch (changes['item_type']) {
+      'circle_event' => (tr('AI guard flagged an event by {target}'), {}),
+      'note' => (tr('AI guard flagged a note by {target}'), {}),
+      'task_list' ||
+      'task_item' => (tr('AI guard flagged a task by {target}'), {}),
+      _ => (tr('AI guard flagged something made by {target}'), {}),
+    },
+    'guard_item_dismiss' => (
+      tr('{actor} dismissed a flagged item by {target} from the review queue'),
       {},
     ),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),

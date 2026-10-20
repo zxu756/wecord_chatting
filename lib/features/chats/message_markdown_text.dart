@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/custom_emoji.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/circles/circle_emoji_repository.dart';
+import 'package:wecord/features/safety/link_safety.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -15,9 +16,17 @@ import 'package:wecord/shared/ui/ui.dart';
 typedef LinkLauncher = Future<void> Function(BuildContext context, Uri uri);
 
 /// Opens links tapped in messages: web pages in the in-app browser where
-/// there is one, everything else with the system; tests override it.
+/// there is one, everything else with the system; tests override it. A link
+/// that looks high-risk gets a warning page first (see
+/// features/safety/link_safety.dart).
 final linkLauncherProvider = Provider<LinkLauncher>((ref) {
   return (context, uri) async {
+    if (!await confirmLinkSafety(context, ref, uri)) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
     if (inAppBrowserSupported && isWebPageUri(uri)) {
       await openInAppBrowser(context, uri);
     } else {

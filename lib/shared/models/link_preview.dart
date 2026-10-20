@@ -7,6 +7,9 @@ class LinkPreview {
     this.description,
     this.imageUrl,
     this.siteName,
+    this.riskLevel,
+    this.riskReasons = const [],
+    this.finalHost,
   });
 
   factory LinkPreview.fromJson(Map<String, dynamic> json) {
@@ -16,6 +19,13 @@ class LinkPreview {
       description: _text(json['description']),
       imageUrl: _httpUrl(json['image_url']),
       siteName: _text(json['site_name']),
+      riskLevel: _risk(json['risk'], 'level'),
+      riskReasons: [
+        if (json['risk'] case {'reasons': final List reasons})
+          for (final reason in reasons)
+            if (reason is String) reason,
+      ],
+      finalHost: _text(json['final_host']),
     );
   }
 
@@ -25,8 +35,21 @@ class LinkPreview {
   final String? imageUrl;
   final String? siteName;
 
+  /// How risky the address looks ("none", "caution" or "high"), as the
+  /// function judged it, with the reasons (see features/safety/link_risk.dart).
+  /// Null from an older function.
+  final String? riskLevel;
+  final List<String> riskReasons;
+
+  /// Where the link ended up, when it redirected somewhere else.
+  final String? finalHost;
+
   /// A card needs at least a title or a description.
   bool get hasContent => title != null || description != null;
+}
+
+String? _risk(Object? risk, String key) {
+  return risk is Map ? _text(risk[key]) : null;
 }
 
 String? _text(Object? value) {

@@ -142,6 +142,7 @@ import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
+import 'package:wecord/features/safety/link_safety.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
 import 'package:wecord/features/wallpapers/wallpaper_picker.dart';

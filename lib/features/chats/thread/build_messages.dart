@@ -247,7 +247,13 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
           // Quoted replies in the bubble can jump to the message they answer.
           final scopedBubble = MessageJumpScope(
             onJump: _scrollToMessage,
-            child: bubble,
+            // Lets a risky link's warning page ask the AI in this chat's
+            // name (the circle's and the group's AI switches apply).
+            child: LinkChatScope(
+              conversationId: message.conversationId,
+              circleId: _circleId,
+              child: bubble,
+            ),
           );
           final swipeable =
               touch &&

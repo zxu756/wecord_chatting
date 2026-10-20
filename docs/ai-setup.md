@@ -23,6 +23,9 @@ explains why).
 | `AI_TRANSCRIBE_BASE_URL` | no | An OpenAI-compatible speech-to-text API root, without `/audio/transcriptions` (see "Voice message transcription"). `https` only (plain `http` for `localhost`). |
 | `AI_TRANSCRIBE_API_KEY` | no | That provider's key. |
 | `AI_TRANSCRIBE_MODEL` | no | The transcription model name, e.g. `whisper-1`. |
+| `AI_VISION_ENABLED` | no | `true` lets the AI guard check pictures (see "Picture checks for the AI guard"). Off unless set to `true`, `1`, `yes` or `on`. |
+| `AI_VISION_MODEL` | no | The model that reads pictures, on the same `AI_BASE_URL` provider. Empty or unset: `AI_MODEL` is used. |
+| `AI_VISION_DAILY_LIMIT_PER_CIRCLE` | no | Pictures one circle's guard may check per UTC day. Default `100`. |
 | `AI_EXTRA_HEADERS` | no | A JSON object of extra request headers for providers that need them, e.g. `{"x-team":"wecord"}`. `Authorization`, `Content-Type`, `Accept`, `Host`, `Content-Length` and `User-Agent` cannot be set this way. |
 
 Set them on the project (the key is a secret: never commit it and never put it
@@ -179,6 +182,8 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `digest` | `digest_id`; only the database may call it (shared secret) | `{ok, chats}` or `{ok, skipped: reason}` / `{ok, failed: reason}` |
 | `note_assist` | `note_id`, `mode` (`continue`/`summarize`/`outline`/`tone`/`translate`/`extract_tasks`), optional `text` (the selection, up to 8000 characters), `tone` (`polite`/`formal`/`casual`/`concise`/`fix`) for `tone`, `target` for `translate`, optional `language` | `{blocks: [{kind, text, checked}], text, truncated, source_chars}` |
 | `meeting_recap` | `conversation_id`, `entries` (1 to 2000 sentences `{speaker, text, at?}`), optional `language`, `time_zone`, `utc_offset_minutes` | `{title, summary, decisions, action_items, truncated, line_count, speaker_count}` |
+| `guard_item` | `review_id`; only the database may call it (shared secret) | `{ok, state, category}` or `{ok, skipped: true}` / `{ok, state, unchecked: reason}` |
+| `link_check` | `url`, optional `language` (`en`/`zh`), `conversation_id` | `{verdict: safe\|suspicious\|dangerous\|unknown, reason, host}` |
 | `ask` | `question` (up to 500 characters), `scope` (`{type: everywhere}`, or `{type: circle\|conversation, id}`; required), optional `language`, `time_zone`, `utc_offset_minutes` | `{found, answer, sources: [{n, message_id, conversation_id, sender, snippet, type, created_at, place}], keywords, candidate_count, reason?}` |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
@@ -493,8 +498,9 @@ messages of a new member (joined less than 1, 3 or 7 days ago, or fewer than N
 messages in the circle) wait for a check before the others see them. A message
 the AI flags stays held for the moderators (Hold) or is released with a flag
 (Flag); moderators decide in the circle's Review queue. Moderators, managers,
-bots and the owner are never held, and only text messages are checked (pictures
-and files are not).
+bots and the owner are never held. Text is always checked; polls (question and
+options), the titles of events, notes and tasks, and pictures are checked too
+(AI guard 2.0, below). Files are not.
 
 How a check runs, and why the database starts it:
 
@@ -543,14 +549,113 @@ Set up (once, besides the usual AI secrets):
 - Optional: `supabase secrets set AI_GUARD_DAILY_LIMIT_PER_CIRCLE=200`.
 
 Privacy: only the **text** of messages from guarded members, and the host names
-of its links, is sent to the model, and only while the guard is on. Nothing is
-stored beyond the category and a short reason (`message_reviews`, readable by
-moderators), and the circle's daily request count.
+of its links, is sent to the model, and only while the guard is on (plus what
+AI guard 2.0 adds below, when its switches are on). Nothing is stored beyond
+the category and a short reason (`message_reviews`, readable by moderators),
+and the circle's daily request count.
+
+### AI guard 2.0: polls, titles and pictures
+
+Migrations `202610260200` to `202610260220`; the circle's managers choose what
+is checked under AI guard → Also checks (`circle_ai_guard_scope`):
+
+- **Polls** (default on): the question and the options go to the model like a
+  message, and the poll waits as `checking` exactly as a message does
+  (`messages_review_scope`, a BEFORE INSERT trigger that sorts after
+  `messages_review_guard` and `messages_review_raid`, so those two are
+  untouched). People under a raid lockdown (C6) are checked whatever the
+  guard's own "who is new" rule says, for polls and pictures too.
+- **Titles of events, notes and tasks** (default on): circle events (title and
+  description), notes in a circle channel (title), task lists (title) and tasks
+  (title and details) made or changed by someone the guard checks. These are
+  not messages, so nothing is hidden while the AI looks: an AFTER trigger
+  records a row in `guard_item_reviews` and wakes `ai` with
+  `{"action": "guard_item", "review_id": ...}`. What the AI flags becomes a
+  card in the Review queue ("Events, notes and tasks flagged by the AI guard"),
+  audited as `guard_item_flag`; a moderator opens the item, deals with it, and
+  dismisses the card (`guard_item_dismiss`). A new edit of the same item checks
+  again at most once a minute, and one person's items are checked ten times
+  in ten minutes at most (so making fifty tasks in one go costs ten requests). Its own pg_cron job
+  `wecord-ai-guard-item-sweep` (every minute) ends checks that never came back
+  as "not checked" and tidies old rows; `run_later_dispatch()` is not touched.
+- **Pictures** (default off, see below).
+
+Everything fails open like the text guard: AI off in the circle, not set up,
+the circle's daily limit reached, a provider error or timeout releases the
+message (or leaves the item alone) as "not checked". Requests are charged to the
+circle (`AI_GUARD_DAILY_LIMIT_PER_CIRCLE`); pictures have their own count.
+
+### Picture checks for the AI guard (vision)
+
+Pictures are read by a model behind the same OpenAI-compatible interface
+(`AI_BASE_URL` / `AI_API_KEY`), billed per request by that provider. **A picture
+from a new member is sent to that model provider** (as base64 inside the one
+request, never as a link to your storage, and it is not kept anywhere by
+WeCord). Only pictures of people the guard checks are sent (new members, and
+people who arrived in a raid), only when the circle turned on "Pictures", and at
+most `AI_VISION_DAILY_LIMIT_PER_CIRCLE` per circle and day. Single pictures of
+JPEG, PNG, WebP or GIF up to 3 MB are read (storage scales them to 768 pixels
+first when your plan allows it); view-once pictures are never read.
+
+Nothing is sent, and no picture is ever held, unless you turn it on:
+
+```sh
+# turn picture checks on, with the main model (it must accept pictures)
+supabase secrets set AI_VISION_ENABLED=true
+
+# or with a separate picture model on the same provider
+supabase secrets set AI_VISION_ENABLED=true AI_VISION_MODEL=<picture-model-name>
+
+# optional: pictures per circle and day (default 100)
+supabase secrets set AI_VISION_DAILY_LIMIT_PER_CIRCLE=50
+
+# turn it off again
+supabase secrets set AI_VISION_ENABLED=false
+```
+
+(These are commands for you to run; nothing in the repository sets a secret.)
+The function reads the secrets on each request, so no redeploy is needed.
+
+How it stays safe when vision is not there:
+
+- The function tells the database whether pictures can be read
+  (`ai_runtime_flags`, the key `vision`), every time someone opens the app's AI
+  status and whenever it checks a picture. The database only marks a picture
+  `checking` while that flag is true, so **with vision off, or never set up, a
+  picture is sent like any other and never waits.** (Right after you turn it on,
+  pictures start being checked as soon as the function has said so; the first
+  status call does that.)
+- If the model refuses pictures (HTTP 400, 404, 415 or 422) the picture is
+  released as "not checked: vision_unsupported", the flag goes false and this
+  copy of the function stops sending pictures for six hours.
+- A picture that cannot be read (a type models do not take, too big, not in
+  storage) is released as `image_unreadable`; vision off is `vision_off`; a busy
+  provider or the picture limit is `limit`. The count is given back whenever
+  the model did not answer.
+- The prompt treats the picture, and any text inside it, as untrusted data.
+
+### Ask AI about a link (`link_check`)
+
+The warning page that opens before a high-risk link (G5) offers "Ask AI to
+check this link". It is only ever started by that tap. The model gets the
+address without its query string or fragment, the address the link redirects
+to, the page title and description that `link-preview` read, and the signals the
+app's own rules found; never anything from the chat, and the link is never
+opened by this function. It counts against the person's daily limit, honours
+the circle's, the group's and the person's AI switches, and stores nothing.
+
+`link-preview` itself needs no AI: it returns `risk: {level, reasons}` and
+`final_host` from the address alone (`supabase/functions/link-preview/link_risk.ts`;
+the app has the same rules in `lib/features/safety/link_risk.dart`, both tested
+against `test/fixtures/link_risk_cases.json`). Deploy order for G5: apply
+migration `202610260220` (the `final_url` column), then
+`supabase functions deploy link-preview` and `supabase functions deploy ai`.
 
 ## Tests
 
 
 ```sh
 cd supabase/functions/ai && deno test
-flutter test test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/supabase/ai_ask_test.dart test/features/inbox test/features/notes
+cd supabase/functions/link-preview && deno test
+flutter test test/features/safety test/features/circles/guard2_test.dart test/supabase/guard2_test.dart test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/supabase/ai_ask_test.dart test/features/inbox test/features/notes
 ```

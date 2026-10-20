@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/link_preview.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -121,6 +122,12 @@ class MessageLinkPreviewCard extends ConsumerWidget {
                             ),
                           ),
                         ],
+                        if (preview.riskLevel == 'caution' ||
+                            preview.riskLevel == 'high')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: _RiskNote(high: preview.riskLevel == 'high'),
+                          ),
                       ],
                     ),
                   ),
@@ -139,5 +146,40 @@ class MessageLinkPreviewCard extends ConsumerWidget {
       return;
     }
     ref.read(linkLauncherProvider)(context, uri).catchError((Object _) {});
+  }
+}
+
+/// "Be careful with this link": the function found something odd about the
+/// address (see features/safety/link_risk.dart). A high risk also gets a
+/// warning page when the link is opened.
+class _RiskNote extends StatelessWidget {
+  const _RiskNote({required this.high});
+
+  final bool high;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final tint = high ? c.dangerText : c.warningText;
+    return Row(
+      key: ValueKey(high ? 'link-risk-high' : 'link-risk-caution'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.warning_amber_rounded, size: 14, color: tint),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            high
+                ? tr('This link looks unsafe')
+                : tr('Be careful with this link'),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: tint,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

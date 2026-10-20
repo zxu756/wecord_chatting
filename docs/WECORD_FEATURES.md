@@ -100,7 +100,7 @@
 - **消息里的时间（时区令牌）**：输入「明天晚上8点」「下周三下午3点」「in 2 hours」等会提示转换；转换后的时间按每个读者自己的时区显示，可点开查看完整时间、加入日历（网页下载 .ics，Apple 平台用分享）、复制。推送里也会按收件人时区和语言格式化。
 - **定时发送**：选择发送时间，到点由服务器自动发出（即使你离线）；发出前可编辑、立即发送、删除；失败会标记原因。
 - **重复的定时消息**：选时间的弹层里有「重复」：每天 / 工作日 / 每周（第一次发送的那个星期几）/ 每月（第一次发送的那个几号），可设结束日期（含当天，最长两年）。按**发送者设备时区的墙钟时间**算：每周一 9:00 在夏令时变化后仍是 9:00；落在被跳过的那个小时（如 02:30）会顺延到间隙之后（03:30），落在重复的那个小时（01:30）只在第二次（标准时间）发一次。每月 29/30/31 号遇到没有这一天的月份，改在**当月最后一天**发，下个月再回到原来的号数。工作日的第一次若选在周末，顺延到周一。列表里每条显示「每周一 9:00 AM」「截止 …」，删除下一条就等于停止重复。同时最多 20 条重复消息。服务器：`scheduled_messages` 加 `recurrence/recurrence_day/recurrence_time/recurrence_tz/recurrence_until/recurrence_parent_id`；任何一条发出（或失败）后，触发器写下一条（`recurrence_parent_id` 唯一索引保证一条只生成一条）；消息的 `client_id` 仍是定时行的 id，重试不会重复发送；晚到（比如宕机几天）只补发一条，下一条从「现在之后」算；发送者退群则系列结束；下一条会出现在「我的日程」里。
-- **链接预览**：自动抓取标题、描述、图片。
+- **链接预览**：自动抓取标题、描述、图片；同时判断链接风险（见第 12 节的链接安全检查）。
 - **离线发送（发件箱）**：没网时消息进入本地发件箱，联网后自动补发；本地聊天缓存（手机/电脑 SQLite，网页 IndexedDB）可离线浏览聊天记录；顶部显示连接状态条。
 - **发送失败处理**：失败的消息可重试、编辑后重发。
 
@@ -267,6 +267,13 @@
   - 版主审核队列（菜单带数字徽标），显示类别和理由（AI 同时生成中英文理由，按界面语言显示），可批准/删除，记入审计日志；
   - AI 不可用（未配置、限额、出错、超时）时直接放行并记为「未检查」；AutoMod 仍先生效；额度计在圈子上，不扣成员的。
   - **编辑后复查**：发送者仍是新成员时，编辑文字会让消息回到「检查中」（同样的规则、同样的唤醒、超时同样放行），通过后留在原位置，不重复推送；管理者、版主、机器人、老成员的编辑不复查。
+- **AI 守护 2.0**（F7，AI 守护设置里的「另外检查」，管理者设置）：
+  - **投票**：新成员（和突袭锁门期间进来的人）发的投票，问题和选项一起交给 AI，和文字消息一样先「检查中」、可被扣留；默认开。
+  - **活动、笔记、任务的标题**：同一批人在圈子里建的活动（标题和说明）、频道里的笔记标题、任务清单标题、任务（标题和详情），创建或修改后由 AI 检查（同一条一分钟内改多次只算一次，同一个人十分钟内最多检查十条，防止用改标题或批量建任务烧额度）。这些不是消息，没法先藏起来，所以**不扣留**：被 AI 标记的在审核页出现独立的卡片「AI 守护标记的活动、笔记和任务」（作者、类型、AI 的类别和理由），版主点「打开」去处理，再点「关闭」；AI 的标记和版主的关闭都记入审计日志（`guard_item_flag`、`guard_item_dismiss`）；红色徽标数字包含这些卡片。默认开。
+  - **图片**：默认关，圈子管理者打开「图片」后，新成员发的单张图片（JPEG/PNG/WebP/GIF，不超过 3MB，存储支持缩放时先缩到 768 像素）发给视觉模型检查（见 `docs/ai-setup.md`：`AI_VISION_ENABLED`、`AI_VISION_MODEL`），被扣留的图片在审核页直接显示出来给版主看；**服务器没开视觉、模型拒收图片、读不了图片或额度用完时，图片直接放行并记为「未检查」，数据库在函数告知「可读图片」之前根本不会扣留图片**（`ai_runtime_flags`），所以没配视觉模型绝不会让图片卡住。图片按每圈每日单独限额（`AI_VISION_DAILY_LIMIT_PER_CIRCLE`，默认 100）。图片只在那一次请求里以 base64 发给模型服务商，不落第三方存储；提示词把图片和图里的文字当不可信数据。
+  - 沿用现有规则：圈子关了 AI 就都不查；额度计在圈子上；AutoMod、突袭防护照常先生效；定时任务是独立的 pg_cron `wecord-ai-guard-item-sweep`（每分钟，结束超时的检查并清理旧行），没有改 `run_later_dispatch()`。
+- **反诈提示**（F7）：群和圈子里，**不是你好友**的人发来的文字，如果在要钱 / 转账 / 保证金、要验证码、中奖、带单稳赚、礼品卡付款或冒充客服说账号异常，或带一个看起来可疑的链接，消息下面出现黄色提示条「谨防诈骗：对方不是你的好友」，写明该小心什么，带「举报这条消息」（走 A1 的举报流程）和「不再提醒此人」。只用规则，在本机运行，消息不发给任何人；只提示不拦截；一个人的提示关掉后（或举报后）不再重复出现；私聊（只限好友）、文件传输助手、自己的消息、机器人和 Webhook 的消息、已被 AI 守护扣留的消息都不提示。只有一个普通链接不算（陌生人发链接太常见），要地址本身看起来可疑，或消息同时在要东西。
+- **链接安全检查**（G5）：`link-preview` 函数顺带返回风险（`risk.level`：none / caution / high 和原因），只看地址：地址里 `@` 前面伪装成域名、数字 IP、外观相似字符、短链接、模仿知名站点（`paypal-login.com`、`paypal.com.xxx.top`）、可疑后缀、登录或领奖字样、下载安装包、不加密还要登录等，规则累加；短链接会跟着重定向（最多 3 次）按最终地址再算一次。预览卡片上 caution 显示「小心这个链接」，high 显示「这个链接看起来不安全」；**点开高风险链接前先出现提示页**（地址、为什么有风险、「返回」是默认、「仍然打开」，同一个主机本次使用中放行一次后不再问）；预览已加载时服务器判断的重定向结果也算。提示页上有「让 AI 检查这个链接」（只在 AI 可用时，用本人每日额度，圈子或群关了 AI 就不出现）：只把地址（去掉 `?` 之后）、页面标题和描述、规则命中的原因发给模型（`ai` 函数的 `link_check` 动作），不发聊天内容，也从不打开链接；页面文字当不可信数据。规则同时在服务器（`supabase/functions/link-preview/link_risk.ts`）和 App（`lib/features/safety/link_risk.dart`）里各一份，用同一份用例文件 `test/fixtures/link_risk_cases.json` 保持一致。没有接 Google Safe Browsing（要把链接发给第三方、商用条款也没确认），只用本地规则。
 - **编辑时限**（圈子设置 →「编辑消息」）：不限 / 15 分钟 / 1 小时 / 24 小时，超时的编辑被服务器拒绝（删除不受限；私聊和群不受限）。
 - **@WeCord AI 助手**（F2）：
   - 在任何聊天里写 `@WeCord AI …` 就会得到回答，所有人都看得到；也可以用输入框「+」菜单或消息菜单的「问 WeCord AI」打开提问面板。
@@ -404,7 +411,7 @@
 - **版本号**：`pubspec.yaml` 的 `version`（不含 `+` 后的构建号）在构建时作为 `APP_VERSION` 传入（`tool/deploy_web.sh` 已自动传），用于功能开关的最低版本和「本次更新」弹窗。发新版时改 `pubspec.yaml` 的版本，并在 `lib/features/announcements/whats_new_content.dart` 加对应条目。
 - **数据库**：`supabase db push --linked --yes`（编号早于线上最新的迁移需加 `--include-all`）。
 - **Edge Functions**：`supabase functions deploy <name>`。
-- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，日常过期清理（`wecord-purge-expired-stories` 删行、`wecord-expire-story-files` 删文件，每 5 分钟），AI 守护清扫（`wecord-ai-guard-sweep`）、圈子安全清扫（`wecord-circle-safety-sweep`，每分钟：限期封禁到期解封、突袭锁门到期解除）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）、产品统计（`wecord-ops-tick` 每 15 分钟、`wecord-ops-daily-close` 每天 00:20 UTC）、监控检查（`wecord-ops-health-check` 每 5 分钟）等任务。
+- **定时任务**：pg_cron `wecord-later-dispatch` 每分钟调用 `run_later_dispatch()`（已配置 Vault 密钥 `wecord_functions_url`、`wecord_dispatch_secret` 和函数密钥 `DISPATCH_SECRET`）；另有过期消息清理（`wecord-purge-expired-messages`）、错误报告清理、活动提醒清理，日常过期清理（`wecord-purge-expired-stories` 删行、`wecord-expire-story-files` 删文件，每 5 分钟），AI 守护清扫（`wecord-ai-guard-sweep`）、AI 守护「活动、笔记和任务」清扫（`wecord-ai-guard-item-sweep`，每分钟）、圈子安全清扫（`wecord-circle-safety-sweep`，每分钟：限期封禁到期解封、突袭锁门到期解除）、WeCord AI 助手清扫（`wecord-ai-assistant-sweep`）、每日速览（`wecord-ai-digest-tick`，每分钟检查谁到点）、圈子数据聚合（`wecord-circle-insights`，每天 00:10 UTC）、产品统计（`wecord-ops-tick` 每 15 分钟、`wecord-ops-daily-close` 每天 00:20 UTC）、监控检查（`wecord-ops-health-check` 每 5 分钟）等任务。
 - **已设置的密钥（只列名字）**：`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`、`DISPATCH_SECRET`、`GIPHY_API_KEY`、`GOTENBERG_URL/USERNAME/PASSWORD`、`LIVEKIT_URL/API_KEY/API_SECRET`、`VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT`。
 - **工具脚本**（`tool/`）：`deploy_web.sh`、`setup_later_dispatch.sh`、`setup_web_push.sh`、`errors_report.sh`（加 `--symbolize` 还原发布版的崩溃栈，配合 `symbolize_errors.py`）、`generate_web_icons.py`、各功能的截图测试 `tool/screenshots/*`、端到端脚本 `tool/e2e/`。
 - **文档**（`docs/`）：`ai-setup.md`、`bot-api.md`、`chat-events.md`、`data-export.md`、`error-reports.md`、`file-preview-converter.md`、`location.md`、`design/wecord-design-language.md`、`design/calls-more.md`。
@@ -430,7 +437,8 @@
 - **地图**：默认 OSM 公共服务，用户多了需换带密钥的服务商。
 - **Supabase Realtime「Allow public access」开关必须保持开启**：约 38 个 postgres_changes 订阅仍是公共通道（数据由表 RLS 保护），关闭可能导致聊天/圈子/语音/笔记实时更新失效；需先验证 private postgres_changes 再改。
 - **公开笔记网页**是网页版 App 里的路由，不是服务端渲染的 HTML：搜索引擎本来就很难读到内容，「允许收录」只是不再要求不收录；不能给这类页面单独设内容安全策略（只有 `note-public` 的 JSON 带 CSP）；改域名/DNS 后链接的站点前缀以 `WECORD_SITE_URL` 为准。笔记 PDF 里的文字不可选中。评论不推送，只进通知页。AI 提取的待办是笔记里的待办块，不会自动进任务清单。
-- **AI 守护**只检查文字消息，不检查笔记标题、任务标题、活动文字、投票问题；放行后再编辑，新成员期内的会重新检查（见 AI 守护的「编辑后复查」）。
+- **AI 守护**检查文字、投票（问题和选项）、活动 / 笔记 / 任务的标题，图片需圈子打开并且服务器配了视觉模型（见 AI 守护 2.0）；笔记正文、群里的活动（群聊活动不属于圈子）、已有内容不检查；活动、笔记、任务只标记不扣留；图片放行后若再编辑（改说明）不复查；放行后再编辑文字，新成员期内的会重新检查（见 AI 守护的「编辑后复查」）。
+- **反诈提示和链接检查**都是提示，不是拦截：规则会有误报（正常的转账、客服话术），用户可以对某个人关掉提示、对某个主机放行；短链接的最终地址只在预览能拿到时才知道；链接规则看不出页面内容。
 - **合并转发**不能发到圈子频道；接龙编号按加入顺序（有人退出会变）；朋友圈不支持多视频；导出不含笔记内图片（导出笔记为 PDF 时图片会画进去）。
 - **iPad**（H4）：Xcode 工程是 iPhone + iPad（`TARGETED_DEVICE_FAMILY = "1,2"`），iPad 支持四个方向，不设 `UIRequiresFullScreen`，所以支持分屏（Split View）、Slide Over 和台前调度（Stage Manager）；窗口宽度变化时界面按宽度重新布局（≥840 电脑布局，600–840 手机布局但不紧凑，<600 紧凑手机布局），页面状态保留。做了三处 iPad 修正：① 触控板/鼠标悬停消息出现操作条（以前 iPad 因为「触屏平台」被关掉了；手指不会触发悬停，所以触屏不受影响）；② 设置里的「键盘快捷键」入口在 iPad 上显示（窗口较长边 ≥960 就算平板，分屏窄窗口也算）；③ Cmd+K / Cmd+/ / Cmd+J / Option+↑↓ 在 iPad 外接键盘上沿用 Mac 的键。截图测试：`tool/screenshots/ipad_screenshots_test.dart`（1024×1366、1366×1024、834×1194、分屏 507×1366）。
 - **存储空间**：iPhone/Mac 的图片只在内存里缓存（没有磁盘图片缓存），所以「已下载的文件」只含在查看器里打开过的文件、视频和语音；清理前下载的文件按「不属于任何聊天的文件」归类（之后再打开会记下来源）；网页的 Service Worker/浏览器自己的缓存不在统计里（只在浏览器用量里体现）。

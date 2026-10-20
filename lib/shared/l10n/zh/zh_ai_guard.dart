@@ -12,8 +12,8 @@ const zhAiGuard = <String, String>{
       '在其他人看到之前，用 AI 检查新成员发出的头几条消息。AI 认为没问题的消息会很快显示出来。',
   'AI features are turned off in this circle, so the guard does nothing. Turn on "Allow AI features in this circle" in Circle settings to use it.':
       '这个圈子已关闭 AI 功能，所以守护不会起作用。请在圈子设置中打开“允许在此圈子使用 AI 功能”。',
-  'Only the text of messages from new members is sent to the AI provider, and only while this is on. Pictures and files are not sent. If the AI is unavailable, messages are shown as usual and marked as not checked.':
-      '只有新成员所发消息的文字会发送给 AI 服务商，并且仅在开启时发送。图片和文件不会发送。如果 AI 不可用，消息会照常显示，并标记为未检查。',
+  'Only the text of messages from new members is sent to the AI provider, and only while this is on. Files are not sent. If the AI is unavailable, messages are shown as usual and marked as not checked.':
+      '只有新成员所发消息的文字会发送给 AI 服务商，并且仅在开启时发送。文件不会发送。如果 AI 不可用，消息会照常显示，并标记为未检查。',
   'On, but AI is off in this circle': '已开启，但此圈子关闭了 AI',
   'Who counts as new': '谁算新成员',
   'Recently joined': '刚加入的',

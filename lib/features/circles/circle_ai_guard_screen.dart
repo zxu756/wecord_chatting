@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_review_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/guard2/guard_scope_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_role.dart';
@@ -170,9 +171,9 @@ class _CircleAiGuardFormState extends ConsumerState<CircleAiGuardForm> {
           key: const ValueKey('ai-guard-main'),
           footer: tr(
             'Only the text of messages from new members is sent to the AI '
-            'provider, and only while this is on. Pictures and files are '
-            'not sent. If the AI is unavailable, messages are shown as '
-            'usual and marked as not checked.',
+            'provider, and only while this is on. Files are not sent. If '
+            'the AI is unavailable, messages are shown as usual and marked '
+            'as not checked.',
           ),
           children: [
             SettingsRow.toggle(
@@ -326,6 +327,7 @@ class _CircleAiGuardFormState extends ConsumerState<CircleAiGuardForm> {
               ),
             ],
           ),
+          GuardScopeSection(circleId: widget.circleId),
         ],
         if (canReview) ...[
           SettingsSectionHeader(tr('Moderation')),

@@ -183,6 +183,8 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610250420_saved_notes_bucket.sql
 \i supabase/migrations/202610250430_export_my_saved_items.sql
 \i supabase/migrations/202610250510_merged_forward_alt_text.sql
+\i supabase/migrations/202610260500_circle_slug.sql
+\i supabase/migrations/202610260510_public_circle_card.sql
 \i supabase/migrations/202610260600_moments2_schema.sql
 \i supabase/migrations/202610260610_moments2_write.sql
 \i supabase/migrations/202610260620_moments2_read.sql

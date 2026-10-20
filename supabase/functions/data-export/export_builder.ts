@@ -144,6 +144,13 @@ export interface ExportData {
    * null when it could not be read, absent in older callers.
    */
   favorites?: Json | null;
+  /**
+   * Moments 2.0: the posts I pinned, the people I reminded to read, the
+   * reminders I got and the pictures on my comments (export_my_moments_more,
+   * migration 202610260650); null when it could not be read, absent in older
+   * callers.
+   */
+  momentsMore?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -681,6 +688,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   if (data.favorites) {
     out.push({ path: "data/favorites.json", value: favoritesJson(data) });
   }
+  if (data.momentsMore) {
+    out.push({ path: "data/moments_more.json", value: momentsMoreJson(data) });
+  }
   const extras = data.extras;
   if (extras) {
     out.push({ path: "data/chains.json", value: extras.chains });
@@ -773,10 +783,29 @@ export function buildMomentsHtml(data: ExportData): string {
     one_month: "Last month",
     three_days: "Last three days",
   };
+  const more = isObject(data.momentsMore) ? data.momentsMore : {};
+  const remindedByPost = new Map(
+    objects(more["reminded"]).map((r) => [
+      str(r["post_id"]) ?? "",
+      names(r["people"]),
+    ]),
+  );
+  const pictureByComment = new Map(
+    objects(more["comment_pictures"]).map((p) => [
+      str(p["comment_id"]) ?? "",
+      p,
+    ]),
+  );
   const posts = moments.posts.map((post) => {
     const photos = objects(post["photos"]).map((photo, n) =>
-      fileHtml(ref(MOMENTS_BUCKET, photo["path"]), `Photo ${n + 1}`, true)
+      fileHtml(ref(MOMENTS_BUCKET, photo["path"]), `Photo ${n + 1}`, true) +
+      (str(photo["alt"])
+        ? `<div class="muted">Description: ${
+          escapeHtml(str(photo["alt"])!)
+        }</div>`
+        : "")
     ).join("");
+    const reminded = remindedByPost.get(str(post["id"]) ?? "");
     const video = post["video"];
     const videoHtml = isObject(video)
       ? fileHtml(ref(MOMENTS_BUCKET, video["path"]), "Video", false)
@@ -803,7 +832,13 @@ export function buildMomentsHtml(data: ExportData): string {
           : ""
       }${photos}${videoHtml}<div>${
         tag(visibilityLabels[str(post["visibility"]) ?? ""] ?? "Friends")
-      }${who ? ` <span class="muted">${escapeHtml(who)}</span>` : ""}</div>`,
+      }${str(post["pinned_at"]) ? ` ${tag("Pinned")}` : ""}${
+        who ? ` <span class="muted">${escapeHtml(who)}</span>` : ""
+      }</div>${
+        reminded
+          ? `<div class="muted">Reminded to read: ${escapeHtml(reminded)}</div>`
+          : ""
+      }`,
     );
   }).join("");
   const comments = moments.comments.map((comment) =>
@@ -820,6 +855,20 @@ export function buildMomentsHtml(data: ExportData): string {
           ? `<div class="muted">Your post: ${
             escapeHtml(str(comment["post_text"])!)
           }</div>`
+          : ""
+      }${
+        pictureByComment.has(str(comment["id"]) ?? "")
+          ? fileHtml(
+            ref(
+              MOMENTS_BUCKET,
+              pictureByComment.get(str(comment["id"]) ?? "")!["path"],
+            ),
+            str(
+              pictureByComment.get(str(comment["id"]) ?? "")!["description"],
+            ) ??
+              "Picture on the comment",
+            true,
+          )
           : ""
       }`,
     )
@@ -882,6 +931,19 @@ ${
       )
     }
 ${section(`Posts you liked (${moments.likes.length})`, likes, "No likes.")}
+${
+      section(
+        "Reminders you got",
+        objects(more["reminded_by"]).map((r) =>
+          `<div class="row"><span>${
+            escapeHtml(personName(r["from"]))
+          } reminded you to read a post</span><span class="muted">${
+            escapeHtml(readableTime(str(r["created_at"])))
+          }</span></div>`
+        ).join(""),
+        "No reminders.",
+      )
+    }
 ${section("Choices for friends", choices, "No special choices.")}
 ${section(`Friend tags (${moments.tags.length})`, tags, "No tags.")}
 ${
@@ -1295,6 +1357,38 @@ own fields, the values on the tasks you created, which tasks are subtasks and
 which repeat.</p>
 ${section("Task lists", lists, "No task lists.")}`,
   );
+}
+
+/** The pictures on the comments I wrote: links, never put into the archive. */
+export function momentsMoreFilesToSign(
+  more: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const picture of objects(more?.["comment_pictures"])) {
+    const path = picture["path"];
+    if (typeof path === "string") {
+      seen.set(`${MOMENTS_BUCKET}/${path}`, { bucket: MOMENTS_BUCKET, path });
+    }
+  }
+  return [...seen.values()];
+}
+
+/** Pins, reminders and comment pictures, with a link for each picture. */
+function momentsMoreJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const more = isObject(data.momentsMore) ? data.momentsMore : {};
+  return {
+    pinned_posts: objects(more["pinned"]),
+    reminded_by_you: objects(more["reminded"]),
+    reminded_you: objects(more["reminded_by"]),
+    comment_pictures: objects(more["comment_pictures"]).map((picture) => ({
+      comment_id: picture["comment_id"],
+      post_id: picture["post_id"],
+      description: picture["description"] ?? null,
+      created_at: picture["created_at"],
+      file: ref(MOMENTS_BUCKET, picture["path"]),
+    })),
+  };
 }
 
 const SAVED_NOTES_BUCKET = "saved-notes";
@@ -1798,6 +1892,9 @@ data/note_extras.json The comments you wrote on notes, your note templates
 data/stories.json     Your dailies still up, close friends and reports.
 data/favorites.json   Your favorites: folders, tags, links, notes and what
                       you kept (other people's words are not copied).
+data/moments_more.json The Moments you pinned, the people you reminded to
+                      read, the reminders you got (never their words) and
+                      the pictures on your comments.
 data/notes.json       Notes (the lines you wrote) in your chats.
 data/task_lists.json  Task lists (the items you created).
 data/task_extras.json Fields, values, subtasks and repeats of those items.

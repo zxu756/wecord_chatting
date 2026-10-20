@@ -5,6 +5,7 @@ import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/merged_forward/merged_forward_models.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
 import 'package:wecord/features/contact_cards/contact_card_models.dart';
+import 'package:wecord/features/moments/moment_card_view.dart';
 import 'package:wecord/features/stories/stories_models.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -61,6 +62,7 @@ String messageSpokenContent(ChatMessage message, {required String senderName}) {
       message.chatHistoryCard!.heading,
     MessageType.text when message.contactCard != null =>
       message.contactCard!.heading,
+    MessageType.text when message.momentCardPostId != null => tr('Moment'),
     MessageType.text when message.storyRef != null => tr(
       'Reply to a daily: {text}',
       {'text': _oneLine(plainTextFromMarkdown(body))},

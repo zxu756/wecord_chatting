@@ -392,6 +392,11 @@ class _MessageBubble extends StatelessWidget {
           contact.isUser ? tr('Open profile') : tr('Open circle invite'),
           () => unawaited(openContactCard(context, contact)),
         ),
+      if (message.momentCardPostId case final momentId?)
+        MessageSemanticAction(
+          tr('Open Moment'),
+          () => unawaited(context.push('/moments/$momentId')),
+        ),
       for (final action in _actions(context))
         MessageSemanticAction(action.label, action.onSelected),
       MessageSemanticAction(
@@ -551,7 +556,9 @@ class _MessageBubble extends StatelessWidget {
         !_isRecalled &&
         message.replyPreview == null &&
         message.forwardPreview == null &&
-        (message.chatHistoryCard != null || message.contactCard != null);
+        (message.chatHistoryCard != null ||
+            message.contactCard != null ||
+            message.momentCardPostId != null);
     // Over a wallpaper the bubbles stay solid and apart from it.
     final onWallpaper = ChatWallpaperScope.activeOf(context);
     return Container(

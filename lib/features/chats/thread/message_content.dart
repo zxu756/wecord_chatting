@@ -272,6 +272,13 @@ class _MessageContent extends StatelessWidget {
           child: ContactCardView(card: contactCard),
         ),
       );
+    } else if (message.momentCardPostId case final momentId?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: MomentCardView(postId: momentId),
+        ),
+      );
     } else if (message.locationCard case final location?) {
       content.add(
         Padding(

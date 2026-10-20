@@ -74,6 +74,7 @@ import 'notes2_a11y_screens.dart';
 import 'favorites2_a11y_screens.dart';
 import 'public_circle_a11y_screens.dart';
 import 'storage_a11y_screens.dart';
+import 'moments2_a11y_screens.dart';
 import 'guard2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
@@ -823,6 +824,7 @@ final allA11yScreens = <A11yScreen>[
   ...favoritesA11yScreens,
   ...platformsA11yScreens,
   ...storageA11yScreens,
+  ...moments2A11yScreens,
   ...guard2A11yScreens,
   ...opsMetricsA11yScreens,
   ...publicCircleA11yScreens,

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
 import 'package:wecord/features/moments/moment_audience_sheet.dart';
+import 'package:wecord/features/moments/moment_mentions.dart';
 import 'package:wecord/features/moments/moment_photos.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
@@ -27,8 +29,9 @@ bool isMomentLink(String text) {
       uri.host.isNotEmpty;
 }
 
-/// New Moment: text, up to nine photos, one video (a minute, 50 MB) or a
-/// link, a place, and who can see it. The post is sent with an id made here, so trying again after a
+/// New Moment: text, up to nine photos (each can be described), one video
+/// (3 minutes, 50 MB) or a link, a place, who can see it and whom to remind
+/// to read it. The post is sent with an id made here, so trying again after a
 /// failure never posts it twice.
 class MomentComposerScreen extends ConsumerStatefulWidget {
   const MomentComposerScreen({super.key});
@@ -50,6 +53,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
   MomentVideoDraft? _video;
   double? _uploadProgress;
   var _audience = MomentAudience.everyone;
+  var _mentioned = <String>{};
   var _linkOpen = false;
   var _locationOpen = false;
   var _picking = false;
@@ -125,7 +129,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
           _picking = false;
           _error = switch (problem.problem) {
             MomentVideoProblem.tooLong => tr(
-              'That video is longer than 1 minute. Choose a shorter one.',
+              'That video is longer than 3 minutes. Choose a shorter one.',
             ),
             MomentVideoProblem.tooBig => tr(
               'That video is bigger than 50 MB. Choose a smaller one.',
@@ -152,8 +156,60 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
   Future<void> _chooseAudience() async {
     final picked = await showMomentAudienceSheet(context, current: _audience);
     if (picked != null && mounted) {
-      setState(() => _audience = picked);
+      final friends = ref.read(friendsProvider).value ?? const <Profile>[];
+      final tags = ref.read(friendTagsProvider).value ?? const FriendTagsData();
+      setState(() {
+        _audience = picked;
+        // Whoever cannot see it now cannot be reminded.
+        _mentioned = keepMentionable(
+          _mentioned,
+          momentMentionCandidates(
+            friends: friends,
+            tags: tags,
+            audience: picked,
+          ),
+        );
+      });
     }
+  }
+
+  Future<void> _chooseMentions() async {
+    final friends = ref.read(friendsProvider).value ?? const <Profile>[];
+    final tags = ref.read(friendTagsProvider).value ?? const FriendTagsData();
+    final picked = await showMomentMentionSheet(
+      context,
+      candidates: momentMentionCandidates(
+        friends: friends,
+        tags: tags,
+        audience: _audience,
+      ),
+      selected: _mentioned,
+    );
+    if (picked != null && mounted) {
+      setState(() => _mentioned = picked);
+    }
+  }
+
+  /// Asks what the photos show, all of them or just [only].
+  Future<void> _describe({MomentPhotoDraft? only}) async {
+    final targets = only == null ? [..._photos] : [only];
+    final result = await showImageAltSheet(
+      context,
+      pictures: [
+        for (final draft in targets)
+          AltPicture(id: draft.id, picture: draft.thumb, current: draft.alt),
+      ],
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      for (final (index, draft) in _photos.indexed) {
+        if (result.containsKey(draft.id)) {
+          _photos[index] = draft.withAlt(result[draft.id]);
+        }
+      }
+    });
   }
 
   void _close() {
@@ -189,6 +245,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
             linkTitle: _hasLink ? _linkTitle.text.trim() : null,
             location: _locationOpen ? _location.text.trim() : null,
             audience: _audience,
+            mentionedIds: _mentioned.toList(),
           );
       await ref.read(momentsFeedProvider.notifier).addPosted(_id);
       if (mounted) {
@@ -212,6 +269,8 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
     final tags = ref.watch(friendTagsProvider).value ?? const FriendTagsData();
     final summary = audienceSummary(_audience, tags: tags, friends: friends);
     final room = momentPhotoRoom(_photos.length);
+    final canRemind = _audience.visibility != MomentVisibility.private;
+    final described = _photos.where((draft) => draft.alt != null).length;
     return Scaffold(
       backgroundColor: c.paper,
       resizeToAvoidBottomInset: true,
@@ -311,6 +370,8 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                                       : null,
                                   onRemove: (draft) =>
                                       setState(() => _photos.remove(draft)),
+                                  onDescribe: (draft) =>
+                                      unawaited(_describe(only: draft)),
                                 ),
                             ],
                           ],
@@ -357,6 +418,39 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                             subtitle: summary,
                             onTap: _chooseAudience,
                           ),
+                          if (canRemind)
+                            SettingsRow(
+                              key: const ValueKey('moment-mention'),
+                              icon: Icons.alternate_email_rounded,
+                              tone: _mentioned.isEmpty
+                                  ? SettingsTone.neutral
+                                  : SettingsTone.accent,
+                              title: tr('Remind who to read'),
+                              subtitle: _mentioned.isEmpty
+                                  ? null
+                                  : momentMentionSummary(_mentioned, friends),
+                              onTap: _chooseMentions,
+                            ),
+                          if (_photos.isNotEmpty)
+                            SettingsRow(
+                              key: const ValueKey('moment-describe'),
+                              icon: Icons.short_text_rounded,
+                              tone: described == _photos.length
+                                  ? SettingsTone.accent
+                                  : SettingsTone.neutral,
+                              title: _photos.length == 1
+                                  ? tr('Describe picture')
+                                  : tr('Describe pictures'),
+                              value: described == 0
+                                  ? null
+                                  : _photos.length == 1
+                                  ? tr('Described')
+                                  : tr('{done} of {total} described', {
+                                      'done': described,
+                                      'total': _photos.length,
+                                    }),
+                              onTap: () => unawaited(_describe()),
+                            ),
                         ],
                       ),
                       if (_linkOpen) ...[
@@ -432,7 +526,7 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                         padding: const EdgeInsets.fromLTRB(6, 14, 6, 0),
                         child: Text(
                           '${tr('Photos are kept private and scaled down before they are sent.')} '
-                          '${tr('Or add one video of up to 1 minute and 50 MB.')}',
+                          '${tr('Or add one video of up to 3 minutes and 50 MB.')}',
                           style: TextStyle(
                             fontSize: 12.5,
                             height: 1.4,
@@ -461,6 +555,7 @@ class _PhotoStrip extends StatelessWidget {
     required this.busy,
     required this.onAdd,
     required this.onRemove,
+    required this.onDescribe,
     this.onAddVideo,
   });
 
@@ -472,6 +567,9 @@ class _PhotoStrip extends StatelessWidget {
   /// Offered while there are no photos: a Moment has photos or a video.
   final VoidCallback? onAddVideo;
   final ValueChanged<MomentPhotoDraft> onRemove;
+
+  /// Asks what the photo shows.
+  final ValueChanged<MomentPhotoDraft> onDescribe;
 
   static const _gap = 6.0;
 
@@ -494,13 +592,37 @@ class _PhotoStrip extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(WeCordRadii.sm),
-                      child: Image.memory(
-                        draft.thumb,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        excludeFromSemantics: true,
+                    WeCordPressable(
+                      key: ValueKey('moment-draft-describe-$index'),
+                      onPressed: () => onDescribe(draft),
+                      pressedScale: 0.97,
+                      semanticLabel: draft.alt == null
+                          ? tr('Describe photo {number}', {'number': index + 1})
+                          : tr('Photo {number} described: {description}', {
+                              'number': index + 1,
+                              'description': draft.alt,
+                            }),
+                      excludeSemantics: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                      ),
+                      builder: (context, states) => ClipRRect(
+                        borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                        child: Image.memory(
+                          draft.thumb,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          excludeFromSemantics: true,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 4,
+                      bottom: 4,
+                      child: ImageAltBadge(
+                        key: ValueKey('moment-draft-alt-$index'),
+                        described: draft.alt != null,
+                        compact: true,
                       ),
                     ),
                     Positioned(

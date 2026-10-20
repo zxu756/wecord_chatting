@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
+import 'package:wecord/features/moments/moments_repository.dart'
+    show MomentPinLimitException;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -27,6 +29,42 @@ Future<void> toggleMomentLike(
   } on Object {
     if (context.mounted) {
       momentsFailureSnack(context, tr('Could not update the like. Try again.'));
+    }
+  }
+}
+
+/// Pins the person's own Moment to their page, or takes it off. Three at
+/// most; the page reads again so the pinned ones come first.
+Future<void> toggleMomentPin(
+  BuildContext context,
+  WidgetRef ref,
+  MomentPost post,
+) async {
+  try {
+    await ref
+        .read(momentPostsStoreProvider.notifier)
+        .setPinned(post.id, pinned: !post.isPinned);
+    ref.invalidate(momentsPageProvider(post.authorId));
+    if (context.mounted) {
+      momentsFailureSnack(
+        context,
+        post.isPinned
+            ? tr('Unpinned from your page')
+            : tr('Pinned to your page'),
+      );
+    }
+  } on MomentPinLimitException {
+    if (context.mounted) {
+      momentsFailureSnack(
+        context,
+        tr('You can pin up to {count} Moments. Unpin one first.', {
+          'count': maxMomentPins,
+        }),
+      );
+    }
+  } on Object {
+    if (context.mounted) {
+      momentsFailureSnack(context, tr('Could not update the pin. Try again.'));
     }
   }
 }

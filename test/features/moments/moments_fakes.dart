@@ -24,6 +24,8 @@ class CreatedMoment {
     this.linkTitle,
     this.location,
     this.video,
+    this.mentionedIds = const [],
+    this.photoAlts = const [],
   });
 
   final String id;
@@ -34,6 +36,10 @@ class CreatedMoment {
   final String? linkTitle;
   final String? location;
   final MomentVideoDraft? video;
+  final List<String> mentionedIds;
+
+  /// The description of each photo (null where there is none).
+  final List<String?> photoAlts;
 }
 
 /// The Moments server in memory. It does not apply the visibility rules (the
@@ -64,7 +70,17 @@ class FakeMomentsRepository implements MomentsRepository {
   final created = <CreatedMoment>[];
   final likeCalls = <(String, bool)>[];
   final comments = <(String postId, String body, String? replyTo)>[];
+  final commentPictures = <MomentCommentPicture?>[];
+  final pinCalls = <(String, bool)>[];
+  final cardsSent = <(String conversationId, String postId)>[];
+
+  /// What a Moment card in a chat shows, by post id; none: "Can't view".
+  final cardInfos = <String, MomentCardInfo>{};
+
+  /// The most Moments the fake lets the person pin (the server says 3).
+  var pinLimit = maxMomentPins;
   final deletedComments = <String>[];
+  final deletedCommentImages = <String?>[];
   final deletedPosts = <String>[];
   final feedCalls =
       <({DateTime? beforeAt, String? beforeId, String? authorId})>[];
@@ -131,6 +147,7 @@ class FakeMomentsRepository implements MomentsRepository {
     String? location,
     MomentAudience audience = MomentAudience.everyone,
     MomentVideoDraft? video,
+    List<String> mentionedIds = const [],
     void Function(double? progress)? onUploadProgress,
   }) async {
     _maybeFail();
@@ -148,6 +165,8 @@ class FakeMomentsRepository implements MomentsRepository {
         linkTitle: linkTitle,
         location: location,
         video: video,
+        mentionedIds: mentionedIds,
+        photoAlts: [for (final photo in photos) photo.alt],
       ),
     );
     MomentVideo? storedVideo;
@@ -179,6 +198,7 @@ class FakeMomentsRepository implements MomentsRepository {
           thumb: thumb,
           width: photo.width,
           height: photo.height,
+          alt: photo.alt,
         ),
       );
     }
@@ -225,6 +245,21 @@ class FakeMomentsRepository implements MomentsRepository {
   }
 
   @override
+  Future<void> setPinned(String id, {required bool pinned}) async {
+    _maybeFail();
+    pinCalls.add((id, pinned));
+    if (pinned && posts.where((post) => post.isPinned).length >= pinLimit) {
+      throw const MomentPinLimitException();
+    }
+    _replace(
+      id,
+      (post) => pinned
+          ? post.copyWith(pinnedAt: DateTime.now().toUtc())
+          : post.copyWith(clearPin: true),
+    );
+  }
+
+  @override
   Future<void> setLiked(String postId, {required bool liked}) async {
     _maybeFail();
     likeCalls.add((postId, liked));
@@ -246,9 +281,11 @@ class FakeMomentsRepository implements MomentsRepository {
     required String postId,
     required String body,
     String? replyToCommentId,
+    MomentCommentPicture? picture,
   }) async {
     _maybeFail();
     comments.add((postId, body, replyToCommentId));
+    commentPictures.add(picture);
     _replace(postId, (post) {
       final parent = post.comments
           .where((comment) => comment.id == replyToCommentId)
@@ -264,6 +301,14 @@ class FakeMomentsRepository implements MomentsRepository {
           replyToCommentId: parent?.id,
           replyToUserId: parent?.userId,
           replyToName: parent?.name,
+          image: picture == null
+              ? null
+              : MomentCommentImage(
+                  path: '$me/c-comment-${comments.length}.${picture.extension}',
+                  width: picture.width,
+                  height: picture.height,
+                  alt: picture.alt,
+                ),
         ),
       ];
       return post.copyWith(comments: next, commentCount: next.length);
@@ -271,9 +316,10 @@ class FakeMomentsRepository implements MomentsRepository {
   }
 
   @override
-  Future<void> deleteComment(String commentId) async {
+  Future<void> deleteComment(String commentId, {String? imagePath}) async {
     _maybeFail();
     deletedComments.add(commentId);
+    deletedCommentImages.add(imagePath);
     posts = [
       for (final post in posts)
         post.comments.any((comment) => comment.id == commentId)
@@ -430,6 +476,19 @@ class FakeMomentsRepository implements MomentsRepository {
 
   @override
   Future<String> signedUrl(String path) async => 'fake://$path';
+
+  @override
+  Future<MomentCardInfo?> momentCard(String postId) async => cardInfos[postId];
+
+  @override
+  Future<String> sendMomentCard({
+    required String conversationId,
+    required String postId,
+  }) async {
+    _maybeFail();
+    cardsSent.add((conversationId, postId));
+    return 'message-${cardsSent.length}';
+  }
 }
 
 /// The tags and stars in memory.
@@ -563,6 +622,16 @@ class FakeMomentPhotoPicker implements MomentPhotoPicker {
   MomentVideoProblem? videoProblem;
   var videoPicks = 0;
 
+  /// What picking a picture for a comment gives (null: cancelled).
+  MomentCommentPicture? commentPhoto;
+  var commentPhotoPicks = 0;
+
+  @override
+  Future<MomentCommentPicture?> pickCommentPhoto() async {
+    commentPhotoPicks += 1;
+    return commentPhoto;
+  }
+
   @override
   Future<MomentVideoDraft?> pickVideo() async {
     videoPicks += 1;
@@ -646,6 +715,9 @@ MomentPost post(
   MomentVisibility visibility = MomentVisibility.friends,
   String? location,
   String? linkUrl,
+  DateTime? pinnedAt,
+  bool mentionedMe = false,
+  List<MomentMention> mentions = const [],
 }) {
   return MomentPost(
     id: id,
@@ -663,6 +735,9 @@ MomentPost post(
     likes: likes,
     commentCount: comments.length,
     comments: comments,
+    pinnedAt: pinnedAt,
+    mentionedMe: mentionedMe,
+    mentions: mentions,
   );
 }
 
@@ -675,6 +750,7 @@ MomentComment comment(
   String? replyToUserId,
   String? replyToName,
   int minutesAgo = 10,
+  MomentCommentImage? image,
 }) {
   return MomentComment(
     id: id,
@@ -685,6 +761,7 @@ MomentComment comment(
     replyToCommentId: replyToId,
     replyToUserId: replyToUserId,
     replyToName: replyToName,
+    image: image,
   );
 }
 

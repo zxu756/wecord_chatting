@@ -12,11 +12,8 @@ const zhMomentsMore = <String, String>{
   'Remove video': '移除视频',
   'Video, {length}': '视频，{length}',
   'Play video, {length}': '播放视频，{length}',
-  'Or add one video of up to 1 minute and 50 MB.': '也可以添加一段不超过 1 分钟、50 MB 的视频。',
   'Uploading video…': '正在上传视频…',
   'Uploading video… {percent}%': '正在上传视频… {percent}%',
-  'That video is longer than 1 minute. Choose a shorter one.':
-      '这段视频超过 1 分钟，请选择更短的视频。',
   'That video is bigger than 50 MB. Choose a smaller one.':
       '这段视频超过 50 MB，请选择更小的视频。',
   'Choose an MP4, MOV or WebM video.': '请选择 MP4、MOV 或 WebM 格式的视频。',

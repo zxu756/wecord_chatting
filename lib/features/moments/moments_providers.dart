@@ -143,18 +143,36 @@ class MomentPostsStore extends Notifier<Map<String, MomentPost>> {
     String id,
     String body, {
     String? replyToCommentId,
+    MomentCommentPicture? picture,
   }) async {
     await _repository.comment(
       postId: id,
       body: body,
       replyToCommentId: replyToCommentId,
+      picture: picture,
     );
     await refresh(id);
   }
 
   Future<void> deleteComment(String postId, String commentId) async {
-    await _repository.deleteComment(commentId);
+    final me = ref.read(momentsUserIdProvider);
+    final comment = state[postId]?.comments
+        .where((comment) => comment.id == commentId)
+        .firstOrNull;
+    await _repository.deleteComment(
+      commentId,
+      // Only the commenter can remove the file from their folder.
+      imagePath: comment != null && comment.userId == me
+          ? comment.image?.path
+          : null,
+    );
     await refresh(postId);
+  }
+
+  /// Pins or unpins the person's own Moment, then reads it again.
+  Future<void> setPinned(String id, {required bool pinned}) async {
+    await _repository.setPinned(id, pinned: pinned);
+    await refresh(id);
   }
 
   Future<void> deletePost(String id) async {
@@ -456,6 +474,18 @@ final momentsFriendPrefsProvider =
 final momentsProfileProvider = FutureProvider.autoDispose
     .family<MomentsProfile?, String>((ref, userId) {
       return ref.watch(momentsRepositoryProvider).profile(userId);
+    });
+
+/// What the Moment card in a chat shows, or null when the reader may not see
+/// the Moment (any more) or it cannot be read.
+final momentCardProvider = FutureProvider.autoDispose
+    .family<MomentCardInfo?, String>((ref, postId) async {
+      ref.watch(momentsUserIdProvider);
+      try {
+        return await ref.watch(momentsRepositoryProvider).momentCard(postId);
+      } on Object {
+        return null;
+      }
     });
 
 /// How a signed link becomes a picture (a network image; tests show

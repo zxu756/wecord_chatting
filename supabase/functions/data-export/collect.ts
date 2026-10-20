@@ -22,6 +22,7 @@ import {
   feedbackFilesToSign,
   formFilesToSign,
   type Json,
+  momentsMoreFilesToSign,
   type OwnedFile,
   ownedFiles,
   storyFilesToSign,
@@ -569,6 +570,21 @@ export async function collectExportData(
     null,
   );
 
+  // Moments 2.0: pins, reminders and the pictures on my comments
+  // (export_my_moments_more).
+  const momentsMore = await tryRead<Row | null>(
+    skipped,
+    "pins and reminders",
+    async () => {
+      const result = await admin.rpc("export_my_moments_more", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -590,6 +606,10 @@ export async function collectExportData(
   }
   // The pictures of my notes are linked.
   for (const { bucket, path } of favoriteFilesToSign(favorites)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures on my comments are linked.
+  for (const { bucket, path } of momentsMoreFilesToSign(momentsMore)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -649,6 +669,7 @@ export async function collectExportData(
     stories,
     taskExtras,
     favorites,
+    momentsMore,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

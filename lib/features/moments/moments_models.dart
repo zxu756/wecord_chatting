@@ -1,13 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/message.dart' show cleanImageAlt;
 
 /// Most photos in one Moment.
 const maxMomentPhotos = 9;
 
-/// The one video of a Moment: at most a minute (half a second of slack for
+/// The one video of a Moment: at most 3 minutes (half a second of slack for
 /// the rounding of the player) and 50 MB. The server checks both too.
-const maxMomentVideoDuration = Duration(seconds: 60, milliseconds: 500);
+const maxMomentVideoDuration = Duration(seconds: 180, milliseconds: 500);
 const maxMomentVideoBytes = 50 * 1024 * 1024;
+
+/// Most friends one Moment can remind to read it ("Remind who to read").
+const maxMomentMentions = 30;
+
+/// Most Moments a person can pin to their page.
+const maxMomentPins = 3;
 
 /// Longest Moment text and comment, as the server enforces them.
 const maxMomentTextLength = 2000;
@@ -102,6 +109,7 @@ class MomentPhoto {
     required this.thumb,
     this.width = 0,
     this.height = 0,
+    this.alt,
   });
 
   factory MomentPhoto.fromJson(Map<String, dynamic> json) {
@@ -110,6 +118,7 @@ class MomentPhoto {
       thumb: json['thumb'] as String? ?? json['path'] as String,
       width: (json['w'] as num?)?.toInt() ?? 0,
       height: (json['h'] as num?)?.toInt() ?? 0,
+      alt: cleanImageAlt(json['alt']),
     );
   }
 
@@ -117,6 +126,9 @@ class MomentPhoto {
   final String thumb;
   final int width;
   final int height;
+
+  /// What the author wrote about the picture, for people who cannot see it.
+  final String? alt;
 
   double? get aspectRatio => width > 0 && height > 0 ? width / height : null;
 }
@@ -201,6 +213,41 @@ class MomentLiker {
   final String? avatarUrl;
 }
 
+/// The picture or sticker on a comment (`moments_comments.image`): a file in
+/// the commenter's folder of the moments bucket and what they wrote about it.
+@immutable
+class MomentCommentImage {
+  const MomentCommentImage({
+    required this.path,
+    this.width = 0,
+    this.height = 0,
+    this.alt,
+  });
+
+  factory MomentCommentImage.fromJson(Map<String, dynamic> json) {
+    return MomentCommentImage(
+      path: json['path'] as String,
+      width: (json['w'] as num?)?.toInt() ?? 0,
+      height: (json['h'] as num?)?.toInt() ?? 0,
+      alt: cleanImageAlt(json['alt']),
+    );
+  }
+
+  final String path;
+  final int width;
+  final int height;
+  final String? alt;
+
+  /// As a picture the full-screen viewer can open.
+  MomentPhoto get asPhoto => MomentPhoto(
+    path: path,
+    thumb: path,
+    width: width,
+    height: height,
+    alt: alt,
+  );
+}
+
 /// A comment or a reply.
 @immutable
 class MomentComment {
@@ -214,6 +261,7 @@ class MomentComment {
     this.replyToCommentId,
     this.replyToUserId,
     this.replyToName,
+    this.image,
   });
 
   factory MomentComment.fromJson(Map<String, dynamic> json) {
@@ -227,6 +275,11 @@ class MomentComment {
       replyToCommentId: json['reply_to_comment_id'] as String?,
       replyToUserId: json['reply_to_user_id'] as String?,
       replyToName: json['reply_to_name'] as String?,
+      image: json['image'] is Map
+          ? MomentCommentImage.fromJson(
+              Map<String, dynamic>.from(json['image'] as Map),
+            )
+          : null,
     );
   }
 
@@ -240,7 +293,33 @@ class MomentComment {
   final String? replyToUserId;
   final String? replyToName;
 
+  /// A picture or sticker on the comment, with or without words.
+  final MomentCommentImage? image;
+
   bool get isReply => replyToUserId != null;
+}
+
+/// A friend the author reminded to read a Moment. Only the author is told
+/// who (the server fills this for them alone).
+@immutable
+class MomentMention {
+  const MomentMention({
+    required this.userId,
+    required this.name,
+    this.avatarUrl,
+  });
+
+  factory MomentMention.fromJson(Map<String, dynamic> json) {
+    return MomentMention(
+      userId: json['user_id'] as String,
+      name: json['name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+
+  final String userId;
+  final String name;
+  final String? avatarUrl;
 }
 
 /// A Moment as the viewer may see it: the likes and comments are already
@@ -266,12 +345,16 @@ class MomentPost {
     this.likes = const [],
     this.commentCount = 0,
     this.comments = const [],
+    this.pinnedAt,
+    this.mentionedMe = false,
+    this.mentions = const [],
   });
 
   factory MomentPost.fromJson(Map<String, dynamic> json) {
     final photos = json['photos'];
     final likes = json['likes'];
     final comments = json['comments'];
+    final mentions = json['mentions'];
     return MomentPost(
       id: json['id'] as String,
       authorId: json['author_id'] as String,
@@ -312,6 +395,18 @@ class MomentPost {
                 ),
             ]
           : const [],
+      pinnedAt: json['pinned_at'] == null
+          ? null
+          : DateTime.parse(json['pinned_at'] as String),
+      mentionedMe: json['mentioned_me'] as bool? ?? false,
+      mentions: mentions is List
+          ? [
+              for (final mention in mentions)
+                MomentMention.fromJson(
+                  Map<String, dynamic>.from(mention as Map),
+                ),
+            ]
+          : const [],
     );
   }
 
@@ -334,12 +429,25 @@ class MomentPost {
   final int commentCount;
   final List<MomentComment> comments;
 
+  /// When the author pinned it to their page; null when it is not pinned.
+  final DateTime? pinnedAt;
+
+  /// The author reminded the viewer to read it.
+  final bool mentionedMe;
+
+  /// Whom the author reminded (filled for the author only).
+  final List<MomentMention> mentions;
+
+  bool get isPinned => pinnedAt != null;
+
   MomentPost copyWith({
     int? likeCount,
     bool? likedByMe,
     List<MomentLiker>? likes,
     int? commentCount,
     List<MomentComment>? comments,
+    DateTime? pinnedAt,
+    bool clearPin = false,
   }) {
     return MomentPost(
       id: id,
@@ -360,6 +468,9 @@ class MomentPost {
       likes: likes ?? this.likes,
       commentCount: commentCount ?? this.commentCount,
       comments: comments ?? this.comments,
+      pinnedAt: clearPin ? null : pinnedAt ?? this.pinnedAt,
+      mentionedMe: mentionedMe,
+      mentions: mentions,
     );
   }
 }
@@ -498,7 +609,10 @@ class MomentsUnseen {
 enum MomentNotificationKind {
   like,
   comment,
-  reply;
+  reply,
+
+  /// The author reminded the person to read their Moment.
+  mention;
 
   static MomentNotificationKind fromWire(Object? value) {
     return MomentNotificationKind.values.firstWhere(
@@ -523,6 +637,7 @@ class MomentNotification {
     this.snippet = '',
     this.postExcerpt = '',
     this.postThumb,
+    this.hasImage = false,
   });
 
   factory MomentNotification.fromJson(Map<String, dynamic> json) {
@@ -538,6 +653,7 @@ class MomentNotification {
       postThumb: json['post_thumb'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       isUnread: json['is_unread'] as bool? ?? false,
+      hasImage: json['has_image'] as bool? ?? false,
     );
   }
 
@@ -552,6 +668,47 @@ class MomentNotification {
   final String? postThumb;
   final DateTime createdAt;
   final bool isUnread;
+
+  /// The comment behind the notice carries a picture or sticker.
+  final bool hasImage;
+}
+
+/// What a Moment card in a chat shows (`get_moment_card`): only while the
+/// reader may see the Moment.
+@immutable
+class MomentCardInfo {
+  const MomentCardInfo({
+    required this.postId,
+    required this.authorId,
+    required this.authorName,
+    required this.kind,
+    this.authorAvatarUrl,
+    this.excerpt = '',
+    this.thumb,
+    this.photoCount = 0,
+  });
+
+  factory MomentCardInfo.fromJson(Map<String, dynamic> json) {
+    return MomentCardInfo(
+      postId: json['post_id'] as String,
+      authorId: json['author_id'] as String,
+      authorName: json['author_name'] as String? ?? '',
+      authorAvatarUrl: json['author_avatar_url'] as String?,
+      kind: MomentKind.fromWire(json['kind']),
+      excerpt: json['excerpt'] as String? ?? '',
+      thumb: json['thumb'] as String?,
+      photoCount: (json['photo_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final String postId;
+  final String authorId;
+  final String authorName;
+  final String? authorAvatarUrl;
+  final MomentKind kind;
+  final String excerpt;
+  final String? thumb;
+  final int photoCount;
 }
 
 /// The words for who can see a Moment, e.g. "Friends", "Only me" or

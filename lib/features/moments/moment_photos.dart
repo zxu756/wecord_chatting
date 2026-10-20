@@ -15,6 +15,9 @@ const momentPhotoEdge = 1920;
 const momentThumbEdge = 480;
 const momentCoverEdge = 1600;
 
+/// The longest side of a picture put on a comment.
+const momentCommentEdge = 960;
+
 /// Scales a picked picture down and compresses it (the chat's photo code:
 /// HEIC, PNG and WebP become JPEG, metadata such as the position is gone,
 /// the orientation is applied) and makes its thumbnail. Null when the
@@ -164,6 +167,10 @@ abstract interface class MomentPhotoPicker {
   /// One video from the library, checked and with its poster frame; null
   /// when cancelled. Throws [MomentVideoException].
   Future<MomentVideoDraft?> pickVideo();
+
+  /// One picture from the library for a comment, scaled down; null when
+  /// cancelled or when it cannot be read.
+  Future<MomentCommentPicture?> pickCommentPhoto();
 }
 
 class SystemMomentPhotoPicker implements MomentPhotoPicker {
@@ -205,6 +212,29 @@ class SystemMomentPhotoPicker implements MomentPhotoPicker {
       file,
       videoPoster: videoPoster,
       videoDuration: videoDuration,
+    );
+  }
+
+  @override
+  Future<MomentCommentPicture?> pickCommentPhoto() async {
+    final file = await _picker.pickImage(source: ImageSource.gallery);
+    if (file == null) {
+      return null;
+    }
+    final prepared = await prepareJpegPhoto(
+      bytes: await file.readAsBytes(),
+      fileName: file.name,
+      maxEdge: momentCommentEdge,
+      quality: 80,
+    );
+    if (prepared == null) {
+      return null;
+    }
+    return MomentCommentPicture(
+      bytes: prepared.bytes,
+      extension: 'jpg',
+      width: prepared.width,
+      height: prepared.height,
     );
   }
 

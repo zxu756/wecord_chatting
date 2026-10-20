@@ -45,17 +45,28 @@ class MomentNotificationCard extends ConsumerWidget {
       MomentNotificationKind.like => tr('liked your Moment'),
       MomentNotificationKind.comment => tr('commented on your Moment'),
       MomentNotificationKind.reply => tr('replied to your comment'),
+      MomentNotificationKind.mention => tr('reminded you to read their Moment'),
     };
     final (badgeColor, badgeIcon) = switch (kind) {
       MomentNotificationKind.like => (c.accent, Icons.favorite_rounded),
       MomentNotificationKind.comment => (c.success, Icons.chat_bubble_rounded),
       MomentNotificationKind.reply => (c.warning, Icons.reply_rounded),
+      MomentNotificationKind.mention => (
+        c.accent,
+        Icons.alternate_email_rounded,
+      ),
     };
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(WeCordRadii.xl),
     );
-    final quote = kind == MomentNotificationKind.like
+    // A like has no words and a reminder carries the post's own start, which
+    // the card already shows; a comment that is only a picture says so.
+    final quote =
+        kind == MomentNotificationKind.like ||
+            kind == MomentNotificationKind.mention
         ? ''
+        : notification.snippet.isEmpty && notification.hasImage
+        ? tr('[Picture]')
         : notification.snippet;
     final age = spokenAge(notification.createdAt);
     return WeCordPressable(

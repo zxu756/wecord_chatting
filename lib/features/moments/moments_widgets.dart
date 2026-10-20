@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/later/saved_actions.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
+import 'package:wecord/features/moments/moment_photo_viewer.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/moments/moments_repository.dart';
@@ -108,25 +110,51 @@ class MomentPhotoGrid extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         Widget tile(int index, double w, double h) {
+          final alt = photos[index].alt;
+          final label = tr('Photo {number} of {count}', {
+            'number': index + 1,
+            'count': photos.length,
+          });
           return SizedBox(
             key: ValueKey('moment-photo-$index'),
             width: w,
             height: h,
-            child: WeCordPressable(
-              onPressed: () => onOpen(index),
-              pressedScale: 0.98,
-              semanticLabel: tr('Photo {number} of {count}', {
-                'number': index + 1,
-                'count': photos.length,
-              }),
-              excludeSemantics: true,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(WeCordRadii.sm),
-              ),
-              builder: (context, states) => ClipRRect(
-                borderRadius: BorderRadius.circular(WeCordRadii.sm),
-                child: MomentImage(path: photos[index].thumb),
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                WeCordPressable(
+                  onPressed: () => onOpen(index),
+                  pressedScale: 0.98,
+                  // What the author wrote about the picture is what a screen
+                  // reader says.
+                  semanticLabel: alt == null
+                      ? label
+                      : tr('{label}: {description}', {
+                          'label': label,
+                          'description': alt,
+                        }),
+                  excludeSemantics: true,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                  ),
+                  builder: (context, states) => ClipRRect(
+                    borderRadius: BorderRadius.circular(WeCordRadii.sm),
+                    child: MomentImage(path: photos[index].thumb),
+                  ),
+                ),
+                if (alt != null && w >= 90)
+                  Positioned(
+                    left: 4,
+                    bottom: 4,
+                    child: ImageAltBadge(
+                      key: ValueKey('moment-photo-alt-$index'),
+                      compact: true,
+                      onPressed: () =>
+                          unawaited(showImageAltReader(context, alt)),
+                      semanticLabel: tr('Picture description'),
+                    ),
+                  ),
+              ],
             ),
           );
         }
@@ -210,14 +238,31 @@ class MomentCommentLine extends StatelessWidget {
       color: c.accentText,
     );
     final bodyStyle = TextStyle(fontSize: 14, height: 1.4, color: c.ink);
-    final spoken = comment.isReply
-        ? tr('{name} replied to {other}: {text}', {
-            'name': comment.name,
-            'other': comment.replyToName ?? '',
-            'text': comment.body,
-          })
-        : tr('{name}: {text}', {'name': comment.name, 'text': comment.body});
-    return WeCordPressable(
+    final image = comment.image;
+    final String spoken;
+    if (comment.body.isEmpty && image != null) {
+      final who = comment.isReply
+          ? tr('{name} replied to {other}', {
+              'name': comment.name,
+              'other': comment.replyToName ?? '',
+            })
+          : comment.name;
+      spoken = image.alt == null
+          ? tr('{name} sent a picture', {'name': who})
+          : tr('{name} sent a picture: {description}', {
+              'name': who,
+              'description': image.alt,
+            });
+    } else {
+      spoken = comment.isReply
+          ? tr('{name} replied to {other}: {text}', {
+              'name': comment.name,
+              'other': comment.replyToName ?? '',
+              'text': comment.body,
+            })
+          : tr('{name}: {text}', {'name': comment.name, 'text': comment.body});
+    }
+    final line = WeCordPressable(
       onPressed: onTap,
       onLongPress: onLongPress,
       pressedScale: 1,
@@ -243,10 +288,88 @@ class MomentCommentLine extends StatelessWidget {
                 ),
                 TextSpan(text: comment.replyToName ?? '', style: nameStyle),
               ],
-              TextSpan(text: ': ${comment.body}', style: bodyStyle),
+              TextSpan(
+                text: comment.body.isEmpty ? '' : ': ${comment.body}',
+                style: bodyStyle,
+              ),
             ],
           ),
         ),
+      ),
+    );
+    if (image == null) {
+      return line;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        line,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4, top: 2),
+          child: MomentCommentImageView(image: image, authorName: comment.name),
+        ),
+      ],
+    );
+  }
+}
+
+/// The picture or sticker on a comment: small, with a mark when the
+/// commenter described it. Opens full screen.
+class MomentCommentImageView extends StatelessWidget {
+  const MomentCommentImageView({
+    required this.image,
+    required this.authorName,
+    super.key,
+  });
+
+  final MomentCommentImage image;
+  final String authorName;
+
+  static const _edge = 132.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final alt = image.alt;
+    final ratio = image.width > 0 && image.height > 0
+        ? (image.width / image.height).clamp(0.6, 1.8)
+        : 1.0;
+    final width = ratio >= 1 ? _edge : _edge * ratio;
+    final height = ratio >= 1 ? _edge / ratio : _edge;
+    return SizedBox(
+      key: ValueKey('moment-comment-image-${image.path}'),
+      width: width,
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          WeCordPressable(
+            onPressed: () =>
+                unawaited(openMomentPhotos(context, [image.asPhoto], 0)),
+            pressedScale: 0.98,
+            semanticLabel: alt == null
+                ? tr('Image from {name}', {'name': authorName})
+                : tr('Image: {name}', {'name': alt}),
+            excludeSemantics: true,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+            ),
+            builder: (context, states) => ClipRRect(
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+              child: MomentImage(path: image.path),
+            ),
+          ),
+          if (alt != null)
+            Positioned(
+              left: 4,
+              bottom: 4,
+              child: ImageAltBadge(
+                compact: true,
+                onPressed: () => unawaited(showImageAltReader(context, alt)),
+                semanticLabel: tr('Picture description'),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -421,6 +544,9 @@ class MomentCard extends ConsumerWidget {
     required this.onLike,
     this.onOpen,
     this.maxComments,
+    this.onShare,
+    this.onTogglePin,
+    this.showPinned = false,
     super.key,
   });
 
@@ -437,6 +563,15 @@ class MomentCard extends ConsumerWidget {
   /// Opens the detail; null on the detail itself.
   final VoidCallback? onOpen;
   final int? maxComments;
+
+  /// Sends the Moment to a chat as a card; null hides the button.
+  final VoidCallback? onShare;
+
+  /// Pins or unpins the person's own Moment; null hides the button.
+  final VoidCallback? onTogglePin;
+
+  /// On a person's page: mark a pinned Moment.
+  final bool showPinned;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -486,13 +621,36 @@ class MomentCard extends ConsumerWidget {
                       ),
                     ),
                     Text(age, style: TextStyle(fontSize: 12, color: c.subtle)),
+                    if (showPinned && post.isPinned)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: _PinnedChip(
+                          key: ValueKey('moment-pinned-${post.id}'),
+                        ),
+                      ),
                   ],
                 ),
               ),
               if (mine && post.visibility != MomentVisibility.friends)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: _AudienceChip(visibility: post.visibility),
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _AudienceChip(visibility: post.visibility),
+                  ),
+                ),
+              if (mine && onTogglePin != null)
+                WeCordIconButton(
+                  key: ValueKey('moment-pin-${post.id}'),
+                  icon: post.isPinned
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined,
+                  tooltip: post.isPinned
+                      ? tr('Unpin from my page')
+                      : tr('Pin to my page'),
+                  variant: WeCordButtonVariant.ghost,
+                  size: 36,
+                  iconSize: 19,
+                  onPressed: onTogglePin,
                 ),
             ],
           ),
@@ -536,6 +694,10 @@ class MomentCard extends ConsumerWidget {
               ],
             ),
           ],
+          if (post.mentionedMe || (mine && post.mentions.isNotEmpty)) ...[
+            const SizedBox(height: 8),
+            _RemindLine(post: post, mine: mine),
+          ],
           const SizedBox(height: 6),
           Row(
             children: [
@@ -560,6 +722,18 @@ class MomentCard extends ConsumerWidget {
               ),
               const SizedBox(width: 4),
               _SaveButton(post: post),
+              if (onShare != null &&
+                  post.visibility != MomentVisibility.private) ...[
+                const SizedBox(width: 4),
+                _ActionButton(
+                  key: ValueKey('moment-share-${post.id}'),
+                  icon: Icons.ios_share_rounded,
+                  color: c.muted,
+                  label: tr('Share to a chat'),
+                  count: 0,
+                  onPressed: onShare!,
+                ),
+              ],
               const Spacer(),
               if (mine)
                 WeCordIconButton(
@@ -586,6 +760,94 @@ class MomentCard extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// "Pinned": marks a Moment the author pinned to their page.
+class _PinnedChip extends StatelessWidget {
+  const _PinnedChip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: ShapeDecoration(
+        color: c.accentSoft,
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.push_pin_rounded, size: 13, color: c.accentText),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              tr('Pinned'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: c.accentText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Reminded you to read this" for a friend who was reminded, "Reminded:
+/// Bob, Cy" for the author.
+class _RemindLine extends StatelessWidget {
+  const _RemindLine({required this.post, required this.mine});
+
+  final MomentPost post;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final names = [for (final mention in post.mentions) mention.name];
+    final text = mine
+        ? tr('Reminded: {names}', {
+            'names': names.length <= 2
+                ? names.join(', ')
+                : tr('{first}, {second} and {count} more', {
+                    'first': names[0],
+                    'second': names[1],
+                    'count': names.length - 2,
+                  }),
+          })
+        : tr('Reminded you to read this');
+    return Row(
+      key: ValueKey('moment-remind-${post.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.alternate_email_rounded,
+            size: 15,
+            color: mine ? c.subtle : c.accentText,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.3,
+              fontWeight: mine ? FontWeight.w400 : FontWeight.w700,
+              color: mine ? c.muted : c.accentText,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -725,12 +987,16 @@ class _AudienceChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: c.muted),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: c.muted,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: c.muted,
+              ),
             ),
           ),
         ],

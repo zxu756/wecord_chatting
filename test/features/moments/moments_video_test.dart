@@ -114,12 +114,14 @@ void main() {
       expect(draft.width, greaterThan(0));
     });
 
-    testWidgets('a minute is fine, a little over it is not', (tester) async {
+    testWidgets('three minutes is fine, a little over it is not', (
+      tester,
+    ) async {
       final ok = await tester.runAsync(
         () => prepareMomentVideo(
           video(),
           videoPoster: poster,
-          videoDuration: (file) => seconds(60),
+          videoDuration: (file) => seconds(180),
         ),
       );
       expect(ok, isNotNull);
@@ -141,7 +143,7 @@ void main() {
       }
 
       expect(
-        await tester.runAsync(() => problem(video(), (f) => seconds(61))),
+        await tester.runAsync(() => problem(video(), (f) => seconds(181))),
         MomentVideoProblem.tooLong,
       );
       expect(
@@ -281,7 +283,7 @@ void main() {
     for (final (problem, message) in [
       (
         MomentVideoProblem.tooLong,
-        'That video is longer than 1 minute. Choose a shorter one.',
+        'That video is longer than 3 minutes. Choose a shorter one.',
       ),
       (
         MomentVideoProblem.tooBig,

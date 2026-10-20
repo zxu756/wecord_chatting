@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -69,13 +72,27 @@ class _MomentPhotoViewerState extends State<MomentPhotoViewer> {
               child: MomentImage(
                 path: widget.photos[index].path,
                 contain: true,
-                semanticLabel: tr('Photo {number} of {count}', {
-                  'number': index + 1,
-                  'count': widget.photos.length,
-                }),
+                // What the author wrote about the picture is what a screen
+                // reader says.
+                semanticLabel: widget.photos[index].alt != null
+                    ? tr('Image: {name}', {'name': widget.photos[index].alt})
+                    : tr('Photo {number} of {count}', {
+                        'number': index + 1,
+                        'count': widget.photos.length,
+                      }),
               ),
             ),
           ),
+          if (widget.photos[_page].alt case final alt?)
+            Positioned(
+              left: 16,
+              bottom: 16 + MediaQuery.paddingOf(context).bottom,
+              child: ImageAltBadge(
+                key: const ValueKey('moment-photo-viewer-alt'),
+                onPressed: () => unawaited(showImageAltReader(context, alt)),
+                semanticLabel: tr('Picture description'),
+              ),
+            ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),

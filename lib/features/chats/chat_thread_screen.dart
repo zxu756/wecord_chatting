@@ -93,6 +93,7 @@ import 'package:wecord/features/chats/view_once.dart';
 import 'package:wecord/features/chats/merged_forward/merged_forward.dart';
 import 'package:wecord/features/chats/selection/chat_selection.dart';
 import 'package:wecord/features/contact_cards/contact_cards.dart';
+import 'package:wecord/features/moments/moment_card_view.dart';
 import 'package:wecord/features/chats/voice_message_player.dart';
 import 'package:wecord/features/chats/voice_message_recorder.dart';
 import 'package:wecord/features/circles/onboarding/guide_models.dart';

@@ -8,8 +8,12 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/chats/media_send/media_upload.dart';
 import 'package:wecord/features/moments/moments_models.dart';
+import 'package:wecord/features/push/push_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
+import 'package:wecord/shared/models/message.dart' show cleanImageAlt;
 import 'package:wecord/shared/realtime/private_channels.dart';
+import 'package:wecord/features/chats/chats_repository.dart'
+    show AutoModBlockedException, SendRefusedException;
 
 /// The private bucket with the pictures and covers.
 const momentsBucket = 'moments';
@@ -24,6 +28,7 @@ class MomentPhotoDraft {
     required this.thumb,
     required this.width,
     required this.height,
+    this.alt,
   });
 
   final String id;
@@ -31,6 +36,66 @@ class MomentPhotoDraft {
   final Uint8List thumb;
   final int width;
   final int height;
+
+  /// What the author wrote about the picture, for people who cannot see it.
+  final String? alt;
+
+  /// The same picture with [alt] as its description (empty or null takes it
+  /// away).
+  MomentPhotoDraft withAlt(String? alt) {
+    return MomentPhotoDraft(
+      id: id,
+      full: full,
+      thumb: thumb,
+      width: width,
+      height: height,
+      alt: cleanImageAlt(alt),
+    );
+  }
+}
+
+/// The picture or sticker being put on a comment: the file's bytes as they
+/// will be stored (a sticker keeps its own format, a photo is a JPEG), and
+/// what the commenter wrote about it.
+@immutable
+class MomentCommentPicture {
+  const MomentCommentPicture({
+    required this.bytes,
+    required this.extension,
+    this.width = 0,
+    this.height = 0,
+    this.alt,
+    this.sticker = false,
+  });
+
+  final Uint8List bytes;
+
+  /// `jpg`, `png`, `webp` or `gif`: the name the bucket stores it under.
+  final String extension;
+  final int width;
+  final int height;
+  final String? alt;
+
+  /// It came from the person's own stickers.
+  final bool sticker;
+
+  String get mimeType => switch (extension) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'gif' => 'image/gif',
+    _ => 'image/jpeg',
+  };
+
+  MomentCommentPicture withAlt(String? alt) {
+    return MomentCommentPicture(
+      bytes: bytes,
+      extension: extension,
+      width: width,
+      height: height,
+      alt: cleanImageAlt(alt),
+      sticker: sticker,
+    );
+  }
 }
 
 /// The video of a Moment being written: the file as the device holds it
@@ -99,20 +164,29 @@ abstract interface class MomentsRepository {
     String? location,
     MomentAudience audience = MomentAudience.everyone,
     MomentVideoDraft? video,
+    List<String> mentionedIds = const [],
     void Function(double? progress)? onUploadProgress,
   });
 
   Future<void> deletePost(String id);
 
+  /// Pins the person's own Moment to their page, or takes it off. Throws
+  /// [MomentPinLimitException] when three are already pinned.
+  Future<void> setPinned(String id, {required bool pinned});
+
   Future<void> setLiked(String postId, {required bool liked});
 
+  /// Comments with words, a [picture] or both.
   Future<void> comment({
     required String postId,
     required String body,
     String? replyToCommentId,
+    MomentCommentPicture? picture,
   });
 
-  Future<void> deleteComment(String commentId);
+  /// Deletes a comment; [imagePath] is the file of its picture when it is
+  /// the person's own, to remove from the bucket.
+  Future<void> deleteComment(String commentId, {String? imagePath});
 
   Future<MomentsProfile?> profile(String userId);
 
@@ -151,12 +225,34 @@ abstract interface class MomentsRepository {
 
   /// A temporary link to a picture in the bucket.
   Future<String> signedUrl(String path);
+
+  /// What a Moment card in a chat shows; null when the person may not see
+  /// the Moment (any more).
+  Future<MomentCardInfo?> momentCard(String postId);
+
+  /// Sends a card of the Moment to a chat; returns the message's id. The card
+  /// holds nothing but the Moment's id.
+  Future<String> sendMomentCard({
+    required String conversationId,
+    required String postId,
+  });
+}
+
+/// Three Moments are already pinned.
+class MomentPinLimitException implements Exception {
+  const MomentPinLimitException();
+
+  @override
+  String toString() => 'You can pin at most $maxMomentPins Moments.';
 }
 
 class SupabaseMomentsRepository implements MomentsRepository {
-  const SupabaseMomentsRepository(this._client, [this._uploader]);
+  const SupabaseMomentsRepository(this._client, [this._uploader, this._onSent]);
 
   final SupabaseClient _client;
+
+  /// Told the id of a sent message, to push it to the others.
+  final Future<void> Function(String messageId)? _onSent;
 
   /// The chat's streaming uploader, for the video.
   final ChatMediaUploader? _uploader;
@@ -212,6 +308,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
     String? location,
     MomentAudience audience = MomentAudience.everyone,
     MomentVideoDraft? video,
+    List<String> mentionedIds = const [],
     void Function(double? progress)? onUploadProgress,
   }) async {
     final owner = _userId;
@@ -270,6 +367,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
           'thumb': thumb,
           'w': photo.width,
           'h': photo.height,
+          'alt': ?cleanImageAlt(photo.alt),
         });
       }
       await _client.rpc<dynamic>(
@@ -285,8 +383,13 @@ class SupabaseMomentsRepository implements MomentsRepository {
           'p_friend_ids': audience.usesLists ? audience.friendIds.toList() : [],
           'p_tag_ids': audience.usesLists ? audience.tagIds.toList() : [],
           'p_video': ?videoEntry,
+          'p_mentioned_ids': mentionedIds,
         },
       );
+      if (mentionedIds.isNotEmpty) {
+        // The reminder is pushed to the people it names.
+        unawaited(_pushFor(id));
+      }
     } on PostgrestException {
       // The server refused the post: the pictures are not needed. (After a
       // lost connection they stay, since the post may have been made.)
@@ -297,14 +400,18 @@ class SupabaseMomentsRepository implements MomentsRepository {
 
   /// Stores [bytes] at [path]. The same file already being there (an earlier
   /// try got through before the answer was lost) is fine.
-  Future<void> _upload(String path, Uint8List bytes) async {
+  Future<void> _upload(
+    String path,
+    Uint8List bytes, {
+    String contentType = 'image/jpeg',
+  }) async {
     try {
       await _client.storage
           .from(momentsBucket)
           .uploadBinary(
             path,
             bytes,
-            fileOptions: const FileOptions(contentType: 'image/jpeg'),
+            fileOptions: FileOptions(contentType: contentType),
           );
     } on StorageException catch (error) {
       if (error.statusCode != '409') {
@@ -337,6 +444,21 @@ class SupabaseMomentsRepository implements MomentsRepository {
   }
 
   @override
+  Future<void> setPinned(String id, {required bool pinned}) async {
+    try {
+      await _client.rpc<dynamic>(
+        'set_moment_pinned',
+        params: {'p_id': id, 'p_pinned': pinned},
+      );
+    } on PostgrestException catch (error) {
+      if (error.code == '54000') {
+        throw const MomentPinLimitException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> setLiked(String postId, {required bool liked}) async {
     final owner = _userId;
     if (liked) {
@@ -362,13 +484,39 @@ class SupabaseMomentsRepository implements MomentsRepository {
     required String postId,
     required String body,
     String? replyToCommentId,
+    MomentCommentPicture? picture,
   }) async {
-    await _client.from('moments_comments').insert({
-      'post_id': postId,
-      'author_id': _userId,
-      'body': body,
-      'reply_to_comment_id': ?replyToCommentId,
-    });
+    final owner = _userId;
+    // The picture's file is named after the comment, so the id is made here.
+    final id = newMomentId();
+    String? path;
+    Map<String, Object?>? image;
+    if (picture != null) {
+      path = '$owner/c-$id.${picture.extension}';
+      await _upload(path, picture.bytes, contentType: picture.mimeType);
+      image = {
+        'path': path,
+        'w': picture.width,
+        'h': picture.height,
+        'alt': ?cleanImageAlt(picture.alt),
+      };
+    }
+    try {
+      await _client.from('moments_comments').insert({
+        'id': id,
+        'post_id': postId,
+        'author_id': owner,
+        'body': body,
+        'reply_to_comment_id': ?replyToCommentId,
+        'image': ?image,
+      });
+    } on PostgrestException {
+      // Refused: the picture is not needed.
+      if (path != null) {
+        await _remove([path]);
+      }
+      rethrow;
+    }
     unawaited(_pushFor(postId));
   }
 
@@ -385,8 +533,11 @@ class SupabaseMomentsRepository implements MomentsRepository {
   }
 
   @override
-  Future<void> deleteComment(String commentId) async {
+  Future<void> deleteComment(String commentId, {String? imagePath}) async {
     await _client.from('moments_comments').delete().eq('id', commentId);
+    if (imagePath != null && imagePath.startsWith('$_userId/')) {
+      await _remove([imagePath]);
+    }
   }
 
   @override
@@ -590,6 +741,42 @@ class SupabaseMomentsRepository implements MomentsRepository {
   Future<String> signedUrl(String path) {
     return _client.storage.from(momentsBucket).createSignedUrl(path, 3600);
   }
+
+  @override
+  Future<MomentCardInfo?> momentCard(String postId) async {
+    final rows = _rows(
+      await _client.rpc<dynamic>(
+        'get_moment_card',
+        params: {'p_post_id': postId},
+      ),
+    );
+    return rows.isEmpty ? null : MomentCardInfo.fromJson(rows.first);
+  }
+
+  @override
+  Future<String> sendMomentCard({
+    required String conversationId,
+    required String postId,
+  }) async {
+    final Object? created;
+    try {
+      created = await _client.rpc<Object?>(
+        'send_moment_card',
+        params: {'target_conversation_id': conversationId, 'p_post_id': postId},
+      );
+    } on PostgrestException catch (error) {
+      final refused = SendRefusedException.fromPostgrest(error);
+      if (refused != null) {
+        throw refused;
+      }
+      rethrow;
+    }
+    if (created is! String) {
+      throw const AutoModBlockedException();
+    }
+    await _onSent?.call(created);
+    return created;
+  }
 }
 
 /// A random version 4 UUID, for a cover's file name.
@@ -636,11 +823,16 @@ class UninitializedMomentsRepository implements MomentsRepository {
     String? location,
     MomentAudience audience = MomentAudience.everyone,
     MomentVideoDraft? video,
+    List<String> mentionedIds = const [],
     void Function(double? progress)? onUploadProgress,
   }) => throw _unavailable();
 
   @override
   Future<void> deletePost(String id) => throw _unavailable();
+
+  @override
+  Future<void> setPinned(String id, {required bool pinned}) =>
+      throw _unavailable();
 
   @override
   Future<void> setLiked(String postId, {required bool liked}) =>
@@ -651,10 +843,12 @@ class UninitializedMomentsRepository implements MomentsRepository {
     required String postId,
     required String body,
     String? replyToCommentId,
+    MomentCommentPicture? picture,
   }) => throw _unavailable();
 
   @override
-  Future<void> deleteComment(String commentId) => throw _unavailable();
+  Future<void> deleteComment(String commentId, {String? imagePath}) =>
+      throw _unavailable();
 
   @override
   Future<MomentsProfile?> profile(String userId) async => null;
@@ -702,6 +896,15 @@ class UninitializedMomentsRepository implements MomentsRepository {
 
   @override
   Future<String> signedUrl(String path) => throw _unavailable();
+
+  @override
+  Future<MomentCardInfo?> momentCard(String postId) async => null;
+
+  @override
+  Future<String> sendMomentCard({
+    required String conversationId,
+    required String postId,
+  }) => throw _unavailable();
 }
 
 final momentsRepositoryProvider = Provider<MomentsRepository>((ref) {
@@ -709,6 +912,7 @@ final momentsRepositoryProvider = Provider<MomentsRepository>((ref) {
     return SupabaseMomentsRepository(
       ref.watch(supabaseClientProvider),
       ref.watch(chatMediaUploaderProvider),
+      ref.watch(pushRepositoryProvider).notifySent,
     );
   } on ProviderException {
     return const UninitializedMomentsRepository();

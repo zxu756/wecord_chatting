@@ -8,6 +8,7 @@ import 'package:wecord/features/moments/moment_actions.dart';
 import 'package:wecord/features/moments/moment_composer_screen.dart';
 import 'package:wecord/features/moments/moment_photo_viewer.dart';
 import 'package:wecord/features/moments/moment_photos.dart';
+import 'package:wecord/features/moments/moment_share.dart';
 import 'package:wecord/features/moments/moments_models.dart';
 import 'package:wecord/features/moments/moments_new_pill.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
@@ -234,6 +235,12 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
                       onLike: () =>
                           unawaited(toggleMomentLike(context, ref, post)),
                       onDelete: () => unawaited(_delete(post)),
+                      onShare: () =>
+                          unawaited(showMomentSharePicker(context, post.id)),
+                      onTogglePin: post.authorId == myId
+                          ? () => unawaited(toggleMomentPin(context, ref, post))
+                          : null,
+                      showPinned: widget.userId != null,
                     ),
                   );
                 },

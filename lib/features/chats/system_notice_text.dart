@@ -65,6 +65,9 @@ String cardBodyText(String body) {
   if (body == '📍 Live location') {
     return '📍 ${tr('Live location')}';
   }
+  if (body == '[Moment]') {
+    return '[${tr('Moment')}]';
+  }
   for (final (prefix, key) in const [
     ('Contact card: ', 'Contact card: {name}'),
     ('Chat history: ', 'Chat history: {name}'),

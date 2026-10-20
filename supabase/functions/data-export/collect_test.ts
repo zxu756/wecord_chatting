@@ -173,6 +173,12 @@ const emptyRpc: Record<string, unknown> = {
   export_my_ai_digest: { enabled: false, subscriptions: [] },
   export_my_note_extras: { comments: [], templates: [], published: [] },
   export_my_task_extras: { lists: [] },
+  export_my_moments_more: {
+    pinned: [],
+    reminded: [],
+    reminded_by: [],
+    comment_pictures: [],
+  },
 };
 
 const feedbackAnswer = [{
@@ -486,6 +492,12 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_moments_more: {
+        pinned: [],
+        reminded: [],
+        reminded_by: [],
+        comment_pictures: [{ comment_id: "c-1", path: "u-1/c-c-1.png" }],
+      },
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -506,6 +518,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_stories", args: { target_user_id: me } },
     { name: "export_my_task_extras", args: { target_user_id: me } },
     { name: "export_my_saved_items", args: { target_user_id: me } },
+    { name: "export_my_moments_more", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -546,6 +559,12 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_moments_more: {
+        pinned: [],
+        reminded: [],
+        reminded_by: [],
+        comment_pictures: [],
+      },
     },
     objects: {
       "moments/u-1/cover-1.jpg": new Uint8Array([1]),
@@ -645,6 +664,12 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_moments_more: {
+        pinned: [],
+        reminded: [],
+        reminded_by: [],
+        comment_pictures: [],
+      },
     },
     objects: { "moments/u-1/cover-1.jpg": new Uint8Array([1]) },
   });
@@ -668,6 +693,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.stories, null);
   assertEquals(data.taskExtras, null);
   assertEquals(data.favorites, null);
+  assertEquals(data.momentsMore, null);
   assertEquals(data.skipped.sort(), [
     "daily",
     "daily digest",
@@ -677,6 +703,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "moments",
     "note comments and templates",
     "notes, lists and more",
+    "pins and reminders",
     "task list fields",
   ]);
   assertEquals(data.messages.length, 2);

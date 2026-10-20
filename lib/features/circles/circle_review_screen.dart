@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/circles/guard2/guard2_repository.dart';
+import 'package:wecord/features/circles/guard2/guard_items_section.dart';
+import 'package:wecord/features/circles/guard2/review_media.dart';
 import 'package:wecord/features/circles/mod_tools/ban_appeals_section.dart';
 import 'package:wecord/features/reports/circle_message_reports_section.dart';
 import 'package:wecord/features/reports/message_reports.dart';
@@ -39,6 +42,11 @@ class CircleReviewScreen extends ConsumerWidget {
     final reports =
         ref.watch(circleMessageReportsProvider(circleId)).value ??
         const <CircleMessageReport>[];
+    // Events, notes and tasks the AI flagged (it cannot hide them, so they
+    // are cards of their own); none when they cannot be read.
+    final flagged =
+        ref.watch(guardItemReviewsProvider(circleId)).value ??
+        const <GuardItemReview>[];
     return CirclePageScaffold(
       title: tr('Review'),
       // The raid banner and ban appeals, then the circle's join requests, sit
@@ -62,7 +70,7 @@ class CircleReviewScreen extends ConsumerWidget {
                 },
               ),
             ),
-            data: (items) => items.isEmpty && reports.isEmpty
+            data: (items) => items.isEmpty && reports.isEmpty && flagged.isEmpty
                 ? CircleEmptyState(
                     key: const ValueKey('review-empty'),
                     icon: Icons.verified_user_outlined,
@@ -93,8 +101,16 @@ class CircleReviewScreen extends ConsumerWidget {
                         ],
                         const SizedBox(height: 16),
                       ],
+                      if (flagged.isNotEmpty) ...[
+                        GuardItemsList(
+                          circleId: circleId,
+                          items: flagged,
+                          now: now,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       if (items.isNotEmpty) ...[
-                        if (reports.isNotEmpty)
+                        if (reports.isNotEmpty || flagged.isNotEmpty)
                           ReviewSectionHeader(
                             key: const ValueKey('review-guard-header'),
                             title: tr('Held or flagged by the AI guard'),
@@ -257,20 +273,24 @@ class _ReviewCardState extends ConsumerState<ReviewCard> {
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            key: const ValueKey('review-body'),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: c.well,
-              borderRadius: BorderRadius.circular(WeCordRadii.lg),
+          if (review.body.trim().isNotEmpty ||
+              !ReviewMedia(type: review.type, media: review.media).hasContent)
+            Container(
+              key: const ValueKey('review-body'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.well,
+                borderRadius: BorderRadius.circular(WeCordRadii.lg),
+              ),
+              child: Text(
+                review.body,
+                maxLines: 8,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, color: c.ink, height: 1.45),
+              ),
             ),
-            child: Text(
-              review.body,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 15, color: c.ink, height: 1.45),
-            ),
-          ),
+          // A held picture, or a poll's options (AI guard 2.0).
+          ReviewMedia(type: review.type, media: review.media),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

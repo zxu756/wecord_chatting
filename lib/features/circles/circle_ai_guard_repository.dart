@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/circles/guard2/guard2_repository.dart'
+    show guardItemCountProvider;
 import 'package:wecord/features/circles/circle_automod_repository.dart'
     show RpcDataSource, SupabaseRpcDataSource, UninitializedRpcDataSource;
 import 'package:wecord/features/circles/join_requests/join_requests_repository.dart';
@@ -147,6 +149,8 @@ class MessageReview {
     this.senderAvatarUrl,
     this.reason,
     this.reasonZh,
+    this.type = 'text',
+    this.media,
   });
 
   factory MessageReview.fromJson(Map<String, dynamic> json) {
@@ -163,6 +167,26 @@ class MessageReview {
       reason: json['reason'] as String?,
       reasonZh: json['reason_zh'] as String?,
       sentAt: DateTime.parse(json['sent_at'] as String),
+    );
+  }
+
+  /// This review with the picture or the poll options it is about.
+  MessageReview withMedia(String type, Map<String, dynamic>? media) {
+    return MessageReview(
+      messageId: messageId,
+      conversationId: conversationId,
+      senderId: senderId,
+      senderName: senderName,
+      body: body,
+      held: held,
+      verdict: verdict,
+      sentAt: sentAt,
+      channelName: channelName,
+      senderAvatarUrl: senderAvatarUrl,
+      reason: reason,
+      reasonZh: reasonZh,
+      type: type,
+      media: media,
     );
   }
 
@@ -184,6 +208,12 @@ class MessageReview {
   /// was asked for.
   final String? reasonZh;
   final DateTime sentAt;
+
+  /// 'text', 'poll' or 'image' (AI guard 2.0), with what the queue shows for
+  /// the last two: a picture's file ({bucket, path, mime_type, ...}) or a
+  /// poll's options ({options: [...]}).
+  final String type;
+  final Map<String, dynamic>? media;
 
   /// The reason in the app's language: the Chinese one when the app is in
   /// Chinese and there is one, else the English one.
@@ -230,9 +260,39 @@ class CircleAiGuardRepository {
       'target_circle_id': circleId,
       'max_results': 100,
     });
-    return [
+    final reviews = [
       for (final row in (rows as List? ?? const []))
         MessageReview.fromJson(Map<String, dynamic>.from(row as Map)),
+    ];
+    if (reviews.isEmpty) {
+      return reviews;
+    }
+    // Pictures and polls come with their file or options; a failure here
+    // only leaves the cards plain.
+    final Map<String, (String, Map<String, dynamic>?)> media = {};
+    try {
+      final extras = await _rpc.rpc('list_message_review_media', {
+        'target_circle_id': circleId,
+        'max_results': 100,
+      });
+      for (final row in (extras as List? ?? const [])) {
+        final fields = Map<String, dynamic>.from(row as Map);
+        media[fields['message_id'] as String] = (
+          fields['type'] as String? ?? 'text',
+          fields['media'] is Map
+              ? Map<String, dynamic>.from(fields['media'] as Map)
+              : null,
+        );
+      }
+    } on Object {
+      // Plain cards.
+    }
+    return [
+      for (final review in reviews)
+        if (media[review.messageId] case (final type, final fields))
+          review.withMedia(type, fields)
+        else
+          review,
     ];
   }
 
@@ -340,5 +400,9 @@ final messageReviewCountProvider = FutureProvider.autoDispose
         joinRequestCountProvider(circleId).future,
       );
       final appeals = await ref.watch(banAppealCountProvider(circleId).future);
-      return messages + joinRequests + appeals;
+      // Flagged events, notes and tasks (AI guard 2.0).
+      final flaggedItems = await ref.watch(
+        guardItemCountProvider(circleId).future,
+      );
+      return messages + joinRequests + appeals + flaggedItems;
     });

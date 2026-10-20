@@ -60,6 +60,20 @@
 //     ask.ts and migration 202610250300. One request against the same daily
 //     limit however many model calls it takes; honours the circle's, the
 //     group's and the person's AI switches. Nothing is stored.
+//   guard_item {review_id}      -> the AI guard's check of an event, note,
+//     task list or task made by a member the guard checks: only the database
+//     calls it (the same shared secret and wake-up as guard; see guard2.ts and
+//     migration 202610260210). What the AI flags goes to the circle's Review
+//     queue. The guard also checks polls (question and options) and, when
+//     AI_VISION_ENABLED is on, pictures (migration 202610260200); with
+//     vision off pictures are skipped and sent as usual.
+//   link_check {url, language?, conversation_id?}
+//     -> {verdict: safe|suspicious|dangerous|unknown, reason, host}. "Ask AI
+//     about this link" on the warning page of a risky link (G5): only the
+//     address (no query), the page title and description from link-preview and
+//     the app's own rule signals go to the model; see link_check.ts. Counts
+//     against the same daily limit; honours the circle's and the person's AI
+//     switches.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the
@@ -73,6 +87,7 @@ import { createAskStore } from "./ask_store.ts";
 import { createDigestStore } from "./digest_store.ts";
 import { createNoteAssistStore } from "./note_assist_store.ts";
 import { createTranslationStore } from "./translations_store.ts";
+import { createGuard2Store, createLinkCheckStore } from "./guard2_store.ts";
 
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -229,5 +244,7 @@ Deno.serve(async (request) => {
     digest: createDigestStore(admin),
     noteAssist: createNoteAssistStore(userClient),
     ask: createAskStore(admin),
+    guard2: createGuard2Store(admin),
+    linkCheck: createLinkCheckStore(admin),
   });
 });

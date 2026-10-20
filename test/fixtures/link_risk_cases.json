@@ -1,0 +1,39 @@
+[
+  { "url": "https://github.com/flutter/flutter", "level": "none", "reasons": [] },
+  { "url": "https://www.wikipedia.org/wiki/Scam", "level": "none", "reasons": [] },
+  { "url": "https://accounts.google.com/signin", "level": "none", "reasons": [] },
+  { "url": "https://login.microsoftonline.com/common/oauth2", "level": "none", "reasons": [] },
+  { "url": "https://www.amazon.de/dp/B000", "level": "none", "reasons": [] },
+  { "url": "https://wecord.jokebear.fyi/c/abc", "level": "none", "reasons": [] },
+  { "url": "https://pineapple.com/recipes", "level": "none", "reasons": [] },
+  { "url": "https://www.applebees.com/menu", "level": "none", "reasons": [] },
+  { "url": "https://example.com/login", "level": "none", "reasons": ["login_words"] },
+  { "url": "https://news.example.org/2026/10/article.html", "level": "none", "reasons": [] },
+
+  { "url": "https://paypal.com@evil.example/verify", "level": "high", "reasons": ["credentials_in_url", "login_words"] },
+  { "url": "https://user@example.com/", "level": "caution", "reasons": ["credentials_in_url"] },
+  { "url": "http://203.0.113.9/", "level": "caution", "reasons": ["ip_address"] },
+  { "url": "http://203.0.113.9/login", "level": "high", "reasons": ["ip_address", "login_words", "plain_http_login"] },
+  { "url": "https://xn--pple-43d.com/", "level": "caution", "reasons": ["punycode"] },
+  { "url": "https://xn--pple-43d.com/signin", "level": "caution", "reasons": ["punycode", "login_words"] },
+
+  { "url": "https://bit.ly/3abcDEF", "level": "caution", "reasons": ["short_link"] },
+  { "url": "https://t.cn/AbCdEf", "level": "caution", "reasons": ["short_link"] },
+
+  { "url": "https://paypal-login.com/", "level": "high", "reasons": ["lookalike_brand", "login_words"] },
+  { "url": "https://paypa1.com/", "level": "caution", "reasons": ["lookalike_brand"] },
+  { "url": "https://secure-paypal.example/", "level": "high", "reasons": ["lookalike_brand", "login_words"] },
+  { "url": "https://paypal.com.account-check.top/", "level": "high", "reasons": ["brand_in_subdomain", "login_words", "risky_tld"] },
+  { "url": "https://appleid-support.xyz/", "level": "caution", "reasons": ["lookalike_brand", "risky_tld"] },
+  { "url": "https://rnicrosoft-verify.com/", "level": "high", "reasons": ["lookalike_brand", "login_words"] },
+  { "url": "https://steam-gift.top/claim", "level": "caution", "reasons": ["login_words", "risky_tld"] },
+  { "url": "https://weixin-wallet.cc/", "level": "high", "reasons": ["lookalike_brand", "login_words"] },
+
+  { "url": "https://cdn.example.com/app-release.apk", "level": "caution", "reasons": ["download_file"] },
+  { "url": "http://free-airdrop-claim-now.top/bonus", "level": "high", "reasons": ["login_words", "many_hyphens", "risky_tld", "plain_http_login"] },
+  { "url": "https://a.b.c.d.e.example.com/", "level": "none", "reasons": ["many_subdomains"] },
+
+  { "url": "mailto:someone@example.com", "level": "none", "reasons": [] },
+  { "url": "javascript:alert(1)", "level": "none", "reasons": [] },
+  { "url": "not a url", "level": "none", "reasons": [] }
+]

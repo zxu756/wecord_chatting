@@ -13,6 +13,7 @@ import 'package:wecord/shared/l10n/zh/zh_ai.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_assistant.dart';
 import 'package:wecord/shared/l10n/zh/zh_digest.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
+import 'package:wecord/shared/l10n/zh/zh_guard2.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_audit.dart';
@@ -173,6 +174,7 @@ const zhAreas = <Map<String, String>>[
   zhFavorites2,
   zhPlatforms,
   zhStorageA11y,
+  zhGuard2,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

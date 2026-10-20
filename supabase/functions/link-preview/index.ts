@@ -8,6 +8,7 @@ import {
   isHtmlContentType,
   type PreviewMeta,
 } from "./html_meta.ts";
+import { assessRedirect, type LinkRisk } from "./link_risk.ts";
 import {
   bareHostname,
   isBlockedAddress,
@@ -34,6 +35,28 @@ interface PreviewRow extends PreviewMeta {
   url: string;
   status: PreviewStatus;
   fetched_at: string;
+  /// Where the link ended after its redirects, when that is somewhere else.
+  final_url?: string | null;
+}
+
+/// What the app gets: the row without its internals and the link's risk
+/// (see link_risk.ts), worked out from the address alone.
+function respond(row: PreviewRow): Response {
+  const { final_url: finalUrl, ...rest } = row;
+  const risk: LinkRisk = assessRedirect(row.url, finalUrl);
+  return json({
+    ...rest,
+    risk: { level: risk.level, reasons: risk.reasons },
+    final_host: finalUrl ? hostOf(finalUrl) : null,
+  });
+}
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 class PreviewFailure extends Error {
@@ -95,7 +118,7 @@ Deno.serve(async (request) => {
       return json({ error: "invalid_url" }, 400);
     }
     // Refused before any lookup; nothing worth caching.
-    return json(emptyRow(rawUrl.trim(), checked.reason));
+    return respond(emptyRow(rawUrl.trim(), checked.reason));
   }
   const url = checked.url.href;
 
@@ -105,17 +128,25 @@ Deno.serve(async (request) => {
 
   const { data: cached } = await admin
     .from("link_previews")
-    .select("url,title,description,image_url,site_name,status,fetched_at")
+    .select(
+      "url,title,description,image_url,site_name,status,fetched_at,final_url",
+    )
     .eq("url", url)
     .maybeSingle<PreviewRow>();
   if (cached && isFresh(cached)) {
-    return json(cached);
+    return respond(cached);
   }
 
   let row: PreviewRow;
   try {
-    const meta = await fetchPreview(checked.url);
-    row = { url, status: "ok", fetched_at: new Date().toISOString(), ...meta };
+    const { meta, finalUrl } = await fetchPreview(checked.url);
+    row = {
+      url,
+      status: "ok",
+      fetched_at: new Date().toISOString(),
+      final_url: finalUrl !== url ? finalUrl : null,
+      ...meta,
+    };
   } catch (error) {
     const status = error instanceof PreviewFailure ? error.status : "error";
     row = emptyRow(url, status);
@@ -125,7 +156,7 @@ Deno.serve(async (request) => {
   if (upsertError) {
     console.error("link_previews upsert failed", upsertError.message);
   }
-  return json(row);
+  return respond(row);
 });
 
 function emptyRow(url: string, status: PreviewStatus): PreviewRow {
@@ -169,7 +200,9 @@ async function assertPublicHost(url: URL): Promise<void> {
   }
 }
 
-async function fetchPreview(start: URL): Promise<PreviewMeta> {
+async function fetchPreview(
+  start: URL,
+): Promise<{ meta: PreviewMeta; finalUrl: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -217,7 +250,10 @@ async function fetchPreview(start: URL): Promise<PreviewMeta> {
         response,
         charsetFromContentType(contentType ?? ""),
       );
-      return extractPreviewMeta(html, current.href);
+      return {
+        meta: extractPreviewMeta(html, current.href),
+        finalUrl: current.href,
+      };
     }
   } finally {
     clearTimeout(timer);

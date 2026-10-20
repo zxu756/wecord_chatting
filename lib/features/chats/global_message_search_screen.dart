@@ -1443,7 +1443,7 @@ class _DateFilterPickerState extends State<_DateFilterPicker> {
               ),
               WeCordSegment(
                 value: SearchOperator.during,
-                label: tr('On'),
+                label: trIn('search', 'On'),
                 key: const ValueKey('search-date-during'),
               ),
               WeCordSegment(

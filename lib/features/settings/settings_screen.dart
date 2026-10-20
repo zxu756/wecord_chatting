@@ -166,7 +166,7 @@ class SettingsPhonePage extends ConsumerWidget {
                 value: appLanguageLabel(ref.watch(appLanguageProvider)),
                 onTap: () => showLanguageSheet(context),
               ),
-              if (!usesTouchInput(context))
+              if (usesKeyboardShortcuts(context))
                 SettingsRow(
                   key: const ValueKey('keyboard-shortcuts-row'),
                   icon: Icons.keyboard_outlined,

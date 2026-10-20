@@ -41,6 +41,8 @@ import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/qr_link_screens.dart';
 import 'package:wecord/features/qr/qr_links.dart';
 import 'package:wecord/features/settings/settings_screen.dart';
+import 'package:wecord/features/share_target/protocol_links.dart';
+import 'package:wecord/features/share_target/share_target_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
@@ -71,6 +73,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         (kIsWeb
             ? callLinkLocationFor(Uri.base) ??
                   qrLinkLocationFor(Uri.base) ??
+                  protocolLinkLocationFor(Uri.base) ??
                   publicNoteLocationFor(Uri.base)
             : null) ??
         HomeScreen.path,
@@ -405,6 +408,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AgendaScreen.path,
             builder: (context, state) => const AgendaScreen(),
           ),
+          // Where "Share to WeCord" from another app lands (see
+          // web/wecord_sw.js): pick a chat for what was shared.
+          GoRoute(
+            path: ShareTargetScreen.path,
+            builder: (context, state) => const ShareTargetScreen(),
+          ),
         ],
       ),
       // Terms, privacy policy and community guidelines, outside the app
@@ -513,7 +522,8 @@ String? _pendingLocation(Uri uri) {
       ? uri.queryParameters['from']
       : uri.path;
   if (candidate != null &&
-      (candidate.startsWith('${CircleInviteScreen.path}/') ||
+      (candidate == ShareTargetScreen.path ||
+          candidate.startsWith('${CircleInviteScreen.path}/') ||
           candidate.startsWith('${CallLinkScreen.path}/') ||
           candidate.startsWith('${UserQrLinkScreen.path}/') ||
           candidate.startsWith('${GroupQrJoinScreen.path}/'))) {

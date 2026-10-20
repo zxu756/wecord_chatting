@@ -25,6 +25,41 @@
         "communication"
     ],
     "prefer_related_applications": false,
+    "share_target": {
+        "action": "/share-target",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url",
+            "files": [
+                {
+                    "name": "files",
+                    "accept": [
+                        "image/*",
+                        "video/*",
+                        "audio/*",
+                        "application/pdf",
+                        "text/plain",
+                        "application/zip",
+                        "application/msword",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.ms-excel",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-powerpoint",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    ]
+                }
+            ]
+        }
+    },
+    "protocol_handlers": [
+        {
+            "protocol": "web+wecord",
+            "url": "/open?uri=%s"
+        }
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

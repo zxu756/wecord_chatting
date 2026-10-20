@@ -37,7 +37,6 @@ const zhMoments2 = <String, String>{
   'Opens the Moment': '打开这条朋友圈',
   'Open Moment': '打开朋友圈',
   "Can't view this Moment": '无法查看这条朋友圈',
-  'Photos': '照片',
 
   // A picture or sticker on a comment.
   'Add a picture or sticker': '添加图片或表情',

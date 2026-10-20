@@ -58,6 +58,7 @@ import 'stickers_a11y_screens.dart';
 import 'insights_a11y_screens.dart';
 import 'forms_a11y_screens.dart';
 import 'admin_ops_a11y_screens.dart';
+import 'ops_metrics_a11y_screens.dart';
 import 'ai_assistant_a11y_screens.dart';
 import 'onboarding_guide_a11y_screens.dart';
 import 'digest_a11y_screens.dart';
@@ -820,4 +821,5 @@ final allA11yScreens = <A11yScreen>[
   ...favoritesA11yScreens,
   ...platformsA11yScreens,
   ...storageA11yScreens,
+  ...opsMetricsA11yScreens,
 ];

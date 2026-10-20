@@ -6,7 +6,11 @@ enum AnnouncementKind {
   announcement('announcement'),
 
   /// The team's answer to the person's own feedback (K7).
-  feedbackReply('feedback_reply');
+  feedbackReply('feedback_reply'),
+
+  /// The monitoring (K3) found something wrong; only owners and moderators
+  /// get one.
+  opsAlert('ops_alert');
 
   const AnnouncementKind(this.value);
 

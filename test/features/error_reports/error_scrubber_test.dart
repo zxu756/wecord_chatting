@@ -140,6 +140,35 @@ void main() {
       expect(out.split('\n').last, endsWith(')'));
     });
 
+    test('a trace from --split-debug-info keeps what symbolizing needs', () {
+      // The shape of a stack in a release build made with
+      // --split-debug-info: no names, only addresses, and a header that says
+      // which build it came from. tool/errors_report.sh --symbolize needs the
+      // header and every frame as they are.
+      const trace = '''
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+pid: 4242, tid: 9001, name 1.ui
+os: ios arch: arm64 comp: no sim: no
+build_id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
+isolate_dso_base: 1048a8000, vm_dso_base: 1048a8000
+isolate_instructions: 1048b5000, vm_instructions: 1048ae000
+    #00 abs 00000001049f5bd3 virt 000000000014dbd3 _kDartIsolateSnapshotInstructions+0x1234
+    #01 abs 00000001049f5c11 virt 000000000014dc11 _kDartIsolateSnapshotInstructions+0x4d6''';
+      final out = ErrorScrubber.stack(trace);
+      expect(out, contains("build_id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90'"));
+      expect(out, contains('isolate_dso_base: 1048a8000'));
+      expect(out, contains('isolate_instructions: 1048b5000'));
+      expect(
+        out,
+        contains(
+          '#00 abs 00000001049f5bd3 virt 000000000014dbd3 '
+          '_kDartIsolateSnapshotInstructions+0x1234',
+        ),
+      );
+      expect(out, contains('#01 abs 00000001049f5c11'));
+      expect(out.split('\n').first, startsWith('*** ***'));
+    });
+
     test('removes tokens that appear in a frame', () {
       final out = ErrorScrubber.stack('#0 f (package:a/b.dart:1:1) $_jwt');
       expect(out, isNot(contains('eyJ')));

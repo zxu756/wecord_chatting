@@ -72,6 +72,10 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
     final title = notice.title(chinese: chinese);
     final body = notice.body(chinese: chinese);
     final age = spokenAge(notice.publishedAt, now: widget.now?.call());
+    // The monitoring's alerts (owners and moderators only) are cards too, but
+    // they are not news from the team: a warning icon, "Monitoring" and an
+    // "Alert" tag.
+    final alert = notice.kind == AnnouncementKind.opsAlert;
     return InboxCardShell(
       key: ValueKey('inbox-announcement-${notice.id}'),
       highlighted: !notice.read,
@@ -79,9 +83,11 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SettingsIconTile(
-            icon: Icons.campaign_outlined,
-            tone: SettingsTone.accent,
+          SettingsIconTile(
+            icon: alert
+                ? Icons.notifications_active_outlined
+                : Icons.campaign_outlined,
+            tone: alert ? SettingsTone.warning : SettingsTone.accent,
             size: 44,
           ),
           const SizedBox(width: 12),
@@ -96,14 +102,14 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
-                      tr('WeCord team'),
+                      alert ? tr('Monitoring') : tr('WeCord team'),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: c.muted,
                       ),
                     ),
-                    _OfficialTag(),
+                    _OfficialTag(alert: alert),
                     Text(
                       age,
                       style: TextStyle(
@@ -155,22 +161,26 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
 }
 
 class _OfficialTag extends StatelessWidget {
+  const _OfficialTag({this.alert = false});
+
+  final bool alert;
+
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: c.accentSoft,
+        color: alert ? c.warningSoft : c.accentSoft,
         borderRadius: BorderRadius.circular(WeCordRadii.sm),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         child: Text(
-          tr('Official'),
+          alert ? tr('Alert') : tr('Official'),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: c.accentText,
+            color: alert ? c.warningText : c.accentText,
           ),
         ),
       ),

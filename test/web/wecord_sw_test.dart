@@ -6,6 +6,8 @@ import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
+import 'package:wecord/features/share_target/protocol_links.dart';
+import 'package:wecord/features/share_target/share_target_screen.dart';
 
 String read(String path) => File(path).readAsStringSync();
 
@@ -42,6 +44,62 @@ void main() {
     expect(push, contains("addEventListener('notificationclick'"));
     expect(push, contains('showNotification'));
     expect(push, contains('wecord-open'));
+  });
+
+  test(
+    'push_sw.js shows classic and declarative pushes (fake worker, node)',
+    () {
+      final result = Process.runSync('node', [
+        'test/web/push_sw_harness.mjs',
+        'web/push_sw.js',
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+    },
+    skip: Process.runSync('node', ['--version']).exitCode == 0
+        ? false
+        : 'node is not installed',
+  );
+
+  test('the share target posts to a path the worker answers', () {
+    final manifest =
+        jsonDecode(read('web/manifest.json')) as Map<String, dynamic>;
+    final target = manifest['share_target'] as Map<String, dynamic>;
+    expect(target['method'], 'POST');
+    expect(target['enctype'], 'multipart/form-data');
+    // The worker answers posts to exactly this path (relative to its scope).
+    expect(target['action'], '/share-target');
+    expect(read('web/wecord_sw.js'), contains("SHARE_PATH = 'share-target'"));
+    // And sends the browser to the route the app's share page is on.
+    expect(read('web/wecord_sw.js'), contains("SHARE_ROUTE = './#/share'"));
+    expect(ShareTargetScreen.path, '/share');
+    final params = target['params'] as Map<String, dynamic>;
+    expect(params['title'], 'title');
+    expect(params['text'], 'text');
+    expect(params['url'], 'url');
+    final files = (params['files'] as List).cast<Map<String, dynamic>>();
+    expect(files.single['name'], 'files');
+    expect(files.single['accept'], contains('image/*'));
+    expect(files.single['accept'], contains('application/pdf'));
+    // The page reads the cache and keys the worker writes.
+    final gateway = read(
+      'lib/features/share_target/share_target_gateway_web.dart',
+    );
+    expect(gateway, contains("_cacheName = 'wecord-share-inbox'"));
+    expect(gateway, contains("_metaPath = 'share-meta'"));
+    expect(
+      read('web/wecord_sw.js'),
+      contains("SHARE_CACHE = 'wecord-share-inbox'"),
+    );
+    expect(read('web/wecord_sw.js'), contains("SHARE_META = 'share-meta'"));
+  });
+
+  test('the protocol handler opens the page that reads web+wecord: links', () {
+    final manifest =
+        jsonDecode(read('web/manifest.json')) as Map<String, dynamic>;
+    final handlers = (manifest['protocol_handlers'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(handlers.single['protocol'], protocolScheme);
+    expect(handlers.single['url'], '$protocolHandlerPath?uri=%s');
   });
 
   group('manifest', () {

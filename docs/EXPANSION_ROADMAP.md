@@ -226,10 +226,10 @@
 
 | 编号 | 功能 | 量 | 标记 | 批次 |
 |---|---|---|---|---|
-| H1 | Android（阶段 0 网页适配 / 阶段 1 原生 App） | S / L | 【花钱】Play 25 美元 | 阶段 0：5；阶段 1：待定 |
+| H1 | Android（阶段 0 网页适配 / 阶段 1 原生 App） | S / L | 【花钱】Play 25 美元 | 阶段 0：5 ✅ 2026-10-20；阶段 1：待定 |
 | H2 | Windows 桌面 | L | 【需决定】 | 待定 |
 | H3 | Linux 桌面 | M | | 待定 |
-| H4 | iPad 适配 | S | | 5 |
+| H4 | iPad 适配 | S | | 5 ✅ 2026-10-20 |
 | H5 | 原生推送 + 通知快捷回复 + 角标 | M | 【Apple 账号】 | Apple |
 | H6 | CallKit / PushKit 来电 | M | 【Apple 账号】 | Apple |
 | H7 | TestFlight 分发 | S | 【Apple 账号】 | Apple |
@@ -237,7 +237,7 @@
 | H9 | Mac 签名公证 + 自动更新 | M | 【Apple 账号】 | Apple |
 | H10 | 通用链接 + Android App Links | S | 【Apple 账号】仅 iOS 部分 | Apple |
 | H11 | 分享扩展 + 小组件 | M | 【Apple 账号】 | Apple |
-| H12 | PWA 增强 | S | | 5 |
+| H12 | PWA 增强 | S | | 5 ✅ 2026-10-20 |
 
 ### I 开发者生态
 

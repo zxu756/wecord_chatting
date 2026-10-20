@@ -3,6 +3,8 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:math' as math;
 
+import 'package:web/web.dart' as web;
+import 'package:wecord/features/voice_input/speech_results.dart';
 import 'package:wecord/features/voice_input/voice_input_models.dart';
 import 'package:wecord/features/voice_input/voice_recognizer.dart';
 
@@ -66,6 +68,18 @@ class BrowserVoiceRecognizer implements VoiceRecognizer {
   }
 }
 
+/// Whether this is a browser on Android, whose recognition repeats growing
+/// phrases (see joinSpeechResults).
+final bool _androidBrowser = _readAndroidBrowser();
+
+bool _readAndroidBrowser() {
+  try {
+    return isAndroidBrowser(web.window.navigator.userAgent);
+  } catch (_) {
+    return false;
+  }
+}
+
 class _BrowserSession implements VoiceSession {
   _BrowserSession(this._recognition);
 
@@ -95,13 +109,14 @@ class _BrowserSession implements VoiceSession {
         return;
       }
       final length = (results['length'] as JSNumber?)?.toDartInt ?? 0;
-      final buffer = StringBuffer();
+      final transcripts = <String>[];
       for (var i = 0; i < length; i++) {
         final result = results.callMethod<JSObject?>('item'.toJS, i.toJS);
         final best = result?.callMethod<JSObject?>('item'.toJS, 0.toJS);
-        buffer.write((best?['transcript'] as JSString?)?.toDart ?? '');
+        transcripts.add((best?['transcript'] as JSString?)?.toDart ?? '');
       }
-      _text = buffer.toString().trim();
+      // Chrome on Android sends each update of a phrase as a new result.
+      _text = joinSpeechResults(transcripts, cumulative: _androidBrowser);
       _speaking = true;
       _emit(VoicePartial(_text));
     }).toJS;

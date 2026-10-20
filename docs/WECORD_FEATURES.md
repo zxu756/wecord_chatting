@@ -10,7 +10,7 @@
 | 项目 | 内容 |
 |---|---|
 | 产品定位 | 微信式的私聊/群聊 + Discord 式的「圈子」社区 + Slack 式的协作工具（笔记、任务、接龙），统一在一个应用里 |
-| 平台 | Web（Cloudflare Worker 托管，可安装为 PWA）、iOS（真机 release 安装）、macOS（release 构建） |
+| 平台 | Web（Cloudflare Worker 托管，可安装为 PWA）、iOS（iPhone 和 iPad，真机 release 安装）、macOS（release 构建） |
 | 客户端 | Flutter + Riverpod 3 + go_router；约 607 个 Dart 文件、17.5 万行 |
 | 后端 | Supabase（Postgres + RLS + Realtime + Storage + Edge Functions + pg_cron + pg_net + Vault），项目 `zpfternchrwboweellka` |
 | 数据库 | 147 个迁移（`supabase/migrations/`），几乎所有业务规则都在 SQL（RLS + security definer 函数）里强制执行 |
@@ -372,6 +372,10 @@
 - **更新提示**：新版本发布后，打开的页面显示「有新版本 — 重新加载」。
 - **未读角标**：安装后图标显示未读数，标签页标题显示「(3) WeCord」。
 - **性能**：网页包 10.1MB → 9.0MB（代码高亮、二维码扫描按需加载），CanvasKit 自托管便于离线。
+- **分享到 WeCord**（H12，Android 和 ChromeOS 的 Chrome）：安装后，其他 App 的「分享」菜单里出现 WeCord，可分享链接、文字、图片、视频、PDF、Office 文档（`manifest.json` 的 `share_target`，POST 到 `/share-target`）。`wecord_sw.js` 接住这个 POST：把标题、文字、链接和文件（最多 10 个，单个不超过聊天的 50 MB 上限）存进缓存 `wecord-share-inbox`（部署清理不会删它，新分享会覆盖没打开过的旧分享），再 303 跳到 `/#/share`。`/share` 页（`ShareTargetScreen`）显示要分享的内容，并列出单聊和群聊，**文件传输助手排第一**；点一下就发送（文字一条消息，图片发成聊天图片，其余发成文件），发完清空缓存并打开那个聊天。没登录时会先登录，再回到分享页；缓存里没有内容时显示「没有要分享的内容」。圈子频道和话题不在列表里。iPhone Safari 不支持 Web Share Target。
+- **`web+wecord:` 链接**（H12）：安装后浏览器可把 `web+wecord:invite/<码>`、`call/<码>`、`u/<码>`、`g/<码>`（圈子邀请、通话链接、个人二维码、群二维码）交给 WeCord（`protocol_handlers`，落到 `/open?uri=…`）；只认这四种，其他内容一律忽略并回到首页。
+- **推送更稳（Declarative Web Push）**（H12）：推送的内容同时带经典字段（`title`、`body`、`tag`、`url`，旧浏览器的 `push_sw.js` 读）和 Declarative Web Push 字段（`web_push: 8030`、`notification.navigate` 等，Safari 18.4 及以上直接显示，不唤醒脚本，iPhone 主屏 PWA 的订阅不会因为「收到推送却没显示」而被系统收回）。由 `sendWebPush` 统一加，`push`、`scheduled-dispatch`、`chat-event-reminders` 三个函数都走它；`navigate` 的网址取函数密钥 `WECORD_SITE_URL`，没设就用 `https://wecord.jokebear.fyi`。没有服务端算的未读数，所以暂不带 `app_badge`（App 打开时仍由前端设角标）。`push_sw.js` 同时改了：Safari 里即使 WeCord 窗口在前台也显示通知（Safari 要求每次推送都显示，否则收回订阅）；点击通知时窗口无法聚焦就新开窗口；浏览器替换订阅（`pushsubscriptionchange`）时用同一把钥匙重新订阅，下次打开 App 自动存回服务器。
+- **Android Chrome 适配检查**（H1 阶段 0）：见第 23 节。
 
 ## 20. 性能与稳定性（已完成的优化）
 
@@ -408,7 +412,7 @@
 
 - iPhone / Mac **原生推送（APNs）**、**TestFlight 分发**、**通用链接**（点通话链接直接进 App）——都需要付费 Apple 开发者账号（99 美元/年）。
 - **Mac 安装包签名公证**：同上；目前可打未签名 .dmg，别人首次打开需在「隐私与安全性」里允许。
-- **Android 版**：未构建。
+- **Android 版**：原生 App 未构建（H1 阶段 1/2 要决定并花钱）。阶段 0（Android Chrome 网页适配）已做：已装为 PWA 时收推送、点通知跳转到对应聊天（`push_sw.js` 已加固）；网页语音输入修了 Android Chrome 的「连续识别把同一句越念越长地重复」（`joinSpeechResults`，只在 Android 用户代理上合并，其他浏览器不变）；「分享到 WeCord」和 `web+wecord:` 链接可用（见第 19 节）；文件上传用系统文件选择器、扫码用 `getUserMedia` 后置摄像头（二维码页另有「从图片识别」兜底）。**只能真机验证**：见本节末尾「真机待验证」。
 - **端到端加密**：未实现。
 - **系统级画中画**：通话库不支持。
 - **网页版语音转文字**：需另配 `AI_TRANSCRIBE_*` 密钥。
@@ -418,4 +422,5 @@
 - **公开笔记网页**是网页版 App 里的路由，不是服务端渲染的 HTML：搜索引擎本来就很难读到内容，「允许收录」只是不再要求不收录；不能给这类页面单独设内容安全策略（只有 `note-public` 的 JSON 带 CSP）；改域名/DNS 后链接的站点前缀以 `WECORD_SITE_URL` 为准。笔记 PDF 里的文字不可选中。评论不推送，只进通知页。AI 提取的待办是笔记里的待办块，不会自动进任务清单。
 - **AI 守护**只检查文字消息，不检查笔记标题、任务标题、活动文字、投票问题；放行后再编辑，新成员期内的会重新检查（见 AI 守护的「编辑后复查」）。
 - **合并转发**不能发到圈子频道；接龙编号按加入顺序（有人退出会变）；朋友圈不支持多视频；导出不含笔记内图片（导出笔记为 PDF 时图片会画进去）。
-- **真机待验证**：扫码、定位权限、语音输入/转写识别质量、通话字幕（通话中 iPhone/Mac 识别与通话共用麦克风）、图片文字识别、修图手感、PWA 安装/离线/更新提示、私有实时通道在托管 Realtime 上的行为。
+- **iPad**（H4）：Xcode 工程是 iPhone + iPad（`TARGETED_DEVICE_FAMILY = "1,2"`），iPad 支持四个方向，不设 `UIRequiresFullScreen`，所以支持分屏（Split View）、Slide Over 和台前调度（Stage Manager）；窗口宽度变化时界面按宽度重新布局（≥840 电脑布局，600–840 手机布局但不紧凑，<600 紧凑手机布局），页面状态保留。做了三处 iPad 修正：① 触控板/鼠标悬停消息出现操作条（以前 iPad 因为「触屏平台」被关掉了；手指不会触发悬停，所以触屏不受影响）；② 设置里的「键盘快捷键」入口在 iPad 上显示（窗口较长边 ≥960 就算平板，分屏窄窗口也算）；③ Cmd+K / Cmd+/ / Cmd+J / Option+↑↓ 在 iPad 外接键盘上沿用 Mac 的键。截图测试：`tool/screenshots/ipad_screenshots_test.dart`（1024×1366、1366×1024、834×1194、分屏 507×1366）。
+- **真机待验证**：扫码、定位权限、语音输入/转写识别质量、通话字幕（通话中 iPhone/Mac 识别与通话共用麦克风）、图片文字识别、修图手感、PWA 安装/离线/更新提示、私有实时通道在托管 Realtime 上的行为；**Android 手机**：Android 上的返回键（弹层打开时按返回会离开当前页面，弹层随页面一起关）、键盘遮挡输入框、语音输入（Web Speech）重复文字是否消失、相机扫码、文件上传、点推送跳转、分享到 WeCord、`web+wecord:` 链接；**iPad**：分屏/台前调度拖动调整宽度、触控板悬停、外接键盘快捷键、安装到 iPad；**iPhone 主屏 PWA**（iOS 18.4+）：推送是否稳定、点通知是否打开对应聊天。

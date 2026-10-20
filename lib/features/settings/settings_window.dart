@@ -328,7 +328,7 @@ class _SettingsNav extends ConsumerWidget {
                     Icons.notifications_none_rounded,
                     tr('Notifications'),
                   ),
-                  if (!usesTouchInput(context))
+                  if (usesKeyboardShortcuts(context))
                     item(
                       SettingsWindowSection.shortcuts,
                       Icons.keyboard_outlined,

@@ -1,5 +1,6 @@
 // Web Push without dependencies: VAPID (RFC 8292) authorization and
 // aes128gcm payload encryption (RFC 8291), on WebCrypto.
+import { siteOriginFromEnv, withDeclarativeFields } from "./declarative.ts";
 
 export interface VapidKeys {
   /// The uncompressed P-256 public key (65 bytes), base64url.
@@ -228,17 +229,29 @@ export async function encryptPayload(
 }
 
 /// Sends [payload] to one subscription. Returns the push service's status.
+///
+/// A notification (a payload with a title and a url) goes out with the
+/// Declarative Web Push fields next to its classic ones, so Safari 18.4+
+/// shows it by itself and everything else runs the service worker as
+/// before (see declarative.ts). [options.siteOrigin] is where its
+/// `navigate` URL points; the site's own origin by default.
 export async function sendWebPush(
   keys: VapidKeys,
   subscription: PushSubscriptionKeys,
   payload: unknown,
-  options: { nowSeconds: number; ttlSeconds?: number } = {
+  options: { nowSeconds: number; ttlSeconds?: number; siteOrigin?: string } = {
     nowSeconds: Math.floor(Date.now() / 1000),
   },
 ): Promise<number> {
+  const message = payload !== null && typeof payload === "object"
+    ? withDeclarativeFields(
+      payload as Record<string, unknown>,
+      options.siteOrigin ?? siteOriginFromEnv(),
+    )
+    : payload;
   const body = await encryptPayload(
     subscription,
-    encoder.encode(JSON.stringify(payload)),
+    encoder.encode(JSON.stringify(message)),
   );
   const response = await fetch(subscription.endpoint, {
     method: "POST",

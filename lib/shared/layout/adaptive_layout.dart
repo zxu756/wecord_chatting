@@ -29,3 +29,16 @@ const wideLayoutBreakpoint = 840.0;
 
 /// Whether [width] calls for the desktop layout.
 bool isWideLayout(double width) => width >= wideLayoutBreakpoint;
+
+/// The longer side of the window from which a touch screen counts as a
+/// tablet. No phone gets there (the largest are about 930 logical pixels
+/// tall), and an iPad's Split View or Slide Over window keeps its full
+/// height, so a narrow window still counts.
+const tabletLongestSide = 960.0;
+
+/// Whether to offer keyboard shortcuts: wherever input is not touch-first,
+/// and on tablets, which often sit in a keyboard case.
+bool usesKeyboardShortcuts(BuildContext context) {
+  return !usesTouchInput(context) ||
+      MediaQuery.sizeOf(context).longestSide >= tabletLongestSide;
+}

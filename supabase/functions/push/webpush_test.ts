@@ -5,6 +5,7 @@ import {
   deriveContentKeys,
   encryptPayload,
   readVapidKeys,
+  sendWebPush,
   vapidAuthorization,
 } from "./webpush.ts";
 
@@ -129,4 +130,103 @@ Deno.test("keys are required, the subject has a default", () => {
     )?.subject,
     "mailto:push@wecord.invalid",
   );
+});
+
+/// Sends [payload] through sendWebPush to a browser we hold the keys of, and
+/// returns what the browser decrypts.
+async function sentAndDecrypted(payload: unknown): Promise<unknown> {
+  const browser = await receiver();
+  const vapid = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  ) as CryptoKeyPair;
+  const jwk = await crypto.subtle.exportKey("jwk", vapid.privateKey);
+  const keys = {
+    publicKey: base64UrlEncode(
+      new Uint8Array(await crypto.subtle.exportKey("raw", vapid.publicKey)),
+    ),
+    privateKey: jwk.d!,
+    subject: "mailto:ops@example.com",
+  };
+
+  const realFetch = globalThis.fetch;
+  let sent: Uint8Array | null = null;
+  globalThis.fetch = (_input, init) => {
+    sent = new Uint8Array(init!.body as Uint8Array);
+    return Promise.resolve(new Response(null, { status: 201 }));
+  };
+  try {
+    const status = await sendWebPush(keys, {
+      endpoint: "https://push.example.com/x",
+      p256dh: base64UrlEncode(browser.publicKey),
+      auth: base64UrlEncode(browser.auth),
+    }, payload, {
+      nowSeconds: 1_700_000_000,
+      siteOrigin: "https://wecord.example",
+    });
+    assertEquals(status, 201);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  const message = sent!;
+  const salt = message.slice(0, 16);
+  const keyLength = message[20];
+  const senderPublic = message.slice(21, 21 + keyLength);
+  const ciphertext = message.slice(21 + keyLength);
+  const senderKey = await crypto.subtle.importKey(
+    "raw",
+    senderPublic,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    [],
+  );
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: "ECDH", public: senderKey },
+      browser.pair.privateKey,
+      256,
+    ),
+  );
+  const { key, nonce } = await deriveContentKeys({
+    sharedSecret,
+    authSecret: browser.auth,
+    receiverPublic: browser.publicKey,
+    senderPublic,
+    salt,
+  });
+  const aesKey = await crypto.subtle.importKey("raw", key, "AES-GCM", false, [
+    "decrypt",
+  ]);
+  const plain = new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: nonce },
+      aesKey,
+      ciphertext,
+    ),
+  );
+  return JSON.parse(new TextDecoder().decode(plain.slice(0, -1)));
+}
+
+Deno.test("a notification goes out classic and declarative in one message", async () => {
+  const received = await sentAndDecrypted({
+    title: "Ada",
+    body: "hello",
+    tag: "c1",
+    url: "/#/chats/c1",
+  }) as Record<string, unknown>;
+  // Older browsers' service worker reads these.
+  assertEquals(received.title, "Ada");
+  assertEquals(received.url, "/#/chats/c1");
+  // Safari 18.4+ reads these.
+  assertEquals(received.web_push, 8030);
+  assertEquals(
+    (received.notification as Record<string, unknown>).navigate,
+    "https://wecord.example/#/chats/c1",
+  );
+});
+
+Deno.test("a payload that is not a notification is sent as it is", async () => {
+  assertEquals(await sentAndDecrypted({ ping: true }), { ping: true });
 });

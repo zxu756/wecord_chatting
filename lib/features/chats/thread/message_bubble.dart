@@ -423,7 +423,10 @@ class _MessageBubble extends StatelessWidget {
     if (isOpeningPost) {
       content = _buildOpeningPost(context);
     } else {
-      final hoverable = desktop && !_isRecalled && !usesTouchInput(context);
+      // A mouse or trackpad (an iPad with a keyboard case has one) shows
+      // the hover actions; a finger never hovers, so touch screens are
+      // unaffected.
+      final hoverable = desktop && !_isRecalled;
       content = _MessageHover(
         enabled: hoverable,
         builder: (context, hovered) => cards

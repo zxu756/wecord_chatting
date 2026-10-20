@@ -39,6 +39,9 @@ class FakeCache {
     }
     return undefined;
   }
+  async delete(request) {
+    return this.entries.delete(FakeCache.key(request, false));
+  }
   async keys() {
     return [...this.entries.keys()].map((url) => new Request(url));
   }
@@ -91,7 +94,12 @@ function makeWorker({ stamped = true, active = false, existingCaches = [] }) {
     Response,
     Request,
     Headers,
+    FormData,
+    Blob,
     URL,
+    Date,
+    JSON,
+    Math,
     Promise,
     Set,
     Array,
@@ -306,6 +314,136 @@ function request(url, { method = 'GET', mode = 'no-cors', range = false } = {}) 
   check('handed-over app files are cached', Boolean(await cache.match(`${ORIGIN}/canvaskit/canvaskit.wasm`)));
   check('handed-over foreign files are not', !(await cache.match('https://evil.test/canvaskit/canvaskit.wasm')));
   check('handed-over API paths are not', !(await cache.match(`${ORIGIN}/rest/v1/x`)));
+}
+
+// Share to WeCord (the manifest's share_target): a multipart POST.
+function shareRequest(build, { path = '/share-target', origin = ORIGIN } = {}) {
+  const form = new FormData();
+  build(form);
+  const real = new Request(`${origin}${path}`, { method: 'POST', body: form });
+  return {
+    url: real.url,
+    method: 'POST',
+    mode: 'navigate',
+    headers: new Headers(),
+    formData: () => real.formData(),
+  };
+}
+
+for (const stamped of [true, false]) {
+  const label = stamped ? 'stamped' : 'unstamped';
+  const worker = makeWorker({ stamped });
+  if (stamped) await fire(worker, 'install');
+
+  const shared = await fire(worker, 'fetch', {
+    request: shareRequest((form) => {
+      form.set('title', 'A page');
+      form.set('text', 'Look at this');
+      form.set('url', 'https://example.com/a');
+      form.append('files', new Blob(['png bytes'], { type: 'image/png' }), 'a.png');
+      form.append('files', new Blob(['pdf bytes'], { type: 'application/pdf' }), 'b.pdf');
+    }),
+  });
+  check(`${label}: a share is answered by the worker`, shared.responded !== null);
+  const redirect = await shared.responded;
+  check(
+    `${label}: a share is redirected into the app's share page`,
+    redirect.status === 303 &&
+      redirect.headers.get('location') === `${ORIGIN}/#/share`,
+  );
+  const inbox = worker.stores.get('wecord-share-inbox');
+  check(`${label}: a share waits in the inbox cache`, Boolean(inbox));
+  const meta = JSON.parse(await (await inbox.match(`${ORIGIN}/share-meta`)).text());
+  check(
+    `${label}: the shared title, text and link are kept`,
+    meta.title === 'A page' &&
+      meta.text === 'Look at this' &&
+      meta.url === 'https://example.com/a',
+  );
+  check(
+    `${label}: the shared files are listed with name, type and size`,
+    meta.files.length === 2 &&
+      meta.files[0].name === 'a.png' &&
+      meta.files[0].type === 'image/png' &&
+      meta.files[0].size === 9 &&
+      meta.files[1].name === 'b.pdf' &&
+      meta.skipped === 0,
+  );
+  const file = await inbox.match(`${ORIGIN}/${meta.files[0].path}`);
+  check(
+    `${label}: a shared file's bytes are kept`,
+    (await file.text()) === 'png bytes',
+  );
+
+  // A newer share replaces the one nobody opened.
+  await (await fire(worker, 'fetch', {
+    request: shareRequest((form) => form.set('text', 'second')),
+  })).responded;
+  const second = JSON.parse(await (await inbox.match(`${ORIGIN}/share-meta`)).text());
+  check(
+    `${label}: a new share replaces the old one`,
+    second.text === 'second' &&
+      second.files.length === 0 &&
+      !(await inbox.match(`${ORIGIN}/${meta.files[0].path}`)),
+  );
+
+  // Other posts, and posts elsewhere, are not ours.
+  for (const [name, req] of [
+    ['posts to other paths', shareRequest(() => {}, { path: '/main.dart.js' })],
+    ['posts to other sites', shareRequest(() => {}, { origin: 'https://evil.test' })],
+  ]) {
+    const event = await fire(worker, 'fetch', { request: req });
+    check(`${label}: ${name} are left alone`, event.responded === null);
+  }
+}
+
+// Too many files, and files over the chat's size limit, are left out and
+// counted.
+{
+  const worker = makeWorker({});
+  const shared = await fire(worker, 'fetch', {
+    request: shareRequest((form) => {
+      for (let i = 0; i < 12; i++) {
+        form.append('files', new Blob(['x'], { type: 'text/plain' }), `f${i}.txt`);
+      }
+    }),
+  });
+  await shared.responded;
+  const inbox = worker.stores.get('wecord-share-inbox');
+  const meta = JSON.parse(await (await inbox.match(`${ORIGIN}/share-meta`)).text());
+  check('at most 10 shared files are kept', meta.files.length === 10);
+  check('the files left out are counted', meta.skipped === 2);
+}
+
+// A share that cannot be read still lands in the app.
+{
+  const worker = makeWorker({});
+  const broken = {
+    url: `${ORIGIN}/share-target`,
+    method: 'POST',
+    mode: 'navigate',
+    headers: new Headers(),
+    formData: async () => {
+      throw new TypeError('bad body');
+    },
+  };
+  const event = await fire(worker, 'fetch', { request: broken });
+  const response = await event.responded;
+  check(
+    'an unreadable share still opens the share page',
+    response.status === 303 &&
+      response.headers.get('location') === `${ORIGIN}/#/share`,
+  );
+}
+
+// The deploy cleanup never deletes a waiting share.
+{
+  const worker = makeWorker({ existingCaches: ['wecord-share-inbox', 'wecord-shell-v0'] });
+  await fire(worker, 'activate');
+  check(
+    'activate keeps the share inbox',
+    worker.stores.has('wecord-share-inbox') && !worker.stores.has('wecord-shell-v0'),
+  );
 }
 
 // An unstamped copy does nothing.

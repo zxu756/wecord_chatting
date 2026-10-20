@@ -10,6 +10,11 @@
 // - Tells open pages when a new deploy has finished downloading
 //   ({type: 'wecord-update-ready'}); the page's "Update available -
 //   Reload" toast answers {type: 'wecord-skip-waiting'}.
+// - Receives "Share to WeCord" (the manifest's share_target, Android and
+//   ChromeOS): a POST to /share-target carrying text, a link and files. It
+//   keeps them in the cache "wecord-share-inbox" (never touched by the
+//   deploy cleanup below) and redirects to the app's #/share page, which
+//   reads and clears them. Works whether or not this copy is stamped.
 //
 // What it never touches: anything that is not on this origin (Supabase's
 // API, signed storage URLs, Edge Functions, LiveKit, jsDelivr, ...) and any
@@ -34,6 +39,17 @@ const LEGACY_CACHE = /^flutter-/;
 
 const SCOPE = new URL(self.registration.scope);
 const SHELL_URL = new URL('./', SCOPE).href;
+
+// Web Share Target: where the manifest sends shares, the cache they wait in
+// until the app opens, and the app route that shows them. At most this many
+// files are kept; the page says how many were left out.
+const SHARE_PATH = 'share-target';
+const SHARE_CACHE = 'wecord-share-inbox';
+const SHARE_META = 'share-meta';
+const SHARE_ROUTE = './#/share';
+const SHARE_MAX_FILES = 10;
+// The largest file a chat takes (maxChatFileBytes in the app).
+const SHARE_MAX_BYTES = 50 * 1024 * 1024;
 
 // The shell: install fails (and is retried later) unless these are cached.
 const REQUIRED = ['./', 'flutter_bootstrap.js', 'manifest.json'];
@@ -176,8 +192,16 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (!STAMPED) return;
   const request = event.request;
+  if (request.method === 'POST') {
+    // The only post this worker answers: a share from another app.
+    const target = new URL(request.url);
+    if (target.origin === SCOPE.origin && appPath(target) === SHARE_PATH) {
+      event.respondWith(receiveShare(request));
+    }
+    return;
+  }
+  if (!STAMPED) return;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   // Supabase, storage, Edge Functions, CDNs: not ours, not cached.
@@ -191,6 +215,63 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(cacheFirst(request, event));
   }
 });
+
+// Keeps what another app shared (title, text, link, files) for the app's
+// #/share page, then sends the browser there. Whatever goes wrong, the
+// browser still lands in the app (the page shows there is nothing to share).
+async function receiveShare(request) {
+  try {
+    const form = await request.formData();
+    const text = (name) => {
+      const value = form.get(name);
+      return typeof value === 'string' ? value : '';
+    };
+    const cache = await caches.open(SHARE_CACHE);
+    // A new share replaces any older one that was never opened.
+    for (const key of await cache.keys()) await cache.delete(key);
+    const picked = form
+      .getAll('files')
+      .filter((value) => value && typeof value !== 'string');
+    const files = [];
+    let skipped = 0;
+    for (const file of picked) {
+      if (files.length >= SHARE_MAX_FILES || (file.size || 0) > SHARE_MAX_BYTES) {
+        skipped++;
+        continue;
+      }
+      const path = 'share-file-' + files.length;
+      await cache.put(
+        new URL(path, SCOPE).href,
+        new Response(file, {
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        }),
+      );
+      files.push({
+        path,
+        name: file.name || 'file',
+        type: file.type || '',
+        size: file.size || 0,
+      });
+    }
+    const meta = {
+      title: text('title'),
+      text: text('text'),
+      url: text('url'),
+      files,
+      skipped,
+      received: Date.now(),
+    };
+    await cache.put(
+      new URL(SHARE_META, SCOPE).href,
+      new Response(JSON.stringify(meta), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  } catch (_) {
+    // Opens the app with nothing to show.
+  }
+  return Response.redirect(new URL(SHARE_ROUTE, SCOPE).href, 303);
+}
 
 // Every page of the single-page app is the same shell.
 async function shellFor(request) {

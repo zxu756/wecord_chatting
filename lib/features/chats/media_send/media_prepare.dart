@@ -49,6 +49,7 @@ Future<MediaToQueue> _prepare(
         originalFileName: draft.name,
         originalMimeType: draft.mimeType,
         originalQuality: original,
+        alt: draft.alt,
       );
     case DraftKind.video:
       final poster = draft.thumbnail;

@@ -6,6 +6,7 @@ import 'package:wecord/features/chat_folders/chat_folders_screen.dart';
 import 'package:wecord/features/chats/chat_polish/chat_polish_settings.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
 import 'package:wecord/features/stickers/sticker_management_screen.dart';
+import 'package:wecord/features/storage/storage_screen.dart';
 import 'package:wecord/features/voice_input/voice_input_settings.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -81,6 +82,7 @@ class ChatSettingsGroup extends ConsumerWidget {
           subtitle: tr('Leave group chats nobody writes in any more'),
           onTap: () => openGroupCleanup(context),
         ),
+        const StorageSettingsRow(),
       ],
     );
   }

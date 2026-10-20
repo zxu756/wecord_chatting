@@ -15,6 +15,7 @@ import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
 import 'package:wecord/features/ai/ai_translation.dart';
 import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/accessibility/chat_text_scale.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/swipe_to_reply.dart';
 import 'package:wecord/features/circles/mod_tools/mod_tools_repository.dart';
@@ -138,6 +139,7 @@ import 'package:wecord/features/location/location_cards.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/wallpapers/wallpaper_backdrop.dart';
@@ -754,6 +756,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                       name: title,
                       avatarUrl: avatarUrl,
                       presence: presenceColor,
+                      presenceStatus: f.peerPresence,
                     ),
                   ),
           );

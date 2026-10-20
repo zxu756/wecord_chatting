@@ -452,10 +452,12 @@ void main() {
       await settingsWorld.open(tester, '/me');
       await settleWithImages(tester);
       final row = find.byKey(const ValueKey('chat-wallpaper-row'));
-      await tester.drag(
-        find.byKey(const ValueKey('settings-screen')),
-        const Offset(0, -600),
+      await tester.dragUntilVisible(
+        row,
+        find.byKey(const ValueKey('settings-page-list')),
+        const Offset(0, -200),
       );
+      await tester.ensureVisible(row);
       await settle(tester);
       await tester.tap(row);
       await settleWithImages(tester);

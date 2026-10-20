@@ -133,6 +133,8 @@ class _ProfileEditorState extends ConsumerState<ProfileEditor> {
                   avatarUrl: _avatarUrl,
                   size: inWindow ? 88 : 80,
                   presence: presenceColor(context, presence),
+                  presenceShape: presenceShapeOf(presence),
+                  presenceLabel: presenceLabelOf(presence),
                 ),
               ),
               Padding(

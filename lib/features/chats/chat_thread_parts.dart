@@ -40,6 +40,8 @@ class ChatAvatar extends ConsumerStatefulWidget {
     this.thing = false,
     this.icon,
     this.presence,
+    this.presenceShape = PresenceShape.solid,
+    this.presenceLabel,
     this.ringColor,
     super.key,
   });
@@ -56,6 +58,10 @@ class ChatAvatar extends ConsumerStatefulWidget {
 
   /// Presence dot color; people only.
   final Color? presence;
+
+  /// The dot's shape and its words, so status doesn't rest on color alone.
+  final PresenceShape presenceShape;
+  final String? presenceLabel;
   final Color? ringColor;
 
   @override
@@ -135,6 +141,8 @@ class _ChatAvatarState extends ConsumerState<ChatAvatar> {
               color: presence,
               size: (size * 0.3).clamp(10.0, 18.0),
               ringColor: widget.ringColor,
+              shape: widget.presenceShape,
+              semanticLabel: widget.presenceLabel,
             ),
           ),
         ],

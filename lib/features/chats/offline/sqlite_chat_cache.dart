@@ -208,6 +208,105 @@ class SqliteChatCache implements ChatCache {
   }
 
   @override
+  Future<ChatCacheSizes> measure(String userId) async {
+    // Bytes of the stored JSON (`length` of text counts characters).
+    final messages = await _db.rawQuery(
+      'select conversation_id, sum(length(cast(row_json as blob))) as bytes '
+      'from messages where user_id = ? group by conversation_id',
+      [userId],
+    );
+    final conversations = await _db.rawQuery(
+      'select sum(length(cast(row_json as blob))) as bytes '
+      'from conversations where user_id = ?',
+      [userId],
+    );
+    final outbox = await _db.rawQuery(
+      'select sum(length(cast(entry_json as blob))) as bytes '
+      'from outbox where user_id = ?',
+      [userId],
+    );
+    int bytes(List<Map<String, Object?>> rows) =>
+        (rows.firstOrNull?['bytes'] as num?)?.toInt() ?? 0;
+    return ChatCacheSizes(
+      conversationList: bytes(conversations),
+      outbox: bytes(outbox),
+      messages: {
+        for (final row in messages)
+          if (row['conversation_id'] is String)
+            row['conversation_id']! as String:
+                (row['bytes'] as num?)?.toInt() ?? 0,
+      },
+    );
+  }
+
+  @override
+  Future<void> removeMessages(
+    String userId,
+    String conversationId, {
+    Set<String>? ids,
+  }) {
+    if (ids == null) {
+      return _db.delete(
+        'messages',
+        where: 'user_id = ? and conversation_id = ?',
+        whereArgs: [userId, conversationId],
+      );
+    }
+    return _db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final id in ids) {
+        batch.delete(
+          'messages',
+          where: 'user_id = ? and conversation_id = ? and id = ?',
+          whereArgs: [userId, conversationId, id],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  @override
+  Future<void> clearMessages(String userId) {
+    return _db.transaction((txn) async {
+      for (final table in ['conversations', 'messages']) {
+        await txn.delete(table, where: 'user_id = ?', whereArgs: [userId]);
+      }
+    });
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> removeExpired(
+    String userId,
+    DateTime now,
+  ) async {
+    // Only rows that carry a time to expire at are worth decoding.
+    final candidates = await _db.query(
+      'messages',
+      columns: ['conversation_id', 'id', 'row_json'],
+      where: 'user_id = ? and row_json like ?',
+      whereArgs: [userId, '%"expires_at":"%'],
+    );
+    final removed = <Map<String, dynamic>>[];
+    final batch = _db.batch();
+    for (final candidate in candidates) {
+      final row = _decode(candidate['row_json']);
+      if (row == null || !cachedRowExpired(row, now)) {
+        continue;
+      }
+      removed.add(row);
+      batch.delete(
+        'messages',
+        where: 'user_id = ? and conversation_id = ? and id = ?',
+        whereArgs: [userId, candidate['conversation_id'], candidate['id']],
+      );
+    }
+    if (removed.isNotEmpty) {
+      await batch.commit(noResult: true);
+    }
+    return removed;
+  }
+
+  @override
   Future<void> clear() {
     return _db.transaction((txn) async {
       for (final table in ['conversations', 'messages', 'outbox']) {

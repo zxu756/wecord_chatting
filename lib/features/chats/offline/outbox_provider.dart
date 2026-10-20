@@ -72,6 +72,7 @@ class MediaToQueue {
     this.originalFileName,
     this.originalMimeType,
     this.originalQuality = false,
+    this.alt,
   });
 
   final OutboxMediaKind kind;
@@ -94,6 +95,9 @@ class MediaToQueue {
 
   /// The sender had "Original quality" on.
   final bool originalQuality;
+
+  /// What a picture shows, written by the sender; null when none.
+  final String? alt;
 }
 
 class OutboxNotifier extends Notifier<List<OutboxEntry>> {
@@ -346,6 +350,9 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
               originalMimeType: original == null ? null : item.originalMimeType,
               originalQuality: item.originalQuality,
               viewOnce: viewOnce,
+              // A view-once picture shows nothing of itself before it is
+              // opened, and nor does its description.
+              alt: viewOnce ? null : item.alt,
             ),
           ),
         );

@@ -1,15 +1,14 @@
 // The viewer's file system side on iOS and macOS (and other dart:io
 // platforms): the download cache, local images and videos.
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wecord/features/file_preview/cache_layout.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/web_share.dart';
@@ -34,7 +33,7 @@ Future<Uint8List?> captureWebVideoPoster(Uri url, int maxSize) async => null;
 /// Browsers only: the native share sheet covers sharing here.
 WebShare createWebShare() => const UnavailableWebShare();
 
-String _hash(String value) => sha1.convert(utf8.encode(value)).toString();
+String _hash(String value) => cacheHash(value);
 
 Future<Directory> _cacheRoot(String name) async {
   final base = await getApplicationCacheDirectory();
@@ -49,7 +48,7 @@ Future<Directory> _cacheRoot(String name) async {
 Future<Uint8List?> readThumbnail(String key) async {
   try {
     final file = File(
-      '${(await _cacheRoot('wecord_thumbs')).path}/${_hash(key)}.png',
+      '${(await _cacheRoot(thumbnailsFolder)).path}/${_hash(key)}.png',
     );
     if (await file.exists()) {
       return await file.readAsBytes();
@@ -62,8 +61,10 @@ Future<Uint8List?> readThumbnail(String key) async {
 
 Future<void> writeThumbnail(String key, Uint8List bytes) async {
   try {
-    final dir = await _cacheRoot('wecord_thumbs');
+    final dir = await _cacheRoot(thumbnailsFolder);
     await File('${dir.path}/${_hash(key)}.png').writeAsBytes(bytes);
+    // Which stored object it shows, for the storage page.
+    await File('${dir.path}/${_hash(key)}.key').writeAsString(key);
   } on Object {
     // Thumbnails are best effort.
   }
@@ -77,7 +78,7 @@ class IoFileFetcher implements FileFetcher {
     this._client, {
     Future<Directory> Function()? root,
     this.maxBytes = maxFileCacheBytes,
-  }) : _root = root ?? (() => _cacheRoot('wecord_files'));
+  }) : _root = root ?? (() => _cacheRoot(downloadsFolder));
 
   final http.Client _client;
   final Future<Directory> Function() _root;
@@ -102,7 +103,7 @@ class IoFileFetcher implements FileFetcher {
     if (file.size > 0 && await target.length() != file.size) {
       return null;
     }
-    unawaited(_touch(target.parent));
+    unawaited(_touch(target.parent, file.key));
     return target.path;
   }
 
@@ -185,7 +186,7 @@ class IoFileFetcher implements FileFetcher {
       rethrow;
     }
     await partial.rename(target.path);
-    unawaited(_touch(target.parent));
+    unawaited(_touch(target.parent, file.key));
     unawaited(evict());
     return target.path;
   }
@@ -232,11 +233,15 @@ class IoFileFetcher implements FileFetcher {
     );
   }
 
-  Future<void> _touch(Directory dir) async {
+  Future<void> _touch(Directory dir, String key) async {
     try {
-      await File('${dir.path}/.used').writeAsString('');
+      await File('${dir.path}/$usedMarkerName').writeAsString('');
+      final marker = File('${dir.path}/$keyMarkerName');
+      if (!await marker.exists()) {
+        await marker.writeAsString(key);
+      }
     } on Object {
-      // Only affects eviction order.
+      // Only affects eviction order and the storage page.
     }
   }
 
@@ -257,8 +262,10 @@ class IoFileFetcher implements FileFetcher {
             continue;
           }
           final stat = await file.stat();
-          if (file.path.endsWith('/.used')) {
+          if (file.path.endsWith('/$usedMarkerName')) {
             used = stat.modified;
+          } else if (file.path.endsWith('/$keyMarkerName')) {
+            continue;
           } else {
             size += stat.size;
             used ??= stat.modified;

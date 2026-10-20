@@ -11,6 +11,8 @@ class ProfileAvatar extends ConsumerStatefulWidget {
     required this.avatarUrl,
     this.size = 46,
     this.presence,
+    this.presenceShape = PresenceShape.solid,
+    this.presenceLabel,
     this.ringColor,
     this.badge,
     super.key,
@@ -24,6 +26,10 @@ class ProfileAvatar extends ConsumerStatefulWidget {
 
   /// The presence dot's color (see presenceColor).
   final Color? presence;
+
+  /// The dot's shape and its words, so status doesn't rest on color alone.
+  final PresenceShape presenceShape;
+  final String? presenceLabel;
   final Color? ringColor;
   final Widget? badge;
 
@@ -48,6 +54,8 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
       size: widget.size,
       image: image,
       presence: widget.presence,
+      presenceShape: widget.presenceShape,
+      presenceLabel: widget.presenceLabel,
       ringColor: widget.ringColor,
       badge: widget.badge,
       onImageError: image == null

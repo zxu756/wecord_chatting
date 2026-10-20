@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wecord/features/accessibility/video_captions/video_captions_controller.dart';
+import 'package:wecord/features/accessibility/video_captions/video_captions_service.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/file_preview_service.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
@@ -129,6 +131,12 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
       await controller.initialize();
       await controller.setPlaybackSpeed(_speed);
       await controller.setVolume(_muted ? 0 : 1);
+      // Someone who turned captions on gets them on every video.
+      if (mounted &&
+          ref.read(videoCaptionsOnProvider) &&
+          ref.read(videoCaptionMakerProvider).available) {
+        unawaited(ref.read(videoCaptionsProvider(widget.file).notifier).make());
+      }
       // With reduced motion the video waits on its first frame until the
       // play button is pressed.
       if (mounted && widget.active && !WeCordMotion.reduceMotion(context)) {
@@ -194,9 +202,25 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
     unawaited(_controller?.setVolume(_muted ? 0 : 1));
   }
 
+  /// Turns captions on or off; turning them on makes them if need be.
+  void _toggleCaptions() {
+    final on = !ref.read(videoCaptionsOnProvider);
+    unawaited(ref.read(videoCaptionsOnProvider.notifier).set(on));
+    if (on) {
+      unawaited(ref.read(videoCaptionsProvider(widget.file).notifier).retry());
+    }
+    WeCordHaptics.selection();
+  }
+
   @override
   Widget build(BuildContext context) {
     final file = widget.file;
+    // Turned on while a video is open: made now.
+    ref.listen(videoCaptionsOnProvider, (previous, on) {
+      if (on && widget.active && _controller != null) {
+        unawaited(ref.read(videoCaptionsProvider(file).notifier).make());
+      }
+    });
     if (_error != null) {
       return PreviewErrorView(
         file: file,
@@ -241,6 +265,8 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
         fit: StackFit.expand,
         children: [
           picture,
+          if (ref.watch(videoCaptionMakerProvider).available)
+            _captionLayer(context, value),
           Positioned(
             left: 0,
             right: 0,
@@ -266,6 +292,80 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
         ],
       ),
     );
+  }
+
+  /// The line being said, and a note while captions are made or failed.
+  Widget _captionLayer(BuildContext context, VideoPlayerValue? value) {
+    final on = ref.watch(videoCaptionsOnProvider);
+    final state = ref.watch(videoCaptionsProvider(widget.file));
+    final dark = WeCordPalette.dark;
+    if (!on) {
+      return const SizedBox.shrink();
+    }
+    final cue = state.status == VideoCaptionStatus.ready
+        ? state.captions?.at(value?.position ?? Duration.zero)
+        : null;
+    final note = switch (state.status) {
+      VideoCaptionStatus.working => tr('Making captions on this device…'),
+      VideoCaptionStatus.failed => _failureText(state.failure),
+      _ => null,
+    };
+    final text = cue?.text ?? note;
+    if (text == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: 16,
+      right: 16,
+      // Clear of the control bar while it shows.
+      bottom: widget.chromeVisible ? 132 : 40,
+      child: IgnorePointer(
+        ignoring: true,
+        child: Center(
+          child: Container(
+            key: ValueKey(
+              cue != null
+                  ? 'video-caption-line'
+                  : state.status == VideoCaptionStatus.failed
+                  ? 'video-caption-failed'
+                  : 'video-caption-working',
+            ),
+            constraints: const BoxConstraints(maxWidth: 640),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: dark.paper.withValues(alpha: cue != null ? 0.82 : 0.72),
+              borderRadius: BorderRadius.circular(WeCordRadii.md),
+            ),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: cue != null ? 17 : 13,
+                height: 1.3,
+                fontWeight: cue != null ? FontWeight.w600 : FontWeight.w500,
+                color: dark.ink,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _failureText(VideoCaptionFailure? failure) {
+    return switch (failure) {
+      VideoCaptionFailure.noSpeech => tr('There is no speech in this video.'),
+      VideoCaptionFailure.notAuthorized => tr(
+        'Speech recognition is turned off for WeCord. Turn it on in Settings to get captions.',
+      ),
+      VideoCaptionFailure.language => tr(
+        "This device can't make captions in this language without sending the sound away, so there are none.",
+      ),
+      VideoCaptionFailure.unreadable => tr(
+        "The sound of this video can't be read here.",
+      ),
+      _ => tr('Captions could not be made.'),
+    };
   }
 
   Widget _controls(BuildContext context, VideoPlayerValue? value, bool ready) {
@@ -351,6 +451,40 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
         ),
       ),
     );
+    final captionsAvailable = ref.watch(videoCaptionMakerProvider).available;
+    final captionsOn = ref.watch(videoCaptionsOnProvider);
+    final captionState = ref.watch(videoCaptionsProvider(widget.file));
+    final captions = !captionsAvailable
+        ? null
+        : captionState.isWorking && captionsOn
+        ? SizedBox.square(
+            key: const ValueKey('video-captions-working'),
+            dimension: 36,
+            child: Center(
+              child: Semantics(
+                label: tr('Making captions on this device…'),
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    value: captionState.progress,
+                    color: c.ink,
+                    backgroundColor: c.track,
+                  ),
+                ),
+              ),
+            ),
+          )
+        : WeCordIconButton(
+            key: const ValueKey('video-captions'),
+            icon: captionsOn
+                ? Icons.closed_caption_rounded
+                : Icons.closed_caption_off_rounded,
+            tooltip: captionsOn ? tr('Turn off captions') : tr('Captions'),
+            variant: WeCordButtonVariant.ghost,
+            size: 36,
+            onPressed: _toggleCaptions,
+          );
     final mute = WeCordIconButton(
       key: const ValueKey('video-mute'),
       icon: _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
@@ -387,7 +521,16 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
                     ],
                   ),
                 ),
-                Row(children: [play, const Spacer(), speed, mute, fullscreen]),
+                Row(
+                  children: [
+                    play,
+                    const Spacer(),
+                    speed,
+                    ?captions,
+                    mute,
+                    fullscreen,
+                  ],
+                ),
               ],
             )
           : Row(
@@ -398,6 +541,7 @@ class _VideoPreviewState extends ConsumerState<VideoPreview> {
                 total,
                 const SizedBox(width: 4),
                 speed,
+                ?captions,
                 mute,
                 fullscreen,
               ],

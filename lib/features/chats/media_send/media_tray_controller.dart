@@ -6,6 +6,7 @@ import 'package:wecord/features/chats/media_send/media_picker.dart';
 import 'package:wecord/features/chats/media_send/photo_compression.dart';
 import 'package:wecord/features/photo_editor/editor_model.dart';
 import 'package:wecord/features/photo_editor/editor_render.dart';
+import 'package:wecord/shared/models/message.dart' show cleanImageAlt;
 
 /// What the tray above the composer holds: the files chosen for the next
 /// message, its caption, and the quality switch.
@@ -47,6 +48,12 @@ class MediaTrayState {
   bool get isOpen => !isEmpty;
 
   bool get hasImages => items.any((item) => item.kind == DraftKind.image);
+
+  /// The pictures that can be given a description.
+  List<DraftAttachment> get describable => [
+    for (final item in items)
+      if (item.canDescribe) item,
+  ];
 
   /// Only photos and videos can be view-once, not files.
   bool get canViewOnce =>
@@ -230,7 +237,8 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     if (_disposed) {
       return;
     }
-    _replace(id, original.copyWith(id: id));
+    // The description stays: the picture is the same.
+    _replace(id, original.copyWith(id: id, alt: state.items[index].alt));
   }
 
   void _replace(String id, DraftAttachment next) {
@@ -247,6 +255,18 @@ class MediaTrayController extends Notifier<MediaTrayState> {
     final dot = name.lastIndexOf('.');
     final stem = dot > 0 ? name.substring(0, dot) : name;
     return '${stem.isEmpty ? 'photo' : stem}.jpg';
+  }
+
+  /// Sets what picture [id] shows, for people who can't see it; an empty
+  /// text takes it away.
+  void setAlt(String id, String text) {
+    final alt = cleanImageAlt(text);
+    state = state.copyWith(
+      items: [
+        for (final item in state.items)
+          if (item.id == id) item.copyWith(alt: alt) else item,
+      ],
+    );
   }
 
   void setCaption(String caption) {

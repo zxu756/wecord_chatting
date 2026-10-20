@@ -718,6 +718,7 @@ class ImageAttachment {
     this.width,
     this.height,
     this.blurhash,
+    this.alt,
   });
 
   factory ImageAttachment.fromJson(Map<String, dynamic> json) {
@@ -732,6 +733,7 @@ class ImageAttachment {
       width: (json['width'] as num?)?.toInt(),
       height: (json['height'] as num?)?.toInt(),
       blurhash: json['blurhash'] as String?,
+      alt: cleanImageAlt(json['alt']),
     );
   }
 
@@ -745,6 +747,11 @@ class ImageAttachment {
   /// A BlurHash of the picture, drawn while it loads (see blurhash.dart).
   final String? blurhash;
 
+  /// What the picture shows, in the sender's words, for people who can't see
+  /// it (read by screen readers; shown behind the "ALT" mark). Null when the
+  /// sender wrote none.
+  final String? alt;
+
   Map<String, dynamic> toJson() {
     return {
       'kind': 'image',
@@ -755,8 +762,28 @@ class ImageAttachment {
       'width': width,
       'height': height,
       if (blurhash != null) 'blurhash': blurhash,
+      'alt': ?cleanImageAlt(alt),
     };
   }
+}
+
+/// The longest picture description that is kept.
+const maxImageAltLength = 1000;
+
+/// [value] as a picture description: trimmed, at most [maxImageAltLength]
+/// characters; null when it is not text or holds nothing.
+String? cleanImageAlt(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  final text = value.trim();
+  if (text.isEmpty) {
+    return null;
+  }
+  final runes = text.runes;
+  return runes.length <= maxImageAltLength
+      ? text
+      : String.fromCharCodes(runes.take(maxImageAltLength));
 }
 
 class VoiceAttachment {

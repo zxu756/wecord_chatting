@@ -270,7 +270,7 @@ Future<void> scrollIntoView(
   Finder? scrollable,
 }) async {
   scrollable ??= find.byType(Scrollable).first;
-  for (var step = 0; step < 30 && finder.evaluate().isEmpty; step++) {
+  for (var step = 0; step < 60 && finder.evaluate().isEmpty; step++) {
     // Drag along the left edge, clear of text fields that scroll too.
     final rect = tester.getRect(scrollable);
     await tester.dragFrom(

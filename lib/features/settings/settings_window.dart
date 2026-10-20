@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:wecord/features/accessibility/chat_text_scale.dart';
 import 'package:wecord/features/admin/admin_entry.dart';
 import 'package:wecord/features/feedback/feedback_entry.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
@@ -495,6 +496,7 @@ class _SectionPage extends ConsumerWidget {
               children: const [
                 GlassEffectsRow(showIcon: false),
                 DensityRow(showIcon: false),
+                ChatTextSizeRow(showIcon: false),
                 ChatWallpaperRow(showIcon: false),
               ],
             ),

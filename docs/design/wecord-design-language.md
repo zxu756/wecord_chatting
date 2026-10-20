@@ -83,7 +83,10 @@ use raw hex in widgets.
 | `scrim` | ink 32% | black 50% | Behind sheets and dialogs |
 
 Presence: online `success`, idle `warning`, do not disturb `danger`,
-offline/invisible `faint`.
+offline/invisible `faint`. Colour is never the only signal: the dot also has a
+shape (`PresenceShape`, `presenceShapeOf(status)`): solid for online, a
+crescent for idle, a bar for do not disturb and a hollow ring for offline.
+Avatars take `presenceShape` and `presenceLabel` next to `presence`.
 
 **Badges: red means "this needs you".** Red (`badgeMention`) is only for
 @mentions (a circle's mention count on the rail, in the sidebar), the Review
@@ -398,6 +401,18 @@ for AI), used in the menu, circle settings and the audit log.
   reaches messages; the context menu key or Shift+F10 opens the focused
   message's menu, Esc closes it and focus returns; Ctrl/Cmd+J jumps to the
   message box.
+- **Chat text size** (Settings → Appearance, `lib/features/accessibility/`):
+  a slider (0.88×–1.5×) on top of the system text size, applied to the message
+  list only (`ChatTextScale` wraps a `MediaQuery` with a `ChatTextScaler`); the
+  header and composer follow the system size alone.
+- **Picture descriptions**: `ImageAttachment.alt` (at most 1000 characters)
+  travels in the attachment JSON. The tray's "Describe pictures" opens the
+  sheet; `ImageAltBadge` marks a described picture (it keeps its size at large
+  text); screen readers say `Image: <description>`
+  (`messageImageDescription(alt:)`). View-once pictures carry none.
+- **Captions on videos** (iPhone/Mac): the viewer's CC button makes timed
+  captions from the sound on the device (`TranscribePlugin` with `video` and
+  `segments`), never through a server.
 - **Text size**: layouts are checked at 1.6× and 2.0× with
   `tool/screenshots/a11y_screenshots_test.dart` (also dark and high
   contrast, into `build/a11y/`). Large page titles shrink to fit their row;

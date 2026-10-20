@@ -52,6 +52,16 @@ abstract interface class TranscriptCache {
   Future<void> write(String messageId, CachedTranscript transcript);
 
   Future<void> remove(String messageId);
+
+  /// How many bytes the transcripts take on this device.
+  Future<int> totalBytes();
+
+  /// Forgets every transcript.
+  Future<void> clear();
+
+  /// Forgets transcripts made before [cutoff]; returns how many bytes that
+  /// freed.
+  Future<int> removeOlderThan(DateTime cutoff);
 }
 
 /// Transcripts in shared preferences, one entry per signed-in user, newest
@@ -141,6 +151,44 @@ class SharedPreferencesTranscriptCache implements TranscriptCache {
       await _save(entries);
     }
   }
+
+  @override
+  Future<int> totalBytes() async => _size(await _load());
+
+  @override
+  Future<void> clear() async {
+    final entries = await _load();
+    if (entries.isNotEmpty) {
+      entries.clear();
+      await _save(entries);
+    }
+  }
+
+  @override
+  Future<int> removeOlderThan(DateTime cutoff) async {
+    final entries = await _load();
+    final before = _size(entries);
+    entries.removeWhere((_, value) => value.savedAt.isBefore(cutoff));
+    if (_size(entries) == before) {
+      return 0;
+    }
+    await _save(entries);
+    return before - _size(entries);
+  }
+
+  static int _size(Map<String, CachedTranscript> entries) {
+    if (entries.isEmpty) {
+      return 0;
+    }
+    return utf8
+        .encode(
+          jsonEncode({
+            for (final MapEntry(:key, :value) in entries.entries)
+              key: value.toJson(),
+          }),
+        )
+        .length;
+  }
 }
 
 /// Transcripts in memory (tests, and nobody signed in).
@@ -161,6 +209,26 @@ class InMemoryTranscriptCache implements TranscriptCache {
   @override
   Future<void> remove(String messageId) async {
     entries.remove(messageId);
+  }
+
+  @override
+  Future<int> totalBytes() async =>
+      entries.values.fold<int>(0, (sum, value) => sum + value.text.length);
+
+  @override
+  Future<void> clear() async => entries.clear();
+
+  @override
+  Future<int> removeOlderThan(DateTime cutoff) async {
+    var freed = 0;
+    entries.removeWhere((_, value) {
+      final old = value.savedAt.isBefore(cutoff);
+      if (old) {
+        freed += value.text.length;
+      }
+      return old;
+    });
+    return freed;
   }
 }
 

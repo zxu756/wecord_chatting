@@ -13,6 +13,7 @@ import 'package:wecord/features/error_reports/error_reporting_wiring.dart';
 import 'package:wecord/features/feature_flags/update_required_screen.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
 import 'package:wecord/features/pwa/pwa_overlay.dart';
+import 'package:wecord/features/storage/storage_providers.dart';
 import 'package:wecord/features/wallpapers/wallpaper_controller.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -74,6 +75,8 @@ class WeCordApp extends ConsumerWidget {
     ref.watch(errorReportingWiringProvider);
     // Wipes the offline copy of chats on sign-out.
     ref.watch(offlineSessionGuardProvider);
+    // Forgets expired cached messages, and old media when the person chose.
+    ref.watch(storageJanitorProvider);
     // Reads the wallpapers kept on this device now, so a chat paints with
     // its own the moment it opens.
     ref.listen(wallpapersLoadedProvider, (previous, next) {});

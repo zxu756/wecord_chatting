@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chat_thread_parts.dart';
+import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/profile/profile_repository.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/models/presence_status.dart';
 import 'package:wecord/shared/models/profile_relationship.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -24,6 +26,7 @@ class ChatProfilePanel extends ConsumerWidget {
     required this.name,
     this.avatarUrl,
     this.presence,
+    this.presenceStatus,
     super.key,
   });
 
@@ -31,6 +34,9 @@ class ChatProfilePanel extends ConsumerWidget {
   final String name;
   final String? avatarUrl;
   final Color? presence;
+
+  /// The status [presence] stands for, for the dot's shape and words.
+  final PresenceStatus? presenceStatus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,6 +118,10 @@ class ChatProfilePanel extends ConsumerWidget {
                     avatarUrl: avatarUrl ?? profile?.avatarUrl,
                     size: 80,
                     presence: presence,
+                    presenceShape: presenceShapeOf(presenceStatus),
+                    presenceLabel: presence == null
+                        ? null
+                        : presenceLabelOf(presenceStatus),
                     ringColor: c.sidebar,
                   ),
                 ),

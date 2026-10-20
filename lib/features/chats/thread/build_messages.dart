@@ -391,23 +391,25 @@ extension _ThreadMessagesBuild on _ChatThreadScreenState {
           return item;
         }
 
-        final list = LayoutBuilder(
-          builder: (context, listConstraints) => MessageListView(
-            key: const ValueKey('chat-message-list'),
-            controller: _scrollController,
-            forum: widget.forumPost,
-            itemCount: display.length,
-            anchorIndex: _anchorIndexFor(display, data),
-            indexOfMessage: (id) => layout.displayIndex[id],
-            messageIdOfKey: (key) => _messageIdsByKey[key],
-            itemBuilder: messageAt,
-            viewportHeight: listConstraints.maxHeight,
-            sidePadding: sidePadding,
-            topPadding: topInset + (desktop ? 18 : 10),
-            bottomPadding: bottomInset + 14,
-            loadingOlder: data.isLoadingOlder,
-            loadingNewer: data.isLoadingNewer,
-            onScrollEnd: _handleScrollEnd,
+        final list = ChatTextScale(
+          child: LayoutBuilder(
+            builder: (context, listConstraints) => MessageListView(
+              key: const ValueKey('chat-message-list'),
+              controller: _scrollController,
+              forum: widget.forumPost,
+              itemCount: display.length,
+              anchorIndex: _anchorIndexFor(display, data),
+              indexOfMessage: (id) => layout.displayIndex[id],
+              messageIdOfKey: (key) => _messageIdsByKey[key],
+              itemBuilder: messageAt,
+              viewportHeight: listConstraints.maxHeight,
+              sidePadding: sidePadding,
+              topPadding: topInset + (desktop ? 18 : 10),
+              bottomPadding: bottomInset + 14,
+              loadingOlder: data.isLoadingOlder,
+              loadingNewer: data.isLoadingNewer,
+              onScrollEnd: _handleScrollEnd,
+            ),
           ),
         );
         final showJumpToLatest =

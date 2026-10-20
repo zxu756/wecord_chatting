@@ -397,10 +397,10 @@
 
 ## 21. 运维与部署
 
+- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`，同时部署 `worker/src` 的公开圈子页面 Worker）；上线后对比线上和本地 `main.dart.js` 的哈希。
 - **iPhone**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build ios --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/ios` → `xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app`（手机需解锁；免费签名约 7 天过期）。
 - **Mac**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build macos --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/macos`，产物 `build/macos/Build/Products/Release/wecord.app`。
 - **符号文件**：`--split-debug-info` 把符号存到 `build/symbols/<版本>/<平台>/`（不提交，每个发布版本留一份，丢了就还原不了那个版本的崩溃栈）；用法见 `sh tool/errors_report.sh --symbolize`。网页版不适用。
-- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`，同时部署 `worker/src` 的公开圈子页面 Worker）；上线后对比线上和本地 `main.dart.js` 的哈希。
 - **版本号**：`pubspec.yaml` 的 `version`（不含 `+` 后的构建号）在构建时作为 `APP_VERSION` 传入（`tool/deploy_web.sh` 已自动传），用于功能开关的最低版本和「本次更新」弹窗。发新版时改 `pubspec.yaml` 的版本，并在 `lib/features/announcements/whats_new_content.dart` 加对应条目。
 - **数据库**：`supabase db push --linked --yes`（编号早于线上最新的迁移需加 `--include-all`）。
 - **Edge Functions**：`supabase functions deploy <name>`。

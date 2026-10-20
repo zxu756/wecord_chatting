@@ -1,6 +1,7 @@
 #!/bin/sh
 # Builds the web app and deploys it to Cloudflare (wrangler.jsonc: the
-# "wecord" Worker serving build/web at https://wecord.jokebear.fyi). Run
+# "wecord" Worker serving build/web at https://wecord.jokebear.fyi, and the
+# public circle pages in worker/src, deployed together). Run
 # from anywhere:
 #
 #   sh tool/deploy_web.sh
@@ -48,4 +49,15 @@ sed "s/__WECORD_VERSION__/$version/" build/web/wecord_sw.js \
 mv build/web/wecord_sw.js.stamped build/web/wecord_sw.js
 echo "deploy_web: service worker version $version"
 
-npx wrangler deploy
+# The Worker (worker/src, wrangler.jsonc "main") draws /c/<slug> and
+# /invite/<code> from two anon-callable database functions, so it needs the
+# project's anon key (public: the web build contains it too). It is read from
+# .env here, never printed, and passed as a plain Worker variable. When .env
+# has none, the Worker hands those two paths to the web app.
+anon_key=$(sed -n 's/^SUPABASE_ANON_KEY=//p' .env | head -n 1 | tr -d "\"' \r")
+if [ -n "$anon_key" ]; then
+  npx wrangler deploy --var "SUPABASE_ANON_KEY:$anon_key"
+else
+  echo "deploy_web: no SUPABASE_ANON_KEY in .env; public circle pages stay off." >&2
+  npx wrangler deploy
+fi

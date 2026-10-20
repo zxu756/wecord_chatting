@@ -71,6 +71,7 @@ import 'platforms_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
 import 'notes2_a11y_screens.dart';
 import 'favorites2_a11y_screens.dart';
+import 'public_circle_a11y_screens.dart';
 import 'storage_a11y_screens.dart';
 import 'moments2_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
@@ -822,4 +823,5 @@ final allA11yScreens = <A11yScreen>[
   ...platformsA11yScreens,
   ...storageA11yScreens,
   ...moments2A11yScreens,
+  ...publicCircleA11yScreens,
 ];

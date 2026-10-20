@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/discovery/circle_discovery_repository.dart';
 import 'package:wecord/features/discovery/discovery_widgets.dart';
+import 'package:wecord/features/discovery/public_circle_link.dart';
+import 'package:wecord/features/discovery/public_circle_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -29,6 +31,15 @@ class CircleDiscoverySettingsScreen extends ConsumerWidget {
     final settings = ref.watch(
       circleDiscoverySettingsProvider(detail.circle.id),
     );
+    // The short name of the circle's web page. Without it (older server, no
+    // permission) the rest of the page works and the section is left out.
+    final slug = ref.watch(circleSlugProvider(detail.circle.id));
+    if (settings.hasValue && slug.isLoading) {
+      return CirclePageScaffold(
+        title: tr('Discovery'),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     return settings.when(
       loading: () => CirclePageScaffold(
         title: tr('Discovery'),
@@ -47,16 +58,30 @@ class CircleDiscoverySettingsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      data: (settings) => _DiscoveryEditor(detail: detail, initial: settings),
+      data: (settings) => _DiscoveryEditor(
+        detail: detail,
+        initial: settings,
+        slugAvailable: !slug.hasError,
+        initialSlug: slug.value,
+      ),
     );
   }
 }
 
 class _DiscoveryEditor extends ConsumerStatefulWidget {
-  const _DiscoveryEditor({required this.detail, required this.initial});
+  const _DiscoveryEditor({
+    required this.detail,
+    required this.initial,
+    this.slugAvailable = false,
+    this.initialSlug,
+  });
 
   final CircleDetail detail;
   final CircleDiscoverySettings initial;
+
+  /// Whether the short name can be edited here.
+  final bool slugAvailable;
+  final String? initialSlug;
 
   @override
   ConsumerState<_DiscoveryEditor> createState() => _DiscoveryEditorState();
@@ -71,9 +96,11 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
     text: widget.initial.description ?? '',
   );
   final _tag = TextEditingController();
+  late final _slug = TextEditingController(text: widget.initialSlug ?? '');
   var _saving = false;
   String? _error;
   String? _tagError;
+  String? _slugError;
 
   String get _circleId => widget.detail.circle.id;
 
@@ -81,6 +108,7 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
   void dispose() {
     _description.dispose();
     _tag.dispose();
+    _slug.dispose();
     super.dispose();
   }
 
@@ -108,10 +136,29 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
     });
   }
 
+  /// The sentence for what is wrong with the short name, or null.
+  String? _slugMessage(String input) => switch (circleSlugProblem(input)) {
+    'length' ||
+    'characters' ||
+    'hyphens' => tr('A short name is 3 to 32 letters, digits and hyphens.'),
+    'reserved' => tr('That short name is reserved.'),
+    _ => null,
+  };
+
   Future<void> _save() async {
     if (_public && _category == null) {
       setState(() => _error = tr('Pick a category to make the circle public.'));
       return;
+    }
+    final slugText = normalizeCircleSlug(_slug.text);
+    final slugChanged =
+        widget.slugAvailable && slugText != (widget.initialSlug ?? '');
+    if (slugChanged) {
+      final message = _slugMessage(slugText);
+      if (message != null) {
+        setState(() => _slugError = message);
+        return;
+      }
     }
     if (_tag.text.trim().isNotEmpty) {
       _addTag();
@@ -144,6 +191,23 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
       return;
     }
     ref.invalidate(circleDiscoverySettingsProvider(_circleId));
+    if (slugChanged) {
+      try {
+        await ref
+            .read(publicCircleRepositoryProvider)
+            .setSlug(_circleId, slugText);
+      } on CircleSlugException catch (error) {
+        ref.invalidate(circleSlugProvider(_circleId));
+        if (mounted) {
+          setState(() {
+            _saving = false;
+            _slugError = error.message;
+          });
+        }
+        return;
+      }
+      ref.invalidate(circleSlugProvider(_circleId));
+    }
     if (mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
@@ -156,6 +220,84 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
       );
       Navigator.of(context).pop();
     }
+  }
+
+  /// The short link of the circle's page for people without the app.
+  List<Widget> _webPage(BuildContext context) {
+    final c = context.tokens.colors;
+    final typed = normalizeCircleSlug(_slug.text);
+    final saved = widget.initialSlug;
+    final showsLink = typed.isNotEmpty && circleSlugProblem(typed) == null;
+    return [
+      SettingsSectionHeader(tr('Web page')),
+      CircleCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            WeCordTextField(
+              fieldKey: const ValueKey('discovery-slug-field'),
+              controller: _slug,
+              hint: tr('Short name, e.g. pixel-painters'),
+              errorText: _slugError,
+              prefixIcon: Icons.link_rounded,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9-]')),
+                LengthLimitingTextInputFormatter(CircleSlugLimits.maxLength),
+              ],
+              onChanged: (_) => setState(() => _slugError = null),
+            ),
+            if (showsLink) ...[
+              const SizedBox(height: 12),
+              SelectableText(
+                publicCircleUrl(typed),
+                key: const ValueKey('discovery-slug-link'),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: c.accentText,
+                ),
+              ),
+              if (saved == typed) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: WeCordButton(
+                    key: const ValueKey('discovery-slug-copy'),
+                    label: tr('Copy link'),
+                    icon: Icons.copy_rounded,
+                    variant: WeCordButtonVariant.secondary,
+                    size: WeCordButtonSize.medium,
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: publicCircleUrl(typed)),
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                          SnackBar(content: Text(tr('Link copied'))),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(6, 10, 6, 0),
+        child: Text(
+          tr(
+            'While the circle is public, anyone with this link can see its '
+            'name, picture, description, tags and a rounded member count on a '
+            'web page, without an account, and link previews show the same. '
+            'Never the members.',
+          ),
+          style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
+        ),
+      ),
+    ];
   }
 
   @override
@@ -333,6 +475,7 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
               ],
             ),
           ),
+          if (widget.slugAvailable) ..._webPage(context),
           SettingsSectionHeader(tr('Preview')),
           Padding(
             padding: const EdgeInsets.only(top: 2),

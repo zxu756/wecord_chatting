@@ -20,6 +20,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { dropQuietPushes } from "./quiet_hours.ts";
 import { dropSilentPushes } from "./silent_messages.ts";
 import { writeTimesForTargets } from "./time_tokens.ts";
+import { newTally, recordPushOutcome, tallyPush } from "./outcome.ts";
 import { readVapidKeys, sendWebPush } from "./webpush.ts";
 
 const corsHeaders = {
@@ -201,6 +202,8 @@ Deno.serve(async (request) => {
   );
   const gone: string[] = [];
   let sent = 0;
+  // How it went, as three numbers for the monitoring (K3).
+  const tally = newTally();
   await Promise.all(targets.map(async (target) => {
     try {
       const status = await sendWebPush(keys, target, {
@@ -209,6 +212,7 @@ Deno.serve(async (request) => {
         tag: target.tag ?? target.conversation_id ?? undefined,
         url: targetPath(target),
       }, { nowSeconds: Math.floor(Date.now() / 1000) });
+      tallyPush(tally, status);
       if (status === 404 || status === 410) {
         gone.push(target.subscription_id);
       } else if (status >= 200 && status < 300) {
@@ -216,10 +220,12 @@ Deno.serve(async (request) => {
       }
     } catch {
       // One unreachable push service doesn't stop the others.
+      tallyPush(tally, null);
     }
   }));
   if (gone.length > 0) {
     await admin.rpc("remove_push_subscriptions", { target_ids: gone });
   }
+  await recordPushOutcome(admin, tally);
   return json({ sent, removed: gone.length });
 });

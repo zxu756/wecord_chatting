@@ -107,6 +107,8 @@ void main() {
       expect(context['route'], '/chats/:id');
       expect(context['locale'], 'zh');
       expect(context['crumbs'], hasLength(2));
+      // The class of the error, for grouping on the server (K5).
+      expect(context['type'], 'StateError');
       expect(report.containsKey('user_id'), isFalse);
       reporter.dispose();
     },

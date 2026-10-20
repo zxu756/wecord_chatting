@@ -238,14 +238,16 @@ class ErrorReporter {
       platform: environment.platform,
       appVersion: environment.appVersion,
       build: environment.build,
-      context: _context(),
+      context: _context(type),
       notBefore: lastSent?.add(sameProblemCooldown),
     );
     _persist();
     _schedule();
   }
 
-  Map<String, Object?> _context() {
+  static final _typeName = RegExp(r'^[A-Za-z_][A-Za-z0-9_<>?, .]{0,79}$');
+
+  Map<String, Object?> _context(String type) {
     String? read(String Function()? provider) {
       try {
         return provider?.call();
@@ -255,6 +257,9 @@ class ErrorReporter {
     }
 
     return {
+      // The class of the error (never its text), so the server can group
+      // reports by type (K5). Only a plausible type name is sent.
+      'type': ?(_typeName.hasMatch(type) ? type : null),
       'route': ?read(routeProvider),
       'locale': ?read(localeProvider),
       'crumbs': breadcrumbs.recent(),

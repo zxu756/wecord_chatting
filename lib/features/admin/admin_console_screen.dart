@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/admin/admin_alerts_view.dart';
 import 'package:wecord/features/admin/admin_audit_view.dart';
 import 'package:wecord/features/admin/admin_feedback_view.dart';
 import 'package:wecord/features/admin/admin_flags_view.dart';
@@ -9,6 +10,7 @@ import 'package:wecord/features/admin/admin_models.dart';
 import 'package:wecord/features/admin/admin_notices_view.dart';
 import 'package:wecord/features/admin/admin_report_screen.dart';
 import 'package:wecord/features/admin/admin_repository.dart';
+import 'package:wecord/features/admin/admin_stats_view.dart';
 import 'package:wecord/features/admin/admin_widgets.dart';
 import 'package:wecord/features/circles/circle_audit_log_screen.dart'
     show formatAuditTime;
@@ -18,8 +20,9 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// The admin console (`/admin`, hidden: Settings lists it only for admins):
 /// the report queue, the audit log, and the tabs for feature flags, official
-/// notices and feedback. A signed-in person who is not an admin sees an empty
-/// page; every call is checked by the server anyway.
+/// notices, feedback, the product stats and the monitoring alerts. A
+/// signed-in person who is not an admin sees an empty page; every call is
+/// checked by the server anyway.
 class AdminConsoleScreen extends ConsumerStatefulWidget {
   const AdminConsoleScreen({this.pageSize = 30, this.now, super.key});
 
@@ -34,7 +37,7 @@ class AdminConsoleScreen extends ConsumerStatefulWidget {
   ConsumerState<AdminConsoleScreen> createState() => _AdminConsoleScreenState();
 }
 
-enum _Tab { reports, audit, flags, notices, feedback }
+enum _Tab { reports, audit, flags, notices, feedback, stats, alerts }
 
 /// The kinds the queue can filter by. Messages are the reports of direct
 /// chats and groups; a circle's message reports go to its moderators.
@@ -190,7 +193,7 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                // Five tabs do not fit a phone as one segmented control: a
+                // Seven tabs do not fit a phone as one segmented control: a
                 // row of chips that scrolls sideways.
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -233,6 +236,8 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
                   _Tab.flags => const AdminFlagsView(),
                   _Tab.notices => AdminNoticesView(now: widget.now),
                   _Tab.feedback => AdminFeedbackView(now: widget.now),
+                  _Tab.stats => const AdminStatsView(),
+                  _Tab.alerts => AdminAlertsView(now: widget.now),
                 },
               ),
             ],
@@ -248,6 +253,8 @@ class _AdminConsoleScreenState extends ConsumerState<AdminConsoleScreen> {
     _Tab.flags => tr('Flags'),
     _Tab.notices => tr('Notices'),
     _Tab.feedback => tr('Feedback'),
+    _Tab.stats => tr('Stats'),
+    _Tab.alerts => tr('Alerts'),
   };
 
   Widget _buildQueue(DateTime now) {

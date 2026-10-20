@@ -3,6 +3,7 @@
 // checks that every tr('…') in lib/ has an entry, and that text shared by
 // several areas reads the same everywhere.
 import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
+import 'package:wecord/shared/l10n/zh/zh_ops_metrics.dart';
 import 'package:wecord/shared/l10n/zh/zh_storage_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_public_circle.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
@@ -174,6 +175,7 @@ const zhAreas = <Map<String, String>>[
   zhFavorites2,
   zhPlatforms,
   zhStorageA11y,
+  zhOpsMetrics,
   zhPublicCircle,
 ];
 

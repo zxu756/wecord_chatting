@@ -4,7 +4,7 @@
 // Moments, new-login alerts, answers to circle join requests, the one push of
 // an official notice, friends' birthdays (at 9 in the morning of the
 // recipient's device), urgent messages (with their one second push) and
-// "please confirm the announcement". The same
+// "please confirm the announcement" and the alerts of the monitoring (K3). The same
 // tick removes the files of expired disappearing messages.
 //
 // pg_cron calls public.run_later_dispatch() every minute. That sends what
@@ -20,6 +20,7 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { newTally, recordPushOutcome, tallyPush } from "../push/outcome.ts";
 import { dropSilentPushes } from "../push/silent_messages.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
@@ -43,6 +44,7 @@ import { type DigestPushRow, digestPushTarget } from "./digest.ts";
 import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
+import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
   audibleTargets,
@@ -227,6 +229,18 @@ Deno.serve(async (request) => {
   targets.push(
     ...((notices ?? []) as AnnouncementPushRow[]).map(announcementTarget),
   );
+  // A monitoring alert that failed (K3), to the devices of the owners and
+  // moderators: ops_raise_alert wakes this function.
+  const { data: opsAlerts, error: opsAlertsError } = await admin.rpc(
+    "claim_ops_alert_pushes",
+  );
+  if (opsAlertsError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_ops_alert_pushes failed", opsAlertsError.message);
+  }
+  targets.push(
+    ...((opsAlerts ?? []) as OpsAlertPushRow[]).map(opsAlertTarget),
+  );
   // "Your daily digest is ready", once the `ai` function finished a card (it
   // wakes this function).
   const { data: digests, error: digestsError } = await admin.rpc(
@@ -307,6 +321,8 @@ Deno.serve(async (request) => {
   );
   const gone: string[] = [];
   let delivered = 0;
+  // How it went, as three numbers for the monitoring (K3).
+  const tally = newTally();
   await Promise.all(ready.map(async (target) => {
     try {
       const status = await sendWebPush(keys, target, {
@@ -315,6 +331,7 @@ Deno.serve(async (request) => {
         tag: target.tag ?? target.conversation_id ?? undefined,
         url: targetPath(target),
       }, { nowSeconds: Math.floor(Date.now() / 1000) });
+      tallyPush(tally, status);
       if (status === 404 || status === 410) {
         gone.push(target.subscription_id);
       } else if (status >= 200 && status < 300) {
@@ -322,10 +339,12 @@ Deno.serve(async (request) => {
       }
     } catch {
       // One unreachable push service doesn't stop the others.
+      tallyPush(tally, null);
     }
   }));
   if (gone.length > 0) {
     await admin.rpc("remove_push_subscriptions", { target_ids: gone });
   }
+  await recordPushOutcome(admin, tally);
   return json({ sent: delivered, removed: gone.length });
 });

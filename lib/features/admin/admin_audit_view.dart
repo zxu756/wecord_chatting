@@ -64,6 +64,8 @@ String adminAuditSummary(AdminAuditEntry entry) {
       '{actor} opened the feedback of {title} again',
       args,
     ),
+    'ack_ops_alert' => tr('{actor} acknowledged the alert “{title}”', args),
+    'resolve_ops_alert' => tr('{actor} closed the alert “{title}”', args),
     'resolve_report' => tr('{actor} closed a report: {resolution}', {
       'actor': actor,
       'resolution':
@@ -85,6 +87,7 @@ IconData adminAuditIcon(String action) => switch (action) {
   'resolve_story_report' => Icons.task_alt_rounded,
   'set_feature_flag' || 'delete_feature_flag' => Icons.flag_outlined,
   'set_min_version' => Icons.system_update_alt_rounded,
+  'ack_ops_alert' || 'resolve_ops_alert' => Icons.notifications_active_outlined,
   'publish_announcement' || 'retract_announcement' => Icons.campaign_outlined,
   'reply_feedback' ||
   'close_feedback' ||

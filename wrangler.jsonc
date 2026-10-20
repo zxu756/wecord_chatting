@@ -1,13 +1,29 @@
 // Cloudflare Worker serving the Flutter web build as static assets at
-// https://wecord.jokebear.fyi. Deploy with tool/deploy_web.sh, which builds
-// build/web first.
+// https://wecord.jokebear.fyi, plus the server-rendered pages of public
+// circles. Deploy with tool/deploy_web.sh, which builds build/web first and
+// deploys the assets and the Worker together.
 {
   "name": "wecord",
+  // The code that draws /c/<slug> and /invite/<code> (worker/src).
+  "main": "worker/src/index.ts",
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./build/web",
+    // The Worker reaches the assets through this binding for any path it
+    // does not draw itself.
+    "binding": "ASSETS",
     // Deep links such as /circles/<id> load index.html and Flutter routes.
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Only these two paths run the Worker; every other request is answered
+    // by the assets without running any code.
+    "run_worker_first": ["/c/*", "/invite/*"]
+  },
+  // The public pages read two anon-callable database functions. The project
+  // URL is public; SUPABASE_ANON_KEY (public too, it ships in the web app) is
+  // passed by tool/deploy_web.sh from .env. Without it the Worker hands
+  // those paths to the web app, as it did before.
+  "vars": {
+    "SUPABASE_URL": "https://zpfternchrwboweellka.supabase.co"
   },
   "routes": [
     {

@@ -224,6 +224,7 @@
 - **通知设置**：每个圈子的通知级别（全部 / 仅 @ / 无）、静音时长。
 - **未读计数**：圈子栏和频道列表的未读数（普通未读为灰色；@提及等需要你处理的为红色）。
 - **发现**（`/discover`）：公开圈子列表（最热、最活跃、按分类和标签筛选），圈子发现设置（是否公开列出），举报公开圈子。
+- **公开圈子网页 + 漂亮的邀请链接（C8）**：公开圈子在「圈子设置 → 发现 → 网页」可设一个**短名**（`circles.slug`，全站唯一，3–32 位小写字母/数字/连字符，`admin`、`invite`、`wecord` 等站点自用词保留；圈主/有 `manage_circle` 的人才能改，每小时最多改 10 次，写入审计日志 `slug_update`）。链接 `https://<站点>/c/<短名>` 和邀请链接 `https://<站点>/invite/<邀请码>`（分享邀请时现在生成这种路径形式，旧的 `/#/invite/<码>` 仍可用）由 Cloudflare Worker（`worker/src/`，`wrangler.jsonc` 的 `main`）在服务器端画成 HTML 卡片：带 Open Graph 信息，微信/Telegram 等里显示圈子名、头像、简介；没装 App 的人也能看到介绍，按钮「在 WeCord 中加入/申请加入/打开」跳到网页版 App 的 `/#/invite/<码>`（C1 申请入圈、C4 邀请归因照常生效）或 `/#/c/<短名>`（成员直接进圈子，其他人看到和发现页一样的预览）。数据只来自两个对 anon 开放的只读函数 `get_public_circle_card(slug)` 和 `get_public_invite_card(code)`：只返回名称、简介、头像（仅 https 地址）、分类、语言、标签、加入方式和**成员数级别**（少于 5 人不显示，否则取 5/10/25/50/100/250/500/1000/2500/5000/10000 中不超过实际人数的最大值），不返回 id、成员或频道。**只展示公开且未被下架/封停的圈子**，私有圈子（即使邀请有效）、被下架或封停的圈子、失效（撤销/过期/用完/被突袭防护暂停）或不存在的邀请码、格式不对的值，全部返回同一个「此页面不可用」（404，页面内容一样，不泄露是否存在）。页面按 `Accept-Language`（也可 `?lang=zh|en`）显示中文或英文；所有动态内容都做 HTML 转义，页面没有任何脚本，CSP 为 `default-src 'none'`、样式只允许自带样式的哈希、图片只允许 https，带 `noindex`、`no-referrer`、禁止被嵌入；结果在边缘缓存 60 秒。Worker 只对 `/c/*` 和 `/invite/*` 先于静态资源运行（`assets.run_worker_first`），其他路径直接由静态资源响应；没有配置数据库地址/密钥时这两条路径照旧交给网页版 App。不碰 DNS 和自定义域名。已安装的 PWA 里，这两种路径由 Service Worker 返回应用外壳，应用按地址自己找到页面。部署：`sh tool/deploy_web.sh` 会连同 Worker 一起部署，并从 `.env` 读取 `SUPABASE_ANON_KEY` 以 `--var` 传给 Worker（不打印；anon key 本来就是公开的）。
 - **Webhook**：频道 webhook（外部服务往频道发消息），公告频道转发 webhook。
 - **机器人**：创建机器人账号（独立身份，不是好友），机器人 token（重置/吊销），斜杠命令注册，Bot API（见第 18 节）。
 - **圈子菜单分组**：常用（邀请、通知设置、表情、昵称、圈子头像）/ 管理（建频道、建分类、圈子设置、引导）/ 审核与安全（角色、封禁、AutoMod、AI 守护、审核队列、审计日志、成员、安全动作）；没权限的分组整组隐藏。
@@ -396,10 +397,10 @@
 
 ## 21. 运维与部署
 
-- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`）；上线后对比线上和本地 `main.dart.js` 的哈希。
 - **iPhone**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build ios --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/ios` → `xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app`（手机需解锁；免费签名约 7 天过期）。
 - **Mac**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build macos --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/macos`，产物 `build/macos/Build/Products/Release/wecord.app`。
 - **符号文件**：`--split-debug-info` 把符号存到 `build/symbols/<版本>/<平台>/`（不提交，每个发布版本留一份，丢了就还原不了那个版本的崩溃栈）；用法见 `sh tool/errors_report.sh --symbolize`。网页版不适用。
+- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`，同时部署 `worker/src` 的公开圈子页面 Worker）；上线后对比线上和本地 `main.dart.js` 的哈希。
 - **版本号**：`pubspec.yaml` 的 `version`（不含 `+` 后的构建号）在构建时作为 `APP_VERSION` 传入（`tool/deploy_web.sh` 已自动传），用于功能开关的最低版本和「本次更新」弹窗。发新版时改 `pubspec.yaml` 的版本，并在 `lib/features/announcements/whats_new_content.dart` 加对应条目。
 - **数据库**：`supabase db push --linked --yes`（编号早于线上最新的迁移需加 `--include-all`）。
 - **Edge Functions**：`supabase functions deploy <name>`。

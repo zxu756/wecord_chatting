@@ -185,6 +185,8 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610260200_guard2_scope.sql
 \i supabase/migrations/202610260210_guard2_items.sql
 \i supabase/migrations/202610260220_link_preview_final_url.sql
+\i supabase/migrations/202610260500_circle_slug.sql
+\i supabase/migrations/202610260510_public_circle_card.sql
 
 create temp table ids (name text primary key, id uuid not null);
 grant all on ids to public;

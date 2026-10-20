@@ -18,6 +18,7 @@ import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
+import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
@@ -45,6 +46,8 @@ import 'package:wecord/features/share_target/protocol_links.dart';
 import 'package:wecord/features/share_target/share_target_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
+import 'package:wecord/features/discovery/public_circle_link.dart';
+import 'package:wecord/features/discovery/public_circle_screen.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/workspace/workspace_screen.dart';
@@ -74,7 +77,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ? callLinkLocationFor(Uri.base) ??
                   qrLinkLocationFor(Uri.base) ??
                   protocolLinkLocationFor(Uri.base) ??
-                  publicNoteLocationFor(Uri.base)
+                  publicNoteLocationFor(Uri.base) ??
+                  circleInviteLocationFor(Uri.base) ??
+                  publicCircleLocationFor(Uri.base)
             : null) ??
         HomeScreen.path,
     refreshListenable: authRouter,
@@ -413,6 +418,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: ShareTargetScreen.path,
             builder: (context, state) => const ShareTargetScreen(),
+          ),
+          // A public circle's page (https://site/c/<slug>): the button on its
+          // web page leads here. Signed-out visitors sign in first.
+          GoRoute(
+            path: '${PublicCircleScreen.path}/:slug',
+            redirect: (context, state) =>
+                isCircleSlug(
+                  normalizeCircleSlug(state.pathParameters['slug'] ?? ''),
+                )
+                ? null
+                : HomeScreen.path,
+            builder: (context, state) => PublicCircleScreen(
+              key: ValueKey('public-circle-${state.pathParameters['slug']}'),
+              slug: normalizeCircleSlug(state.pathParameters['slug']!),
+            ),
           ),
         ],
       ),

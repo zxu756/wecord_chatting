@@ -9,9 +9,43 @@ void main() {
         isWeb: true,
         base: Uri.parse('https://wecord.example/some/page#/chats'),
       ),
-      'https://wecord.example/#/invite/abcdefgh23',
+      'https://wecord.example/invite/abcdefgh23',
     );
     expect(circleInviteLink('abcdefgh23', isWeb: false), '/invite/abcdefgh23');
+  });
+
+  test('a shared /invite/<code> address finds the invite page', () {
+    expect(
+      circleInviteLocationFor(
+        Uri.parse('https://wecord.example/invite/ABCDEFGH23'),
+      ),
+      '/invite/abcdefgh23',
+    );
+    expect(
+      circleInviteLocationFor(
+        Uri.parse('https://wecord.example/invite/abcdefgh23/'),
+      ),
+      '/invite/abcdefgh23',
+    );
+    // Routes after a '#' are the app's own and are left alone.
+    expect(
+      circleInviteLocationFor(
+        Uri.parse('https://wecord.example/invite/abcdefgh23#/chats'),
+      ),
+      isNull,
+    );
+    expect(
+      circleInviteLocationFor(Uri.parse('https://wecord.example/')),
+      isNull,
+    );
+    expect(
+      circleInviteLocationFor(Uri.parse('https://wecord.example/invite/short')),
+      isNull,
+    );
+    expect(
+      circleInviteLocationFor(Uri.parse('https://wecord.example/c/abcdefgh23')),
+      isNull,
+    );
   });
 
   test('parseCircleInviteCode accepts codes, paths and links', () {

@@ -4,6 +4,7 @@
 // several areas reads the same everywhere.
 import 'package:wecord/shared/l10n/zh/zh_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_storage_a11y.dart';
+import 'package:wecord/shared/l10n/zh/zh_public_circle.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -175,6 +176,7 @@ const zhAreas = <Map<String, String>>[
   zhPlatforms,
   zhStorageA11y,
   zhGuard2,
+  zhPublicCircle,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

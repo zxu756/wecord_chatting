@@ -543,6 +543,7 @@ IconData circleAuditIcon(String action) {
     'invites_pause' => Icons.pause_circle_outline,
     'invites_resume' => Icons.play_circle_outline,
     'discovery_update' => Icons.explore_outlined,
+    'slug_update' => Icons.link_rounded,
     'edit_window_update' => Icons.history_toggle_off,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
@@ -906,6 +907,7 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       false => (tr('{actor} made the circle private'), {}),
       _ => (tr('{actor} updated the discovery settings'), {}),
     },
+    'slug_update' => (tr("{actor} changed the circle's short link"), {}),
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),

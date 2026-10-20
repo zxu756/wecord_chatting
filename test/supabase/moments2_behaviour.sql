@@ -183,6 +183,17 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610250420_saved_notes_bucket.sql
 \i supabase/migrations/202610250430_export_my_saved_items.sql
 \i supabase/migrations/202610250510_merged_forward_alt_text.sql
+\i supabase/migrations/202610260100_ops_metrics_schema.sql
+\i supabase/migrations/202610260110_ops_metrics_compute.sql
+\i supabase/migrations/202610260120_ops_metrics_admin.sql
+\i supabase/migrations/202610260130_error_groups.sql
+\i supabase/migrations/202610260140_ops_alerts_schema.sql
+\i supabase/migrations/202610260150_ops_health_checks.sql
+\i supabase/migrations/202610260160_ops_alerts_admin.sql
+\i supabase/migrations/202610260170_ops_alert_push.sql
+\i supabase/migrations/202610260200_guard2_scope.sql
+\i supabase/migrations/202610260210_guard2_items.sql
+\i supabase/migrations/202610260220_link_preview_final_url.sql
 \i supabase/migrations/202610260500_circle_slug.sql
 \i supabase/migrations/202610260510_public_circle_card.sql
 \i supabase/migrations/202610260600_moments2_schema.sql

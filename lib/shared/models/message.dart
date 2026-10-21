@@ -104,6 +104,7 @@ class ChatMessage {
     this.expiresAt,
     this.reviewState,
     this.silent = false,
+    this.autoReply = false,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -153,6 +154,7 @@ class ChatMessage {
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
       reviewState: MessageReviewState.maybeFromJson(json['review_state']),
       silent: json['silent'] == true,
+      autoReply: json['auto_reply'] == true,
     );
   }
 
@@ -235,6 +237,9 @@ class ChatMessage {
 
   /// Sent without a push: nobody's device was told about it.
   final bool silent;
+
+  /// The server sent it for an away person (A8).
+  final bool autoReply;
 
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
@@ -468,6 +473,7 @@ class ChatMessage {
           ? this.reviewState
           : reviewState as MessageReviewState?,
       silent: silent,
+      autoReply: autoReply,
     );
   }
 }

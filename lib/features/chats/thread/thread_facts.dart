@@ -259,6 +259,7 @@ extension _ThreadFactsState on _ChatThreadScreenState {
               canSend
           ? ref.watch(circleBotCommandsProvider(circleId)).value ?? const []
           : const [],
+      quickReplies: ref.watch(quickRepliesProvider).value ?? const [],
     );
     _slowmodeUntil = slowmodeSeconds > 0
         ? slowmodeEnd(

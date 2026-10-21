@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 import 'package:wecord/shared/models/custom_status.dart';
+import 'package:wecord/features/chats/quick_replies/quick_replies_models.dart';
 
 /// Picks `/roll` results; tests override it with a seeded generator.
 final slashCommandRandomProvider = Provider<math.Random>((ref) {
@@ -18,6 +19,7 @@ class SlashCommandContext {
     this.isCircleConversation = false,
     this.canCreatePolls = false,
     this.botCommands = const [],
+    this.quickReplies = const [],
   });
 
   /// A circle channel or a thread of one, where `/nick` changes the
@@ -30,6 +32,9 @@ class SlashCommandContext {
   /// The commands of the circle's bots, offered after the built-in ones
   /// in circle channels.
   final List<BotSlashCommand> botCommands;
+
+  /// The person's own phrases (A8), offered before the commands.
+  final List<QuickReply> quickReplies;
 }
 
 /// A command a circle's bot registered. Using it sends the bot an
@@ -359,10 +364,17 @@ class SlashCommandList extends StatelessWidget {
     this.framed = true,
     this.botCommands = const [],
     this.onSelectBot,
+    this.quickReplies = const [],
+    this.onSelectQuickReply,
     super.key,
   });
 
   final List<SlashCommand> commands;
+
+  /// The person's own phrases, listed first; [highlightedIndex] counts
+  /// through them, then [commands], then [botCommands].
+  final List<QuickReply> quickReplies;
+  final ValueChanged<QuickReply>? onSelectQuickReply;
 
   /// Bots' commands, listed after [commands]; [highlightedIndex] counts
   /// on into them.
@@ -390,11 +402,31 @@ class SlashCommandList extends StatelessWidget {
         child: ListView(
           shrinkWrap: true,
           children: [
+            for (final (index, reply) in quickReplies.indexed)
+              ListTile(
+                key: ValueKey('quick-reply-${reply.shortcut}'),
+                dense: true,
+                selected: index == highlightedIndex,
+                selectedTileColor: context.tokens.colors.accentSoft,
+                leading: const Icon(Icons.bolt_outlined, size: 18),
+                title: Text(
+                  '/${reply.shortcut}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  reply.body.replaceAll(RegExp(r'\s+'), ' '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => onSelectQuickReply?.call(reply),
+              ),
             for (final (index, command) in commands.indexed)
               ListTile(
                 key: ValueKey('slash-command-${command.name}'),
                 dense: true,
-                selected: index == highlightedIndex,
+                selected: quickReplies.length + index == highlightedIndex,
                 selectedTileColor: context.tokens.colors.accentSoft,
                 leading: const Icon(Icons.keyboard_command_key, size: 18),
                 title: Text.rich(
@@ -427,7 +459,9 @@ class SlashCommandList extends StatelessWidget {
               ListTile(
                 key: ValueKey('bot-command-${command.name}'),
                 dense: true,
-                selected: commands.length + index == highlightedIndex,
+                selected:
+                    quickReplies.length + commands.length + index ==
+                    highlightedIndex,
                 selectedTileColor: context.tokens.colors.accentSoft,
                 leading: const Icon(Icons.smart_toy_outlined, size: 18),
                 title: Text.rich(

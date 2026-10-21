@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chat_folders/chat_folders_screen.dart';
 import 'package:wecord/features/chats/chat_polish/chat_polish_settings.dart';
+import 'package:wecord/features/chats/quick_replies/quick_replies_screen.dart';
 import 'package:wecord/features/groups/group_cleanup.dart';
 import 'package:wecord/features/stickers/sticker_management_screen.dart';
 import 'package:wecord/features/storage/storage_screen.dart';
@@ -81,6 +82,16 @@ class ChatSettingsGroup extends ConsumerWidget {
           title: tr('Clean up groups'),
           subtitle: tr('Leave group chats nobody writes in any more'),
           onTap: () => openGroupCleanup(context),
+        ),
+        SettingsRow(
+          key: const ValueKey('quick-replies-tile'),
+          icon: Icons.bolt_outlined,
+          tone: SettingsTone.accent,
+          title: tr('Quick replies'),
+          subtitle: tr(
+            'Phrases to send with a slash, and an auto-reply for when you are away',
+          ),
+          onTap: () => openQuickReplies(context),
         ),
         const StorageSettingsRow(),
       ],

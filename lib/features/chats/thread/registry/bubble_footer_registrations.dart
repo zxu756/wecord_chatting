@@ -7,6 +7,7 @@
 // ... within each placement; pick a number in between to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_polish/silent_send.dart';
+import 'package:wecord/features/chats/quick_replies/quick_reply_picker.dart';
 import 'package:wecord/features/circles/channel_types/qa_actions.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
@@ -25,6 +26,7 @@ final List<BubbleFooterEntry> bubbleFooterExtensions = [
   silentFooterEntry,
   scamHintFooterEntry,
   qaAcceptedFooterEntry,
+  autoReplyFooterEntry,
 ];
 
 /// The slot's registry. Tests can override it to add or drop entries.

@@ -1010,6 +1010,8 @@ IconData circleChannelIcon(CircleChannelKind kind) => switch (kind) {
   CircleChannelKind.stage => Icons.podcasts,
   CircleChannelKind.text => Icons.tag,
   CircleChannelKind.announcement => Icons.campaign_outlined,
+  CircleChannelKind.media => Icons.photo_library_outlined,
+  CircleChannelKind.qa => Icons.help_outline_rounded,
 };
 
 bool _sameLayout(CircleChannelLayout left, CircleChannelLayout right) {

@@ -77,6 +77,18 @@ class _CircleChannelCreationSheetState
         tr('Members start posts, each with its own replies.'),
       ),
       (
+        CircleChannelKind.media,
+        Icons.photo_library_outlined,
+        tr('Media'),
+        tr('A wall of pictures: every post needs a picture.'),
+      ),
+      (
+        CircleChannelKind.qa,
+        Icons.help_outline_rounded,
+        tr('Q&A'),
+        tr('Members ask questions and mark them solved with an answer.'),
+      ),
+      (
         CircleChannelKind.stage,
         Icons.podcasts,
         tr('Stage'),
@@ -227,6 +239,8 @@ class _CircleChannelCreationSheetState
     CircleChannelKind.stage => Icons.podcasts,
     CircleChannelKind.text => Icons.tag,
     CircleChannelKind.announcement => Icons.campaign_outlined,
+    CircleChannelKind.media => Icons.photo_library_outlined,
+    CircleChannelKind.qa => Icons.help_outline_rounded,
   };
 
   Future<void> _createChannel() async {

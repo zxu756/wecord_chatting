@@ -163,6 +163,12 @@ export interface ExportData {
    * when it could not be read, absent in older callers.
    */
   honors?: Json | null;
+  /**
+   * What I made in media and Q&A channels: my picture posts, my questions and
+   * the answers of mine that were accepted (export_my_channel_posts, migration
+   * 202610270330); null when it could not be read, absent in older callers.
+   */
+  channelPosts?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -708,6 +714,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.honors) {
     out.push({ path: "data/honors.json", value: data.honors });
+  }
+  if (data.channelPosts) {
+    out.push({
+      path: "data/channel_posts.json",
+      value: channelPostsJson(data),
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -1716,6 +1728,125 @@ still read the page.</p>
   );
 }
 
+const CHAT_IMAGES_BUCKET = "chat-images";
+
+/** The pictures of my media posts: links, never put into the archive. */
+export function channelPostFilesToSign(
+  posts: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const post of objects(posts?.["media_posts"])) {
+    const picture = post["picture"];
+    if (!isObject(picture)) continue;
+    const path = picture["path"];
+    if (typeof path !== "string") continue;
+    const bucket = str(picture["bucket"]) ?? CHAT_IMAGES_BUCKET;
+    seen.set(`${bucket}/${path}`, { bucket, path });
+  }
+  return [...seen.values()];
+}
+
+/** Media posts (with a link for each picture), questions, accepted answers. */
+function channelPostsJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const posts = isObject(data.channelPosts) ? data.channelPosts : {};
+  return {
+    media_posts: objects(posts["media_posts"]).map((post) => {
+      const picture = isObject(post["picture"]) ? post["picture"] : null;
+      return {
+        circle_name: post["circle_name"],
+        channel_name: post["channel_name"],
+        title: post["title"],
+        posted_at: post["posted_at"],
+        picture: picture
+          ? {
+            description: picture["description"] ?? null,
+            file: ref(
+              str(picture["bucket"]) ?? CHAT_IMAGES_BUCKET,
+              picture["path"],
+            ),
+          }
+          : null,
+      };
+    }),
+    questions: objects(posts["questions"]),
+    accepted_answers: objects(posts["accepted_answers"]),
+  };
+}
+
+/** My picture posts, my questions and my accepted answers (C9). */
+export function buildChannelPostsHtml(data: ExportData): string {
+  const posts = isObject(data.channelPosts) ? data.channelPosts : {};
+  const where = (item: Json) =>
+    `<span class="muted">${escapeHtml(str(item["circle_name"]) ?? "")} · ${
+      escapeHtml(str(item["channel_name"]) ?? "")
+    }</span>`;
+  const ref = fileRefs(data);
+  const media = objects(posts["media_posts"]).map((post) => {
+    const picture = isObject(post["picture"]) ? post["picture"] : null;
+    const link = picture
+      ? ref(
+        str(picture["bucket"]) ?? CHAT_IMAGES_BUCKET,
+        picture["path"],
+      )?.download_url
+      : null;
+    const description = picture ? str(picture["description"]) : null;
+    return entry(
+      str(post["posted_at"]),
+      `<div><strong>${escapeHtml(str(post["title"]) ?? "")}</strong> ${
+        where(post)
+      }</div>${
+        description ? `<div class="body">${escapeHtml(description)}</div>` : ""
+      }${
+        link
+          ? `<div><a href="${escapeHtml(link)}">Picture (link)</a></div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  const questions = objects(posts["questions"]).map((question) => {
+    const status = question["solved"] === true
+      ? question["answer_accepted"] === true
+        ? "solved, answer accepted"
+        : "solved"
+      : "open";
+    return entry(
+      str(question["asked_at"]),
+      `<div><strong>${escapeHtml(str(question["title"]) ?? "")}</strong> ${
+        where(question)
+      }</div><div class="muted">${escapeHtml(status)}${
+        question["solved_by_you"] === true ? " · marked by you" : ""
+      }</div>`,
+    );
+  }).join("");
+  const answers = objects(posts["accepted_answers"]).map((answer) =>
+    entry(
+      str(answer["accepted_at"]),
+      `<div><strong>An answer of yours was accepted</strong> ${
+        where(answer)
+      }</div>`,
+    )
+  ).join("");
+  return page(
+    "Picture posts and Q&A — your WeCord data",
+    `${backLink()}<h1>Picture posts and Q&amp;A</h1>
+<p class="muted">The posts you made in media channels, the questions you asked
+in Q&amp;A channels, and where an answer of yours was accepted. The words of
+your posts and answers are with your messages; other people's questions and
+answers are not copied.</p>
+<h2>Picture posts</h2>
+<div class="card">${
+      media || '<div class="row muted">No picture posts.</div>'
+    }</div>
+<h2>Questions</h2>
+<div class="card">${
+      questions || '<div class="row muted">No questions.</div>'
+    }</div>
+<h2>Accepted answers</h2>
+<div class="card">${answers || '<div class="row muted">None.</div>'}</div>`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -1942,6 +2073,19 @@ export function buildSectionPages(
       content: buildHonorsHtml(data),
     });
   }
+  if (data.channelPosts) {
+    const counts = (key: string) =>
+      objects(isObject(data.channelPosts) ? data.channelPosts[key] : null)
+        .length;
+    out.push({
+      path: "pages/channel_posts.html",
+      label: "Picture posts and Q&A",
+      summary: `${counts("media_posts")} picture posts · ${
+        counts("questions")
+      } questions`,
+      content: buildChannelPostsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2029,6 +2173,9 @@ data/knowledge.json   The pages you made in circle knowledge bases and the
                       pages you read (the words you wrote are in notes.json).
 data/honors.json      The titles circles gave you, your honors and streaks, and
                       the circles you stay out of honors in.
+data/channel_posts.json The posts you made in media channels (with a link to
+                      each picture), the questions you asked in Q&A channels
+                      and where an answer of yours was accepted.
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

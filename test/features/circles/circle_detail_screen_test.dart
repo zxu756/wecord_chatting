@@ -2276,6 +2276,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('No category'));
       await tester.pumpAndSettle();
+      // The sheet has two more kinds now and scrolls on short screens.
+      await tester.ensureVisible(find.text('Text').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Text').last);
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -3586,6 +3589,9 @@ class FakeCirclesRepository implements CirclesRepository {
       >[];
   final forumChangeControllers = <StreamController<void>>[];
 
+  /// The image of the last forum post created, with its description.
+  ImageAttachment? lastForumImage;
+
   @override
   Future<List<ForumPost>> listForumPosts({
     required String channelId,
@@ -3639,6 +3645,7 @@ class FakeCirclesRepository implements CirclesRepository {
       hasImage: image != null,
       mentions: mentions,
     ));
+    lastForumImage = image;
     final now = DateTime.utc(2026, 10, 14, 12);
     final post = ForumPost(
       id: 'post-new',

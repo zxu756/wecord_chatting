@@ -498,7 +498,19 @@ class CircleChannel {
   /// A forum's tags, in order; empty for other channels.
   final List<ForumTag> tags;
 
-  bool get isForum => kind == CircleChannelKind.forum;
+  /// Holds posts instead of a chat: a forum, a media channel or a Q&A
+  /// channel. They share the post list, the post page, the tags and the pins.
+  bool get isForum =>
+      kind == CircleChannelKind.forum ||
+      kind == CircleChannelKind.media ||
+      kind == CircleChannelKind.qa;
+
+  /// A wall of pictures: a forum whose posts each need a picture.
+  bool get isMedia => kind == CircleChannelKind.media;
+
+  /// A forum where the asker or a moderator marks a post solved and picks the
+  /// answer.
+  bool get isQa => kind == CircleChannelKind.qa;
 
   /// Members connect to it to talk: a voice channel or a stage.
   bool get isVoice =>
@@ -516,13 +528,16 @@ class CircleChannel {
       kind == CircleChannelKind.text || kind == CircleChannelKind.announcement;
 }
 
-/// What a channel holds: a chat, a voice call, forum posts or a stage.
+/// What a channel holds: a chat, a voice call, forum posts, a stage, a wall of
+/// pictures or questions and answers.
 enum CircleChannelKind {
   text('text'),
   voice('voice'),
   forum('forum'),
   stage('stage'),
-  announcement('announcement');
+  announcement('announcement'),
+  media('media'),
+  qa('qa');
 
   const CircleChannelKind(this.value);
 

@@ -118,6 +118,8 @@ class ForumPost {
     this.archivedAt,
     this.thumbnail,
     this.canManage = false,
+    this.solvedAt,
+    this.solvedMessageId,
   });
 
   factory ForumPost.fromJson(Map<String, dynamic> json) {
@@ -153,6 +155,11 @@ class ForumPost {
       unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       thumbnail: _parseImage(thumbnail),
       canManage: json['can_manage'] == true,
+      solvedAt: switch (json['solved_at']) {
+        final String value => DateTime.parse(value).toUtc(),
+        _ => null,
+      },
+      solvedMessageId: json['solved_message_id'] as String?,
     );
   }
 
@@ -193,6 +200,15 @@ class ForumPost {
   final bool canManage;
 
   bool get isArchived => archivedAt != null;
+
+  /// A question of a Q&A channel that was marked solved; null elsewhere and
+  /// while the question is open.
+  final DateTime? solvedAt;
+
+  /// The answer picked for a solved question, when one was.
+  final String? solvedMessageId;
+
+  bool get isSolved => solvedAt != null;
 
   /// Where the next page starts when this is the last post of a page.
   ForumPostCursor cursorFor(ForumPostSort sort) {

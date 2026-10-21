@@ -186,7 +186,7 @@ class DiscoveryChannel {
 
   final String name;
 
-  /// text, voice, forum, stage or announcement.
+  /// text, voice, forum, stage, announcement, media or qa.
   final String kind;
 
   IconData get icon => switch (kind) {
@@ -194,6 +194,8 @@ class DiscoveryChannel {
     'stage' => Icons.podcasts,
     'forum' => Icons.forum_outlined,
     'announcement' => Icons.campaign_outlined,
+    'media' => Icons.photo_library_outlined,
+    'qa' => Icons.help_outline_rounded,
     _ => Icons.tag,
   };
 }

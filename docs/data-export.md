@@ -43,6 +43,7 @@ data/moments.json            settings, friend_choices, posts, comments_you_wrote
 data/moments_more.json       pinned_posts, reminded_by_you, reminded_you, comment_pictures (links)
 data/knowledge.json         pages_made, pages_read (circle knowledge base)
 data/honors.json            titles, honors, streaks, opted_out (circle titles and honors)
+data/channel_posts.json     media_posts, questions, accepted_answers (media and Q&A channels)
 data/friend_tags.json        tags (with who is in them), starred_friends
 data/chains.json  data/notes.json  data/task_lists.json
 data/saved_messages.json  data/reminders.json  data/scheduled_messages.json
@@ -69,6 +70,7 @@ The rule per section:
 | Likes | post id and time | who else liked, the post |
 | Circle knowledge base | the pages you made (with their circle) and the pages you opened; a title only while you can still read the page; `data/knowledge.json` and `pages/knowledge.html` (migration 202610270130, `export_my_knowledge`; the words you wrote are in `data/notes.json`) | other people's pages and words |
 | Circle titles and honors | the titles circles gave you (with the circle), the honors you earned (a week's level or a streak milestone, with its date), your running streak and best streak per circle, and the circles where you chose to stay out of honors; `data/honors.json` and `pages/honors.html` (migration 202610270240, `export_my_honors`) | other members' titles, honors or numbers, and the days you were active (the C3 table is not exported) |
+| Picture posts and Q&A | the posts you made in media channels (circle, channel, title, time, a link to the picture and the description you wrote), the questions you asked in Q&A channels (solved or not, when, whether an answer was accepted, whether you marked it yourself) and where an answer of yours was accepted (circle, channel and time only); `data/channel_posts.json` and `pages/channel_posts.html` (migration 202610270330, `export_my_channel_posts`; the words you wrote are with your messages) | other people's posts, questions, answers and the titles of questions you did not ask |
 | Moments 2.0 (pins, reminders, comment pictures) | which of your posts are pinned and when, the people you reminded to read each post (names), the reminders you got (who and when, never their words), the pictures on the comments you wrote with their descriptions as links, and the descriptions of your own photos; `data/moments_more.json` and extra lines on `pages/moments.html` (migration 202610260650, `export_my_moments_more`) | what others wrote in reminders, others' posts and pictures |
 | Friend tags | your tags and who is in them (names) | anyone else's tags |
 | Starred friends | your stars (names) | anyone else's stars |

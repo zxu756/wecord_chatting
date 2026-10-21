@@ -42,6 +42,7 @@ pages/wallpapers.html        chat wallpapers
 data/moments.json            settings, friend_choices, posts, comments_you_wrote, posts_you_liked
 data/moments_more.json       pinned_posts, reminded_by_you, reminded_you, comment_pictures (links)
 data/knowledge.json         pages_made, pages_read (circle knowledge base)
+data/honors.json            titles, honors, streaks, opted_out (circle titles and honors)
 data/friend_tags.json        tags (with who is in them), starred_friends
 data/chains.json  data/notes.json  data/task_lists.json
 data/saved_messages.json  data/reminders.json  data/scheduled_messages.json
@@ -67,6 +68,7 @@ The rule per section:
 | Comments you wrote | your text, the post id, the post author's name, who you replied to by name; the post's text only if the post is yours | the rest of the thread, other people's comments, comment counts |
 | Likes | post id and time | who else liked, the post |
 | Circle knowledge base | the pages you made (with their circle) and the pages you opened; a title only while you can still read the page; `data/knowledge.json` and `pages/knowledge.html` (migration 202610270130, `export_my_knowledge`; the words you wrote are in `data/notes.json`) | other people's pages and words |
+| Circle titles and honors | the titles circles gave you (with the circle), the honors you earned (a week's level or a streak milestone, with its date), your running streak and best streak per circle, and the circles where you chose to stay out of honors; `data/honors.json` and `pages/honors.html` (migration 202610270240, `export_my_honors`) | other members' titles, honors or numbers, and the days you were active (the C3 table is not exported) |
 | Moments 2.0 (pins, reminders, comment pictures) | which of your posts are pinned and when, the people you reminded to read each post (names), the reminders you got (who and when, never their words), the pictures on the comments you wrote with their descriptions as links, and the descriptions of your own photos; `data/moments_more.json` and extra lines on `pages/moments.html` (migration 202610260650, `export_my_moments_more`) | what others wrote in reminders, others' posts and pictures |
 | Friend tags | your tags and who is in them (names) | anyone else's tags |
 | Starred friends | your stars (names) | anyone else's stars |

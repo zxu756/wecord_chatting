@@ -19,6 +19,8 @@ import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
 import 'package:wecord/features/circles/mod_tools/mod_notes_screen.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/member_honors/honor_repository.dart';
+import 'package:wecord/features/member_honors/member_title_actions.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/custom_status_label.dart';
@@ -813,6 +815,9 @@ class CircleMemberList extends ConsumerWidget {
     final circleAvatars =
         ref.watch(circleMemberAvatarsProvider(detail.circle.id)).value ??
         const <String, String>{};
+    final flair =
+        ref.watch(circleMemberFlairProvider(detail.circle.id)).value ??
+        const {};
     final groups = [
       for (final role in detail.roles)
         if (hoisted[role.id] case final members?) (role.name, members, true),
@@ -865,6 +870,27 @@ class CircleMemberList extends ConsumerWidget {
                       statuses: presenceStatuses,
                     ),
                     roleColor: detail.roleColorOf(member),
+                    circleId: detail.circle.id,
+                    onSetTitle: detail.canSetTitle(member)
+                        ? () => changeMemberTitle(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            member: member,
+                            currentTitle: flair[member.profile.id]?.title,
+                          )
+                        : null,
+                    onRemoveOwnTitle:
+                        member.isCurrentUser &&
+                            !detail.canSetTitle(member) &&
+                            flair[member.profile.id]?.title != null
+                        ? () => removeOwnMemberTitle(
+                            context,
+                            ref,
+                            circleId: detail.circle.id,
+                            userId: member.profile.id,
+                          )
+                        : null,
                     onChangeNickname: detail.canChangeNickname(member)
                         ? () => onChangeNickname(member)
                         : null,
@@ -943,6 +969,9 @@ class _MemberRow extends ConsumerWidget {
     this.presence,
     this.circleAvatarUrl,
     this.roleColor,
+    this.circleId,
+    this.onSetTitle,
+    this.onRemoveOwnTitle,
     this.onChangeNickname,
     this.onManageRoles,
     this.onModNotes,
@@ -967,6 +996,16 @@ class _MemberRow extends ConsumerWidget {
 
   /// The member's highest coloured role, as 0xRRGGBB.
   final int? roleColor;
+
+  /// The circle, for the title and honors shown next to the name.
+  final String? circleId;
+
+  /// Null when the current user may not give this member a title.
+  final VoidCallback? onSetTitle;
+
+  /// Set on the current user's own row when they have a title they may take
+  /// off but not change.
+  final VoidCallback? onRemoveOwnTitle;
 
   /// Null when the current user may not change this member's nickname.
   final VoidCallback? onChangeNickname;
@@ -1049,6 +1088,37 @@ class _MemberRow extends ConsumerWidget {
       (null, null) => null,
     };
 
+    final circle = circleId;
+    final hasTitle =
+        circle != null &&
+        ref
+                .watch(circleMemberFlairProvider(circle))
+                .value?[profile.id]
+                ?.title !=
+            null;
+    final stackBadges =
+        MediaQuery.textScalerOf(context).scale(10) > 14 ||
+        (compact && hasTitle);
+    final nameText = Text(
+      name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: compact ? 13.5 : 15,
+        fontWeight: roleColor == null ? FontWeight.w600 : FontWeight.w700,
+        color: switch (roleColor) {
+          final color? => circleRoleColor(color),
+          null => c.ink,
+        },
+      ),
+    );
+    Widget badges(double gap) => ProfileNameBadges(
+      userId: profile.id,
+      circleId: circleId,
+      showHonors: true,
+      leadingGap: gap,
+    );
+
     return GestureDetector(
       excludeFromSemantics: true,
       onSecondaryTapUp: (details) =>
@@ -1088,28 +1158,21 @@ class _MemberRow extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: compact ? 13.5 : 15,
-                                  fontWeight: roleColor == null
-                                      ? FontWeight.w600
-                                      : FontWeight.w700,
-                                  color: switch (roleColor) {
-                                    final color? => circleRoleColor(color),
-                                    null => c.ink,
-                                  },
-                                ),
-                              ),
-                            ),
-                            ProfileNameBadges(userId: profile.id),
-                          ],
-                        ),
+                        // At large text, or in the narrow desktop list, a title
+                        // and honors move under the name, so the name keeps its room.
+                        if (stackBadges) ...[
+                          nameText,
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: badges(0),
+                          ),
+                        ] else
+                          Row(
+                            children: [
+                              Flexible(child: nameText),
+                              badges(6),
+                            ],
+                          ),
                         if (status != null)
                           DefaultTextStyle.merge(
                             style: TextStyle(fontSize: 11.5, color: c.muted),
@@ -1150,6 +1213,18 @@ class _MemberRow extends ConsumerWidget {
             value: _MemberAction.nickname,
             icon: Icons.badge_outlined,
             label: tr('Change nickname'),
+          ),
+        if (onSetTitle != null)
+          CircleMenuItem(
+            value: _MemberAction.title,
+            icon: Icons.military_tech_outlined,
+            label: tr('Set title'),
+          ),
+        if (onRemoveOwnTitle != null)
+          CircleMenuItem(
+            value: _MemberAction.removeTitle,
+            icon: Icons.military_tech_outlined,
+            label: tr('Remove my title'),
           ),
         if (onManageRoles != null)
           CircleMenuItem(
@@ -1199,6 +1274,10 @@ class _MemberRow extends ConsumerWidget {
         _openProfile(context);
       case _MemberAction.nickname:
         onChangeNickname?.call();
+      case _MemberAction.title:
+        onSetTitle?.call();
+      case _MemberAction.removeTitle:
+        onRemoveOwnTitle?.call();
       case _MemberAction.roles:
         onManageRoles?.call();
       case _MemberAction.modNotes:
@@ -1220,6 +1299,8 @@ class _MemberRow extends ConsumerWidget {
 enum _MemberAction {
   profile,
   nickname,
+  title,
+  removeTitle,
   roles,
   modNotes,
   timeOut,

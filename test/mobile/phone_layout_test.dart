@@ -1022,6 +1022,9 @@ void main() {
 
       await tester.tap(find.byTooltip('Circle menu'));
       await settle(tester);
+      // The menu scrolls on short screens.
+      await tester.ensureVisible(find.text('Create category'));
+      await settle(tester);
       await tester.tap(find.text('Create category'));
       await settle(tester);
       await showKeyboard(tester, viewport);

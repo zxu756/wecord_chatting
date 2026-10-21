@@ -600,6 +600,20 @@ export async function collectExportData(
     null,
   );
 
+  // The titles circles gave me and my honors (export_my_honors).
+  const honors = await tryRead<Row | null>(
+    skipped,
+    "circle titles and honors",
+    async () => {
+      const result = await admin.rpc("export_my_honors", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -686,6 +700,7 @@ export async function collectExportData(
     favorites,
     momentsMore,
     knowledge,
+    honors,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

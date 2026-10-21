@@ -45,6 +45,7 @@ import { type DigestPushRow, digestPushTarget } from "./digest.ts";
 import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
+import { type TitlePushRow, titleTarget } from "./titles.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -215,6 +216,17 @@ Deno.serve(async (request) => {
   targets.push(
     ...((moderation ?? []) as ModerationPushRow[]).map(moderationTarget),
   );
+
+  // "<circle> gave you the title X" (C7): set_circle_member_title wakes this
+  // function.
+  const { data: titles, error: titlesError } = await admin.rpc(
+    "claim_circle_title_pushes",
+  );
+  if (titlesError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_circle_title_pushes failed", titlesError.message);
+  }
+  targets.push(...((titles ?? []) as TitlePushRow[]).map(titleTarget));
 
   // The push of an official notice (K6), a batch of devices at a time: in
   // the language of each device, held back in quiet hours below like the

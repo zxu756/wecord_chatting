@@ -157,6 +157,12 @@ export interface ExportData {
    * read, absent in older callers.
    */
   knowledge?: Json | null;
+  /**
+   * The titles circles gave me, my honors and streaks, and the circles where
+   * I stay out of honors (export_my_honors, migration 202610270240); null
+   * when it could not be read, absent in older callers.
+   */
+  honors?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -699,6 +705,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.knowledge) {
     out.push({ path: "data/knowledge.json", value: data.knowledge });
+  }
+  if (data.honors) {
+    out.push({ path: "data/honors.json", value: data.honors });
   }
   const extras = data.extras;
   if (extras) {
@@ -1707,6 +1716,63 @@ still read the page.</p>
   );
 }
 
+/** The titles circles gave me and my honors (C7). */
+export function buildHonorsHtml(data: ExportData): string {
+  const honors = isObject(data.honors) ? data.honors : {};
+  const titles = objects(honors["titles"]).map((t) =>
+    entry(
+      str(t["given_at"]),
+      `<div><strong>${
+        escapeHtml(str(t["title"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(t["circle_name"]) ?? "")
+      }</span></div>`,
+    )
+  ).join("");
+  const earned = objects(honors["honors"]).map((h) => {
+    const kind = str(h["kind"]) === "streak"
+      ? `${String(h["level"] ?? "")}-day streak`
+      : `Week level ${String(h["level"] ?? "")}`;
+    return entry(
+      str(h["awarded_at"]),
+      `<div><strong>${escapeHtml(kind)}</strong> <span class="muted">${
+        escapeHtml(str(h["circle_name"]) ?? "")
+      }</span></div>`,
+    );
+  }).join("");
+  const streaks = objects(honors["streaks"]).map((s) =>
+    entry(
+      str(s["as_of"]),
+      `<div><strong>${
+        escapeHtml(str(s["circle_name"]) ?? "")
+      }</strong> <span class="muted">streak ${
+        escapeHtml(String(s["current_streak"] ?? 0))
+      } days, best ${escapeHtml(String(s["best_streak"] ?? 0))}</span></div>`,
+    )
+  ).join("");
+  const out = objects(honors["opted_out"]).map((o) =>
+    entry(
+      str(o["since"]),
+      `<div><strong>${escapeHtml(str(o["circle_name"]) ?? "")}</strong></div>`,
+    )
+  ).join("");
+  return page(
+    "Circle titles and honors — your WeCord data",
+    `${backLink()}<h1>Circle titles and honors</h1>
+<p class="muted">The titles circles gave you, the honors you earned from the
+days you were active (never the messages), your running streaks, and the
+circles where you chose to stay out of honors.</p>
+<h2>Titles</h2>
+<div class="card">${titles || '<div class="row muted">No titles.</div>'}</div>
+<h2>Honors</h2>
+<div class="card">${earned || '<div class="row muted">No honors.</div>'}</div>
+<h2>Streaks</h2>
+<div class="card">${streaks || '<div class="row muted">No streaks.</div>'}</div>
+<h2>Circles you stay out of</h2>
+<div class="card">${out || '<div class="row muted">None.</div>'}</div>`,
+  );
+}
+
 /** Comments on notes, personal templates and published pages (D5). */
 export function buildNoteExtrasHtml(data: ExportData): string {
   const extras = isObject(data.noteExtras) ? data.noteExtras : {};
@@ -1866,6 +1932,16 @@ export function buildSectionPages(
       content: buildKnowledgeHtml(data),
     });
   }
+  if (data.honors) {
+    const counts = (key: string) =>
+      objects(isObject(data.honors) ? data.honors[key] : null).length;
+    out.push({
+      path: "pages/honors.html",
+      label: "Circle titles and honors",
+      summary: `${counts("titles")} titles · ${counts("honors")} honors`,
+      content: buildHonorsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -1951,6 +2027,8 @@ data/favorites.json   Your favorites: folders, tags, links, notes and what
                       you kept (other people's words are not copied).
 data/knowledge.json   The pages you made in circle knowledge bases and the
                       pages you read (the words you wrote are in notes.json).
+data/honors.json      The titles circles gave you, your honors and streaks, and
+                      the circles you stay out of honors in.
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

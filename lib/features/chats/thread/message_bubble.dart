@@ -745,7 +745,10 @@ class _MessageBubble extends StatelessWidget {
                             const MessageBotTag(),
                           ],
                           if (sender.userId case final userId?)
-                            ProfileNameBadges(userId: userId),
+                            ProfileNameBadges(
+                              userId: userId,
+                              circleId: circleId,
+                            ),
                         ],
                       ),
                     ),
@@ -836,7 +839,7 @@ class _MessageBubble extends StatelessWidget {
                   const MessageBotTag(),
                 ],
                 if (sender?.userId case final userId?)
-                  ProfileNameBadges(userId: userId),
+                  ProfileNameBadges(userId: userId, circleId: circleId),
                 const SizedBox(width: 8),
                 Text(
                   chatClockTime(message.createdAt),

@@ -10,6 +10,8 @@ import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/file_preview_service.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/file_preview/thumbnails.dart';
+import 'package:wecord/features/group_space/group_space_providers.dart';
+import 'package:wecord/features/group_space/group_space_screen.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -26,10 +28,11 @@ final chatMediaProvider = FutureProvider.autoDispose
           .listConversationMedia(conversationId);
     });
 
-enum _MediaTab { images, voice, files }
+enum _MediaTab { images, voice, files, albums, folders }
 
 /// A conversation's media center: photos and videos in a grid, voice
-/// messages, and files. Everything opens in the file viewer.
+/// messages, and files. Everything opens in the file viewer. A group chat also
+/// has its albums and folders here (the group space, B6).
 class ChatMediaScreen extends ConsumerStatefulWidget {
   const ChatMediaScreen({required this.conversationId, super.key});
 
@@ -49,6 +52,13 @@ class _ChatMediaScreenState extends ConsumerState<ChatMediaScreen> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final media = ref.watch(chatMediaProvider(widget.conversationId));
+    final space = ref
+        .watch(groupSpaceInfoProvider(widget.conversationId))
+        .value;
+    final hasSpace = space != null && space.supported;
+    final tab = !hasSpace && _tab.index >= _MediaTab.albums.index
+        ? _MediaTab.images
+        : _tab;
     return Scaffold(
       backgroundColor: c.paper,
       body: SafeArea(
@@ -65,7 +75,7 @@ class _ChatMediaScreenState extends ConsumerState<ChatMediaScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   child: WeCordSegmented<_MediaTab>(
                     expand: true,
-                    selected: _tab,
+                    selected: tab,
                     onChanged: (tab) => setState(() => _tab = tab),
                     segments: [
                       WeCordSegment(
@@ -74,46 +84,73 @@ class _ChatMediaScreenState extends ConsumerState<ChatMediaScreen> {
                       ),
                       WeCordSegment(value: _MediaTab.voice, label: tr('Voice')),
                       WeCordSegment(value: _MediaTab.files, label: tr('Files')),
+                      if (hasSpace) ...[
+                        WeCordSegment(
+                          key: const ValueKey('media-tab-albums'),
+                          value: _MediaTab.albums,
+                          label: tr('Albums'),
+                        ),
+                        WeCordSegment(
+                          key: const ValueKey('media-tab-folders'),
+                          value: _MediaTab.folders,
+                          label: tr('Folders'),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 Expanded(
-                  child: media.when(
-                    loading: () => Center(
-                      child: CircularProgressIndicator(color: c.muted),
-                    ),
-                    error: (error, stackTrace) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          errorText(error),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: c.dangerText),
+                  child: hasSpace && tab == _MediaTab.albums
+                      ? GroupAlbumsTab(
+                          conversationId: widget.conversationId,
+                          info: space,
+                        )
+                      : hasSpace && tab == _MediaTab.folders
+                      ? GroupFoldersTab(
+                          conversationId: widget.conversationId,
+                          info: space,
+                        )
+                      : media.when(
+                          loading: () => Center(
+                            child: CircularProgressIndicator(color: c.muted),
+                          ),
+                          error: (error, stackTrace) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                errorText(error),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: c.dangerText),
+                              ),
+                            ),
+                          ),
+                          data: (items) => switch (tab) {
+                            _MediaTab.images => _MediaGrid(
+                              conversationId: widget.conversationId,
+                              items: items,
+                            ),
+                            _MediaTab.voice => _MediaList(
+                              items: _filter(items, MessageType.voice),
+                              emptyText: tr('No voice messages yet'),
+                            ),
+                            _MediaTab.files ||
+                            _MediaTab.albums ||
+                            _MediaTab.folders => _MediaList(
+                              items: [
+                                for (final item in _filter(
+                                  items,
+                                  MessageType.file,
+                                ))
+                                  if (!(PreviewFile.fromMediaItem(
+                                        item,
+                                      )?.kind.isGalleryMedia ??
+                                      false))
+                                    item,
+                              ],
+                              emptyText: tr('No files yet'),
+                            ),
+                          },
                         ),
-                      ),
-                    ),
-                    data: (items) => switch (_tab) {
-                      _MediaTab.images => _MediaGrid(
-                        conversationId: widget.conversationId,
-                        items: items,
-                      ),
-                      _MediaTab.voice => _MediaList(
-                        items: _filter(items, MessageType.voice),
-                        emptyText: tr('No voice messages yet'),
-                      ),
-                      _MediaTab.files => _MediaList(
-                        items: [
-                          for (final item in _filter(items, MessageType.file))
-                            if (!(PreviewFile.fromMediaItem(
-                                  item,
-                                )?.kind.isGalleryMedia ??
-                                false))
-                              item,
-                        ],
-                        emptyText: tr('No files yet'),
-                      ),
-                    },
-                  ),
                 ),
               ],
             ),

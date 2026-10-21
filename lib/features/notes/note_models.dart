@@ -225,12 +225,17 @@ class NoteMeta {
     this.updatedAt,
     this.canEdit = false,
     this.canManage = false,
+    this.circleId,
+    this.parentId,
   });
 
   factory NoteMeta.fromJson(Map<String, dynamic> json) {
     return NoteMeta(
       id: json['id'] as String,
-      conversationId: json['conversation_id'] as String,
+      // A knowledge base page belongs to a circle and has no conversation.
+      conversationId: json['conversation_id'] as String? ?? '',
+      circleId: json['circle_id'] as String?,
+      parentId: json['parent_id'] as String?,
       title: json['title'] as String? ?? '',
       icon: json['icon'] as String? ?? defaultIcon,
       managersOnly: json['managers_only'] == true,
@@ -246,6 +251,8 @@ class NoteMeta {
   static const defaultIcon = '\u{1F4DD}';
 
   final String id;
+
+  /// Empty for a page of a circle's knowledge base.
   final String conversationId;
   final String title;
   final String icon;
@@ -256,6 +263,13 @@ class NoteMeta {
   final DateTime? updatedAt;
   final bool canEdit;
   final bool canManage;
+
+  /// The circle a knowledge base page belongs to (null for a chat note), and
+  /// the page it sits under.
+  final String? circleId;
+  final String? parentId;
+
+  bool get isKnowledgePage => circleId != null;
 
   NoteMeta copyWith({
     String? title,
@@ -278,6 +292,8 @@ class NoteMeta {
       updatedAt: updatedAt ?? this.updatedAt,
       canEdit: canEdit ?? this.canEdit,
       canManage: canManage ?? this.canManage,
+      circleId: circleId,
+      parentId: parentId,
     );
   }
 }

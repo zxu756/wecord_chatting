@@ -151,6 +151,12 @@ export interface ExportData {
    * callers.
    */
   momentsMore?: Json | null;
+  /**
+   * The pages I made in circle knowledge bases and the ones I read
+   * (export_my_knowledge, migration 202610270130); null when it could not be
+   * read, absent in older callers.
+   */
+  knowledge?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -690,6 +696,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.momentsMore) {
     out.push({ path: "data/moments_more.json", value: momentsMoreJson(data) });
+  }
+  if (data.knowledge) {
+    out.push({ path: "data/knowledge.json", value: data.knowledge });
   }
   const extras = data.extras;
   if (extras) {
@@ -1660,6 +1669,44 @@ themselves are short-lived and not included.</p>
   );
 }
 
+/** The pages I made in circle knowledge bases, and the ones I read (D6). */
+export function buildKnowledgeHtml(data: ExportData): string {
+  const knowledge = isObject(data.knowledge) ? data.knowledge : {};
+  const made = objects(knowledge["pages_made"]).map((p) =>
+    entry(
+      str(p["created_at"]),
+      `<div><strong>${
+        escapeHtml(str(p["title"]) || "A page you can no longer read")
+      }</strong> <span class="muted">${
+        escapeHtml(str(p["circle_name"]) ?? "")
+      }</span></div>`,
+    )
+  ).join("");
+  const read = objects(knowledge["pages_read"]).map((p) =>
+    entry(
+      str(p["read_at"]),
+      `<div><strong>${
+        escapeHtml(str(p["title"]) || "A page you can no longer read")
+      }</strong> <span class="muted">${
+        escapeHtml(str(p["circle_name"]) ?? "")
+      }</span></div>`,
+    )
+  ).join("");
+  return page(
+    "Knowledge base pages — your WeCord data",
+    `${backLink()}<h1>Knowledge base pages</h1>
+<p class="muted">The pages you made in circles and the ones you opened. The
+words you wrote in them are in notes.json. A title is shown only while you can
+still read the page.</p>
+<h2>Pages you made</h2>
+<div class="card">${made || '<div class="row muted">No pages.</div>'}</div>
+<h2>Pages you read</h2>
+<div class="card">${
+      read || '<div class="row muted">No pages read.</div>'
+    }</div>`,
+  );
+}
+
 /** Comments on notes, personal templates and published pages (D5). */
 export function buildNoteExtrasHtml(data: ExportData): string {
   const extras = isObject(data.noteExtras) ? data.noteExtras : {};
@@ -1809,6 +1856,16 @@ export function buildSectionPages(
       content: buildAiDigestHtml(data),
     });
   }
+  if (data.knowledge) {
+    const counts = (key: string) =>
+      objects(isObject(data.knowledge) ? data.knowledge[key] : null).length;
+    out.push({
+      path: "pages/knowledge.html",
+      label: "Knowledge base pages",
+      summary: `${counts("pages_made")} made · ${counts("pages_read")} read`,
+      content: buildKnowledgeHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -1892,6 +1949,8 @@ data/note_extras.json The comments you wrote on notes, your note templates
 data/stories.json     Your dailies still up, close friends and reports.
 data/favorites.json   Your favorites: folders, tags, links, notes and what
                       you kept (other people's words are not copied).
+data/knowledge.json   The pages you made in circle knowledge bases and the
+                      pages you read (the words you wrote are in notes.json).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

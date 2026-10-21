@@ -8,6 +8,9 @@ import 'package:wecord/features/circles/circle_emoji_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/onboarding/guide_models.dart';
 import 'package:wecord/features/circles/onboarding/guide_repository.dart';
+import 'package:wecord/features/knowledge_base/kb_models.dart';
+import 'package:wecord/features/knowledge_base/kb_repository.dart';
+import 'package:wecord/features/knowledge_base/kb_sheets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
@@ -58,6 +61,13 @@ class CircleGuideEditorScreen extends ConsumerWidget {
       data: (config) => GuideEditor(detail: detail, initial: config),
     );
   }
+}
+
+/// The label of the page a task points at: its title from the tree, else the
+/// title the server sent with the task.
+String _pageLabel(KbTree? tree, _TaskDraft draft) {
+  final title = tree?.page(draft.pageId)?.title ?? draft.pageTitle ?? '';
+  return title.trim().isEmpty ? tr('Untitled') : title;
 }
 
 /// A chip is as wide as its words; long names are cut so it fits a phone.
@@ -128,18 +138,23 @@ class _TaskDraft {
     : id = data.id,
       title = TextEditingController(text: data.title),
       action = data.action,
-      channelId = data.channelId;
+      channelId = data.channelId,
+      pageId = data.pageId,
+      pageTitle = data.pageTitle;
 
   final String? id;
   final TextEditingController title;
   GuideTaskAction action;
   String? channelId;
+  String? pageId;
+  String? pageTitle;
 
   GuideTaskDraftData toData() => GuideTaskDraftData(
     id: id,
     title: title.text,
     action: action,
     channelId: action.takesChannel ? channelId : null,
+    pageId: action.needsPage ? pageId : null,
   );
 
   void dispose() => title.dispose();
@@ -206,6 +221,9 @@ class _GuideEditorState extends ConsumerState<GuideEditor> {
       }
       if (task.action.needsChannel && task.channelId == null) {
         return tr('Pick the channel to visit.');
+      }
+      if (task.action.needsPage && task.pageId == null) {
+        return tr('Pick the page to read.');
       }
     }
     return null;
@@ -360,6 +378,7 @@ class _GuideEditorState extends ConsumerState<GuideEditor> {
             _TaskEditor(
               key: ObjectKey(task),
               index: index,
+              circleId: _circleId,
               draft: task,
               channels: widget.detail.channels,
               onChanged: () => setState(() {}),
@@ -777,9 +796,10 @@ class _OptionEditor extends StatelessWidget {
   }
 }
 
-class _TaskEditor extends StatelessWidget {
+class _TaskEditor extends ConsumerWidget {
   const _TaskEditor({
     required this.index,
+    required this.circleId,
     required this.draft,
     required this.channels,
     required this.onChanged,
@@ -788,14 +808,32 @@ class _TaskEditor extends StatelessWidget {
   });
 
   final int index;
+  final String circleId;
   final _TaskDraft draft;
   final List<CircleChannel> channels;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
 
+  Future<void> _pickPage(BuildContext context, WidgetRef ref) async {
+    final tree = ref.read(kbTreeProvider(circleId)).value;
+    if (tree == null || tree.isEmpty) {
+      return;
+    }
+    final page = await showKbPagePicker(context, tree: tree);
+    if (page == null) {
+      return;
+    }
+    draft.pageId = page.id;
+    draft.pageTitle = page.title;
+    onChanged();
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tokens.colors;
+    final pages = draft.action.needsPage
+        ? ref.watch(kbTreeProvider(circleId)).value
+        : null;
     final pickable = [
       for (final channel in channels)
         if (!channel.isVoice) channel,
@@ -846,6 +884,10 @@ class _TaskEditor extends StatelessWidget {
                           if (!action.takesChannel) {
                             draft.channelId = null;
                           }
+                          if (!action.needsPage) {
+                            draft.pageId = null;
+                            draft.pageTitle = null;
+                          }
                           // Keep the words unless they were the suggestion.
                           if (draft.title.text.trim().isEmpty ||
                               draft.title.text == previous.suggestedTitle) {
@@ -867,6 +909,37 @@ class _TaskEditor extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (draft.action.needsPage) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    tr('Page to read'),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.subtle,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (pages != null && pages.isEmpty)
+                    Text(
+                      tr(
+                        'This circle has no knowledge base pages yet. Add '
+                        'one first.',
+                      ),
+                      style: TextStyle(fontSize: 13.5, color: c.muted),
+                    )
+                  else
+                    WeCordButton(
+                      key: ValueKey('guide-task-page-$index'),
+                      label: draft.pageId == null
+                          ? tr('Choose a page')
+                          : _pageLabel(pages, draft),
+                      icon: Icons.menu_book_outlined,
+                      variant: WeCordButtonVariant.secondary,
+                      size: WeCordButtonSize.medium,
+                      onPressed: () => unawaited(_pickPage(context, ref)),
+                    ),
+                ],
                 if (draft.action.takesChannel) ...[
                   const SizedBox(height: 10),
                   Text(

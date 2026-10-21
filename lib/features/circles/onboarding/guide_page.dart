@@ -11,6 +11,7 @@ import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/onboarding/guide_models.dart';
 import 'package:wecord/features/circles/onboarding/guide_prompts_page.dart';
 import 'package:wecord/features/circles/onboarding/guide_repository.dart';
+import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/settings/profile_editor.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
@@ -201,6 +202,17 @@ class CircleGuidePage extends ConsumerWidget {
         );
       case GuideTaskAction.setAvatar:
         await openProfileEditor(context);
+      case GuideTaskAction.readPage:
+        final pageId = task.pageId;
+        if (pageId == null) {
+          return;
+        }
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (context) =>
+                KnowledgeBaseScreen(circleId: circleId, initialPageId: pageId),
+          ),
+        );
       case GuideTaskAction.visitChannel:
       case GuideTaskAction.sendMessage:
         final channel = _channel(task.channelId);
@@ -392,7 +404,10 @@ class _TaskRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final channel = task.channelName;
-    final subtitle = channel == null ? null : '#$channel';
+    final page = task.pageTitle;
+    final subtitle = task.action == GuideTaskAction.readPage
+        ? (page == null || page.trim().isEmpty ? tr('Untitled') : page)
+        : (channel == null ? null : '#$channel');
     return WeCordPressable(
       key: ValueKey('guide-task-${task.id}'),
       semanticLabel: [

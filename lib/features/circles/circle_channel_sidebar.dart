@@ -30,6 +30,7 @@ import 'package:wecord/features/circles/onboarding/guide_page.dart';
 import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
+import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
 import 'package:wecord/features/profile/profile_social_repository.dart';
@@ -713,6 +714,14 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     );
   }
 
+  void _openKnowledgeBase(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => KnowledgeBaseScreen(circleId: _circleId),
+      ),
+    );
+  }
+
   void _openEvents(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -771,6 +780,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
           value: _CircleMenuAction.support,
           icon: Icons.favorite_border_rounded,
           label: tr('Support this circle'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
+          value: _CircleMenuAction.knowledgeBase,
+          icon: Icons.menu_book_outlined,
+          label: tr('Knowledge base'),
         ),
       if (currentMember != null)
         CircleMenuItem(
@@ -937,6 +952,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleReviewScreen(context, detail.circle.id);
       case _CircleMenuAction.onboarding:
         openCircleOnboardingSettings(context, detail);
+      case _CircleMenuAction.knowledgeBase:
+        _openKnowledgeBase(context);
       case _CircleMenuAction.emojis:
         openCircleEmojisScreen(context, detail.circle.id);
       case _CircleMenuAction.guide:
@@ -1192,6 +1209,7 @@ enum _CircleMenuAction {
   autoMod,
   onboarding,
   guide,
+  knowledgeBase,
   emojis,
   notificationSettings,
   support,

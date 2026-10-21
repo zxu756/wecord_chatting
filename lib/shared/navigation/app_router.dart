@@ -19,6 +19,7 @@ import 'package:wecord/features/chats/global_message_search_screen.dart';
 import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
+import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
@@ -351,6 +352,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   return CircleEventsScreen(
                     circleId: state.pathParameters['circleId']!,
                     initialEventId: state.uri.queryParameters['event'],
+                  );
+                },
+              ),
+              // The circle's knowledge base; ?page= opens one page (from the
+              // newcomer guide).
+              GoRoute(
+                path: 'knowledge',
+                builder: (context, state) {
+                  return KnowledgeBaseScreen(
+                    circleId: state.pathParameters['circleId']!,
+                    initialPageId: state.uri.queryParameters['page'],
                   );
                 },
               ),

@@ -179,6 +179,7 @@ const emptyRpc: Record<string, unknown> = {
     reminded_by: [],
     comment_pictures: [],
   },
+  export_my_knowledge: { pages_made: [], pages_read: [] },
 };
 
 const feedbackAnswer = [{
@@ -492,6 +493,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_knowledge: { pages_made: [], pages_read: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -519,6 +521,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_task_extras", args: { target_user_id: me } },
     { name: "export_my_saved_items", args: { target_user_id: me } },
     { name: "export_my_moments_more", args: { target_user_id: me } },
+    { name: "export_my_knowledge", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -559,6 +562,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_knowledge: { pages_made: [], pages_read: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -664,6 +668,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_ai_digest: digestAnswer,
       export_my_note_extras: noteExtrasAnswer,
       export_my_task_extras: { lists: [{ id: "l-1", items: [] }] },
+      export_my_knowledge: { pages_made: [], pages_read: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -694,12 +699,14 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.taskExtras, null);
   assertEquals(data.favorites, null);
   assertEquals(data.momentsMore, null);
+  assertEquals(data.knowledge, null);
   assertEquals(data.skipped.sort(), [
     "daily",
     "daily digest",
     "favorites",
     "feedback",
     "forms",
+    "knowledge base pages",
     "moments",
     "note comments and templates",
     "notes, lists and more",

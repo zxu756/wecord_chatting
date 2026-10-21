@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/composer_drafts.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
@@ -1715,6 +1716,9 @@ class PhoneWorld {
   /// The Density setting and the wide layout's panel widths on this
   /// "device".
   final densityStore = InMemoryDensityStore();
+
+  /// Care mode's choices on this "device" (off unless a test turns it on).
+  final careStore = InMemoryCareModeStore();
   final panelLayoutStore = InMemoryPanelLayoutStore();
 
   /// The file viewer's services: fakes that stay off the network.
@@ -1789,6 +1793,7 @@ class PhoneWorld {
       ),
       glassEffectsStoreProvider.overrideWithValue(InMemoryGlassEffectsStore()),
       densityStoreProvider.overrideWithValue(densityStore),
+      careModeStoreProvider.overrideWithValue(careStore),
       panelLayoutStoreProvider.overrideWithValue(panelLayoutStore),
       ...extraOverrides,
     ];

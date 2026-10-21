@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/app_lock/app_lock_gate.dart';
 import 'package:wecord/features/app_lock/lock_storage.dart';
+import 'package:wecord/features/care_mode/care_mode_host.dart';
+import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
@@ -55,12 +57,15 @@ Future<void> runWeCordApp() async {
   // The app lock's settings, read before the first frame: a locked app must
   // never show its content for a moment before the lock covers it.
   final lockStorage = await SharedPreferencesLockStorage.open();
+  // Care mode's choices, for the same reason: no flash of the normal sizes.
+  final careStore = await SharedPreferencesCareModeStore.open();
   runApp(
     ProviderScope(
       retry: noProviderRetry,
       observers: [ErrorReportingProviderObserver(errorReporter)],
       overrides: [
         lockStorageProvider.overrideWithValue(lockStorage),
+        careModeStoreProvider.overrideWithValue(careStore),
         if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
         deviceConnectivityProvider.overrideWith(
           (ref) => platformDeviceConnectivity(),
@@ -89,6 +94,7 @@ class WeCordApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final glassEffects = ref.watch(glassEffectsProvider);
     final density = ref.watch(densityProvider);
+    final care = ref.watch(careModeProvider);
     final chinese = resolvesToChinese(ref.watch(appLanguageProvider));
     // Set before anything below builds, so every tr() sees it.
     AppStrings.isChinese = chinese;
@@ -103,8 +109,9 @@ class WeCordApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'WeCord',
       debugShowCheckedModeBanner: false,
-      theme: WeCordTheme.light(),
-      darkTheme: WeCordTheme.dark(),
+      // Care mode can ask for the high contrast colors itself.
+      theme: WeCordTheme.light(highContrast: care.forcesHighContrast),
+      darkTheme: WeCordTheme.dark(highContrast: care.forcesHighContrast),
       // "Increase contrast" in the platform's accessibility settings.
       highContrastTheme: WeCordTheme.light(highContrast: true),
       highContrastDarkTheme: WeCordTheme.dark(highContrast: true),
@@ -117,19 +124,24 @@ class WeCordApp extends ConsumerWidget {
       // icons readable in both themes.
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: WeCordTheme.overlayStyleFor(Theme.of(context).brightness),
-        child: WeCordAppearance(
-          glassEffects: glassEffects,
-          child: WeCordDensityScope(
-            density: density,
-            child: MacosTitleBarFrame(
-              // Covers everything below while the app is locked (G2).
-              child: AppLockGate(
-                child: PwaOverlayHost(
-                  // "Please update" instead of the app while this version is
-                  // older than the server allows (K4).
-                  child: AppUpdateGate(
-                    child: PresenceActivityListener(
-                      child: child ?? const SizedBox.shrink(),
+        // Care mode: bigger text and tap areas for everything below. It is
+        // always here, on or off, so switching it keeps the page as it is.
+        child: CareModeHost(
+          child: WeCordAppearance(
+            glassEffects: glassEffects,
+            child: WeCordDensityScope(
+              // Care mode lists and messages sit comfortably.
+              density: care.enabled ? WeCordDensity.comfortable : density,
+              child: MacosTitleBarFrame(
+                // Covers everything below while the app is locked (G2).
+                child: AppLockGate(
+                  child: PwaOverlayHost(
+                    // "Please update" instead of the app while this version is
+                    // older than the server allows (K4).
+                    child: AppUpdateGate(
+                      child: PresenceActivityListener(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),

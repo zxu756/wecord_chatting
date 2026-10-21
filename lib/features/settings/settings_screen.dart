@@ -5,6 +5,7 @@ import 'package:wecord/features/accessibility/chat_text_scale.dart';
 import 'package:wecord/features/admin/admin_entry.dart';
 import 'package:wecord/features/feedback/feedback_entry.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
+import 'package:wecord/features/care_mode/care_mode_screen.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/home/home_screen.dart';
@@ -148,6 +149,8 @@ class SettingsPhonePage extends ConsumerWidget {
             ],
           ),
           SettingsSectionHeader(tr('Appearance')),
+          const CareModeSettingsGroup(),
+          const SizedBox(height: 12),
           const SettingsGroup(
             padding: EdgeInsets.all(12),
             children: [ThemeModePicker()],

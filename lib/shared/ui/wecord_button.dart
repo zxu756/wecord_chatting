@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:wecord/shared/theme/wecord_tokens.dart';
 import 'package:wecord/shared/ui/count_badge.dart';
 import 'package:wecord/shared/ui/motion.dart';
+import 'package:wecord/shared/ui/tap_target.dart';
 import 'package:wecord/shared/ui/wecord_pressable.dart';
 
 /// How a [WeCordButton] or [WeCordIconButton] is filled.
@@ -166,7 +169,14 @@ class WeCordButton extends StatelessWidget {
             duration: WeCordMotion.quick,
             curve: WeCordMotion.standard,
             // At least `size.height`; taller when large text needs room.
-            constraints: BoxConstraints(minHeight: size.height),
+            constraints: BoxConstraints(
+              // Care mode makes every button at least as tall as its theme
+              // says.
+              minHeight: math.max(
+                size.height,
+                WeCordCareTheme.maybeOf(context)?.buttonHeight ?? 0,
+              ),
+            ),
             width: expand ? double.infinity : null,
             padding: EdgeInsets.symmetric(
               horizontal: size.padding,
@@ -233,6 +243,9 @@ class WeCordIconButton extends StatelessWidget {
           : variant,
       tokens,
     );
+    // Care mode draws round buttons bigger.
+    final scale = WeCordCareTheme.maybeOf(context)?.iconButtonScale ?? 1;
+    final size = this.size * scale;
     final target = size < WeCordSizes.touchTarget
         ? WeCordSizes.touchTarget
         : size;
@@ -263,7 +276,9 @@ class WeCordIconButton extends StatelessWidget {
           ),
           child: Icon(
             icon,
-            size: iconSize ?? (size * 0.5).clamp(16.0, 24.0),
+            size: iconSize == null
+                ? (size * 0.5).clamp(16.0, 24.0 * scale)
+                : iconSize! * scale,
             color: colors.foreground,
           ),
         );

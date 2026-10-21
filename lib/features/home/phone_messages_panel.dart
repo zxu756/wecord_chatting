@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/agenda/agenda_repository.dart';
 import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/care_mode/care_home_shortcuts.dart';
+import 'package:wecord/features/care_mode/care_mode_settings.dart';
+import 'package:wecord/features/chat_folders/chat_folder.dart';
 import 'package:wecord/features/chat_folders/chat_folder_rules.dart';
 import 'package:wecord/features/chat_folders/chat_folder_strip.dart';
 import 'package:wecord/features/chat_folders/chat_folders_repository.dart';
@@ -95,8 +98,15 @@ class PhoneMessagesPanel extends ConsumerWidget {
     ];
     // The folder strip filters the list; under All, the folded folder's
     // chats show as one row.
-    final folders = ref.watch(chatFoldersProvider).value ?? const [];
-    final selectedFolder = ref.watch(effectiveChatFolderSelectionProvider);
+    // Care mode's simple home: no folders and no row of small shortcuts, just
+    // the chats and two big tiles (Friends, Moments).
+    final simple = ref.watch(careModeProvider.select((s) => s.simplifies));
+    final folders = simple
+        ? const <ChatFolder>[]
+        : ref.watch(chatFoldersProvider).value ?? const [];
+    final selectedFolder = simple
+        ? null
+        : ref.watch(effectiveChatFolderSelectionProvider);
     final entries = chatListEntries(
       chats: chats,
       folders: folders,
@@ -150,56 +160,68 @@ class PhoneMessagesPanel extends ConsumerWidget {
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: ChatFolderStrip()),
+        // The slivers stay the same whether Care mode is on or off, so the
+        // list keeps its place; only what they hold changes.
         SliverToBoxAdapter(
-          child: SizedBox(
-            // 58 tile + the label, which grows with the text size, and room
-            // for the status bubbles when a friend has one.
-            height:
-                86 +
-                bubbleRoom +
-                MediaQuery.textScalerOf(context).scale(12 * 1.3).clamp(16, 80),
-            child: ListView.separated(
-              key: const ValueKey('phone-friends-row'),
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-              itemCount: sortedFriends.length + 5,
-              separatorBuilder: (context, index) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                // The shortcuts sit lower by the room the bubbles take.
-                Widget lowered(Widget tile) => bubbleRoom == 0
-                    ? tile
-                    : Padding(
-                        padding: EdgeInsets.only(top: bubbleRoom),
-                        child: tile,
+          child: simple ? const SizedBox.shrink() : const ChatFolderStrip(),
+        ),
+        SliverToBoxAdapter(
+          child: simple
+              ? CareHomeShortcuts(requestCount: requestCount)
+              : SizedBox(
+                  // 58 tile + the label, which grows with the text size, and room
+                  // for the status bubbles when a friend has one.
+                  height:
+                      86 +
+                      bubbleRoom +
+                      MediaQuery.textScalerOf(
+                        context,
+                      ).scale(12 * 1.3).clamp(16, 80),
+                  child: ListView.separated(
+                    key: const ValueKey('phone-friends-row'),
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                    itemCount: sortedFriends.length + 5,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      // The shortcuts sit lower by the room the bubbles take.
+                      Widget lowered(Widget tile) => bubbleRoom == 0
+                          ? tile
+                          : Padding(
+                              padding: EdgeInsets.only(top: bubbleRoom),
+                              child: tile,
+                            );
+                      if (index == 0) {
+                        return lowered(
+                          _AddFriendTile(requestCount: requestCount),
+                        );
+                      }
+                      if (index == 1) {
+                        return lowered(const _SavedTile());
+                      }
+                      if (index == 2) {
+                        return lowered(const _AgendaTile());
+                      }
+                      if (index == 3) {
+                        return lowered(const _MomentsTile());
+                      }
+                      if (index == 4) {
+                        return lowered(const _DailyTile());
+                      }
+                      final friend = sortedFriends[index - 5];
+                      return _FriendTile(
+                        friend: friend,
+                        presence: presence(friend.id),
+                        bubble: bubbles[friend.id],
+                        bubbleRoom: bubbleRoom,
                       );
-                if (index == 0) {
-                  return lowered(_AddFriendTile(requestCount: requestCount));
-                }
-                if (index == 1) {
-                  return lowered(const _SavedTile());
-                }
-                if (index == 2) {
-                  return lowered(const _AgendaTile());
-                }
-                if (index == 3) {
-                  return lowered(const _MomentsTile());
-                }
-                if (index == 4) {
-                  return lowered(const _DailyTile());
-                }
-                final friend = sortedFriends[index - 5];
-                return _FriendTile(
-                  friend: friend,
-                  presence: presence(friend.id),
-                  bubble: bubbles[friend.id],
-                  bubbleRoom: bubbleRoom,
-                );
-              },
-            ),
-          ),
+                    },
+                  ),
+                ),
         ),
         SliverPadding(
+          key: const ValueKey('phone-messages-chats'),
           padding: const EdgeInsets.symmetric(horizontal: 6),
           sliver: SliverList.separated(
             itemCount: entries.length,

@@ -7,6 +7,8 @@
 // then the parent's extra actions at 1500, then Events at 2000. Pick an
 // `order` to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/care_mode/care_mode_settings.dart';
+import 'package:wecord/features/care_mode/care_registry_filters.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/app_lock/chat_lock_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
@@ -22,9 +24,15 @@ final List<HeaderActionContribution> headerActionExtensions = [
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.
-final headerActionRegistryProvider = Provider<HeaderActionRegistry>(
-  (ref) => HeaderActionRegistry([
-    ...builtInHeaderActions,
-    ...headerActionExtensions,
-  ]),
-);
+final headerActionRegistryProvider = Provider<HeaderActionRegistry>((ref) {
+  // Care mode's simple home keeps the everyday actions only.
+  final simple = ref.watch(careModeProvider.select((s) => s.simplifies));
+  return HeaderActionRegistry([
+    for (final contribution in [
+      ...builtInHeaderActions,
+      ...headerActionExtensions,
+    ])
+      if (!simple || !careHiddenHeaderActionIds.contains(contribution.id))
+        contribution,
+  ]);
+});

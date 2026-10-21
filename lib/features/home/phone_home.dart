@@ -55,6 +55,7 @@ class PhoneHomeFrame extends ConsumerStatefulWidget {
     required this.panelBuilder,
     this.homeSelected = false,
     this.selectedCircleId,
+    this.showRail = true,
     super.key,
   });
 
@@ -65,6 +66,9 @@ class PhoneHomeFrame extends ConsumerStatefulWidget {
 
   /// The circle the rail highlights.
   final String? selectedCircleId;
+
+  /// Whether the circle rail is there. Care mode's simple home hides it.
+  final bool showRail;
 
   static const panelRadius = WeCordRadii.xxl;
 
@@ -132,21 +136,29 @@ class _PhoneHomeFrameState extends ConsumerState<PhoneHomeFrame>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Padding(
-                      padding: EdgeInsets.only(left: padding.left),
-                      child: CircleRail(
-                        phone: true,
-                        homeSelected: widget.homeSelected,
-                        selectedCircleId: widget.selectedCircleId,
-                        padding: EdgeInsets.only(
-                          top: panelTop + 7,
-                          bottom: bottomInset + _gap,
+                    // Keyed, so the panel keeps its state when the rail comes
+                    // and goes (Care mode).
+                    if (widget.showRail)
+                      Padding(
+                        key: const ValueKey('phone-home-rail-slot'),
+                        padding: EdgeInsets.only(left: padding.left),
+                        child: CircleRail(
+                          phone: true,
+                          homeSelected: widget.homeSelected,
+                          selectedCircleId: widget.selectedCircleId,
+                          padding: EdgeInsets.only(
+                            top: panelTop + 7,
+                            bottom: bottomInset + _gap,
+                          ),
                         ),
                       ),
-                    ),
                     Expanded(
+                      key: const ValueKey('phone-home-panel-slot'),
                       child: Padding(
-                        padding: EdgeInsets.only(top: panelTop),
+                        padding: EdgeInsets.only(
+                          top: panelTop,
+                          left: widget.showRail ? 0 : padding.left,
+                        ),
                         child: PanelSurface(
                           key: const ValueKey('phone-home-panel'),
                           child: Material(

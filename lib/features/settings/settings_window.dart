@@ -8,6 +8,7 @@ import 'package:wecord/features/accessibility/chat_text_scale.dart';
 import 'package:wecord/features/admin/admin_entry.dart';
 import 'package:wecord/features/feedback/feedback_entry.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
+import 'package:wecord/features/care_mode/care_mode_screen.dart';
 import 'package:wecord/features/chats/quick_reaction.dart';
 import 'package:wecord/features/legal/about_screen.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
@@ -489,6 +490,7 @@ class _SectionPage extends ConsumerWidget {
         return SettingsPage(
           title: tr('Appearance'),
           children: [
+            const CareModeSettingsGroup(showIcon: false),
             SettingsSectionHeader(tr('Theme')),
             const ThemeModePicker(large: true),
             SettingsGroup(

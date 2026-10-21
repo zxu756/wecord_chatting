@@ -413,6 +413,27 @@ for AI), used in the menu, circle settings and the audit log.
 - **Captions on videos** (iPhone/Mac): the viewer's CC button makes timed
   captions from the sound on the device (`TranscribePlugin` with `video` and
   `segments`), never through a server.
+- **Care mode** (Settings → Appearance, `lib/features/care_mode/`): one
+  switch for the elders' mode, remembered per device (`SharedPreferences`,
+  read before the first frame). `CareModeHost` (always in the app builder,
+  on or off, so the page tree never changes and nothing is lost) wraps the app
+  in a `CareModeScope`, a `MediaQuery` whose `CareTextScaler` makes the system
+  text 1.3× bigger (never past 2.0× the font size, never below the system's),
+  and a `Theme` carrying `WeCordCareTheme` (`lib/shared/ui/tap_target.dart`):
+  `Theme.of(context).platformTouchTarget` (so every `WeCordPressable`) rises to
+  56 on touch and 40 with a mouse, `WeCordButton` is at least 56 tall,
+  `WeCordIconButton` is drawn 1.2× bigger, Material buttons get a 56 minimum.
+  New controls get this for free by using `WeCordPressable` /
+  `context.touchTargetSize`; never hard-code a smaller tap area. Density is
+  forced to Comfortable while it is on. The simple home (`simpleHome`)
+  hides the phone rail (`PhoneHomeFrame.showRail`, keyed so the panel keeps its
+  state), the folder strip and the small shortcuts (replaced by the two
+  `CareHomeTile`s), and drops entries from the chat registries by id
+  (`care_registry_filters.dart`; the registry providers filter, the entries
+  themselves are untouched). "Read aloud" is a `MessageActionContribution`
+  (order 250) over `SpeechReader` (`flutter_tts`; tests use a fake). "Stronger
+  colors" passes `highContrast: true` to the app's themes. Care screens are in
+  `test/accessibility/care_mode_a11y_screens.dart`.
 - **Text size**: layouts are checked at 1.6× and 2.0× with
   `tool/screenshots/a11y_screenshots_test.dart` (also dark and high
   contrast, into `build/a11y/`). Large page titles shrink to fit their row;

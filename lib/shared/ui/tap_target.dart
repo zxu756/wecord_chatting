@@ -14,14 +14,83 @@ double touchTargetFor(TargetPlatform platform) => switch (platform) {
   TargetPlatform.macOS || TargetPlatform.windows || TargetPlatform.linux => 0,
 };
 
+/// What Care mode (Settings → Appearance) asks of the controls: bigger tap
+/// areas, taller buttons and bigger round buttons. It is on the theme only
+/// while Care mode is on; without it everything keeps its usual size.
+@immutable
+class WeCordCareTheme extends ThemeExtension<WeCordCareTheme> {
+  const WeCordCareTheme({
+    required this.touchTarget,
+    this.buttonHeight = 56,
+    this.iconButtonScale = 1.2,
+  });
+
+  /// The smallest tap area on this platform: 56 with a finger, 40 with a
+  /// mouse.
+  final double touchTarget;
+
+  /// The smallest height of a pill button.
+  final double buttonHeight;
+
+  /// How much bigger round icon buttons are drawn.
+  final double iconButtonScale;
+
+  /// Care mode's sizes for [platform].
+  factory WeCordCareTheme.forPlatform(TargetPlatform platform) =>
+      WeCordCareTheme(
+        touchTarget: switch (platform) {
+          TargetPlatform.android ||
+          TargetPlatform.fuchsia ||
+          TargetPlatform.iOS => 56,
+          TargetPlatform.macOS ||
+          TargetPlatform.windows ||
+          TargetPlatform.linux => 40,
+        },
+      );
+
+  /// The care sizes on [context]'s theme; null when Care mode is off.
+  static WeCordCareTheme? maybeOf(BuildContext context) =>
+      Theme.of(context).extension<WeCordCareTheme>();
+
+  @override
+  WeCordCareTheme copyWith({
+    double? touchTarget,
+    double? buttonHeight,
+    double? iconButtonScale,
+  }) => WeCordCareTheme(
+    touchTarget: touchTarget ?? this.touchTarget,
+    buttonHeight: buttonHeight ?? this.buttonHeight,
+    iconButtonScale: iconButtonScale ?? this.iconButtonScale,
+  );
+
+  @override
+  WeCordCareTheme lerp(covariant WeCordCareTheme? other, double t) =>
+      other == null
+      ? this
+      : WeCordCareTheme(
+          touchTarget: math.max(
+            0.0,
+            touchTarget + (other.touchTarget - touchTarget) * t,
+          ),
+          buttonHeight: buttonHeight + (other.buttonHeight - buttonHeight) * t,
+          iconButtonScale:
+              iconButtonScale + (other.iconButtonScale - iconButtonScale) * t,
+        );
+}
+
 extension WeCordTouchTargetTheme on ThemeData {
-  /// The smallest touch target for this theme's platform (0 on desktops).
-  double get platformTouchTarget => touchTargetFor(platform);
+  /// The smallest touch target for this theme's platform (0 on desktops);
+  /// Care mode raises it.
+  double get platformTouchTarget => math.max(
+    touchTargetFor(platform),
+    extension<WeCordCareTheme>()?.touchTarget ?? 0,
+  );
 }
 
 extension WeCordTouchTargetContext on BuildContext {
-  /// The smallest touch target for the platform here (0 on desktops).
-  double get touchTargetSize => touchTargetFor(Theme.of(this).platform);
+  /// The smallest touch target for the platform here (0 on desktops); Care
+  /// mode raises it.
+  double get touchTargetSize => Theme.of(this).platformTouchTarget;
 }
 
 /// Grows its child's tappable (and accessibility) area to at least [minSize]

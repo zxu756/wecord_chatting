@@ -585,6 +585,21 @@ export async function collectExportData(
     null,
   );
 
+  // The pages I made in circle knowledge bases and the ones I read
+  // (export_my_knowledge).
+  const knowledge = await tryRead<Row | null>(
+    skipped,
+    "knowledge base pages",
+    async () => {
+      const result = await admin.rpc("export_my_knowledge", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -670,6 +685,7 @@ export async function collectExportData(
     taskExtras,
     favorites,
     momentsMore,
+    knowledge,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

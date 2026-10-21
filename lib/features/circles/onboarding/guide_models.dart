@@ -96,13 +96,17 @@ class GuidePrompt {
   final List<GuideOption> options;
 }
 
-/// What a newcomer task asks for. The first two work themselves out from
-/// the member's own state; a visit is ticked off by the app.
+/// What a newcomer task asks for. Reading the rules, a page and the avatar
+/// work themselves out from the member's own state; a visit is ticked off by
+/// the app.
 enum GuideTaskAction {
   readRules('read_rules'),
   visitChannel('visit_channel'),
   sendMessage('send_message'),
-  setAvatar('set_avatar');
+  setAvatar('set_avatar'),
+
+  /// A page of the circle's knowledge base (required reading).
+  readPage('read_page');
 
   const GuideTaskAction(this.value);
 
@@ -123,6 +127,7 @@ enum GuideTaskAction {
     visitChannel => tr('Visit a channel'),
     sendMessage => tr('Send a message'),
     setAvatar => tr('Set a profile picture'),
+    readPage => tr('Read a page'),
   };
 
   /// A title to start from.
@@ -131,8 +136,10 @@ enum GuideTaskAction {
     visitChannel => tr('Have a look around'),
     sendMessage => tr('Introduce yourself'),
     setAvatar => tr('Add a profile picture'),
+    readPage => tr('Read the welcome page'),
   };
 
+  bool get needsPage => this == readPage;
   bool get needsChannel => this == visitChannel;
   bool get takesChannel => this == visitChannel || this == sendMessage;
 }
@@ -145,6 +152,8 @@ class GuideTask {
     required this.action,
     this.channelId,
     this.channelName,
+    this.pageId,
+    this.pageTitle,
     this.done = false,
   });
 
@@ -154,6 +163,8 @@ class GuideTask {
     action: GuideTaskAction.fromJson(json['action']),
     channelId: json['channel_id'] as String?,
     channelName: json['channel_name'] as String?,
+    pageId: json['page_id'] as String?,
+    pageTitle: json['page_title'] as String?,
     done: json['done'] == true,
   );
 
@@ -162,6 +173,10 @@ class GuideTask {
   final GuideTaskAction action;
   final String? channelId;
   final String? channelName;
+
+  /// The knowledge base page of a "read a page" task, and its title.
+  final String? pageId;
+  final String? pageTitle;
   final bool done;
 }
 
@@ -304,6 +319,8 @@ class GuideTaskDraftData {
     this.title = '',
     this.action = GuideTaskAction.sendMessage,
     this.channelId,
+    this.pageId,
+    this.pageTitle,
   });
 
   factory GuideTaskDraftData.fromJson(Map<String, dynamic> json) =>
@@ -312,6 +329,8 @@ class GuideTaskDraftData {
         title: json['title'] as String? ?? '',
         action: GuideTaskAction.fromJson(json['action']),
         channelId: json['channel_id'] as String?,
+        pageId: json['page_id'] as String?,
+        pageTitle: json['page_title'] as String?,
       );
 
   final String? id;
@@ -319,11 +338,16 @@ class GuideTaskDraftData {
   final GuideTaskAction action;
   final String? channelId;
 
+  /// The page of a "read a page" task, and its title (for the editor).
+  final String? pageId;
+  final String? pageTitle;
+
   Map<String, dynamic> toJson() => {
     'id': ?id,
     'title': title.trim(),
     'action': action.value,
     if (action.takesChannel) 'channel_id': channelId,
+    if (action.needsPage) 'page_id': pageId,
   };
 }
 

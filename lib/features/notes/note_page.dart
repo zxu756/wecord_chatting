@@ -38,21 +38,44 @@ import 'package:wecord/shared/ui/ui.dart';
 ///
 /// Used full screen on phones and inside the workspace panel on desktop
 /// ([embedded]).
+///
+/// A page of a circle's knowledge base is a note of the circle: pass
+/// [circleId] instead of [conversationId]. It has no chat to be shared in,
+/// no comments, no AI and no web page; [knowledgeMenu] adds what a page can
+/// do (who may read it, moving it, deleting it) and [trail] shows where it
+/// sits in the tree.
 class NotePage extends ConsumerStatefulWidget {
   const NotePage({
     required this.noteId,
-    required this.conversationId,
+    this.conversationId,
+    this.circleId,
     this.seed,
     this.onBack,
     this.embedded = false,
     this.autofocus = false,
     this.onDeleted,
     this.draftStore,
+    this.trail,
+    this.knowledgeMenu,
+    this.selfName,
     super.key,
-  });
+  }) : assert(
+         (conversationId == null) != (circleId == null),
+         'A note belongs to a conversation or to a circle',
+       );
 
   final String noteId;
-  final String conversationId;
+  final String? conversationId;
+  final String? circleId;
+
+  /// Under the header of a knowledge base page: where the page sits.
+  final Widget? trail;
+
+  /// The entries a knowledge base page adds to its menu.
+  final List<GlassMenuEntry> Function(NoteMeta meta)? knowledgeMenu;
+
+  /// The reader's name in the circle, shown to others in the page.
+  final String? selfName;
 
   /// What the list knows of the note, shown while it loads.
   final NoteMeta? seed;
@@ -76,6 +99,8 @@ class _NotePageState extends ConsumerState<NotePage> {
   final _editorKey = GlobalKey<NoteEditorState>();
   var _titleSynced = '';
 
+  bool get _knowledge => widget.circleId != null;
+
   @override
   void initState() {
     super.initState();
@@ -95,12 +120,18 @@ class _NotePageState extends ConsumerState<NotePage> {
       noteId: widget.noteId,
       newId: newClientId,
     )..addListener(_onController);
-    unawaited(_comments.open());
+    if (!_knowledge) {
+      unawaited(_comments.open());
+    }
   }
 
   String _selfName(String? userId) {
+    if (_knowledge) {
+      final name = widget.selfName;
+      return name == null || name.isEmpty ? tr('Someone') : name;
+    }
     final members = ref
-        .read(conversationMembersProvider(widget.conversationId))
+        .read(conversationMembersProvider(widget.conversationId!))
         .value;
     if (userId != null && members != null) {
       for (final member in members) {
@@ -146,10 +177,14 @@ class _NotePageState extends ConsumerState<NotePage> {
 
   Future<void> _share() async {
     final messenger = ScaffoldMessenger.maybeOf(context);
+    final conversationId = widget.conversationId;
+    if (conversationId == null) {
+      return;
+    }
     try {
       await ref
           .read(notesRepositoryProvider)
-          .shareNote(widget.noteId, widget.conversationId);
+          .shareNote(widget.noteId, conversationId);
       messenger?.showSnackBar(
         SnackBar(content: Text(tr('Shared in the chat.'))),
       );
@@ -162,9 +197,14 @@ class _NotePageState extends ConsumerState<NotePage> {
 
   // ----------------------------------------------- comments, AI, export --
 
-  List<GroupMember> get _members =>
-      ref.read(conversationMembersProvider(widget.conversationId)).value ??
-      const [];
+  List<GroupMember> get _members {
+    final conversationId = widget.conversationId;
+    if (conversationId == null) {
+      return const [];
+    }
+    return ref.read(conversationMembersProvider(conversationId)).value ??
+        const [];
+  }
 
   void _startComment(NoteCommentTarget target) {
     unawaited(
@@ -384,7 +424,10 @@ class _NotePageState extends ConsumerState<NotePage> {
     }
     try {
       await ref.read(notesRepositoryProvider).deleteNote(widget.noteId);
-      ref.invalidate(notesListProvider(widget.conversationId));
+      final conversationId = widget.conversationId;
+      if (conversationId != null) {
+        ref.invalidate(notesListProvider(conversationId));
+      }
       if (mounted) {
         (widget.onDeleted ?? widget.onBack)?.call();
       }
@@ -400,6 +443,45 @@ class _NotePageState extends ConsumerState<NotePage> {
   void _openMenu(BuildContext buttonContext) {
     final meta = _controller.meta;
     if (meta == null) {
+      return;
+    }
+    final exports = <GlassMenuEntry>[
+      GlassMenuEntry(
+        icon: Icons.description_outlined,
+        label: tr('Export as a Markdown file'),
+        onSelected: () => unawaited(_exportMarkdown()),
+      ),
+      GlassMenuEntry(
+        icon: Icons.picture_as_pdf_outlined,
+        label: tr('Export as a PDF'),
+        onSelected: () => unawaited(_exportPdf()),
+      ),
+      GlassMenuEntry(
+        icon: Icons.copy_all_rounded,
+        label: tr('Copy as Markdown'),
+        onSelected: () {
+          unawaited(
+            Clipboard.setData(
+              ClipboardData(
+                text: noteToMarkdown(meta.title, _controller.engine.blocks),
+              ),
+            ),
+          );
+          ScaffoldMessenger.maybeOf(
+            context,
+          )?.showSnackBar(SnackBar(content: Text(tr('Copied.'))));
+        },
+      ),
+    ];
+    if (_knowledge) {
+      unawaited(
+        showGlassMenu(
+          buttonContext,
+          anchor: globalRectOf(buttonContext),
+          width: 280,
+          entries: [...exports, ...?widget.knowledgeMenu?.call(meta)],
+        ),
+      );
       return;
     }
     unawaited(
@@ -442,32 +524,7 @@ class _NotePageState extends ConsumerState<NotePage> {
             label: tr('Save as a template…'),
             onSelected: () => unawaited(_saveTemplate()),
           ),
-          GlassMenuEntry(
-            icon: Icons.description_outlined,
-            label: tr('Export as a Markdown file'),
-            onSelected: () => unawaited(_exportMarkdown()),
-          ),
-          GlassMenuEntry(
-            icon: Icons.picture_as_pdf_outlined,
-            label: tr('Export as a PDF'),
-            onSelected: () => unawaited(_exportPdf()),
-          ),
-          GlassMenuEntry(
-            icon: Icons.copy_all_rounded,
-            label: tr('Copy as Markdown'),
-            onSelected: () {
-              unawaited(
-                Clipboard.setData(
-                  ClipboardData(
-                    text: noteToMarkdown(meta.title, _controller.engine.blocks),
-                  ),
-                ),
-              );
-              ScaffoldMessenger.maybeOf(
-                context,
-              )?.showSnackBar(SnackBar(content: Text(tr('Copied.'))));
-            },
-          ),
+          ...exports,
           GlassMenuEntry(
             icon: Icons.delete_outline_rounded,
             label: tr('Delete note'),
@@ -497,9 +554,11 @@ class _NotePageState extends ConsumerState<NotePage> {
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
     final meta = _controller.meta ?? widget.seed;
-    final members =
-        ref.watch(conversationMembersProvider(widget.conversationId)).value ??
-        const [];
+    final conversationId = widget.conversationId;
+    final members = conversationId == null
+        ? const <GroupMember>[]
+        : ref.watch(conversationMembersProvider(conversationId)).value ??
+              const [];
     final loading = _controller.loading && _controller.meta == null;
 
     Widget body;
@@ -528,15 +587,17 @@ class _NotePageState extends ConsumerState<NotePage> {
         controller: _controller,
         members: members,
         autofocus: widget.autofocus && _controller.canEdit,
-        extras: NoteEditorExtras(
-          comments: _comments,
-          canComment: _comments.canComment,
-          onComment: _startComment,
-          onOpenComments: _openComments,
-          onAssist: _controller.canEdit
-              ? (target) => unawaited(_startAssist(target))
-              : null,
-        ),
+        extras: _knowledge
+            ? const NoteEditorExtras()
+            : NoteEditorExtras(
+                comments: _comments,
+                canComment: _comments.canComment,
+                onComment: _startComment,
+                onOpenComments: _openComments,
+                onAssist: _controller.canEdit
+                    ? (target) => unawaited(_startAssist(target))
+                    : null,
+              ),
         padding: EdgeInsets.fromLTRB(
           widget.embedded ? 16 : 20,
           8,
@@ -561,6 +622,7 @@ class _NotePageState extends ConsumerState<NotePage> {
 
     final header = _NoteHeader(
       controller: _controller,
+      knowledge: _knowledge,
       embedded: widget.embedded,
       onBack: widget.onBack,
       onShare: _share,
@@ -585,6 +647,7 @@ class _NotePageState extends ConsumerState<NotePage> {
         child: Column(
           children: [
             header,
+            ?widget.trail,
             if (_controller.status == NoteSyncStatus.offline)
               _OfflineBanner(pending: _controller.engine.pendingCount),
             Expanded(child: body),
@@ -598,6 +661,7 @@ class _NotePageState extends ConsumerState<NotePage> {
 class _NoteHeader extends StatelessWidget {
   const _NoteHeader({
     required this.controller,
+    required this.knowledge,
     required this.embedded,
     required this.onShare,
     required this.onHistory,
@@ -612,6 +676,9 @@ class _NoteHeader extends StatelessWidget {
   final VoidCallback onComments;
 
   final NoteEditorController controller;
+
+  /// A page of a circle's knowledge base: no chat to share in, no comments.
+  final bool knowledge;
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback onShare;
@@ -686,24 +753,26 @@ class _NoteHeader extends StatelessWidget {
             ),
           ),
           if (meta != null) ...[
-            WeCordIconButton(
-              tooltip: tr('Share in the chat'),
-              icon: Icons.ios_share_rounded,
-              iconSize: 20,
-              size: size,
-              variant: WeCordButtonVariant.ghost,
-              onPressed: onShare,
-            ),
-            WeCordIconButton(
-              key: const ValueKey('note-comments-button'),
-              tooltip: tr('Comments'),
-              icon: Icons.mode_comment_outlined,
-              iconSize: 20,
-              size: size,
-              variant: WeCordButtonVariant.ghost,
-              badgeCount: commentCount > 0 ? commentCount : null,
-              onPressed: onComments,
-            ),
+            if (!knowledge) ...[
+              WeCordIconButton(
+                tooltip: tr('Share in the chat'),
+                icon: Icons.ios_share_rounded,
+                iconSize: 20,
+                size: size,
+                variant: WeCordButtonVariant.ghost,
+                onPressed: onShare,
+              ),
+              WeCordIconButton(
+                key: const ValueKey('note-comments-button'),
+                tooltip: tr('Comments'),
+                icon: Icons.mode_comment_outlined,
+                iconSize: 20,
+                size: size,
+                variant: WeCordButtonVariant.ghost,
+                badgeCount: commentCount > 0 ? commentCount : null,
+                onPressed: onComments,
+              ),
+            ],
             WeCordIconButton(
               tooltip: tr('Version history'),
               icon: Icons.history_rounded,

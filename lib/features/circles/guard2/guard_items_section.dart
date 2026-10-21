@@ -9,6 +9,7 @@ import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/guard2/guard2_repository.dart';
+import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/reports/circle_message_reports_section.dart'
     show ReviewSectionHeader;
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -107,6 +108,13 @@ class _GuardItemCardState extends ConsumerState<GuardItemCard> {
         router.push(
           '/circles/${widget.circleId}/channels/$conversationId',
           extra: item.channelName,
+        ),
+      );
+    } else if (item.type == GuardItemType.note) {
+      // A page of the knowledge base belongs to the circle, not a channel.
+      unawaited(
+        router.push(
+          KnowledgeBaseScreen.pathFor(widget.circleId, pageId: item.itemId),
         ),
       );
     }

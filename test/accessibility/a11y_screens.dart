@@ -78,6 +78,7 @@ import 'moments2_a11y_screens.dart';
 import 'guard2_a11y_screens.dart';
 import 'app_lock_a11y_screens.dart';
 import 'care_mode_a11y_screens.dart';
+import 'knowledge_base_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -832,4 +833,5 @@ final allA11yScreens = <A11yScreen>[
   ...publicCircleA11yScreens,
   ...appLockA11yScreens,
   ...careModeA11yScreens,
+  ...knowledgeBaseA11yScreens,
 ];

@@ -523,6 +523,10 @@ IconData circleAuditIcon(String action) {
     'guard_item_flag' => Icons.flag_outlined,
     'guard_item_dismiss' => Icons.check_circle_outline,
     'onboarding_update' => Icons.rule,
+    'kb_page_create' => Icons.note_add_outlined,
+    'kb_page_move' => Icons.drive_file_move_outlined,
+    'kb_page_delete' => Icons.delete_outline,
+    'kb_page_access' => Icons.manage_accounts_outlined,
     'onboarding_roles' => Icons.badge_outlined,
     'join_request_approve' => Icons.how_to_reg_outlined,
     'join_request_deny' => Icons.person_off_outlined,
@@ -837,6 +841,28 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       {},
     ),
     'onboarding_update' => (tr('{actor} updated the onboarding'), {}),
+    'kb_page_create' => (
+      (entry.targetLabel ?? '').isEmpty
+          ? tr('{actor} added a knowledge base page')
+          : tr('{actor} added the knowledge base page {target}'),
+      {},
+    ),
+    'kb_page_move' => (
+      (entry.targetLabel ?? '').isEmpty
+          ? tr('{actor} moved a knowledge base page')
+          : tr('{actor} moved the knowledge base page {target}'),
+      {},
+    ),
+    'kb_page_delete' => (
+      (entry.targetLabel ?? '').isEmpty
+          ? tr('{actor} deleted a knowledge base page')
+          : tr('{actor} deleted the knowledge base page {target}'),
+      {},
+    ),
+    'kb_page_access' => (
+      tr('{actor} changed who can read or edit a knowledge base page'),
+      {},
+    ),
     'onboarding_roles' => (tr('{target} chose roles through onboarding'), {}),
     'edit_window_update' => switch (_newValue(changes['edit_window_seconds'])) {
       final int seconds when seconds > 0 => (

@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   attachmentsToSign,
+  channelPostFilesToSign,
   EXPORT_LIFETIME_MS,
   type ExportBlob,
   type ExportCircle,
@@ -614,6 +615,20 @@ export async function collectExportData(
     null,
   );
 
+  // What I made in media and Q&A channels (export_my_channel_posts).
+  const channelPosts = await tryRead<Row | null>(
+    skipped,
+    "picture posts and questions",
+    async () => {
+      const result = await admin.rpc("export_my_channel_posts", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -639,6 +654,10 @@ export async function collectExportData(
   }
   // The pictures on my comments are linked.
   for (const { bucket, path } of momentsMoreFilesToSign(momentsMore)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures of my media posts are linked.
+  for (const { bucket, path } of channelPostFilesToSign(channelPosts)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -701,6 +720,7 @@ export async function collectExportData(
     momentsMore,
     knowledge,
     honors,
+    channelPosts,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

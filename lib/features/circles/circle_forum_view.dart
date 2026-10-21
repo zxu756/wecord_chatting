@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/circles/channel_types/channel_types_repository.dart';
+import 'package:wecord/features/circles/channel_types/media_wall.dart';
+import 'package:wecord/features/circles/channel_types/qa_models.dart';
+import 'package:wecord/features/circles/channel_types/qa_widgets.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -22,6 +26,10 @@ import 'package:wecord/shared/ui/ui.dart';
 /// first with pinned posts on top, filtered by tag, loading more while
 /// scrolling. Members who can send messages start new posts; tapping a post
 /// opens it through [onOpenPost].
+///
+/// The same view shows the two other post channels (C9): a media channel lists
+/// its posts as a wall of pictures, and a Q&A channel adds a solved filter and
+/// a "Solved" mark on the questions that are.
 class CircleForumView extends ConsumerStatefulWidget {
   const CircleForumView({
     required this.detail,
@@ -50,6 +58,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
   final _scrollController = ScrollController();
   final _posts = <ForumPost>[];
   var _sort = ForumPostSort.activity;
+  var _status = QaStatusFilter.all;
   String? _tagId;
   var _loading = false;
   var _hasMore = true;
@@ -61,6 +70,18 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
   var _generation = 0;
 
   CircleChannel get _channel => widget.channel;
+
+  IconData get _kindIcon => _channel.isMedia
+      ? Icons.photo_library_outlined
+      : _channel.isQa
+      ? Icons.help_outline_rounded
+      : Icons.forum_outlined;
+
+  String get _kindLabel => _channel.isMedia
+      ? tr('Media')
+      : _channel.isQa
+      ? tr('Q&A')
+      : tr('Forum');
 
   @override
   void initState() {
@@ -126,6 +147,35 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
 
   int get _unpinnedCount => _posts.where((post) => !post.isPinned).length;
 
+  /// A page of posts: a Q&A channel's through its own list (the solved
+  /// filter), every other channel's through the forum's.
+  Future<List<ForumPost>> _fetch({
+    ForumPostCursor? before,
+    required int limit,
+  }) {
+    if (_channel.isQa) {
+      return ref
+          .read(channelTypesRepositoryProvider)
+          .listPosts(
+            channelId: _channel.id,
+            sort: _sort,
+            tagId: _tagId,
+            status: _status,
+            before: before,
+            limit: limit,
+          );
+    }
+    return ref
+        .read(circlesRepositoryProvider)
+        .listForumPosts(
+          channelId: _channel.id,
+          sort: _sort,
+          tagId: _tagId,
+          before: before,
+          limit: limit,
+        );
+  }
+
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) {
       return;
@@ -139,15 +189,10 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
       _error = null;
     });
     try {
-      final page = await ref
-          .read(circlesRepositoryProvider)
-          .listForumPosts(
-            channelId: _channel.id,
-            sort: _sort,
-            tagId: _tagId,
-            before: first ? null : cursor,
-            limit: widget.pageSize,
-          );
+      final page = await _fetch(
+        before: first ? null : cursor,
+        limit: widget.pageSize,
+      );
       if (!mounted || generation != _generation) {
         return;
       }
@@ -183,14 +228,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
     final generation = ++_generation;
     final limit = _unpinnedCount.clamp(widget.pageSize, 100);
     try {
-      final page = await ref
-          .read(circlesRepositoryProvider)
-          .listForumPosts(
-            channelId: _channel.id,
-            sort: _sort,
-            tagId: _tagId,
-            limit: limit,
-          );
+      final page = await _fetch(limit: limit);
       if (!mounted || generation != _generation) {
         return;
       }
@@ -226,6 +264,14 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
       return;
     }
     _sort = sort;
+    _restart();
+  }
+
+  void _setStatus(QaStatusFilter status) {
+    if (status == _status) {
+      return;
+    }
+    _status = status;
     _restart();
   }
 
@@ -292,6 +338,16 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
               .read(circlesRepositoryProvider)
               .setForumPostTags(threadId: post.id, tagIds: tagIds),
           failure: tr('Could not change the tags. Try again.'),
+        );
+      case ForumPostAction.markSolved:
+        await _run(
+          () => ref.read(channelTypesRepositoryProvider).markSolved(post.id),
+          failure: tr('Could not mark the question solved. Try again.'),
+        );
+      case ForumPostAction.reopen:
+        await _run(
+          () => ref.read(channelTypesRepositoryProvider).reopen(post.id),
+          failure: tr('Could not reopen the question. Try again.'),
         );
       case ForumPostAction.archive:
       case ForumPostAction.unarchive:
@@ -404,7 +460,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
         shape: Border(bottom: BorderSide(color: c.lineSoft)),
         leading: Center(
           child: ThingAvatar(
-            icon: Icons.forum_outlined,
+            icon: _kindIcon,
             size: 36,
             color: c.raised,
             foregroundColor: c.ink,
@@ -435,7 +491,7 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                   style: subtitleStyle,
                 )
               else
-                Text(tr('Forum'), style: subtitleStyle),
+                Text(_kindLabel, style: subtitleStyle),
             ],
           ),
         ),
@@ -456,27 +512,35 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
                 return Row(
                   children: [
                     if (canPost)
-                      Flexible(
-                        child: WeCordButton(
-                          key: const ValueKey('forum-new-post'),
-                          variant: WeCordButtonVariant.accent,
-                          size: touch
-                              ? WeCordButtonSize.medium
-                              : WeCordButtonSize.small,
-                          onPressed: _newPost,
-                          icon: Icons.add_rounded,
-                          label: tr('New post'),
+                      Expanded(
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: WeCordButton(
+                            key: const ValueKey('forum-new-post'),
+                            variant: WeCordButtonVariant.accent,
+                            size: touch
+                                ? WeCordButtonSize.medium
+                                : WeCordButtonSize.small,
+                            onPressed: _newPost,
+                            icon: Icons.add_rounded,
+                            label: _channel.isQa
+                                ? tr('Ask a question')
+                                : tr('New post'),
+                          ),
                         ),
                       )
                     else
                       Expanded(
                         child: Text(
-                          tr('You cannot post in this forum.'),
+                          _channel.isMedia
+                              ? tr('You cannot post in this media channel.')
+                              : _channel.isQa
+                              ? tr('You cannot ask in this channel.')
+                              : tr('You cannot post in this forum.'),
                           key: const ValueKey('forum-read-only'),
                           style: TextStyle(fontSize: 13, color: c.muted),
                         ),
                       ),
-                    if (canPost) const Spacer(),
                     const SizedBox(width: 8),
                     Builder(
                       builder: (buttonContext) => WeCordPressable(
@@ -547,6 +611,8 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
               },
             ),
           ),
+          if (_channel.isQa)
+            QaStatusBar(selected: _status, onChanged: _setStatus),
           if (_channel.tags.isNotEmpty)
             SizedBox(
               height: touch ? 62 : 44,
@@ -587,8 +653,10 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
     if (_posts.isEmpty) {
       if (_error != null) {
         return CircleEmptyState(
-          icon: Icons.forum_outlined,
-          title: tr('Could not load posts.'),
+          icon: _kindIcon,
+          title: _channel.isQa
+              ? tr('Could not load questions.')
+              : tr('Could not load posts.'),
           action: WeCordButton(
             label: tr('Retry'),
             variant: WeCordButtonVariant.secondary,
@@ -599,16 +667,74 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
       if (_loading || _hasMore) {
         return const Center(child: CircularProgressIndicator());
       }
+      final filtered = _tagId != null || _status != QaStatusFilter.all;
       return CircleEmptyState(
-        icon: Icons.forum_outlined,
-        title: _tagId == null
-            ? tr('No posts yet')
-            : tr('No posts with this tag'),
-        message: canPost && _tagId == null
-            ? tr('Start the first conversation with New post.')
+        icon: _kindIcon,
+        title: _tagId != null
+            ? tr('No posts with this tag')
+            : _status == QaStatusFilter.solved
+            ? tr('No solved questions')
+            : _status == QaStatusFilter.unsolved
+            ? tr('No open questions')
+            : _channel.isMedia
+            ? tr('No pictures yet')
+            : _channel.isQa
+            ? tr('No questions yet')
+            : tr('No posts yet'),
+        message: canPost && !filtered
+            ? _channel.isMedia
+                  ? tr('Share the first picture with New post.')
+                  : _channel.isQa
+                  ? tr('Ask the first question with Ask a question.')
+                  : tr('Start the first conversation with New post.')
             : null,
       );
     }
+    List<ForumPostAction> actionsFor(ForumPost post) => [
+      if (canPin) post.isPinned ? ForumPostAction.unpin : ForumPostAction.pin,
+      if (post.canManage && _channel.tags.isNotEmpty) ForumPostAction.editTags,
+      if (_channel.isQa && post.canManage)
+        post.isSolved ? ForumPostAction.reopen : ForumPostAction.markSolved,
+      if (post.canManage)
+        post.isArchived ? ForumPostAction.unarchive : ForumPostAction.archive,
+    ];
+
+    Widget? listFooter() {
+      if (_error != null) {
+        return Center(
+          child: WeCordButton(
+            label: tr('Could not load more. Retry'),
+            variant: WeCordButtonVariant.ghost,
+            onPressed: _loadMore,
+          ),
+        );
+      }
+      if (_hasMore) {
+        return const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
+      return null;
+    }
+
+    if (_channel.isMedia) {
+      return MediaWall(
+        controller: _scrollController,
+        posts: _posts,
+        onOpen: _open,
+        footer: listFooter(),
+        actionsFor: (post) => [
+          for (final action in actionsFor(post))
+            MediaTileAction(
+              label: tr(action.label),
+              icon: action.icon,
+              onSelected: () => unawaited(_onPostAction(post, action)),
+            ),
+        ],
+      );
+    }
+
     return ListView.builder(
       key: const ValueKey('forum-post-list'),
       controller: _scrollController,
@@ -616,34 +742,10 @@ class _CircleForumViewState extends ConsumerState<CircleForumView> {
       itemCount: _posts.length + 1,
       itemBuilder: (context, index) {
         if (index == _posts.length) {
-          if (_error != null) {
-            return Center(
-              child: WeCordButton(
-                label: tr('Could not load more. Retry'),
-                variant: WeCordButtonVariant.ghost,
-                onPressed: _loadMore,
-              ),
-            );
-          }
-          if (_hasMore) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          return const SizedBox(height: 16);
+          return listFooter() ?? const SizedBox(height: 16);
         }
         final post = _posts[index];
-        final actions = [
-          if (canPin)
-            post.isPinned ? ForumPostAction.unpin : ForumPostAction.pin,
-          if (post.canManage && _channel.tags.isNotEmpty)
-            ForumPostAction.editTags,
-          if (post.canManage)
-            post.isArchived
-                ? ForumPostAction.unarchive
-                : ForumPostAction.archive,
-        ];
+        final actions = actionsFor(post);
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: ForumPostCard(
@@ -664,7 +766,9 @@ enum ForumPostAction {
   unpin('Unpin post', Icons.push_pin),
   editTags('Edit tags', Icons.sell_outlined),
   archive('Archive post', Icons.archive_outlined),
-  unarchive('Unarchive post', Icons.unarchive_outlined);
+  unarchive('Unarchive post', Icons.unarchive_outlined),
+  markSolved('Mark as solved', Icons.check_circle_outline_rounded),
+  reopen('Reopen question', Icons.help_outline_rounded);
 
   const ForumPostAction(this.label, this.icon);
 
@@ -755,12 +859,13 @@ class ForumPostCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (post.isPinned || post.isArchived)
+                    if (post.isPinned || post.isArchived || post.isSolved)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Wrap(
                           spacing: 8,
                           children: [
+                            if (post.isSolved) const QaSolvedBadge(),
                             if (post.isPinned)
                               _Badge(
                                 key: const ValueKey('forum-post-pinned'),

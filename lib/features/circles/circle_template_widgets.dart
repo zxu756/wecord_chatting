@@ -498,6 +498,8 @@ class CircleTemplatePreview extends StatelessWidget {
                 CircleChannelKind.stage => Icons.podcasts,
                 CircleChannelKind.forum => Icons.forum_outlined,
                 CircleChannelKind.announcement => Icons.campaign_outlined,
+                CircleChannelKind.media => Icons.photo_library_outlined,
+                CircleChannelKind.qa => Icons.help_outline_rounded,
                 CircleChannelKind.text => Icons.tag,
               },
               size: 16,

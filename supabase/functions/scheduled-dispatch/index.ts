@@ -46,6 +46,7 @@ import { type BirthdayPushRow, birthdayTarget } from "./birthdays.ts";
 import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type TitlePushRow, titleTarget } from "./titles.ts";
+import { type QaPushRow, qaTarget } from "./qa.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -227,6 +228,17 @@ Deno.serve(async (request) => {
     console.error("claim_circle_title_pushes failed", titlesError.message);
   }
   targets.push(...((titles ?? []) as TitlePushRow[]).map(titleTarget));
+
+  // "Your answer was accepted" / "your question was marked solved" (C9):
+  // mark_post_solved wakes this function.
+  const { data: qaPushes, error: qaError } = await admin.rpc(
+    "claim_qa_answer_pushes",
+  );
+  if (qaError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_qa_answer_pushes failed", qaError.message);
+  }
+  targets.push(...((qaPushes ?? []) as QaPushRow[]).map(qaTarget));
 
   // The push of an official notice (K6), a batch of devices at a time: in
   // the language of each device, held back in quiet hours below like the

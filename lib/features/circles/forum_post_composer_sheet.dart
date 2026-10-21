@@ -12,6 +12,8 @@ import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/group.dart';
+import 'package:wecord/shared/models/message.dart'
+    show ImageAttachment, cleanImageAlt, maxImageAltLength;
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the new post form of a forum. Returns the created post, or null
@@ -27,7 +29,9 @@ Future<ForumPost?> showForumPostComposer(
 }
 
 /// The new post form: title, body (with @mentions of members who can see
-/// the forum), tags and an optional image.
+/// the forum), tags and an optional image. In a media channel the picture is
+/// required and can carry a description for people who cannot see it (L8); in
+/// a Q&A channel it is a question.
 class ForumPostComposerSheet extends ConsumerStatefulWidget {
   const ForumPostComposerSheet({required this.channel, super.key});
 
@@ -42,6 +46,7 @@ class _ForumPostComposerSheetState
     extends ConsumerState<ForumPostComposerSheet> {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _altController = TextEditingController();
   final _tagIds = <String>{};
   final _mentionDraft = MentionDraft();
   String? _mentionQuery;
@@ -60,6 +65,7 @@ class _ForumPostComposerSheetState
   void dispose() {
     _titleController.dispose();
     _bodyController.dispose();
+    _altController.dispose();
     super.dispose();
   }
 
@@ -99,6 +105,10 @@ class _ForumPostComposerSheetState
       setState(() => _errorText = tr('Give your post a title.'));
       return;
     }
+    if (widget.channel.isMedia && _image == null) {
+      setState(() => _errorText = tr('Add a picture to post here.'));
+      return;
+    }
     if (body.isEmpty && _image == null) {
       setState(() => _errorText = tr('Write something or add an image.'));
       return;
@@ -109,11 +119,25 @@ class _ForumPostComposerSheetState
     });
     final repository = ref.read(circlesRepositoryProvider);
     try {
-      final image = _image == null
+      final uploaded = _image == null
           ? null
           : await repository.uploadForumImage(
               forumConversationId: widget.channel.conversationId,
               image: _image!,
+            );
+      // The description rides on the picture, as in chats and Moments.
+      final alt = cleanImageAlt(_altController.text);
+      final image = uploaded == null || alt == null
+          ? uploaded
+          : ImageAttachment(
+              bucket: uploaded.bucket,
+              path: uploaded.path,
+              mimeType: uploaded.mimeType,
+              size: uploaded.size,
+              width: uploaded.width,
+              height: uploaded.height,
+              blurhash: uploaded.blurhash,
+              alt: alt,
             );
       final post = await repository.createForumPost(
         channelId: widget.channel.id,
@@ -163,7 +187,9 @@ class _ForumPostComposerSheetState
           );
     final c = context.tokens.colors;
     return CircleFormBody(
-      title: tr('New post in {channel}', {'channel': widget.channel.name}),
+      title: widget.channel.isQa
+          ? tr('Ask in {channel}', {'channel': widget.channel.name})
+          : tr('New post in {channel}', {'channel': widget.channel.name}),
       errorText: _errorText,
       actions: [
         WeCordButton(
@@ -187,7 +213,7 @@ class _ForumPostComposerSheetState
           enabled: !_saving,
           maxLength: ForumPost.maxTitleLength,
           textInputAction: TextInputAction.next,
-          label: tr('Title'),
+          label: widget.channel.isQa ? tr('Question') : tr('Title'),
         ),
         const SizedBox(height: 4),
         WeCordTextField(
@@ -198,7 +224,7 @@ class _ForumPostComposerSheetState
           maxLines: 8,
           maxLength: ForumPost.maxBodyLength,
           keyboardType: TextInputType.multiline,
-          label: tr('Message'),
+          label: widget.channel.isQa ? tr('Details') : tr('Message'),
         ),
         if (candidates.isNotEmpty) ...[
           MentionCandidateList(
@@ -232,7 +258,9 @@ class _ForumPostComposerSheetState
               variant: WeCordButtonVariant.secondary,
               onPressed: _saving || _picking ? null : _pickImage,
               icon: Icons.image_outlined,
-              label: tr('Add image'),
+              label: widget.channel.isMedia
+                  ? tr('Add picture')
+                  : tr('Add image'),
             ),
           )
         else
@@ -271,6 +299,27 @@ class _ForumPostComposerSheetState
               ],
             ),
           ),
+        if (image != null) ...[
+          const SizedBox(height: 12),
+          WeCordTextField(
+            fieldKey: const ValueKey('forum-post-image-alt-field'),
+            controller: _altController,
+            enabled: !_saving,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: maxImageAltLength,
+            keyboardType: TextInputType.multiline,
+            label: trIn('picture-description', 'Description'),
+            hint: tr('A dog asleep on a red sofa'),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              tr('Helps people who cannot see the picture.'),
+              style: TextStyle(fontSize: 12.5, color: c.muted),
+            ),
+          ),
+        ],
       ],
     );
   }

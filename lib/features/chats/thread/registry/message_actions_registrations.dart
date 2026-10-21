@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/care_mode/care_registry_filters.dart';
 import 'package:wecord/features/care_mode/read_aloud.dart';
+import 'package:wecord/features/circles/channel_types/qa_actions.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/chats/chat_polish/quote_reply.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
@@ -30,6 +31,7 @@ final List<MessageActionContribution> messageActionExtensions = [
   quoteReplyAction,
   urgentMessageAction,
   readAloudAction,
+  qaAcceptAnswerAction,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

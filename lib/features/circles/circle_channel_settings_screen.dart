@@ -986,7 +986,9 @@ class _DeleteChannelDialogState extends State<_DeleteChannelDialog> {
     return CircleDialog(
       title: tr('Delete channel'),
       message: switch (widget.channel.kind) {
-        CircleChannelKind.forum => tr(
+        CircleChannelKind.forum ||
+        CircleChannelKind.media ||
+        CircleChannelKind.qa => tr(
           'Delete #{name} with all of its posts? This cannot be undone.',
           {'name': name},
         ),

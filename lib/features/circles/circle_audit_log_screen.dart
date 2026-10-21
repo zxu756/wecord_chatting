@@ -504,6 +504,8 @@ IconData circleAuditIcon(String action) {
     'forum_tag_reorder' => Icons.swap_vert,
     'forum_post_pin' => Icons.push_pin_outlined,
     'forum_post_unpin' => Icons.push_pin,
+    'forum_post_solved' => Icons.check_circle_outline_rounded,
+    'forum_post_reopened' => Icons.help_outline_rounded,
     'event_create' => Icons.event_outlined,
     'event_update' => Icons.edit_calendar_outlined,
     'event_cancel' => Icons.event_busy_outlined,
@@ -730,6 +732,20 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
           ? (tr('{actor} unpinned post {target}'), {})
           : (
               tr('{actor} unpinned post {target} in {channel}'),
+              {'channel': inChannel},
+            ),
+    'forum_post_solved' =>
+      inChannel == null
+          ? (tr('{actor} marked question {target} as solved'), {})
+          : (
+              tr('{actor} marked question {target} in {channel} as solved'),
+              {'channel': inChannel},
+            ),
+    'forum_post_reopened' =>
+      inChannel == null
+          ? (tr('{actor} reopened question {target}'), {})
+          : (
+              tr('{actor} reopened question {target} in {channel}'),
               {'channel': inChannel},
             ),
     'event_create' => (tr('{actor} scheduled event {target}'), {}),

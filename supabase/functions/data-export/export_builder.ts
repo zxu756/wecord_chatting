@@ -176,6 +176,12 @@ export interface ExportData {
    * callers.
    */
   events2?: Json | null;
+  /**
+   * My quick replies and my away auto-reply settings (export_my_quick_replies,
+   * migration 202610280330); null when they could not be read, absent in older
+   * callers.
+   */
+  quickReplies?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -730,6 +736,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.events2) {
     out.push({ path: "data/events.json", value: eventsJson(data) });
+  }
+  if (data.quickReplies) {
+    out.push({
+      path: "data/quick_replies.json",
+      value: quickRepliesJson(data),
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -1996,6 +2008,55 @@ ${section("Events you made", made, "None.")}`,
   );
 }
 
+/** My quick replies and my away auto-reply (A8). */
+function quickRepliesJson(data: ExportData): Json {
+  const source = isObject(data.quickReplies) ? data.quickReplies : {};
+  return {
+    quick_replies: objects(source["quick_replies"]),
+    away: isObject(source["away"]) ? source["away"] : null,
+  };
+}
+
+/** My quick replies and the away message I set (A8). */
+export function buildQuickRepliesHtml(data: ExportData): string {
+  const source = isObject(data.quickReplies) ? data.quickReplies : {};
+  const replies = objects(source["quick_replies"]).map((reply) =>
+    entry(
+      str(reply["created_at"]),
+      `<div><strong>/${
+        escapeHtml(str(reply["shortcut"]) ?? "")
+      }</strong></div><div class="body">${
+        escapeHtml(str(reply["body"]) ?? "")
+      }</div>`,
+    )
+  ).join("");
+  const away = isObject(source["away"]) ? source["away"] : null;
+  const awayHtml = away
+    ? `<div class="row"><div class="body">${
+      escapeHtml(str(away["message"]) ?? "")
+    }</div><div class="muted">${away["enabled"] === true ? "On" : "Off"}${
+      str(away["until"])
+        ? ` · until ${escapeHtml(str(away["until"]) ?? "")}`
+        : ""
+    }${
+      away["during_quiet_hours"] === true ? " · also during quiet hours" : ""
+    }</div></div>`
+    : '<div class="row muted">None.</div>';
+  return page(
+    "Quick replies — your WeCord data",
+    `${backLink()}<h1>Quick replies</h1>
+<p class="muted">The phrases you keep to send with a slash, and the message your
+away auto-reply sends. The auto-replies it already sent are with your
+messages.</p>
+<h2>Quick replies</h2>
+<div class="card">${
+      replies || '<div class="row muted">No quick replies.</div>'
+    }</div>
+<h2>Away auto-reply</h2>
+<div class="card">${awayHtml}</div>`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -2247,6 +2308,17 @@ export function buildSectionPages(
       content: buildEventsHtml(data),
     });
   }
+  if (data.quickReplies) {
+    const replies = objects(
+      isObject(data.quickReplies) ? data.quickReplies["quick_replies"] : null,
+    ).length;
+    out.push({
+      path: "pages/quick_replies.html",
+      label: "Quick replies",
+      summary: `${replies} quick repl${replies === 1 ? "y" : "ies"}`,
+      content: buildQuickRepliesHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2340,6 +2412,8 @@ data/channel_posts.json The posts you made in media channels (with a link to
 data/events.json      The events you signed up to (with your answers), waited
                       for, checked in to, the pictures you added and the
                       events you made (never other people's answers).
+data/quick_replies.json The quick replies you keep and your away auto-reply
+                      (the auto-replies it sent are with your messages).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

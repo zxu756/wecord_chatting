@@ -644,6 +644,20 @@ export async function collectExportData(
     null,
   );
 
+  // My quick replies and away auto-reply (export_my_quick_replies).
+  const quickReplies = await tryRead<Row | null>(
+    skipped,
+    "quick replies",
+    async () => {
+      const result = await admin.rpc("export_my_quick_replies", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -741,6 +755,7 @@ export async function collectExportData(
     honors,
     channelPosts,
     events2,
+    quickReplies,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

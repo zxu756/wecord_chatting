@@ -48,6 +48,7 @@ import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type TitlePushRow, titleTarget } from "./titles.ts";
 import { type QaPushRow, qaTarget } from "./qa.ts";
 import { type EventNoticePushRow, eventNoticeTarget } from "./events2.ts";
+import { awayReplyTargets } from "./away_replies.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -140,6 +141,11 @@ Deno.serve(async (request) => {
       })),
     );
   }
+
+  // Away auto-replies (A8): ordinary messages from the away person, written
+  // by the database; pushed like a scheduled message the sender just sent.
+  // The trigger and a cron job of their own wake this function.
+  targets.push(...await awayReplyTargets(admin));
 
   // Reminders that came due: "Reminder" / "{sender}: {text}".
   const { data: reminders, error: reminderError } = await admin.rpc(

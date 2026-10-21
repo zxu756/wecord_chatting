@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>WeCord uses the camera for video in voice channels, to scan QR codes and to take photos and videos for your daily.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>WeCord uses Face ID to unlock the app and your locked chats. Your face never leaves your iPhone.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>WeCord uses your location to send it to a chat, and to share it live for as long as you choose. Sharing pauses when WeCord is closed.</string>
 	<key>NSMicrophoneUsageDescription</key>

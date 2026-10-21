@@ -9,6 +9,7 @@
 // Answers {created, pushed, removed}. See docs/chat-events.md.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
+import { maskLockedPushes } from "../push/locked_chats.ts";
 import { dropQuietPushes } from "../push/quiet_hours.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
 import {
@@ -60,10 +61,12 @@ Deno.serve(async (request) => {
     (claimed.data ?? []) as ReminderTarget[],
     Math.floor(Date.now() / 1000),
   );
+  // A chat the subscriber locked is told without its words (G2).
+  const unrevealing = await maskLockedPushes(admin, audible);
   // Times in an event's title are written for each subscriber's zone.
   const targets = await writeTimesForTargets(
     admin,
-    audible,
+    unrevealing,
     Math.floor(Date.now() / 1000),
   );
   const gone: string[] = [];

@@ -265,7 +265,7 @@ final effectiveChatFolderSelectionProvider = Provider.autoDispose<String?>((
 /// self first, as the list shows them.
 final chatFolderChatsProvider = Provider.autoDispose<List<ConversationSummary>>(
   (ref) {
-    final all = ref.watch(conversationsProvider).value ?? const [];
+    final all = ref.watch(listedConversationsProvider).value ?? const [];
     return [
       for (final chat in all)
         if (chat.isDirectMessage) chat,

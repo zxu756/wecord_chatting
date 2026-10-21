@@ -17,6 +17,7 @@
 // All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { maskLockedPushes } from "./locked_chats.ts";
 import { dropQuietPushes } from "./quiet_hours.ts";
 import { dropSilentPushes } from "./silent_messages.ts";
 import { writeTimesForTargets } from "./time_tokens.ts";
@@ -194,10 +195,12 @@ Deno.serve(async (request) => {
       ? null
       : (messageId as string),
   );
+  // A chat the subscriber locked is told without its words (G2).
+  const unrevealing = await maskLockedPushes(admin, audible);
   // Times in the text are written for each subscriber's zone and language.
   const targets = await writeTimesForTargets(
     admin,
-    audible,
+    unrevealing,
     Math.floor(Date.now() / 1000),
   );
   const gone: string[] = [];

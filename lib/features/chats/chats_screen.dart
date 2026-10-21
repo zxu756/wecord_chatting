@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/app_lock/chat_lock_actions.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chat_folders/add_to_folder_sheet.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
@@ -34,13 +36,24 @@ class ChatThreadRouteExtra {
 final conversationsProvider =
     FutureProvider.autoDispose<List<ConversationSummary>>((ref) async {
       final repository = ref.watch(chatsRepositoryProvider);
+      // Locked chats are marked so no list shows their latest message (G2).
+      final locked = ref.watch(lockedConversationIdsProvider);
+      List<ConversationSummary> marked(List<ConversationSummary> list) =>
+          locked.isEmpty
+          ? list
+          : [
+              for (final conversation in list)
+                locked.contains(conversation.id)
+                    ? conversation.copyWith(isLocked: true)
+                    : conversation,
+            ];
       ref.watch(reconnectCountProvider);
       final subscription = repository.conversationChanges().listen((_) {
         ref.invalidateSelf();
       });
       ref.onDispose(subscription.cancel);
       if (repository is! ConversationRowsSource) {
-        return repository.listConversations();
+        return marked(await repository.listConversations());
       }
       final rowsSource = repository as ConversationRowsSource;
       final memo = ref.read(_conversationRowsMemoProvider);
@@ -48,7 +61,7 @@ final conversationsProvider =
       final userId = ref.watch(authRepositoryProvider).currentUser?.id;
 
       List<ConversationSummary> parse(List<Map<String, dynamic>> rows) {
-        return [for (final row in rows) ?_tryConversation(row)];
+        return marked([for (final row in rows) ?_tryConversation(row)]);
       }
 
       void keep(List<Map<String, dynamic>> rows) {
@@ -99,6 +112,24 @@ final conversationsProvider =
       return parse(cached);
     });
 
+/// [conversationsProvider] without the locked chats the person hid from the
+/// lists (G2). Lists and pickers watch this one; a page that looks a chat up
+/// by id, and the chat itself, still use the full list.
+final listedConversationsProvider =
+    Provider.autoDispose<AsyncValue<List<ConversationSummary>>>((ref) {
+      final all = ref.watch(conversationsProvider);
+      final hidden = ref.watch(hiddenConversationIdsProvider);
+      if (hidden.isEmpty) {
+        return all;
+      }
+      return all.whenData(
+        (list) => [
+          for (final conversation in list)
+            if (!hidden.contains(conversation.id)) conversation,
+        ],
+      );
+    });
+
 ConversationSummary? _tryConversation(Map<String, dynamic> row) {
   try {
     return ConversationSummary.fromJson(row);
@@ -142,7 +173,7 @@ abstract final class ChatsScreen {
   static const path = '/chats';
 }
 
-enum _ConversationAction { pin, mute, markReadState, folders, hide }
+enum _ConversationAction { pin, mute, markReadState, folders, lock, hide }
 
 Map<_ConversationAction, String> _conversationActionLabels(
   ConversationSummary conversation,
@@ -157,6 +188,8 @@ Map<_ConversationAction, String> _conversationActionLabels(
         ? tr('Mark read')
         : tr('Mark unread'),
     _ConversationAction.folders: tr('Add to folder…'),
+    if (conversation.isDirectMessage)
+      _ConversationAction.lock: chatLockLabel(locked: conversation.isLocked),
     _ConversationAction.hide: tr('Delete conversation'),
   };
 }
@@ -206,6 +239,10 @@ Future<void> showConversationActions(
                     _ConversationAction.markReadState =>
                       Icons.mark_chat_read_outlined,
                     _ConversationAction.folders => Icons.folder_outlined,
+                    _ConversationAction.lock =>
+                      conversation.isLocked
+                          ? Icons.lock_open_rounded
+                          : Icons.lock_outline_rounded,
                     _ConversationAction.hide => Icons.delete_outline,
                   }),
                   title: Text(label),
@@ -219,6 +256,10 @@ Future<void> showConversationActions(
   );
   if (action == _ConversationAction.folders && context.mounted) {
     await showAddToFolderSheet(context, conversation);
+    return;
+  }
+  if (action == _ConversationAction.lock && context.mounted) {
+    await toggleChatLock(context, ref, conversation.id);
     return;
   }
   if (action != null && context.mounted) {
@@ -247,7 +288,8 @@ void _handleConversationAction(
           ? repository.markConversationRead(conversation.id)
           : repository.markConversationUnread(conversation.id),
     // Handled by the caller: it opens a sheet of its own.
-    _ConversationAction.folders => Future<void>.value(),
+    _ConversationAction.folders || _ConversationAction.lock =>
+      Future<void>.value(),
     _ConversationAction.hide => repository.hideConversation(conversation.id),
   };
 

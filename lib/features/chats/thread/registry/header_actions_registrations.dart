@@ -8,6 +8,7 @@
 // `order` to place yours.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
+import 'package:wecord/features/app_lock/chat_lock_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
 import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
@@ -16,6 +17,7 @@ import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
 final List<HeaderActionContribution> headerActionExtensions = [
   // myFeatureHeaderAction,
   autoTranslateHeaderAction,
+  chatLockHeaderAction,
   threadLockHeaderAction,
 ];
 

@@ -7,6 +7,7 @@ import 'package:wecord/shared/l10n/zh/zh_ops_metrics.dart';
 import 'package:wecord/shared/l10n/zh/zh_storage_a11y.dart';
 import 'package:wecord/shared/l10n/zh/zh_moments2.dart';
 import 'package:wecord/shared/l10n/zh/zh_public_circle.dart';
+import 'package:wecord/shared/l10n/zh/zh_app_lock.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -181,6 +182,7 @@ const zhAreas = <Map<String, String>>[
   zhGuard2,
   zhOpsMetrics,
   zhPublicCircle,
+  zhAppLock,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

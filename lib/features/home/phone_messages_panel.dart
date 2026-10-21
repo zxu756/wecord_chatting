@@ -52,7 +52,7 @@ class PhoneMessagesPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final c = context.tokens.colors;
-    final conversations = ref.watch(conversationsProvider);
+    final conversations = ref.watch(listedConversationsProvider);
     final friends = ref.watch(friendsProvider).value ?? const <Profile>[];
     final onlineIds =
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};
@@ -879,9 +879,12 @@ class PhoneConversationRow extends ConsumerWidget {
                 null => null,
               });
     final lastMessageAt = conversation.lastMessageAt;
-    final draft = ref.watch(
-      composerDraftsProvider.select((drafts) => drafts[conversation.id]),
-    );
+    // A locked chat shows nothing of what was typed in it (G2).
+    final draft = conversation.isLocked
+        ? null
+        : ref.watch(
+            composerDraftsProvider.select((drafts) => drafts[conversation.id]),
+          );
     final hasDraft = draft != null && draft.hasText;
     final previewStyle = TextStyle(
       fontSize: 14,

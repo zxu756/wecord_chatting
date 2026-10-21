@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/album_label.dart';
@@ -43,6 +44,7 @@ final notificationCoordinatorProvider = Provider<NotificationCoordinator>((
         ref.read(presenceSettingsProvider).value?.status ==
         PresenceStatus.doNotDisturb,
     quietSettings: () => ref.read(notificationSettingsProvider).value,
+    lockedChatIds: () => ref.read(lockedConversationIdsProvider),
     starredFriendIds: () async {
       try {
         return (await ref.read(friendTagsRepositoryProvider).load()).starred;
@@ -74,6 +76,7 @@ class NotificationCoordinator {
     this._onRemindersChanged,
     bool Function()? doNotDisturb,
     this._quietSettings,
+    this._lockedChatIds,
     this._starredFriendIds,
     DateTime Function()? now,
     Stream<void>? pollTicks,
@@ -98,6 +101,10 @@ class NotificationCoordinator {
 
   /// The person's quiet hours, when there are any to follow.
   final NotificationSettings? Function()? _quietSettings;
+
+  /// The chats the person locked: a notification about one names no sender
+  /// and shows no text (G2).
+  final Set<String> Function()? _lockedChatIds;
   final Future<Set<String>> Function()? _starredFriendIds;
   Set<String> _starredCache = const {};
   DateTime? _starredFetchedAt;
@@ -216,7 +223,9 @@ class NotificationCoordinator {
           MessageType.system => systemNoticeText(reminder.body),
         };
         final sender = reminder.senderName.trim();
-        final body = !preferences.showPreviews || text.isEmpty
+        final locked =
+            _lockedChatIds?.call().contains(reminder.conversationId) ?? false;
+        final body = locked || !preferences.showPreviews || text.isEmpty
             ? tr('A message you wanted to be reminded about')
             : sender.isEmpty
             ? text
@@ -507,10 +516,14 @@ class NotificationCoordinator {
         return;
       }
       try {
+        final locked = _lockedChatIds?.call().contains(conversation.id) ?? false;
         await _notificationService.showMessageNotification(
           conversationId: conversation.id,
-          title: _notificationTitle(conversation),
-          body: _notificationBody(conversation, preferences),
+          // A locked chat is told without a name or a word of it.
+          title: locked ? 'WeCord' : _notificationTitle(conversation),
+          body: locked
+              ? tr('You have a new message')
+              : _notificationBody(conversation, preferences),
         );
       } catch (_) {
         continue;

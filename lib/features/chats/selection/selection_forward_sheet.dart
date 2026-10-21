@@ -136,7 +136,7 @@ class _SelectionForwardSheetState extends ConsumerState<SelectionForwardSheet> {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    final conversations = ref.watch(conversationsProvider);
+    final conversations = ref.watch(listedConversationsProvider);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final skipped = widget.messages.length - _forwardable.length;
     final note = _merged

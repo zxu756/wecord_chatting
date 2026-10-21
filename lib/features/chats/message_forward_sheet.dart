@@ -32,7 +32,7 @@ class _MessageForwardSheetState extends ConsumerState<MessageForwardSheet> {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    final conversations = ref.watch(conversationsProvider);
+    final conversations = ref.watch(listedConversationsProvider);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
 
     return SafeArea(

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/time_tokens/time_token.dart';
+import 'package:wecord/features/events2/event_options_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_event.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the event form for a new event of [conversationId], or to edit
@@ -70,6 +72,7 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
   final _locationController = TextEditingController();
   final _linkController = TextEditingController();
   final _descriptionController = TextEditingController();
+  late final EventOptionsController _options;
   late DateTime _startsAt;
   DateTime? _endsAt;
   var _reminder = _Reminder.quarterHour;
@@ -83,6 +86,9 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
   void initState() {
     super.initState();
     final event = widget.event;
+    _options = EventOptionsController(
+      event == null ? null : EventOptions.fromExtras(event.extras),
+    );
     if (event != null) {
       _titleController.text = event.title;
       _locationController.text = event.locationText ?? '';
@@ -104,6 +110,7 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
     _locationController.dispose();
     _linkController.dispose();
     _descriptionController.dispose();
+    _options.dispose();
     super.dispose();
   }
 
@@ -203,6 +210,7 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
       link: _link,
       reminderLeads: _reminder.leads,
       pin: _pin,
+      options: _options.options,
     );
     final repository = ref.read(chatEventsRepositoryProvider);
     try {
@@ -363,6 +371,13 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
             WeCordSegment(value: _Reminder.hour, label: tr('1 hour')),
             WeCordSegment(value: _Reminder.both, label: tr('Both')),
           ],
+        ),
+        const SizedBox(height: 18),
+        EventOptionsSection(
+          controller: _options,
+          kind: EventKind.chat,
+          scopeId: widget.conversationId,
+          enabled: !_saving,
         ),
         if (!editing) ...[
           const SizedBox(height: 10),

@@ -6,8 +6,13 @@ import 'package:wecord/features/chats/events/chat_event_format.dart';
 import 'package:wecord/features/chats/events/chat_events_providers.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
+import 'package:wecord/features/events2/event_check_in.dart';
+import 'package:wecord/features/events2/event_manage_sheet.dart';
+import 'package:wecord/features/events2/event_photos_section.dart';
+import 'package:wecord/features/events2/event_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_event.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 const _englishMonthAbbreviations = [
@@ -42,14 +47,17 @@ class _DateTile extends StatelessWidget {
     final c = context.tokens.colors;
     final fill = muted ? c.raised : c.accentSoft;
     final ink = muted ? c.muted : c.accentText;
+    // The page grows with the text, so large text does not overflow it.
+    final box =
+        size * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
     return ExcludeSemantics(
       child: Container(
-        width: size,
-        height: size,
+        width: box,
+        height: box,
         decoration: ShapeDecoration(
           color: fill,
           shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(size * 0.3),
+            borderRadius: BorderRadius.circular(box * 0.3),
           ),
         ),
         child: Column(
@@ -146,19 +154,26 @@ class _ChatEventRsvpBarState extends ConsumerState<ChatEventRsvpBar> {
   Widget build(BuildContext context) {
     final event = widget.event;
     final enabled = !event.isCancelled;
+    final extras = event.extras;
+    // A full event puts a Going on the waiting list (Events 2.0).
+    final waiting = extras.myWaitlisted;
+    final full =
+        extras.isFull(event.goingCount) &&
+        event.myStatus != ChatEventRsvp.going;
     Widget button(
       ChatEventRsvp status,
       String label,
       IconData icon,
-      int count,
-    ) {
+      int count, {
+      bool lit = false,
+    }) {
       return Expanded(
         child: _RsvpButton(
           key: ValueKey('chat-event-rsvp-${status.value}'),
           status: status,
           label: label,
           icon: icon,
-          selected: (_busy ?? event.myStatus) == status,
+          selected: lit || (_busy ?? event.myStatus) == status,
           onPressed: enabled ? () => _answer(status) : null,
         ),
       );
@@ -168,9 +183,14 @@ class _ChatEventRsvpBarState extends ConsumerState<ChatEventRsvpBar> {
       children: [
         button(
           ChatEventRsvp.going,
-          tr('Going'),
-          Icons.check_rounded,
+          waiting
+              ? tr('On waitlist')
+              : full
+              ? tr('Waitlist')
+              : tr('Going'),
+          waiting ? Icons.hourglass_empty_rounded : Icons.check_rounded,
           event.goingCount,
+          lit: waiting,
         ),
         const SizedBox(width: 8),
         button(
@@ -447,6 +467,13 @@ class _EventCardBody extends ConsumerWidget {
             builder: (context, states) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (event.extras.coverPath != null) ...[
+                  EventCoverBanner(
+                    kind: EventKind.chat,
+                    coverPath: event.extras.coverPath!,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -531,6 +558,13 @@ class _EventCardBody extends ConsumerWidget {
                 ],
                 const SizedBox(height: 12),
                 ChatEventAttendees(event: event),
+                if (!event.extras.isPlain) ...[
+                  const SizedBox(height: 10),
+                  EventInfoChips(
+                    extras: event.extras,
+                    seatsTaken: event.goingCount,
+                  ),
+                ],
               ],
             ),
           ),
@@ -660,6 +694,13 @@ class _EventSheet extends ConsumerWidget {
       controller: scrollController,
       padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottom),
       children: [
+        if (event.extras.coverPath != null) ...[
+          EventCoverBanner(
+            kind: EventKind.chat,
+            coverPath: event.extras.coverPath!,
+          ),
+          const SizedBox(height: 14),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -743,10 +784,37 @@ class _EventSheet extends ConsumerWidget {
             style: TextStyle(fontSize: 12.5, color: c.subtle),
           ),
         ],
+        if (!event.extras.isPlain) ...[
+          const SizedBox(height: 14),
+          EventInfoChips(extras: event.extras, seatsTaken: event.goingCount),
+        ],
         if (status != ChatEventStatus.over &&
             status != ChatEventStatus.cancelled) ...[
           const SizedBox(height: 16),
           ChatEventRsvpBar(event: event),
+          if (event.extras.myWaitlisted)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                tr(
+                  'The event is full. You move up when someone drops out, '
+                  'and you get a notification.',
+                ),
+                key: const ValueKey('chat-event-waiting-note'),
+                style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
+              ),
+            ),
+        ],
+        if (!event.isCancelled) ...[
+          const SizedBox(height: 12),
+          EventCheckInRow(
+            extras: event.extras,
+            open: eventCheckInOpen(
+              startsAt: event.startsAt,
+              endsAt: event.effectiveEndsAt,
+              now: now,
+            ),
+          ),
         ],
         const SizedBox(height: 18),
         _AttendeeSection(
@@ -767,6 +835,18 @@ class _EventSheet extends ConsumerWidget {
               style: TextStyle(fontSize: 13, color: c.subtle),
             ),
           ),
+        if (!event.isCancelled) ...[
+          const SizedBox(height: 18),
+          EventPhotosSection(
+            kind: EventKind.chat,
+            eventId: event.id,
+            scopeId: event.conversationId,
+            started: !now.isBefore(
+              event.startsAt.subtract(const Duration(hours: 1)),
+            ),
+            photoCount: event.extras.photoCount,
+          ),
+        ],
         const SizedBox(height: 18),
         SettingsGroup(
           separatorIndent: 58,
@@ -774,6 +854,17 @@ class _EventSheet extends ConsumerWidget {
             action(Icons.event_available_rounded, tr('Add to calendar'), () {
               actions.addToCalendar(event);
             }),
+            if (event.canManage && !event.isCancelled)
+              action(
+                Icons.how_to_reg_outlined,
+                tr('Sign-ups and check-in'),
+                () => showEventManageSheet(
+                  context,
+                  kind: EventKind.chat,
+                  eventId: event.id,
+                  title: event.title,
+                ),
+              ),
             if (event.canManage && !event.isCancelled)
               action(
                 event.isPinned
@@ -797,9 +888,12 @@ class _EventSheet extends ConsumerWidget {
               }),
             if (event.canManage && !event.isCancelled)
               action(Icons.event_busy_outlined, tr('Cancel event'), () async {
-                final confirmed = await _confirmCancel(context, event);
-                if (confirmed == true) {
-                  final done = await actions.cancel(event);
+                final choice = await _confirmCancel(context, event);
+                if (choice != null) {
+                  final done = await actions.cancel(
+                    event,
+                    wholeSeries: choice == _CancelChoice.series,
+                  );
                   if (done && context.mounted) {
                     Navigator.of(context).maybePop();
                   }
@@ -812,27 +906,46 @@ class _EventSheet extends ConsumerWidget {
   }
 }
 
-Future<bool?> _confirmCancel(BuildContext context, ChatEvent event) {
-  return showDialog<bool>(
+enum _CancelChoice { one, series }
+
+/// Asks before cancelling; an event that repeats can end its whole series.
+Future<_CancelChoice?> _confirmCancel(BuildContext context, ChatEvent event) {
+  return showDialog<_CancelChoice>(
     context: context,
     builder: (context) => AlertDialog(
       scrollable: true,
       title: Text(tr('Cancel event?')),
       content: Text(
-        tr(
-          '"{title}" will be marked as cancelled and no one will be reminded of it.',
-          {'title': event.title},
-        ),
+        event.extras.repeats
+            ? tr(
+                '"{title}" repeats. Cancel only this one, or this one and all '
+                'the ones after it?',
+                {'title': event.title},
+              )
+            : tr(
+                '"{title}" will be marked as cancelled and no one will be reminded of it.',
+                {'title': event.title},
+              ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: () => Navigator.of(context).pop(),
           child: Text(tr('Keep event')),
         ),
+        if (event.extras.repeats)
+          TextButton(
+            key: const ValueKey('chat-event-confirm-cancel-series'),
+            onPressed: () => Navigator.of(context).pop(_CancelChoice.series),
+            child: Text(tr('Cancel this and all after')),
+          ),
         FilledButton(
           key: const ValueKey('chat-event-confirm-cancel'),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(tr('Cancel event')),
+          onPressed: () => Navigator.of(context).pop(_CancelChoice.one),
+          child: Text(
+            event.extras.repeats
+                ? tr('Cancel only this one')
+                : tr('Cancel event'),
+          ),
         ),
       ],
     ),

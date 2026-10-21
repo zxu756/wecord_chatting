@@ -1,3 +1,4 @@
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_notification_settings.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -81,6 +82,7 @@ class CircleEvent {
     this.interestedCount = 0,
     this.interestedByMe = false,
     this.canManage = false,
+    this.extras = EventExtras.none,
   });
 
   factory CircleEvent.fromJson(Map<String, dynamic> json) {
@@ -110,6 +112,7 @@ class CircleEvent {
       interestedCount: (json['interested_count'] as num?)?.toInt() ?? 0,
       interestedByMe: json['interested_by_me'] == true,
       canManage: json['can_manage'] == true,
+      extras: EventExtras.fromJson(json),
     );
   }
 
@@ -151,6 +154,10 @@ class CircleEvent {
 
   /// The current user created the event or may manage events.
   final bool canManage;
+
+  /// The cover, repeat, questions, seats and check-in of the event (Events
+  /// 2.0).
+  final EventExtras extras;
 
   /// When the event is over: its end, or [defaultDuration] after it starts.
   DateTime get effectiveEndsAt => endsAt ?? startsAt.add(defaultDuration);
@@ -208,6 +215,7 @@ class CircleEvent {
       interestedCount: interestedCount ?? this.interestedCount,
       interestedByMe: interestedByMe ?? this.interestedByMe,
       canManage: canManage,
+      extras: extras,
     );
   }
 }

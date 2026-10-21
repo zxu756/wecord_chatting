@@ -6,10 +6,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:wecord/features/chats/events/chat_event_format.dart';
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
+import 'package:wecord/features/events2/event_widgets.dart';
+import 'package:wecord/features/events2/events2_repository.dart';
 import 'package:wecord/shared/calendar/calendar_file_saver.dart';
 import 'package:wecord/shared/calendar/ics.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_event.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 
 /// A chat's events, soonest first, past and cancelled ones too. Reloads
 /// when an event or an answer changes.
@@ -79,13 +82,43 @@ class ChatEventActions {
     )?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// Sets the caller's answer; tapping the current one clears it.
+  /// Sets the caller's answer; tapping the current one clears it (tapping
+  /// Going on the waiting list leaves it). Going to an event with questions
+  /// asks them first.
   Future<bool> rsvp(ChatEvent event, ChatEventRsvp status) async {
-    final next = event.myStatus == status ? null : status;
+    final extras = event.extras;
+    final leaving =
+        event.myStatus == status ||
+        (status == ChatEventRsvp.going && extras.myWaitlisted);
+    final next = leaving ? null : status;
+    Map<String, String>? answers;
+    if (next == ChatEventRsvp.going && extras.hasQuestions) {
+      answers = await showEventAnswerSheet(
+        context,
+        eventTitle: event.title,
+        questions: extras.questions,
+        initial: extras.myAnswers,
+        actionLabel: extras.isFull(event.goingCount)
+            ? tr('Join waiting list')
+            : tr('Sign up'),
+      );
+      if (answers == null) {
+        return false;
+      }
+    }
     try {
-      await _repository.rsvp(event.id, next);
+      if (answers != null) {
+        await ref
+            .read(events2RepositoryProvider)
+            .rsvpChat(event.id, next?.value, answers: answers);
+      } else {
+        await _repository.rsvp(event.id, next);
+      }
       _refresh(event);
       return true;
+    } on EventException catch (error) {
+      _say(error.failure.message);
+      return false;
     } catch (_) {
       _say(tr('Could not save your answer. Try again.'));
       return false;
@@ -108,9 +141,15 @@ class ChatEventActions {
     }
   }
 
-  Future<bool> cancel(ChatEvent event) async {
+  Future<bool> cancel(ChatEvent event, {bool wholeSeries = false}) async {
     try {
-      await _repository.cancelEvent(event.id);
+      if (wholeSeries) {
+        await ref
+            .read(events2RepositoryProvider)
+            .cancelSeries(EventKind.chat, event.id);
+      } else {
+        await _repository.cancelEvent(event.id);
+      }
       _refresh(event);
       return true;
     } catch (_) {

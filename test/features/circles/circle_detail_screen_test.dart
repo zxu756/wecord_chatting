@@ -3095,6 +3095,7 @@ class FakeCirclesRepository implements CirclesRepository {
   var eventInterested = <CircleEventPerson>[];
   var eventReminders = <CircleEventReminder>[];
   final eventCalls = <String>[];
+  final eventOptions = <Map<String, Object?>?>[];
   final eventDrafts =
       <
         ({
@@ -3174,7 +3175,9 @@ class FakeCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) async {
+    eventOptions.add(options);
     eventDrafts.add((
       eventId: null,
       title: title,
@@ -3214,7 +3217,9 @@ class FakeCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) async {
+    eventOptions.add(options);
     eventDrafts.add((
       eventId: eventId,
       title: title,

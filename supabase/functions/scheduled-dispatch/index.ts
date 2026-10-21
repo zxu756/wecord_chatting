@@ -1,7 +1,7 @@
 // Pushes for things the database does on its own: scheduled messages that
 // were sent, messages the AI guard released, reminders that came due, chat
-// events about to start, tasks that came due, likes and comments on
-// Moments, new-login alerts, answers to circle join requests, the one push of
+// events about to start, seats that opened up in a full event, tasks that
+// came due, likes and comments on Moments, new-login alerts, answers to circle join requests, the one push of
 // an official notice, friends' birthdays (at 9 in the morning of the
 // recipient's device), urgent messages (with their one second push) and
 // "please confirm the announcement" and the alerts of the monitoring (K3). The same
@@ -47,6 +47,7 @@ import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type TitlePushRow, titleTarget } from "./titles.ts";
 import { type QaPushRow, qaTarget } from "./qa.ts";
+import { type EventNoticePushRow, eventNoticeTarget } from "./events2.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -239,6 +240,23 @@ Deno.serve(async (request) => {
     console.error("claim_qa_answer_pushes failed", qaError.message);
   }
   targets.push(...((qaPushes ?? []) as QaPushRow[]).map(qaTarget));
+
+  // "You moved up from the waiting list" (C10): events2_promote wakes this
+  // function. A chat event's push carries its chat, so a locked chat is masked
+  // and quiet hours hold it back below like the rest.
+  const { data: eventNotices, error: eventNoticesError } = await admin.rpc(
+    "claim_event_notice_pushes",
+  );
+  if (eventNoticesError) {
+    // Not fatal: the other pushes still go out.
+    console.error(
+      "claim_event_notice_pushes failed",
+      eventNoticesError.message,
+    );
+  }
+  targets.push(
+    ...((eventNotices ?? []) as EventNoticePushRow[]).map(eventNoticeTarget),
+  );
 
   // The push of an official notice (K6), a batch of devices at a time: in
   // the language of each device, held back in quiet hours below like the

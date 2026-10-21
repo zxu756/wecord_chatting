@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/models/chat_event.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 
 final chatEventsRepositoryProvider = Provider<ChatEventsRepository>((ref) {
   try {
@@ -25,6 +26,7 @@ class ChatEventDraft {
     this.link,
     this.reminderLeads = const [15],
     this.pin = false,
+    this.options,
   });
 
   final String title;
@@ -37,6 +39,10 @@ class ChatEventDraft {
 
   /// Pin it to the chat header (a new event only).
   final bool pin;
+
+  /// Repeat, seats, questions and cover (Events 2.0); null leaves them as
+  /// they are.
+  final EventOptions? options;
 }
 
 abstract interface class ChatEventsRepository {
@@ -109,6 +115,7 @@ class SupabaseChatEventsRepository implements ChatEventsRepository {
     'event_location': draft.location?.trim(),
     'event_link': draft.link?.trim(),
     'event_reminder_leads': draft.reminderLeads,
+    if (draft.options != null) 'event_options': draft.options!.toJson(),
   };
 
   @override

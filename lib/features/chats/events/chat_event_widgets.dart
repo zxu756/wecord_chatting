@@ -10,6 +10,8 @@ import 'package:wecord/features/events2/event_check_in.dart';
 import 'package:wecord/features/events2/event_manage_sheet.dart';
 import 'package:wecord/features/events2/event_photos_section.dart';
 import 'package:wecord/features/events2/event_widgets.dart';
+import 'package:wecord/features/scheduled_calls/scheduled_call_widgets.dart';
+import 'package:wecord/features/scheduled_calls/scheduled_calls.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_event.dart';
 import 'package:wecord/shared/models/event_extras.dart';
@@ -568,6 +570,10 @@ class _EventCardBody extends ConsumerWidget {
               ],
             ),
           ),
+          if (ScheduledCall.canJoin(event, now)) ...[
+            const SizedBox(height: 12),
+            ScheduledCallJoinButton(event: event, now: now),
+          ],
           if (status != ChatEventStatus.over) ...[
             const SizedBox(height: 12),
             ChatEventRsvpBar(event: event),
@@ -787,6 +793,14 @@ class _EventSheet extends ConsumerWidget {
         if (!event.extras.isPlain) ...[
           const SizedBox(height: 14),
           EventInfoChips(extras: event.extras, seatsTaken: event.goingCount),
+        ],
+        if (ScheduledCall.canJoin(event, now)) ...[
+          const SizedBox(height: 16),
+          ScheduledCallJoinButton(
+            event: event,
+            now: now,
+            onJoined: () => Navigator.of(context).maybePop(),
+          ),
         ],
         if (status != ChatEventStatus.over &&
             status != ChatEventStatus.cancelled) ...[
@@ -1053,71 +1067,87 @@ class ChatEventStrip extends ConsumerWidget {
     final detail =
         '${live ? tr('Live now') : formatChatEventWhen(event, now, use24Hour: use24Hour)}'
         ' · ${chatEventCountsText(event)}';
+    final canJoin = ScheduledCall.canJoin(event, now);
+    final strip = WeCordPressable(
+      key: const ValueKey('chat-event-strip'),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.lg),
+      ),
+      semanticLabel: tr('Pinned event: {title}, {detail}', {
+        'title': event.title,
+        'detail': detail,
+      }),
+      hint: tr('Opens the event'),
+      excludeSemantics: true,
+      onPressed: () => showChatEventSheet(context, event.id, conversationId),
+      builder: (context, states) => Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: BoxDecoration(
+          color: states.contains(WidgetState.hovered)
+              ? Color.alphaBlend(
+                  c.accentText.withValues(alpha: 0.06),
+                  c.accentSoft,
+                )
+              : c.accentSoft,
+          borderRadius: BorderRadius.circular(WeCordRadii.lg),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              event.extras.hasCall
+                  ? Icons.phone_in_talk_outlined
+                  : Icons.event_rounded,
+              size: 20,
+              color: c.accentText,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: c.ink,
+                    ),
+                  ),
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.accentText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.accentText),
+          ],
+        ),
+      ),
+    );
     return Padding(
       padding: desktop
           ? const EdgeInsets.fromLTRB(20, 10, 20, 0)
           : const EdgeInsets.fromLTRB(12, 6, 12, 0),
-      child: WeCordPressable(
-        key: const ValueKey('chat-event-strip'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(WeCordRadii.lg),
-        ),
-        semanticLabel: tr('Pinned event: {title}, {detail}', {
-          'title': event.title,
-          'detail': detail,
-        }),
-        hint: tr('Opens the event'),
-        excludeSemantics: true,
-        onPressed: () => showChatEventSheet(context, event.id, conversationId),
-        builder: (context, states) => Container(
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: states.contains(WidgetState.hovered)
-                ? Color.alphaBlend(
-                    c.accentText.withValues(alpha: 0.06),
-                    c.accentSoft,
-                  )
-                : c.accentSoft,
-            borderRadius: BorderRadius.circular(WeCordRadii.lg),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.event_rounded, size: 20, color: c.accentText),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      event.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: c.ink,
-                      ),
-                    ),
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: c.accentText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, size: 20, color: c.accentText),
-            ],
-          ),
-        ),
-      ),
+      child: canJoin
+          ? Row(
+              children: [
+                Expanded(child: strip),
+                const SizedBox(width: 8),
+                ScheduledCallJoinButton(event: event, now: now, compact: true),
+              ],
+            )
+          : strip,
     );
   }
 }
@@ -1231,6 +1261,11 @@ class _EventsList extends ConsumerWidget {
                   ],
                 ),
               ),
+              if (event.extras.hasCall)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(Icons.call_outlined, size: 18, color: c.muted),
+                ),
               if (event.myStatus != null)
                 Icon(
                   switch (event.myStatus!) {

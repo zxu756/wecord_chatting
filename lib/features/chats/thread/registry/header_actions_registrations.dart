@@ -15,6 +15,7 @@ import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
 import 'package:wecord/features/circles/channel_types/qa_actions.dart';
 import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
+import 'package:wecord/features/scheduled_calls/scheduled_calls.dart';
 
 /// Feature contributions to the header. Append yours here.
 final List<HeaderActionContribution> headerActionExtensions = [
@@ -23,6 +24,7 @@ final List<HeaderActionContribution> headerActionExtensions = [
   chatLockHeaderAction,
   threadLockHeaderAction,
   qaSolvedHeaderAction,
+  scheduleCallHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.

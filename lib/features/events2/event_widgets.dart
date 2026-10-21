@@ -139,6 +139,7 @@ class EventInfoChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final capacity = extras.capacity;
     final chips = <(IconData, String)>[
+      if (extras.hasCall) (Icons.call_outlined, tr('Includes a call')),
       if (extras.repeats) (Icons.repeat_rounded, extras.recurrence.label),
       if (capacity != null)
         (

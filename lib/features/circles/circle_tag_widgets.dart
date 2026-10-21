@@ -7,6 +7,8 @@ import 'package:wecord/features/chats/message_author.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_tag_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart' hide CircleTag;
+import 'package:wecord/features/member_honors/honor_repository.dart';
+import 'package:wecord/features/member_honors/honor_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -53,16 +55,31 @@ class CircleTagChip extends StatelessWidget {
   }
 }
 
-/// What shows next to [userId]'s name: a BOT badge for bots and their
-/// circle tag, if they chose one. Nothing while loading or without them.
+/// What shows next to [userId]'s name: a BOT badge for bots, then, inside a
+/// circle ([circleId]), the title a moderator gave them there, then their
+/// circle tag, if they chose one. The member list also shows the honors that
+/// may be shown to others ([showHonors]). Nothing while loading or without
+/// them.
+///
+/// Order of what shares the slot: the name's own color is the role's; then
+/// BOT, title (blue, this circle), honors (gold), circle tag (green, from
+/// any circle).
 class ProfileNameBadges extends ConsumerWidget {
   const ProfileNameBadges({
     required this.userId,
+    this.circleId,
+    this.showHonors = false,
     this.leadingGap = 6,
     super.key,
   });
 
   final String userId;
+
+  /// The circle the name is shown in, for the title the member has there.
+  final String? circleId;
+
+  /// Also show the honors that may be shown to others (member list).
+  final bool showHonors;
 
   /// Space before the badges when there are any.
   final double leadingGap;
@@ -72,19 +89,32 @@ class ProfileNameBadges extends ConsumerWidget {
     final badges =
         ref.watch(profileBadgesProvider(userId)).value ?? ProfileBadges.none;
     final tag = badges.tag;
-    if (badges.isEmpty) {
+    final circle = circleId;
+    final flair = circle == null
+        ? null
+        : ref.watch(circleMemberFlairProvider(circle)).value?[userId];
+    final title = flair?.title;
+    final honor = showHonors && flair != null && flair.hasHonor ? flair : null;
+    if (badges.isEmpty && title == null && honor == null) {
       return const SizedBox.shrink();
     }
+    final children = <Widget>[
+      if (badges.isBot) const MessageBotTag(),
+      if (title != null) MemberTitleChip(title: title),
+      if (honor != null) MemberHonorBadge(flair: honor),
+      if (tag != null)
+        CircleTagChip(tag: tag, circleName: badges.tagCircleName),
+    ];
     return Padding(
       key: ValueKey('profile-badges-$userId'),
       padding: EdgeInsetsDirectional.only(start: leadingGap),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (badges.isBot) const MessageBotTag(),
-          if (badges.isBot && tag != null) const SizedBox(width: 4),
-          if (tag != null)
-            CircleTagChip(tag: tag, circleName: badges.tagCircleName),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            children[i],
+          ],
         ],
       ),
     );

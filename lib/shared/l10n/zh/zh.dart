@@ -10,6 +10,7 @@ import 'package:wecord/shared/l10n/zh/zh_public_circle.dart';
 import 'package:wecord/shared/l10n/zh/zh_app_lock.dart';
 import 'package:wecord/shared/l10n/zh/zh_care_mode.dart';
 import 'package:wecord/shared/l10n/zh/zh_knowledge_base.dart';
+import 'package:wecord/shared/l10n/zh/zh_member_honors.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -187,6 +188,7 @@ const zhAreas = <Map<String, String>>[
   zhAppLock,
   zhCareMode,
   zhKnowledgeBase,
+  zhMemberHonors,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

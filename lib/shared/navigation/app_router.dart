@@ -20,6 +20,7 @@ import 'package:wecord/features/circles/circle_channel_thread_screen.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
 import 'package:wecord/features/knowledge_base/kb_screen.dart';
+import 'package:wecord/features/member_honors/honors_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
@@ -363,6 +364,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   return KnowledgeBaseScreen(
                     circleId: state.pathParameters['circleId']!,
                     initialPageId: state.uri.queryParameters['page'],
+                  );
+                },
+              ),
+              // The circle's member honors (C7).
+              GoRoute(
+                path: 'honors',
+                builder: (context, state) {
+                  return MemberHonorsScreen(
+                    circleId: state.pathParameters['circleId']!,
                   );
                 },
               ),

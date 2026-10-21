@@ -31,6 +31,7 @@ import 'package:wecord/features/circles/onboarding/guide_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/features/home/user_panel.dart';
 import 'package:wecord/features/knowledge_base/kb_screen.dart';
+import 'package:wecord/features/member_honors/honors_screen.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
 import 'package:wecord/features/profile/circle_avatar_sheet.dart';
 import 'package:wecord/features/profile/profile_social_repository.dart';
@@ -789,6 +790,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         ),
       if (currentMember != null)
         CircleMenuItem(
+          value: _CircleMenuAction.honors,
+          icon: Icons.emoji_events_outlined,
+          label: tr('Honors'),
+        ),
+      if (currentMember != null)
+        CircleMenuItem(
           value: _CircleMenuAction.emojis,
           icon: Icons.emoji_emotions_outlined,
           label: tr('Emoji & stickers'),
@@ -954,6 +961,8 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
         openCircleOnboardingSettings(context, detail);
       case _CircleMenuAction.knowledgeBase:
         _openKnowledgeBase(context);
+      case _CircleMenuAction.honors:
+        openMemberHonors(context, _circleId);
       case _CircleMenuAction.emojis:
         openCircleEmojisScreen(context, detail.circle.id);
       case _CircleMenuAction.guide:
@@ -1210,6 +1219,7 @@ enum _CircleMenuAction {
   onboarding,
   guide,
   knowledgeBase,
+  honors,
   emojis,
   notificationSettings,
   support,

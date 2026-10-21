@@ -853,3 +853,12 @@ context carries the selected messages and `leaveSelection`. "Extract to-dos"
 Behaviour that does not change when a registry grows: entries appear in
 `order`, then in the order they were listed for equal orders; built-in orders
 are never renumbered, so a feature's number stays valid.
+
+**Next to a name (C7).** The slot after a name holds, in this order: BOT
+(`MessageBotTag`), the member's circle title (blue `accentSoft` tag, 10/800,
+at most 132 wide, one circle only), honors (a gold `warningSoft` pill with a
+flame for a streak and a trophy for last week's level; member list only, an
+icon and a tooltip, never a number), then the circle tag (green, global). The
+name keeps the role color. Where the row is narrow (the desktop member list)
+or the text is large, the title and honors move to their own line under the
+name. Honors never show a count of days to anyone but their owner.

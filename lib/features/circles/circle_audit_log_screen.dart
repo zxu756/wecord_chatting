@@ -481,6 +481,8 @@ IconData circleAuditIcon(String action) {
     'member_add' => Icons.person_add_alt_1_outlined,
     'member_roles_update' => Icons.badge_outlined,
     'member_nickname_update' => Icons.edit_outlined,
+    'member_title_update' => Icons.military_tech_outlined,
+    'honors_update' => Icons.emoji_events_outlined,
     'member_kick' => Icons.person_remove_outlined,
     'member_ban' => Icons.block,
     'member_unban' => Icons.lock_open_outlined,
@@ -647,6 +649,17 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       tr('{actor} changed the nickname of {target}'),
       {},
     ),
+    'member_title_update' => switch (_newValue(changes['title'])) {
+      final String title when title.isNotEmpty => (
+        tr('{actor} gave {target} the title {title}'),
+        {'title': title},
+      ),
+      _ => (tr('{actor} removed the title of {target}'), {}),
+    },
+    'honors_update' => switch (_newValue(changes['enabled'])) {
+      false => (tr('{actor} turned member honors off'), {}),
+      _ => (tr('{actor} turned member honors on'), {}),
+    },
     'member_kick' => (tr('{actor} kicked {target}'), {}),
     'member_ban' => (tr('{actor} banned {target}'), {}),
     'member_unban' => (tr('{actor} unbanned {target}'), {}),

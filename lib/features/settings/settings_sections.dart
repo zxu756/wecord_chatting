@@ -22,6 +22,7 @@ import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/moments/moments_settings_screen.dart';
 import 'package:wecord/features/error_reports/error_reports_setting.dart';
 import 'package:wecord/features/chats/read_status/read_receipts_setting.dart';
+import 'package:wecord/features/app_lock/app_lock_settings_screen.dart';
 import 'package:wecord/features/privacy/devices_screen.dart';
 import 'package:wecord/features/privacy/privacy_permissions.dart';
 import 'package:wecord/features/privacy/profile_visibility.dart';
@@ -868,6 +869,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
           showChevron: true,
           onTap: () => openTwoFactorSettings(context),
         ),
+        const AppLockSettingsRow(),
         const ProfileVisibilityRow(),
         const ReadReceiptsRow(),
         SettingsRow(

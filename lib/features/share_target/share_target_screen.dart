@@ -142,7 +142,7 @@ class _ShareTargetScreenState extends ConsumerState<ShareTargetScreen> {
 
   Widget _buildShare(BuildContext context, SharedContent content) {
     final c = context.tokens.colors;
-    final conversations = ref.watch(conversationsProvider);
+    final conversations = ref.watch(listedConversationsProvider);
     final bottom = MediaQuery.paddingOf(context).bottom;
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + bottom),

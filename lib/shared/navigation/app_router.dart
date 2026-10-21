@@ -11,6 +11,7 @@ import 'package:wecord/features/auth/set_new_password_screen.dart';
 import 'package:wecord/features/auth/two_factor.dart';
 import 'package:wecord/features/auth/two_factor_challenge_screen.dart';
 import 'package:wecord/features/auth/profile_bootstrap_gate.dart';
+import 'package:wecord/features/app_lock/chat_lock_gate.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chat_media_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
@@ -268,26 +269,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 );
               }
               final wide = isWideLayout(MediaQuery.sizeOf(context).width);
-              return ChatThreadScreen(
-                conversationId: state.pathParameters['conversationId']!,
-                title: title,
-                avatarUrl: avatarUrl,
-                conversationType: conversationType,
-                // Phones show the thread full screen, so offer the way back
-                // (to Home when it was opened from a link or notification).
-                onBack: wide
-                    ? null
-                    : () => context.canPop()
-                          ? context.pop()
-                          : context.go(HomeScreen.path),
+              final conversationId = state.pathParameters['conversationId']!;
+              // Phones show the thread full screen, so offer the way back
+              // (to Home when it was opened from a link or notification).
+              void back() => context.canPop()
+                  ? context.pop()
+                  : context.go(HomeScreen.path);
+              // A chat the person locked opens only after Face ID, Touch ID,
+              // the passcode or the PIN (G2).
+              return ChatLockGate(
+                conversationId: conversationId,
+                onBack: back,
+                child: ChatThreadScreen(
+                  conversationId: conversationId,
+                  title: title,
+                  avatarUrl: avatarUrl,
+                  conversationType: conversationType,
+                  onBack: wide ? null : back,
+                ),
               );
             },
           ),
           GoRoute(
             path: '/chats/:conversationId/media',
             builder: (context, state) {
-              return ChatMediaScreen(
-                conversationId: state.pathParameters['conversationId']!,
+              final conversationId = state.pathParameters['conversationId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: ChatMediaScreen(conversationId: conversationId),
               );
             },
           ),
@@ -297,13 +306,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/chats/:conversationId/workspace',
             builder: (context, state) {
               final query = state.uri.queryParameters;
-              return WorkspaceScreen(
-                conversationId: state.pathParameters['conversationId']!,
-                title: state.extra is String ? state.extra! as String : null,
-                tab: WorkspaceScreen.tabFrom(query),
-                noteId: query['note'],
-                listId: query['list'],
-                itemId: query['item'],
+              final conversationId = state.pathParameters['conversationId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: WorkspaceScreen(
+                  conversationId: conversationId,
+                  title: state.extra is String ? state.extra! as String : null,
+                  tab: WorkspaceScreen.tabFrom(query),
+                  noteId: query['note'],
+                  listId: query['list'],
+                  itemId: query['item'],
+                ),
               );
             },
           ),

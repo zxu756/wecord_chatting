@@ -51,6 +51,7 @@ class InboxItem {
     required this.reason,
     required this.isUnread,
     this.senderAvatarUrl,
+    this.locked = false,
   });
 
   factory InboxItem.fromJson(Map<String, dynamic> json) {
@@ -83,6 +84,24 @@ class InboxItem {
 
   /// Sent after the user last read the conversation.
   final bool isUnread;
+
+  /// The conversation is one the person locked: the card shows no text.
+  final bool locked;
+
+  /// This item for a locked conversation.
+  InboxItem asLocked() => InboxItem(
+    messageId: messageId,
+    conversationId: conversationId,
+    senderId: senderId,
+    senderName: senderName,
+    senderAvatarUrl: senderAvatarUrl,
+    body: '',
+    type: MessageType.text,
+    createdAt: createdAt,
+    reason: reason,
+    isUnread: isUnread,
+    locked: true,
+  );
 }
 
 abstract interface class InboxRepository {

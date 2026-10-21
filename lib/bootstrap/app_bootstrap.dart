@@ -4,6 +4,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:wecord/features/app_lock/app_lock_gate.dart';
+import 'package:wecord/features/app_lock/lock_storage.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
@@ -50,11 +52,15 @@ Future<void> runWeCordApp() async {
   watchAuthEvents(Supabase.instance.client.auth, errorReporter);
 
   final chatCache = await chatCacheOpening;
+  // The app lock's settings, read before the first frame: a locked app must
+  // never show its content for a moment before the lock covers it.
+  final lockStorage = await SharedPreferencesLockStorage.open();
   runApp(
     ProviderScope(
       retry: noProviderRetry,
       observers: [ErrorReportingProviderObserver(errorReporter)],
       overrides: [
+        lockStorageProvider.overrideWithValue(lockStorage),
         if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
         deviceConnectivityProvider.overrideWith(
           (ref) => platformDeviceConnectivity(),
@@ -116,12 +122,15 @@ class WeCordApp extends ConsumerWidget {
           child: WeCordDensityScope(
             density: density,
             child: MacosTitleBarFrame(
-              child: PwaOverlayHost(
-                // "Please update" instead of the app while this version is
-                // older than the server allows (K4).
-                child: AppUpdateGate(
-                  child: PresenceActivityListener(
-                    child: child ?? const SizedBox.shrink(),
+              // Covers everything below while the app is locked (G2).
+              child: AppLockGate(
+                child: PwaOverlayHost(
+                  // "Please update" instead of the app while this version is
+                  // older than the server allows (K4).
+                  child: AppUpdateGate(
+                    child: PresenceActivityListener(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

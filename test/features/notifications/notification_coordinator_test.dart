@@ -916,6 +916,55 @@ void main() {
     });
   });
 
+  group('locked chats', () {
+    test('a notification names no sender and shows no text', () async {
+      final harness = NotificationCoordinatorHarness(
+        lockedChatIds: () => {'c1'},
+      );
+      harness.seed([harness.summary(id: 'c1'), harness.summary(id: 'c2')]);
+      await harness.start();
+
+      await harness.emit([
+        harness.summary(id: 'c1', unreadCount: 1, body: 'the secret plan'),
+        harness.summary(id: 'c2', unreadCount: 1, body: 'lunch at noon'),
+      ]);
+
+      final locked = harness.notifications.firstWhere((n) => n.payload == 'c1');
+      expect(locked.title, 'WeCord');
+      expect(locked.body, 'You have a new message');
+      expect(locked.title, isNot(contains('Ada')));
+      // Tapping it still opens the chat (where the lock asks).
+      expect(locked.payload, 'c1');
+      final other = harness.notifications.firstWhere((n) => n.payload == 'c2');
+      expect(other.title, 'Ada');
+      expect(other.body, 'lunch at noon');
+    });
+
+    test('a message reminder shows no text either', () async {
+      final reminders = FakeRemindersRepository()
+        ..due = [
+          const LocalReminder(
+            id: 'r1',
+            conversationId: 'c1',
+            senderName: 'Bob',
+            body: 'the secret plan',
+            type: MessageType.text,
+          ),
+        ];
+      final harness = NotificationCoordinatorHarness(
+        remindersRepository: reminders,
+        lockedChatIds: () => {'c1'},
+      );
+      harness.seed([]);
+
+      await harness.start();
+
+      expect(harness.notifications.single.title, 'Reminder');
+      expect(harness.notifications.single.body, isNot(contains('secret')));
+      expect(harness.notifications.single.body, isNot(contains('Bob')));
+    });
+  });
+
   test('stops listening after dispose', () async {
     final harness = NotificationCoordinatorHarness();
     harness.seed([harness.summary(id: 'c1')]);
@@ -938,6 +987,7 @@ class NotificationCoordinatorHarness {
     DateTime Function()? now,
     bool Function()? doNotDisturb,
     NotificationSettings? Function()? quietSettings,
+    Set<String> Function()? lockedChatIds,
     Future<Set<String>> Function()? starredFriendIds,
     RemindersRepository? remindersRepository,
     void Function()? onRemindersChanged,
@@ -965,6 +1015,7 @@ class NotificationCoordinatorHarness {
       activeConversationId: () => _activeConversationId,
       doNotDisturb: doNotDisturb,
       quietSettings: quietSettings,
+      lockedChatIds: lockedChatIds,
       starredFriendIds: starredFriendIds,
       now: now ?? () => DateTime.utc(2026, 5, 18, 12, 30),
       pollTicks: _pollTicks.stream,

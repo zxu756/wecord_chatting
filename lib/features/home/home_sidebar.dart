@@ -88,7 +88,7 @@ class HomeSidebar extends ConsumerWidget {
                 .length ??
             0) +
         ref.watch(firedRemindersProvider).length;
-    final conversations = ref.watch(conversationsProvider);
+    final conversations = ref.watch(listedConversationsProvider);
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};
     final presenceStatuses = ref.watch(presenceStatusesProvider).value;
@@ -522,7 +522,7 @@ class _DirectMessageRow extends ConsumerWidget {
     final emphasized = selected || (unread && !conversation.isMuted);
     final group = conversation.type == ConversationType.group;
     // The open conversation's draft is right there in its composer.
-    final draft = selected
+    final draft = selected || conversation.isLocked
         ? null
         : ref.watch(
             composerDraftsProvider.select((drafts) => drafts[conversation.id]),

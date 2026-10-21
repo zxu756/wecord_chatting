@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/agenda/agenda_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
@@ -306,7 +307,7 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
   List<QuickSwitchItem> _results() {
     final items = quickSwitchItems(
       conversations:
-          ref.watch(conversationsProvider).value ??
+          ref.watch(listedConversationsProvider).value ??
           const <ConversationSummary>[],
       circles:
           ref.watch(circleSummariesProvider).value ?? const <CircleSummary>[],
@@ -413,7 +414,11 @@ class _QuickSwitcherDialogState extends ConsumerState<QuickSwitcherDialog> {
                     enabledBorder: _fieldBorder(c.raised, 0),
                     focusedBorder: _fieldBorder(c.accent, 1.5),
                   ),
-                  onChanged: (_) => setState(() => _highlighted = 0),
+                  onChanged: (text) {
+                    // The secret code shows the chats hidden from the list.
+                    ref.read(chatLockProvider.notifier).tryReveal(text);
+                    setState(() => _highlighted = 0);
+                  },
                   onSubmitted: (_) => _pick(results),
                 ),
               ),

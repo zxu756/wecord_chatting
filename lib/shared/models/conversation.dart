@@ -111,6 +111,7 @@ class ConversationSummary {
     this.canSendMessages = true,
     this.slowmodeSeconds = 0,
     this.isNoteToSelf = false,
+    this.isLocked = false,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -246,6 +247,11 @@ class ConversationSummary {
   /// listed first. Never unread, never receipted, never pushed.
   final bool isNoteToSelf;
 
+  /// The person locked this chat on their devices (app lock and chat lock,
+  /// G2). Set by the app, never by the server: lists show "Locked chat" in
+  /// place of the latest message.
+  final bool isLocked;
+
   bool get isThread => type == ConversationType.thread;
 
   /// A direct or group chat, listed under direct messages.
@@ -283,6 +289,7 @@ class ConversationSummary {
     Object? circleMutedUntil = _sentinel,
     Object? directUserId = _sentinel,
     Object? directCustomStatus = _sentinel,
+    bool? isLocked,
   }) {
     return ConversationSummary(
       id: id ?? this.id,
@@ -353,6 +360,7 @@ class ConversationSummary {
       canSendMessages: canSendMessages,
       slowmodeSeconds: slowmodeSeconds,
       isNoteToSelf: isNoteToSelf,
+      isLocked: isLocked ?? this.isLocked,
     );
   }
 }

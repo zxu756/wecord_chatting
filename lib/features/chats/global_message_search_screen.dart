@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
+import 'package:wecord/features/app_lock/hidden_chats_section.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/conversation_navigation.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
@@ -210,6 +212,8 @@ class _GlobalMessageSearchScreenState
   void _handleTextChange() {
     final text = _controller.text;
     if (!_askMode) {
+      // The secret code shows the chats hidden from the list.
+      ref.read(chatLockProvider.notifier).tryReveal(text);
       if (text != ref.read(messageSearchControllerProvider).input) {
         _search.setInput(text);
         _dismissedSuggestions = false;
@@ -739,6 +743,7 @@ class _GlobalMessageSearchScreenState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 PaperPageHeader(title: tr('Search')),
+                const HiddenChatsSection(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                   child: WeCordTextField(

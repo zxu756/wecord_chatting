@@ -37,6 +37,7 @@ import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/lists/list_models.dart';
 import 'package:wecord/features/moments/moment_notification_card.dart';
 import 'package:wecord/features/moments/moments_models.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/notes/note_comment_notifications.dart';
 import 'package:wecord/features/notes/notes2_models.dart';
@@ -54,14 +55,24 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/navigation/paper_page_header.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-final inboxProvider = FutureProvider.autoDispose<List<InboxItem>>((ref) {
+final inboxProvider = FutureProvider.autoDispose<List<InboxItem>>((
+  ref,
+) async {
   // New messages (and reads) show up in the conversation list first.
   ref.listen(conversationsProvider, (previous, next) {
     if (previous != null && previous.hasValue && next is AsyncData) {
       ref.invalidateSelf();
     }
   });
-  return ref.watch(inboxRepositoryProvider).listInbox();
+  final locked = ref.watch(lockedConversationIdsProvider);
+  final items = await ref.watch(inboxRepositoryProvider).listInbox();
+  // A mention in a locked chat shows no text (G2).
+  return locked.isEmpty
+      ? items
+      : [
+          for (final item in items)
+            locked.contains(item.conversationId) ? item.asLocked() : item,
+        ];
 });
 
 /// Unread mentions and replies plus pending friend requests, for the
@@ -360,11 +371,15 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         id: reminder.id,
         senderName: reminder.available ? reminder.senderName : '',
         senderAvatarUrl: reminder.available ? reminder.senderAvatarUrl : null,
-        preview: laterPreview(
-          conversationId: reminder.conversationId,
-          body: reminder.body,
-          type: reminder.type,
-        ),
+        preview: ref
+                .watch(lockedConversationIdsProvider)
+                .contains(reminder.conversationId)
+            ? tr('Locked chat')
+            : laterPreview(
+                conversationId: reminder.conversationId,
+                body: reminder.body,
+                type: reminder.type,
+              ),
         available: reminder.available,
         at: reminder.remindAt,
         upcoming: upcoming,
@@ -1094,6 +1109,9 @@ class _InboxCard extends StatelessWidget {
 
 /// The message as one line of text, as in the pinned message list.
 String inboxPreviewText(InboxItem item) {
+  if (item.locked) {
+    return tr('Locked chat');
+  }
   return pinnedMessagePreview(
     ChatMessage(
       id: item.messageId,

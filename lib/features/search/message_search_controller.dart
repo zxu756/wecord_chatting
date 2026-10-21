@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/features/search/message_search_repository.dart';
@@ -297,7 +298,7 @@ class MessageSearchController extends Notifier<MessageSearchState> {
         sort: state.sort,
       );
       final discovery = _discover(parsed);
-      final page = await _repository.search(request);
+      final page = _withoutLocked(await _repository.search(request), request);
       final people = await discovery;
       if (generation != _generation) {
         return;
@@ -328,6 +329,41 @@ class MessageSearchController extends Notifier<MessageSearchState> {
 
   MessageSearchRequest? _lastRequest;
 
+  /// [page] without the messages of chats the person locked (G2). A search
+  /// inside one chat is left alone: the person has it open.
+  SearchPage _withoutLocked(SearchPage page, MessageSearchRequest request) {
+    if (request.scope is ConversationScope) {
+      return page;
+    }
+    final locked = ref.read(lockedConversationIdsProvider);
+    if (locked.isEmpty) {
+      return page;
+    }
+    final hits = [
+      for (final hit in page.hits)
+        if (!locked.contains(hit.message.conversationId)) hit,
+    ];
+    final counts = {
+      for (final entry in page.conversationCounts.entries)
+        if (!locked.contains(entry.key)) entry.key: entry.value,
+    };
+    if (hits.length == page.hits.length &&
+        counts.length == page.conversationCounts.length) {
+      return page;
+    }
+    final removed = page.conversationCounts.entries
+        .where((entry) => locked.contains(entry.key))
+        .fold<int>(0, (sum, entry) => sum + entry.value);
+    final total = page.total;
+    return SearchPage(
+      hits: hits,
+      nextCursor: page.nextCursor,
+      total: total == null ? null : (total - removed).clamp(0, total),
+      totalCapped: page.totalCapped,
+      conversationCounts: counts,
+    );
+  }
+
   /// The next page, for infinite scroll.
   Future<void> loadMore() async {
     final cursor = state.nextCursor;
@@ -341,7 +377,8 @@ class MessageSearchController extends Notifier<MessageSearchState> {
     final generation = _generation;
     state = state.copyWith(isLoadingMore: true);
     try {
-      final page = await _repository.search(request.nextPage(cursor));
+      final next = request.nextPage(cursor);
+      final page = _withoutLocked(await _repository.search(next), next);
       if (generation != _generation) {
         return;
       }

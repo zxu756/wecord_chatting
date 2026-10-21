@@ -29,6 +29,10 @@ ConversationPreview? conversationPreview(
   ConversationSummary conversation, {
   String? currentUserId,
 }) {
+  // A locked chat shows nothing of its messages in a list (G2).
+  if (conversation.isLocked) {
+    return (icon: Icons.lock_outline_rounded, text: tr('Locked chat'));
+  }
   final body = conversation.lastMessageBody?.trim() ?? '';
   final type = conversation.lastMessageType;
   if (body.isEmpty && (type == null || type == MessageType.text)) {

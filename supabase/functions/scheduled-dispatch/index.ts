@@ -21,6 +21,7 @@
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { newTally, recordPushOutcome, tallyPush } from "../push/outcome.ts";
+import { maskLockedPushes } from "../push/locked_chats.ts";
 import { dropSilentPushes } from "../push/silent_messages.ts";
 import { writeTimesForTargets } from "../push/time_tokens.ts";
 import { readVapidKeys, sendWebPush } from "../push/webpush.ts";
@@ -313,10 +314,12 @@ Deno.serve(async (request) => {
     await dropSilentPushes(admin, urgentTargets),
     Math.floor(Date.now() / 1000),
   );
+  // A chat the subscriber locked is told without its words (G2).
+  const unrevealing = await maskLockedPushes(admin, audible);
   // Times in the text are written for each subscriber's zone and language.
   const ready = await writeTimesForTargets(
     admin,
-    audible,
+    unrevealing,
     Math.floor(Date.now() / 1000),
   );
   const gone: string[] = [];

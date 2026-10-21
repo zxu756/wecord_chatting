@@ -48,6 +48,7 @@ import 'package:wecord/features/settings/settings_screen.dart';
 import 'package:wecord/features/share_target/protocol_links.dart';
 import 'package:wecord/features/share_target/share_target_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
+import 'package:wecord/features/events2/event_check_in.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
 import 'package:wecord/features/discovery/public_circle_link.dart';
 import 'package:wecord/features/discovery/public_circle_screen.dart';
@@ -78,6 +79,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation:
         (kIsWeb
             ? callLinkLocationFor(Uri.base) ??
+                  checkInLocationFor(Uri.base) ??
                   qrLinkLocationFor(Uri.base) ??
                   protocolLinkLocationFor(Uri.base) ??
                   publicNoteLocationFor(Uri.base) ??
@@ -438,6 +440,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               );
             },
           ),
+          // An event's check-in link (https://site/checkin/<code>).
+          GoRoute(
+            path: '${EventCheckInLinkScreen.path}/:code',
+            builder: (context, state) {
+              return EventCheckInLinkScreen(
+                key: ValueKey('check-in-${state.pathParameters['code']}'),
+                code: state.pathParameters['code']!,
+              );
+            },
+          ),
           // The admin console. Hidden: Settings lists it for admins only,
           // and the page shows nothing to anybody else.
           GoRoute(
@@ -580,6 +592,7 @@ String? _pendingLocation(Uri uri) {
       (candidate == ShareTargetScreen.path ||
           candidate.startsWith('${CircleInviteScreen.path}/') ||
           candidate.startsWith('${CallLinkScreen.path}/') ||
+          candidate.startsWith('${EventCheckInLinkScreen.path}/') ||
           candidate.startsWith('${UserQrLinkScreen.path}/') ||
           candidate.startsWith('${GroupQrJoinScreen.path}/'))) {
     return candidate;

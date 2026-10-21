@@ -1,3 +1,5 @@
+import 'package:wecord/shared/models/event_extras.dart';
+
 /// How a member answered an event invitation.
 enum ChatEventRsvp {
   going('going'),
@@ -76,6 +78,7 @@ class ChatEvent {
     this.myStatus,
     this.attendees = const [],
     this.canManage = false,
+    this.extras = EventExtras.none,
   });
 
   factory ChatEvent.fromJson(Map<String, dynamic> json) {
@@ -110,6 +113,7 @@ class ChatEvent {
           ChatEventAttendee.fromJson(attendee as Map<String, dynamic>),
       ],
       canManage: json['can_manage'] == true,
+      extras: EventExtras.fromJson(json),
     );
   }
 
@@ -151,6 +155,10 @@ class ChatEvent {
   /// Up to a dozen people who are Going (first) or Maybe.
   final List<ChatEventAttendee> attendees;
   final bool canManage;
+
+  /// The cover, repeat, questions, seats and check-in of the event (Events
+  /// 2.0).
+  final EventExtras extras;
 
   bool get isCancelled => cancelledAt != null;
   bool get isPinned => pinnedAt != null;
@@ -196,6 +204,7 @@ class ChatEvent {
       myStatus: status,
       attendees: attendees,
       canManage: canManage,
+      extras: extras,
     );
   }
 

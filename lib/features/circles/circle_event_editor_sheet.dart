@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/events2/event_options_section.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the form that schedules an event in [detail]'s circle, or edits
@@ -85,6 +87,9 @@ class _CircleEventEditorSheetState
   late final _locationController = TextEditingController(
     text: widget.event?.locationText ?? '',
   );
+  late final EventOptionsController _options = EventOptionsController(
+    widget.event == null ? null : EventOptions.fromExtras(widget.event!.extras),
+  );
   late DateTime _startsAt;
   DateTime? _endsAt;
   late CircleEventLocationType _locationType;
@@ -141,6 +146,7 @@ class _CircleEventEditorSheetState
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _options.dispose();
     super.dispose();
   }
 
@@ -246,6 +252,7 @@ class _CircleEventEditorSheetState
               locationText: external ? _locationController.text : null,
               startsAt: _startsAt,
               endsAt: _endsAt,
+              options: _options.options.toJson(),
             )
           : await repository.updateEvent(
               eventId: event.id,
@@ -256,6 +263,7 @@ class _CircleEventEditorSheetState
               locationText: external ? _locationController.text : null,
               startsAt: _startsAt,
               endsAt: _endsAt,
+              options: _options.options.toJson(),
             );
       if (mounted) {
         Navigator.of(context).pop(saved);
@@ -431,6 +439,13 @@ class _CircleEventEditorSheetState
           maxLength: CircleEvent.maxDescriptionLength,
           keyboardType: TextInputType.multiline,
           label: tr('Description (optional)'),
+        ),
+        const SizedBox(height: 16),
+        EventOptionsSection(
+          controller: _options,
+          kind: EventKind.circle,
+          scopeId: widget.detail.circle.id,
+          enabled: !_saving,
         ),
       ],
     );

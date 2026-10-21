@@ -344,6 +344,7 @@ class FakeCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) => throw UnimplementedError();
 
   @override
@@ -356,6 +357,7 @@ class FakeCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) => throw UnimplementedError();
 
   @override

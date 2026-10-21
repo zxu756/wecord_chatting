@@ -169,6 +169,7 @@ void main() {
       find.byKey(const ValueKey('event-title-field')),
       'Picnic',
     );
+    await tester.ensureVisible(find.text('Elsewhere'));
     await tester.tap(find.text('Elsewhere'));
     await settle(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('event-save')));

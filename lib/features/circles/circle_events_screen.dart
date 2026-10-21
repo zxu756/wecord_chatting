@@ -12,6 +12,11 @@ import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/events2/event_check_in.dart';
+import 'package:wecord/features/events2/event_manage_sheet.dart';
+import 'package:wecord/features/events2/event_photos_section.dart';
+import 'package:wecord/features/events2/event_widgets.dart';
+import 'package:wecord/features/events2/events2_repository.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -19,6 +24,7 @@ import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/circle_event.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// Which events of a circle to list.
@@ -297,8 +303,30 @@ Future<void> toggleCircleEventInterest(
 ) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   try {
-    await ref.read(circlesRepositoryProvider).toggleEventInterest(event.id);
+    final joined = event.interestedByMe || event.extras.myWaitlisted;
+    if (!joined && event.extras.hasQuestions) {
+      // Events 2.0: the questions come before the seat.
+      final answers = await showEventAnswerSheet(
+        context,
+        eventTitle: event.title,
+        questions: event.extras.questions,
+        initial: event.extras.myAnswers,
+        actionLabel: event.extras.isFull(event.interestedCount)
+            ? tr('Join waiting list')
+            : tr('Sign up'),
+      );
+      if (answers == null) {
+        return;
+      }
+      await ref
+          .read(events2RepositoryProvider)
+          .registerCircle(event.id, answers);
+    } else {
+      await ref.read(circlesRepositoryProvider).toggleEventInterest(event.id);
+    }
     refreshCircleEvents(ref);
+  } on EventException catch (error) {
+    messenger?.showSnackBar(SnackBar(content: Text(error.failure.message)));
   } catch (_) {
     messenger?.showSnackBar(
       SnackBar(content: Text(tr('Could not update your interest.'))),
@@ -441,6 +469,13 @@ class CircleEventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (event.extras.coverPath != null) ...[
+                EventCoverBanner(
+                  kind: EventKind.circle,
+                  coverPath: event.extras.coverPath!,
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -488,22 +523,27 @@ class CircleEventCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (!event.extras.isPlain) ...[
+                const SizedBox(height: 10),
+                EventInfoChips(
+                  extras: event.extras,
+                  seatsTaken: event.interestedCount,
+                ),
+              ],
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      [
-                        interested,
-                        if (creator != null)
-                          tr('by {name}', {'name': creator.name}),
-                      ].join(' · '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, color: c.muted),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+              _cardFooter(
+                context,
+                summary: Text(
+                  [
+                    interested,
+                    if (creator != null)
+                      tr('by {name}', {'name': creator.name}),
+                  ].join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: c.muted),
+                ),
+                buttons: [
                   CircleEventJoinVoiceButton(event: event, now: now),
                   CircleEventInterestButton(
                     key: ValueKey('circle-event-interest-${event.id}'),
@@ -513,6 +553,9 @@ class CircleEventCard extends StatelessWidget {
                     onPressed: onToggleInterest,
                   ),
                 ],
+                // "Join waiting list" next to the text does not fit a narrow
+                // card: events with seats or questions put the buttons below.
+                stacked: event.extras.hasCapacity || event.extras.hasQuestions,
               ),
             ],
           ),
@@ -520,6 +563,40 @@ class CircleEventCard extends StatelessWidget {
       },
     );
   }
+}
+
+/// The bottom of an event card: the summary and the buttons side by side, or
+/// (for [stacked] cards) the buttons on a line of their own, wrapping when
+/// they do not fit.
+Widget _cardFooter(
+  BuildContext context, {
+  required Widget summary,
+  required List<Widget> buttons,
+  required bool stacked,
+}) {
+  if (stacked) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        summary,
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: buttons,
+        ),
+      ],
+    );
+  }
+  return Row(
+    children: [
+      Expanded(child: summary),
+      const SizedBox(width: 8),
+      ...buttons,
+    ],
+  );
 }
 
 /// "Join" for a voice event that is on now: connects to its voice channel
@@ -611,19 +688,35 @@ class CircleEventInterestButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = event.isActiveAt(now ?? DateTime.now());
+    final extras = event.extras;
+    final waiting = extras.myWaitlisted;
+    final joined = event.interestedByMe || waiting;
     // Interest can always be taken back, but only given while the event is
     // still on.
-    final enabled = !busy && (active || event.interestedByMe);
+    final enabled = !busy && (active || joined);
+    // An event with seats or questions is signed up to, not just marked.
+    final signUp = extras.hasCapacity || extras.hasQuestions;
+    final label = !signUp
+        ? tr('Interested')
+        : waiting
+        ? tr('On the waiting list')
+        : event.interestedByMe
+        ? tr('Signed up')
+        : extras.isFull(event.interestedCount)
+        ? tr('Join waiting list')
+        : tr('Sign up');
     return WeCordButton(
-      variant: event.interestedByMe
+      variant: joined
           ? WeCordButtonVariant.primary
           : WeCordButtonVariant.secondary,
       size: _cardButtonSize(context),
       onPressed: enabled ? onPressed : null,
-      icon: event.interestedByMe
+      icon: waiting
+          ? Icons.hourglass_empty_rounded
+          : event.interestedByMe
           ? Icons.notifications_active_rounded
           : Icons.notifications_none_rounded,
-      label: tr('Interested'),
+      label: label,
     );
   }
 }
@@ -718,7 +811,9 @@ class CircleEventDetailScreen extends ConsumerStatefulWidget {
       _CircleEventDetailScreenState();
 }
 
-enum _EventMenuAction { edit, cancel }
+enum _EventMenuAction { manage, edit, cancel }
+
+enum _CancelChoice { one, series }
 
 class _CircleEventDetailScreenState
     extends ConsumerState<CircleEventDetailScreen> {
@@ -760,6 +855,11 @@ class _CircleEventDetailScreenState
       title: _event.title,
       position: position,
       items: [
+        CircleMenuItem(
+          value: _EventMenuAction.manage,
+          icon: Icons.how_to_reg_outlined,
+          label: tr('Sign-ups and check-in'),
+        ),
         if (canEdit)
           CircleMenuItem(
             value: _EventMenuAction.edit,
@@ -781,6 +881,13 @@ class _CircleEventDetailScreenState
 
   Future<void> _onMenu(_EventMenuAction action, CircleDetail? detail) async {
     switch (action) {
+      case _EventMenuAction.manage:
+        await showEventManageSheet(
+          context,
+          kind: EventKind.circle,
+          eventId: _event.id,
+          title: _event.title,
+        );
       case _EventMenuAction.edit:
         if (detail == null) {
           return;
@@ -795,38 +902,60 @@ class _CircleEventDetailScreenState
           refreshCircleEvents(ref);
         }
       case _EventMenuAction.cancel:
-        final confirmed = await showCircleDialog<bool>(
+        final repeats = _event.extras.repeats;
+        final choice = await showCircleDialog<_CancelChoice>(
           context,
           builder: (context) => CircleDialog(
             title: tr('Cancel event?'),
-            message: tr(
-              '"{title}" will be marked as cancelled and no one will be '
-              'reminded of it.',
-              {'title': _event.title},
-            ),
+            message: repeats
+                ? tr(
+                    '"{title}" repeats. Cancel only this one, or this one and '
+                    'all the ones after it?',
+                    {'title': _event.title},
+                  )
+                : tr(
+                    '"{title}" will be marked as cancelled and no one will be '
+                    'reminded of it.',
+                    {'title': _event.title},
+                  ),
             actions: [
               CircleDialogAction(
                 label: tr('Keep event'),
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () => Navigator.of(context).pop(),
               ),
+              if (repeats)
+                CircleDialogAction(
+                  key: const ValueKey('circle-event-confirm-cancel-series'),
+                  label: tr('Cancel this and all after'),
+                  onPressed: () =>
+                      Navigator.of(context).pop(_CancelChoice.series),
+                ),
               CircleDialogAction.danger(
                 key: const ValueKey('circle-event-confirm-cancel'),
-                label: tr('Cancel event'),
-                onPressed: () => Navigator.of(context).pop(true),
+                label: repeats
+                    ? tr('Cancel only this one')
+                    : tr('Cancel event'),
+                onPressed: () => Navigator.of(context).pop(_CancelChoice.one),
               ),
             ],
           ),
         );
-        if (confirmed != true || !mounted) {
+        if (choice == null || !mounted) {
           return;
         }
         final messenger = ScaffoldMessenger.maybeOf(context);
         try {
-          final cancelled = await ref
-              .read(circlesRepositoryProvider)
-              .cancelEvent(_event.id);
-          if (mounted) {
-            setState(() => _adopt(cancelled));
+          if (choice == _CancelChoice.series) {
+            await ref
+                .read(events2RepositoryProvider)
+                .cancelSeries(EventKind.circle, _event.id);
+          } else {
+            final cancelled = await ref
+                .read(circlesRepositoryProvider)
+                .cancelEvent(_event.id);
+            if (mounted) {
+              setState(() => _adopt(cancelled));
+            }
           }
           refreshCircleEvents(ref);
         } catch (_) {
@@ -911,6 +1040,13 @@ class _CircleEventDetailScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (event.extras.coverPath != null) ...[
+                  EventCoverBanner(
+                    kind: EventKind.circle,
+                    coverPath: event.extras.coverPath!,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -966,6 +1102,13 @@ class _CircleEventDetailScreenState
                     icon: Icons.person_outline_rounded,
                     text: tr('Created by {name}', {'name': creator.name}),
                   ),
+                if (!event.extras.isPlain) ...[
+                  const SizedBox(height: 4),
+                  EventInfoChips(
+                    extras: event.extras,
+                    seatsTaken: event.interestedCount,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -989,6 +1132,33 @@ class _CircleEventDetailScreenState
                     ),
                   ],
                 ),
+                if (event.extras.myWaitlisted)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      tr(
+                        'The event is full. You move up when someone drops '
+                        'out, and you get a notification.',
+                      ),
+                      key: const ValueKey('circle-event-waiting-note'),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: c.muted,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                if (!event.isCancelled) ...[
+                  const SizedBox(height: 10),
+                  EventCheckInRow(
+                    extras: event.extras,
+                    open: eventCheckInOpen(
+                      startsAt: event.startsAt,
+                      endsAt: event.effectiveEndsAt,
+                      now: now,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1039,6 +1209,18 @@ class _CircleEventDetailScreenState
               );
             },
           ),
+          if (!event.isCancelled) ...[
+            const SizedBox(height: 16),
+            EventPhotosSection(
+              kind: EventKind.circle,
+              eventId: event.id,
+              scopeId: widget.circleId,
+              started: !now.isBefore(
+                event.startsAt.subtract(const Duration(hours: 1)),
+              ),
+              photoCount: event.extras.photoCount,
+            ),
+          ],
         ],
       ),
     );

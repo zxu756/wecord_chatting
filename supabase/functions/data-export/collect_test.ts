@@ -186,6 +186,13 @@ const emptyRpc: Record<string, unknown> = {
     questions: [],
     accepted_answers: [],
   },
+  export_my_events2: {
+    signed_up: [],
+    waiting: [],
+    check_ins: [],
+    photos: [],
+    events_made: [],
+  },
 };
 
 const feedbackAnswer = [{
@@ -506,6 +513,13 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         questions: [],
         accepted_answers: [],
       },
+      export_my_events2: {
+        signed_up: [],
+        waiting: [],
+        check_ins: [],
+        photos: [],
+        events_made: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -536,6 +550,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_knowledge", args: { target_user_id: me } },
     { name: "export_my_honors", args: { target_user_id: me } },
     { name: "export_my_channel_posts", args: { target_user_id: me } },
+    { name: "export_my_events2", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -582,6 +597,13 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         media_posts: [],
         questions: [],
         accepted_answers: [],
+      },
+      export_my_events2: {
+        signed_up: [],
+        waiting: [],
+        check_ins: [],
+        photos: [],
+        events_made: [],
       },
       export_my_moments_more: {
         pinned: [],
@@ -695,6 +717,13 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         questions: [],
         accepted_answers: [],
       },
+      export_my_events2: {
+        signed_up: [],
+        waiting: [],
+        check_ins: [],
+        photos: [],
+        events_made: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -728,10 +757,12 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.knowledge, null);
   assertEquals(data.honors, null);
   assertEquals(data.channelPosts, null);
+  assertEquals(data.events2, null);
   assertEquals(data.skipped.sort(), [
     "circle titles and honors",
     "daily",
     "daily digest",
+    "events",
     "favorites",
     "feedback",
     "forms",

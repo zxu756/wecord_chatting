@@ -9,6 +9,7 @@ import 'package:wecord/features/discovery/circle_discovery_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_audit_entry.dart';
 import 'package:wecord/shared/models/circle_role.dart';
+import 'package:wecord/shared/models/event_extras.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 void openCircleAuditLogScreen(BuildContext context, String circleId) {
@@ -1109,6 +1110,10 @@ String _labelFor(String key) {
     'warnings' => tr('Warnings'),
     'threshold' => tr('Threshold'),
     'expired_at' => tr('Ended'),
+    'capacity' => tr('Seats'),
+    'recurrence' => tr('Repeat'),
+    'questions' => tr('Questions'),
+    'series' => tr('Whole series'),
     _ =>
       key.isEmpty
           ? key
@@ -1182,6 +1187,9 @@ String _formatValue(String key, Object? value) {
       'spam' => tr('Spam'),
       _ => value,
     };
+  }
+  if (key == 'recurrence' && value is String) {
+    return EventRecurrence.fromJson(value).label;
   }
   if (key == 'color' && value is num) {
     return '#${value.toInt().toRadixString(16).padLeft(6, '0').toUpperCase()}';

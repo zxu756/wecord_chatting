@@ -169,6 +169,13 @@ export interface ExportData {
    * 202610270330); null when it could not be read, absent in older callers.
    */
   channelPosts?: Json | null;
+  /**
+   * What I did with events (export_my_events2, migration 202610270470): the
+   * events I signed up to, waited for, checked in to, the pictures I added and
+   * the events I made; null when it could not be read, absent in older
+   * callers.
+   */
+  events2?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -720,6 +727,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
       path: "data/channel_posts.json",
       value: channelPostsJson(data),
     });
+  }
+  if (data.events2) {
+    out.push({ path: "data/events.json", value: eventsJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -1847,6 +1857,145 @@ answers are not copied.</p>
   );
 }
 
+/** The pictures I added to events and the covers of the events I made. */
+export function eventFilesToSign(
+  events: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  const add = (bucket: unknown, path: unknown) => {
+    if (typeof path !== "string" || typeof bucket !== "string") return;
+    seen.set(`${bucket}/${path}`, { bucket, path });
+  };
+  for (const photo of objects(events?.["photos"])) {
+    add(photo["bucket"], photo["path"]);
+  }
+  for (const made of objects(events?.["events_made"])) {
+    const cover = made["cover"];
+    if (isObject(cover)) add(cover["bucket"], cover["path"]);
+  }
+  return [...seen.values()];
+}
+
+/** Events: sign-ups (with my answers), waiting, check-ins, pictures, made. */
+function eventsJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const events = isObject(data.events2) ? data.events2 : {};
+  return {
+    signed_up: objects(events["signed_up"]),
+    waiting: objects(events["waiting"]),
+    check_ins: objects(events["check_ins"]),
+    photos: objects(events["photos"]).map((photo) => ({
+      kind: photo["kind"],
+      event: photo["title"],
+      added_at: photo["added_at"],
+      file: ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"]),
+    })),
+    events_made: objects(events["events_made"]).map((made) => {
+      const cover = isObject(made["cover"]) ? made["cover"] : null;
+      return {
+        ...made,
+        cover: cover
+          ? ref(str(cover["bucket"]) ?? CHAT_IMAGES_BUCKET, cover["path"])
+          : null,
+      };
+    }),
+  };
+}
+
+function answersText(answers: unknown, questions: unknown): string {
+  if (!isObject(answers)) return "";
+  const labels = new Map<string, string>();
+  for (const question of objects(questions)) {
+    const id = str(question["id"]);
+    const label = str(question["label"]);
+    if (id && label) labels.set(id, label);
+  }
+  return Object.entries(answers)
+    .map(([id, value]) => `${labels.get(id) ?? id}: ${String(value)}`)
+    .join(" · ");
+}
+
+/** My events: what I signed up to, waited for, checked in to, added, made. */
+export function buildEventsHtml(data: ExportData): string {
+  const events = isObject(data.events2) ? data.events2 : {};
+  const ref = fileRefs(data);
+  const place = (item: Json) =>
+    item["circle_name"]
+      ? `<span class="muted">${
+        escapeHtml(str(item["circle_name"]) ?? "")
+      }</span>`
+      : "";
+  const signedUp = objects(events["signed_up"]).map((item) => {
+    const answers = answersText(item["answers"], item["questions"]);
+    return entry(
+      str(item["starts_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong> ${
+        place(item)
+      }</div><div class="muted">${
+        escapeHtml(
+          `${str(item["answer"]) ?? ""}${
+            item["cancelled"] === true ? " · cancelled" : ""
+          }${item["checked_in_at"] ? " · checked in" : ""}`,
+        )
+      }</div>${
+        answers ? `<div class="body">${escapeHtml(answers)}</div>` : ""
+      }`,
+    );
+  }).join("");
+  const waiting = objects(events["waiting"]).map((item) =>
+    entry(
+      str(item["starts_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong></div>`,
+    )
+  ).join("");
+  const checkIns = objects(events["check_ins"]).map((item) =>
+    entry(
+      str(item["checked_in_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong></div>`,
+    )
+  ).join("");
+  const photos = objects(events["photos"]).map((photo) => {
+    const link = ref(
+      str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET,
+      photo["path"],
+    )?.download_url;
+    return entry(
+      str(photo["added_at"]),
+      `<div><strong>${escapeHtml(str(photo["title"]) ?? "")}</strong></div>${
+        link
+          ? `<div><a href="${escapeHtml(link)}">Picture (link)</a></div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  const made = objects(events["events_made"]).map((item) => {
+    const questions = objects(item["questions"]);
+    const bits = [
+      item["repeats"] ? `repeats ${String(item["repeats"])}` : "",
+      item["capacity"] ? `capacity ${String(item["capacity"])}` : "",
+      questions.length > 0 ? `${questions.length} question(s)` : "",
+    ].filter((bit) => bit !== "").join(" · ");
+    return entry(
+      str(item["starts_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong> ${
+        place(item)
+      }</div>${bits ? `<div class="muted">${escapeHtml(bits)}</div>` : ""}`,
+    );
+  }).join("");
+  return page(
+    "Events — your WeCord data",
+    `${backLink()}<h1>Events</h1>
+<p class="muted">The events you signed up to (with the answers you gave), the
+waiting lists you were on, where you checked in, the pictures you added and the
+events you made. Other people's answers, names and pictures are not copied.</p>
+${section("Signed up", signedUp, "None.")}
+${section("Waiting list", waiting, "None.")}
+${section("Checked in", checkIns, "None.")}
+${section("Pictures you added", photos, "None.")}
+${section("Events you made", made, "None.")}`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -2086,6 +2235,18 @@ export function buildSectionPages(
       content: buildChannelPostsHtml(data),
     });
   }
+  if (data.events2) {
+    const counts = (key: string) =>
+      objects(isObject(data.events2) ? data.events2[key] : null).length;
+    out.push({
+      path: "pages/events.html",
+      label: "Events",
+      summary: `${counts("signed_up")} signed up · ${
+        counts("events_made")
+      } made`,
+      content: buildEventsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2176,6 +2337,9 @@ data/honors.json      The titles circles gave you, your honors and streaks, and
 data/channel_posts.json The posts you made in media channels (with a link to
                       each picture), the questions you asked in Q&A channels
                       and where an answer of yours was accepted.
+data/events.json      The events you signed up to (with your answers), waited
+                      for, checked in to, the pictures you added and the
+                      events you made (never other people's answers).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

@@ -254,6 +254,7 @@ abstract interface class CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   });
 
   /// Changes an event (its creator or members who manage events).
@@ -266,6 +267,7 @@ abstract interface class CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   });
 
   Future<CircleEvent> cancelEvent(String eventId);
@@ -947,6 +949,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) async {
     final payload = await _dataSource.rpc('create_circle_event', {
       'target_circle_id': circleId,
@@ -959,6 +962,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
         startsAt: startsAt,
         endsAt: endsAt,
       ),
+      'event_options': ?options,
     });
     return CircleEvent.fromJson(payload as Map<String, dynamic>);
   }
@@ -973,6 +977,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) async {
     final payload = await _dataSource.rpc('update_circle_event', {
       'target_event_id': eventId,
@@ -985,6 +990,7 @@ class SupabaseCirclesRepository implements CirclesRepository {
         startsAt: startsAt,
         endsAt: endsAt,
       ),
+      'event_options': ?options,
     });
     return CircleEvent.fromJson(payload as Map<String, dynamic>);
   }
@@ -1952,6 +1958,7 @@ class UninitializedCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) {
     throw StateError('Supabase must be initialized before creating events.');
   }
@@ -1966,6 +1973,7 @@ class UninitializedCirclesRepository implements CirclesRepository {
     String? locationText,
     required DateTime startsAt,
     DateTime? endsAt,
+    Map<String, Object?>? options,
   }) {
     throw StateError('Supabase must be initialized before editing events.');
   }

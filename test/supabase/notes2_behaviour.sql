@@ -643,7 +643,7 @@ begin
   perform pg_temp.expect(not exists (select 1 from jsonb_array_elements(page -> 'blocks') b where b -> 'props' ? 'secret'), 'and only the props of each kind');
   perform pg_temp.expect(not (page ? 'created_by') and not (page::text like '%0000000000%'), 'no ids of people');
   perform pg_temp.expect(not (page::text like '%Is this%') and not (page::text like '%comment%'), 'no comments');
-  perform pg_temp.expect(public.public_note_by_token('0' || substr(tok, 2)) ->> 'status' = 'invalid', 'a nearly right token is not');
+  perform pg_temp.expect(public.public_note_by_token(case when substr(tok, 1, 1) = '0' then '1' else '0' end || substr(tok, 2)) ->> 'status' = 'invalid', 'a nearly right token is not');
   perform pg_temp.expect(public.public_note_by_token(upper(tok)) ->> 'status' = 'invalid' or upper(tok) = tok, 'case counts');
   perform pg_temp.expect(public.public_note_by_token('abc') ->> 'status' = 'invalid', 'a short token is not');
   perform pg_temp.expect(public.public_note_by_token('') ->> 'status' = 'invalid' and public.public_note_by_token(null) ->> 'status' = 'invalid', 'nor an empty one');

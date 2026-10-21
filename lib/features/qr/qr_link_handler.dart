@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
+import 'package:wecord/features/events2/event_check_in.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/qr/qr_links.dart';
@@ -44,6 +45,7 @@ Future<void> openQrScanner(BuildContext context, WidgetRef ref) async {
 /// * a group's code opens the join page;
 /// * a circle invite opens the join flow;
 /// * a call link opens the call;
+/// * an event's check-in code checks the person in;
 /// * anything else is shown as text, with Copy and (for web links) Open link.
 Future<void> handleScannedText(
   BuildContext context,
@@ -61,6 +63,8 @@ Future<void> handleScannedText(
       unawaited(context.push(circleInvitePath(code)));
     case CallQrLink(:final code):
       unawaited(context.push(callLinkPath(code)));
+    case CheckInQrLink(:final code):
+      await performEventCheckIn(context, ref, code);
     case OtherQrText():
       await showScannedTextSheet(context, link);
   }

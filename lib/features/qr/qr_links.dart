@@ -110,6 +110,20 @@ class CallQrLink extends ScannedLink {
   int get hashCode => Object.hash('call', code);
 }
 
+/// An event's check-in code: checks the person in.
+class CheckInQrLink extends ScannedLink {
+  const CheckInQrLink(this.code);
+
+  final String code;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CheckInQrLink && other.code == code;
+
+  @override
+  int get hashCode => Object.hash('check-in', code);
+}
+
 /// Anything else: shown as text, with Copy and (for web links) Open link.
 class OtherQrText extends ScannedLink {
   const OtherQrText(this.text, {this.url});
@@ -131,6 +145,7 @@ final _userPath = RegExp(r'^/u/([A-Za-z0-9]{16})/?$');
 final _groupPath = RegExp(r'^/g/([A-Za-z0-9]{16})/?$');
 final _invitePath = RegExp(r'^/invite/([A-Za-z0-9]{10})/?$');
 final _callPath = RegExp(r'^/call/([A-Za-z0-9]{12})/?$');
+final _checkInPath = RegExp(r'^/checkin/([A-Za-z0-9]{12})/?$');
 
 /// The hosts WeCord links can come from: the deployed site, the site this
 /// build points at and (in a browser) the page's own host.
@@ -170,6 +185,9 @@ ScannedLink? _fromPath(String path) {
   }
   if (_callPath.firstMatch(path) case final match?) {
     return CallQrLink(match.group(1)!.toLowerCase());
+  }
+  if (_checkInPath.firstMatch(path) case final match?) {
+    return CheckInQrLink(match.group(1)!.toLowerCase());
   }
   return null;
 }

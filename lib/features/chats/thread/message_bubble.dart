@@ -558,7 +558,8 @@ class _MessageBubble extends StatelessWidget {
         message.forwardPreview == null &&
         (message.chatHistoryCard != null ||
             message.contactCard != null ||
-            message.momentCardPostId != null);
+            message.momentCardPostId != null ||
+            message.isVideoNote);
     // Over a wallpaper the bubbles stay solid and apart from it.
     final onWallpaper = ChatWallpaperScope.activeOf(context);
     return Container(

@@ -37,6 +37,7 @@ class OutboxMedia {
     this.originalQuality = false,
     this.viewOnce = false,
     this.alt,
+    this.videoNoteMs,
   });
 
   factory OutboxMedia.fromJson(Map<String, dynamic> json) {
@@ -57,6 +58,7 @@ class OutboxMedia {
       originalQuality: json['original_quality'] == true,
       viewOnce: json['view_once'] == true,
       alt: cleanImageAlt(json['alt']),
+      videoNoteMs: (json['video_note_ms'] as num?)?.toInt(),
     );
   }
 
@@ -97,6 +99,10 @@ class OutboxMedia {
 
   /// What a picture shows, in the sender's words; sent with the picture.
   final String? alt;
+
+  /// A round video message (A13): how long it runs, in milliseconds; null
+  /// for any other attachment.
+  final int? videoNoteMs;
 
   /// The storage bucket: pictures and everything else live apart.
   String get bucket =>
@@ -139,6 +145,7 @@ class OutboxMedia {
         width: width,
         height: height,
         blurhash: blurhash,
+        videoNoteMs: videoNoteMs,
       ).toJson(),
     };
   }
@@ -161,6 +168,7 @@ class OutboxMedia {
       if (originalQuality) 'original_quality': true,
       if (viewOnce) 'view_once': true,
       'alt': ?alt,
+      'video_note_ms': ?videoNoteMs,
     };
   }
 }

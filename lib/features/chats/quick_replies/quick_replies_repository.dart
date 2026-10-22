@@ -46,9 +46,10 @@ class SupabaseQuickRepliesRepository implements QuickRepliesRepository {
 
   @override
   Future<List<QuickReply>> load() async {
-    final rows = await _client.from('quick_replies').select().order(
-      'created_at',
-    );
+    final rows = await _client
+        .from('quick_replies')
+        .select()
+        .order('created_at');
     return [
       for (final row in rows)
         QuickReply.fromJson(Map<String, dynamic>.from(row)),

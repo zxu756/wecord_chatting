@@ -91,6 +91,7 @@ import 'package:wecord/features/chats/slash_commands.dart';
 import 'package:wecord/features/chats/quick_replies/quick_replies_models.dart';
 import 'package:wecord/features/chats/quick_replies/quick_replies_repository.dart';
 import 'package:wecord/features/chats/quick_replies/quick_reply_picker.dart';
+import 'package:wecord/features/chats/video_note/video_note_bubble.dart';
 import 'package:wecord/features/chats/time_tokens/time_token_widgets.dart';
 import 'package:wecord/features/chats/view_once.dart';
 import 'package:wecord/features/chats/merged_forward/merged_forward.dart';

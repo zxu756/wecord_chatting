@@ -65,7 +65,9 @@ class QuickRepliesScreen extends ConsumerWidget {
             ),
           )
         else if (replies.isEmpty)
-          _EmptyReplies(onCreate: () => unawaited(showQuickReplyEditor(context)))
+          _EmptyReplies(
+            onCreate: () => unawaited(showQuickReplyEditor(context)),
+          )
         else
           SettingsGroup(
             children: [

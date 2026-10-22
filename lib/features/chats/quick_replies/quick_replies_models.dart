@@ -103,10 +103,7 @@ String? slashQueryAt(String text) {
 }
 
 /// The phrases whose shortcut starts with [query], in the order kept.
-List<QuickReply> quickReplyCandidates(
-  String query,
-  List<QuickReply> replies,
-) {
+List<QuickReply> quickReplyCandidates(String query, List<QuickReply> replies) {
   final normalized = query.toLowerCase();
   return [
     for (final reply in replies)

@@ -187,28 +187,33 @@ class _QuickReplyPickerState extends ConsumerState<QuickReplyPicker> {
                         ),
                       ),
                     )
-                  : ListView(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      children: [
-                        for (final reply in shown)
-                          ListTile(
-                            key: ValueKey('quick-reply-pick-${reply.shortcut}'),
-                            leading: const Icon(Icons.bolt_outlined),
-                            title: Text(
-                              '/${reply.shortcut}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                  : Material(
+                      type: MaterialType.transparency,
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        children: [
+                          for (final reply in shown)
+                            ListTile(
+                              key: ValueKey(
+                                'quick-reply-pick-${reply.shortcut}',
                               ),
+                              leading: const Icon(Icons.bolt_outlined),
+                              title: Text(
+                                '/${reply.shortcut}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(
+                                reply.body.replaceAll(RegExp(r'\s+'), ' '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => Navigator.of(context).pop(reply),
                             ),
-                            subtitle: Text(
-                              reply.body.replaceAll(RegExp(r'\s+'), ' '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () => Navigator.of(context).pop(reply),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
             ),
             Padding(

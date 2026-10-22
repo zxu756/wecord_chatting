@@ -8,6 +8,7 @@
 // By default an entry holds only its time, its kind and the conversation's
 // name; titles, places and descriptions are written only when the person
 // switched "Include titles and details" on.
+import { DEFAULT_SITE_ORIGIN } from "../push/declarative.ts";
 import { buildIcsFeed, type IcsEntry } from "./ics.ts";
 
 export const feedDays = 60;
@@ -23,6 +24,8 @@ export type FeedItem = {
   target_id: string;
   place_name: string | null;
   subtitle: string | null;
+  /** Small extras of the entry; an event with a call carries its link code. */
+  meta?: { call_link_code?: string | null } | null;
 };
 
 export type FeedResult =
@@ -61,6 +64,7 @@ const labels = {
     task: "Task",
     calendar: "WeCord agenda",
     fallbackPlace: "WeCord",
+    joinCall: "Join the call",
   },
   zh: {
     chat_event: "活动",
@@ -68,6 +72,7 @@ const labels = {
     task: "任务",
     calendar: "WeCord 日程",
     fallbackPlace: "WeCord",
+    joinCall: "加入通话",
   },
 } as const;
 
@@ -81,6 +86,8 @@ export function entryFor(
     includeContent: boolean;
     utcOffsetMinutes: number;
     language: "en" | "zh";
+    /** The site the call links of scheduled calls point at. */
+    siteOrigin?: string;
   },
 ): IcsEntry | null {
   const text = labels[options.language];
@@ -124,6 +131,16 @@ export function entryFor(
   if (options.includeContent) {
     if (item.subtitle) entry.location = item.subtitle;
     if (title && item.place_name) entry.description = item.place_name;
+    // The call of a scheduled call: the way in is written only for a person
+    // who asked for details, like the title is.
+    const code = item.meta?.call_link_code;
+    if (!isTask && typeof code === "string" && /^[a-z0-9]{12}$/.test(code)) {
+      const url = `${options.siteOrigin ?? DEFAULT_SITE_ORIGIN}/call/${code}`;
+      entry.url = url;
+      entry.description = [entry.description, `${text.joinCall}: ${url}`]
+        .filter((part) => part && part.trim())
+        .join("\n");
+    }
   }
   return entry;
 }
@@ -131,6 +148,7 @@ export function entryFor(
 export function buildFeed(
   result: Extract<FeedResult, { status: "ok" }>,
   now: Date,
+  siteOrigin?: string,
 ): string {
   const entries: IcsEntry[] = [];
   for (const item of result.items) {
@@ -138,6 +156,7 @@ export function buildFeed(
       includeContent: result.include_content,
       utcOffsetMinutes: result.utc_offset_minutes,
       language: result.language,
+      siteOrigin,
     });
     if (entry) entries.push(entry);
   }
@@ -197,6 +216,8 @@ export type FeedDeps = {
   now: () => Date;
   /** Wrong tokens per address; guessing is hopeless, this only saves work. */
   badTokens: WindowLimiter;
+  /** The site call links point at; the default site when missing. */
+  siteOrigin?: string;
 };
 
 function headers(extra: Record<string, string> = {}): Headers {
@@ -266,7 +287,7 @@ export async function handleFeedRequest(
     return plainResponse(404, "Not found");
   }
 
-  const body = buildFeed(result, nowDate);
+  const body = buildFeed(result, nowDate, deps.siteOrigin);
   return new Response(request.method === "HEAD" ? null : body, {
     status: 200,
     headers: headers({

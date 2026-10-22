@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:wecord/features/chats/events/chat_events_repository.dart';
 import 'package:wecord/features/chats/time_tokens/time_token.dart';
 import 'package:wecord/features/events2/event_options_section.dart';
@@ -10,18 +11,27 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// Opens the event form for a new event of [conversationId], or to edit
 /// [event]. Returns the saved event, or null when cancelled.
+///
+/// With [scheduleCall] the form of a new event opens with a call attached (the
+/// "Schedule a call" action of the chat).
 Future<ChatEvent?> showChatEventEditor(
   BuildContext context, {
   required String conversationId,
   ChatEvent? event,
+  bool scheduleCall = false,
 }) {
   return showWeCordSheet<ChatEvent>(
     context,
-    title: event == null ? tr('New event') : tr('Edit event'),
+    title: event != null
+        ? tr('Edit event')
+        : scheduleCall
+        ? tr('Schedule a call')
+        : tr('New event'),
     detents: const [0.92],
     builder: (context, scrollController) => ChatEventEditor(
       conversationId: conversationId,
       event: event,
+      scheduleCall: scheduleCall,
       scrollController: scrollController,
     ),
   );
@@ -51,6 +61,7 @@ class ChatEventEditor extends ConsumerStatefulWidget {
   const ChatEventEditor({
     required this.conversationId,
     this.event,
+    this.scheduleCall = false,
     this.scrollController,
     this.clock,
     super.key,
@@ -58,6 +69,9 @@ class ChatEventEditor extends ConsumerStatefulWidget {
 
   final String conversationId;
   final ChatEvent? event;
+
+  /// A new event starts with a call attached.
+  final bool scheduleCall;
   final ScrollController? scrollController;
 
   /// The current time; the real one by default.
@@ -87,7 +101,9 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
     super.initState();
     final event = widget.event;
     _options = EventOptionsController(
-      event == null ? null : EventOptions.fromExtras(event.extras),
+      event == null
+          ? EventOptions(call: widget.scheduleCall ? true : false)
+          : EventOptions.fromExtras(event.extras, supportsCall: true),
     );
     if (event != null) {
       _titleController.text = event.title;
@@ -221,11 +237,18 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
       if (mounted) {
         Navigator.of(context).pop(saved);
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
+        final cannotCall =
+            error is PostgrestException &&
+            error.message.toLowerCase().contains('cannot call');
         setState(() {
           _saving = false;
-          _errorText = widget.event == null
+          _errorText = cannotCall
+              ? tr(
+                  "You can't call in this chat, so the event can't have a call.",
+                )
+              : widget.event == null
               ? tr('Could not create the event. Try again.')
               : tr('Could not save the event. Try again.');
         });
@@ -257,7 +280,7 @@ class _ChatEventEditorState extends ConsumerState<ChatEventEditor> {
           fieldKey: const ValueKey('chat-event-title-field'),
           controller: _titleController,
           label: tr('Title'),
-          hint: tr('Climbing night'),
+          hint: widget.scheduleCall ? tr('Team call') : tr('Climbing night'),
           autofocus: !editing,
           enabled: !_saving,
           maxLength: ChatEvent.maxTitleLength,

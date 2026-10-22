@@ -83,6 +83,7 @@ import 'knowledge_base_a11y_screens.dart';
 import 'member_honors_a11y_screens.dart';
 import 'channel_types_a11y_screens.dart';
 import 'events2_a11y_screens.dart';
+import 'scheduled_calls_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -842,4 +843,5 @@ final allA11yScreens = <A11yScreen>[
   ...channelTypesA11yScreens,
   ...events2A11yScreens,
   ...interactionsA11yScreens,
+  ...scheduledCallsA11yScreens,
 ];

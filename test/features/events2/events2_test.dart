@@ -1268,6 +1268,8 @@ void main() {
       expect(options['capacity'], 15);
       expect(options['cover_path'], isNull);
       expect(options['questions'], isEmpty);
+      // A circle event cannot carry a call (scheduled calls): nothing is sent.
+      expect(options.containsKey('call'), isFalse);
       await world.close(tester);
     });
   });

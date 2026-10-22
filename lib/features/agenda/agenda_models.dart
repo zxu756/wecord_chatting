@@ -115,6 +115,15 @@ class AgendaItem {
   /// My answer to an event: `going`, `maybe` or `interested`.
   String? get rsvp => meta['status'] as String?;
 
+  /// The call link code of an event that carries a scheduled call, while the
+  /// link works; null for everything else.
+  String? get callLinkCode {
+    final code = meta['call_link_code'];
+    return code is String && code.isNotEmpty ? code : null;
+  }
+
+  bool get hasCall => callLinkCode != null;
+
   /// 0 none, 1 low, 2 medium, 3 high (tasks).
   int get priority => (meta['priority'] as num?)?.toInt() ?? 0;
 

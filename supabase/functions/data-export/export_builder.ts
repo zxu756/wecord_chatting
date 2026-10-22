@@ -1890,6 +1890,8 @@ function eventsJson(data: ExportData): Json {
       added_at: photo["added_at"],
       file: ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"]),
     })),
+    // The events I made with a call (scheduled calls); never a link's code.
+    calls_made: objects(events["calls_made"]),
     events_made: objects(events["events_made"]).map((made) => {
       const cover = isObject(made["cover"]) ? made["cover"] : null;
       return {
@@ -1982,6 +1984,19 @@ export function buildEventsHtml(data: ExportData): string {
       }</div>${bits ? `<div class="muted">${escapeHtml(bits)}</div>` : ""}`,
     );
   }).join("");
+  const calls = objects(events["calls_made"]).map((item) => {
+    const bits = [
+      item["cancelled"] === true ? "cancelled" : "",
+      item["repeats"] ? `repeats ${String(item["repeats"])}` : "",
+      item["link_turned_off"] === true ? "link turned off" : "",
+    ].filter((bit) => bit !== "").join(" · ");
+    return entry(
+      str(item["starts_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong></div>${
+        bits ? `<div class="muted">${escapeHtml(bits)}</div>` : ""
+      }`,
+    );
+  }).join("");
   return page(
     "Events — your WeCord data",
     `${backLink()}<h1>Events</h1>
@@ -1992,7 +2007,8 @@ ${section("Signed up", signedUp, "None.")}
 ${section("Waiting list", waiting, "None.")}
 ${section("Checked in", checkIns, "None.")}
 ${section("Pictures you added", photos, "None.")}
-${section("Events you made", made, "None.")}`,
+${section("Events you made", made, "None.")}
+${section("Calls you scheduled", calls, "None.")}`,
   );
 }
 
@@ -2339,7 +2355,8 @@ data/channel_posts.json The posts you made in media channels (with a link to
                       and where an answer of yours was accepted.
 data/events.json      The events you signed up to (with your answers), waited
                       for, checked in to, the pictures you added and the
-                      events you made (never other people's answers).
+                      events you made, and the calls you scheduled (never
+                      a call link's code or other people's answers).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

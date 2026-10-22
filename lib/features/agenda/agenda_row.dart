@@ -102,7 +102,10 @@ class AgendaRow extends StatelessWidget {
     final c = context.tokens.colors;
     final overdue = item.isOverdue(now);
     final title = agendaTitle(item);
-    final kind = agendaKindLabel(item.kind);
+    // An event with a call (scheduled calls) reads as a call.
+    final kind = item.hasCall
+        ? tr('Scheduled call')
+        : agendaKindLabel(item.kind);
     final time = agendaTimeLabel(context, item, withDate: withDate);
     final place = [
       if (item.placeName != null) item.placeName!,
@@ -143,7 +146,9 @@ class AgendaRow extends StatelessWidget {
             children: [
               ThingAvatar(
                 size: 40,
-                icon: agendaKindIcon(item.kind),
+                icon: item.hasCall
+                    ? Icons.phone_in_talk_outlined
+                    : agendaKindIcon(item.kind),
                 color: overdue ? c.dangerSoft : c.raised,
                 foregroundColor: overdue ? c.dangerText : c.muted,
               ),

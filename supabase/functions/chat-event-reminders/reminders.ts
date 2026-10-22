@@ -1,4 +1,5 @@
 // The parts of the chat-event-reminders function that need no network.
+import { callPath } from "../push/call_path.ts";
 
 /** One device to push a reminder to, as claim_chat_event_reminder_pushes
  * returns it. */
@@ -12,11 +13,19 @@ export interface ReminderTarget {
   event_id: string;
   title: string;
   body: string;
+  /** The event's call link code, for a reminder sent in the last 20 minutes
+   * before an event with a call (scheduled calls); otherwise null. */
+  call_link_code?: string | null;
+  /** Set by the sender: where the push opens, when it is not the chat. */
+  url?: string;
 }
 
-/** Where tapping the notification opens the app (hash routes on the web). */
+/** Where tapping the notification opens the app (hash routes on the web): the
+ * event's call when it has one and the reminder is the last one, else its
+ * chat. */
 export function reminderPath(target: ReminderTarget): string {
-  return `/#/chats/${target.conversation_id}`;
+  return callPath(target.call_link_code) ??
+    `/#/chats/${target.conversation_id}`;
 }
 
 /** What the push shows. The tag groups a person's reminders for one event so

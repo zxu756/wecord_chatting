@@ -15,6 +15,7 @@
 // every push that belongs to a chat goes out with a plain, bilingual notice
 // instead of its real text. A missed message is worse than a push that is
 // less specific, but a locked chat's words on a lock screen are worse still.
+import { isCallPath } from "./call_path.ts";
 import type { RpcClient } from "./quiet_hours.ts";
 
 /// What the function needs of a push target.
@@ -23,6 +24,11 @@ export interface MaskableTarget {
   conversation_id?: string | null;
   title: string;
   body: string;
+  /// Where the push opens, when it is not the chat. A call link (scheduled
+  /// calls) is swapped for the chat when the chat is locked.
+  url?: string | null;
+  /// The call link code of an event reminder (scheduled calls).
+  call_link_code?: string | null;
 }
 
 /// The words used when the lookup fails and nothing is known about the
@@ -74,7 +80,7 @@ export async function maskLockedPushes<T extends MaskableTarget>(
   if (rows === null) {
     return targets.map((target) =>
       target.conversation_id
-        ? { ...target, title: FALLBACK_TITLE, body: FALLBACK_BODY }
+        ? withoutCall({ ...target, title: FALLBACK_TITLE, body: FALLBACK_BODY })
         : target
     );
   }
@@ -89,6 +95,19 @@ export async function maskLockedPushes<T extends MaskableTarget>(
     const mask = target.conversation_id
       ? masks.get(keyOf(target.subscription_id, target.conversation_id))
       : undefined;
-    return mask ? { ...target, title: mask.title, body: mask.body } : target;
+    if (!mask) {
+      return target;
+    }
+    return withoutCall({ ...target, title: mask.title, body: mask.body });
   });
+}
+
+/// [target] without the call link of a scheduled call: a locked chat's
+/// reminder opens the chat (where the app asks for the unlock), not the call.
+function withoutCall<T extends MaskableTarget>(target: T): T {
+  if (!isCallPath(target.url) && !target.call_link_code) {
+    return target;
+  }
+  const { url: _url, ...rest } = target;
+  return { ...rest, call_link_code: null } as unknown as T;
 }

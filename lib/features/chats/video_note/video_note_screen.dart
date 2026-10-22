@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,7 +58,7 @@ class _VideoNoteScreenState extends ConsumerState<VideoNoteScreen> {
   var _stage = _Stage.opening;
   VideoNoteCameraProblem? _problem;
   Timer? _ticker;
-  final _clock = Stopwatch();
+  final _watch = clock.stopwatch();
   var _elapsed = Duration.zero;
   var _holding = false;
   VideoNoteClip? _clip;
@@ -129,7 +130,7 @@ class _VideoNoteScreenState extends ConsumerState<VideoNoteScreen> {
     if (!mounted) {
       return;
     }
-    _clock
+    _watch
       ..reset()
       ..start();
     _elapsed = Duration.zero;
@@ -137,7 +138,7 @@ class _VideoNoteScreenState extends ConsumerState<VideoNoteScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _elapsed = _clock.elapsed);
+      setState(() => _elapsed = _watch.elapsed);
       if (_elapsed >= const Duration(seconds: maxVideoNoteSeconds)) {
         unawaited(_stop());
       }
@@ -154,7 +155,7 @@ class _VideoNoteScreenState extends ConsumerState<VideoNoteScreen> {
       return;
     }
     _ticker?.cancel();
-    _clock.stop();
+    _watch.stop();
     setState(() => _stage = _Stage.opening);
     VideoNoteClip? clip;
     try {

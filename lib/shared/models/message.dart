@@ -1,6 +1,7 @@
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
+import 'package:wecord/shared/models/message_components.dart';
 import 'package:wecord/shared/models/message_origin.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -104,6 +105,7 @@ class ChatMessage {
     this.expiresAt,
     this.reviewState,
     this.silent = false,
+    this.components,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -153,6 +155,7 @@ class ChatMessage {
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
       reviewState: MessageReviewState.maybeFromJson(json['review_state']),
       silent: json['silent'] == true,
+      components: MessageComponents.maybeFromJson(json['components']),
     );
   }
 
@@ -235,6 +238,10 @@ class ChatMessage {
 
   /// Sent without a push: nobody's device was told about it.
   final bool silent;
+
+  /// The buttons, links and lists a bot put on its message (I1); null on every
+  /// other message.
+  final MessageComponents? components;
 
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
@@ -392,6 +399,7 @@ class ChatMessage {
     Object? album = _sentinel,
     Object? expiresAt = _sentinel,
     Object? reviewState = _sentinel,
+    Object? components = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -468,6 +476,9 @@ class ChatMessage {
           ? this.reviewState
           : reviewState as MessageReviewState?,
       silent: silent,
+      components: identical(components, _sentinel)
+          ? this.components
+          : components as MessageComponents?,
     );
   }
 }

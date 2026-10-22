@@ -67,6 +67,15 @@ const events2 = {
     path: "c-1/events/p1.jpg",
     added_at: "2026-11-01T03:00:00Z",
   }],
+  calls_made: [{
+    title: "Thursday sync",
+    starts_at: "2026-10-22T18:00:00Z",
+    ends_at: "2026-10-22T19:00:00Z",
+    cancelled: false,
+    repeats: "weekly",
+    link_works_until: "2026-10-22T20:00:00Z",
+    link_turned_off: false,
+  }],
   events_made: [{
     kind: "chat",
     title: "Saturday hike",
@@ -122,6 +131,11 @@ Deno.test("events add a page and a JSON file", () => {
     "https://files.example.com/p1.jpg",
   );
   assertEquals(json.events_made[0].time_zone, "Pacific/Auckland");
+  assertEquals(json.calls_made[0].title, "Thursday sync");
+  assertEquals(json.calls_made[0].repeats, "weekly");
+  assertStringIncludes(page, "Calls you scheduled");
+  assertStringIncludes(page, "Thursday sync");
+  assert(!("code" in json.calls_made[0]));
   assertEquals(
     json.events_made[0].cover.download_url,
     "https://files.example.com/cover.jpg",

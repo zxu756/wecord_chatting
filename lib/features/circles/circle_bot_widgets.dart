@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_bot_repository.dart';
 import 'package:wecord/features/circles/circle_settings_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
+import 'package:wecord/features/interactions/bot_callback_dialog.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -13,7 +14,7 @@ import 'package:wecord/shared/models/circle_role.dart';
 import 'package:wecord/shared/models/message_origin.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-enum _BotAction { regenerate, revoke, delete }
+enum _BotAction { regenerate, revoke, delete, callback }
 
 /// Circle settings → Bots: bot accounts that programs drive through the
 /// bot API with a token.
@@ -98,6 +99,7 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
         ),
         tr('Delete'),
       ),
+      _BotAction.callback => ('', '', ''),
     };
     final confirmed = await showCircleDialog<bool>(
       context,
@@ -145,6 +147,8 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
           (repository) => repository.deleteBot(bot.id),
           failure: tr('Could not delete the bot. Try again.'),
         );
+      case _BotAction.callback:
+        break;
     }
   }
 
@@ -167,6 +171,11 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
       position: position,
       items: [
         CircleMenuItem(
+          value: _BotAction.callback,
+          icon: Icons.webhook_outlined,
+          label: tr('Callback address'),
+        ),
+        CircleMenuItem(
           value: _BotAction.regenerate,
           icon: Icons.key_outlined,
           label: tr('Reset token'),
@@ -186,7 +195,9 @@ class _CircleBotsSectionState extends ConsumerState<CircleBotsSection> {
         ),
       ],
     );
-    if (action != null && mounted) {
+    if (action == _BotAction.callback && mounted) {
+      await showBotCallbackDialog(context, ref, bot);
+    } else if (action != null && mounted) {
       await _act(bot, action);
     }
   }
@@ -535,10 +546,15 @@ class InteractionOrigin extends StatelessWidget {
           const SizedBox(width: 4),
           Flexible(
             child: Text(
-              tr('{name} used /{command}', {
-                'name': interaction.userName,
-                'command': interaction.command,
-              }),
+              interaction.componentLabel != null
+                  ? tr('{name} pressed {label}', {
+                      'name': interaction.userName,
+                      'label': interaction.componentLabel,
+                    })
+                  : tr('{name} used /{command}', {
+                      'name': interaction.userName,
+                      'command': interaction.command,
+                    }),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(

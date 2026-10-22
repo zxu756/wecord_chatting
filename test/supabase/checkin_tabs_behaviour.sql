@@ -215,6 +215,11 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610270450_events2_photos.sql
 \i supabase/migrations/202610270460_events2_push_guard.sql
 \i supabase/migrations/202610270470_events2_account.sql
+\i supabase/migrations/202610280100_scheduled_calls_schema.sql
+\i supabase/migrations/202610280110_scheduled_calls_events.sql
+\i supabase/migrations/202610280120_scheduled_calls_push.sql
+\i supabase/migrations/202610280130_scheduled_calls_agenda.sql
+\i supabase/migrations/202610280140_scheduled_calls_account.sql
 \i supabase/migrations/202610280500_checkin_schema.sql
 \i supabase/migrations/202610280510_checkin_rpcs.sql
 \i supabase/migrations/202610280520_checkin_push.sql
@@ -222,6 +227,12 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280540_group_tabs_schema.sql
 \i supabase/migrations/202610280550_group_tabs_rpcs.sql
 \i supabase/migrations/202610280560_group_tabs_account.sql
+\i supabase/migrations/202610280610_interactions_schema.sql
+\i supabase/migrations/202610280620_interactions_send.sql
+\i supabase/migrations/202610280630_interactions_submit.sql
+\i supabase/migrations/202610280640_interactions_bot_api.sql
+\i supabase/migrations/202610280650_interactions_callbacks.sql
+\i supabase/migrations/202610280660_interactions_account.sql
 \o /dev/null
 
 create temp table failures (msg text);

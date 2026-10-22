@@ -28,12 +28,16 @@ class EventOptionsController extends ChangeNotifier {
     timeZone: _options.recurrence == EventRecurrence.none
         ? null
         : deviceTimeZone() ?? _options.timeZone,
+    call: _options.call,
   );
 
   EventRecurrence get recurrence => _options.recurrence;
   String? get coverPath => _options.coverPath;
   List<EventQuestion> get questions => _options.questions;
   int? get capacity => _options.capacity;
+
+  /// Whether the event carries a call; null where it cannot (circle events).
+  bool? get call => _options.call;
 
   void setRecurrence(EventRecurrence value) {
     _options = _options.copyWith(recurrence: value);
@@ -52,6 +56,11 @@ class EventOptionsController extends ChangeNotifier {
 
   void setCapacity(int? value) {
     _options = _options.copyWith(capacity: value);
+    notifyListeners();
+  }
+
+  void setCall(bool value) {
+    _options = _options.copyWith(call: value);
     notifyListeners();
   }
 }
@@ -204,6 +213,17 @@ class _EventOptionsSectionState extends ConsumerState<EventOptionsSection> {
           separatorIndent: 58,
           color: c.well,
           children: [
+            if (_controller.call != null)
+              SettingsRow.toggle(
+                key: const ValueKey('event-option-call'),
+                icon: Icons.call_outlined,
+                title: tr('Attach a call'),
+                subtitle: tr(
+                  'People can join from the event, and reminders open the call.',
+                ),
+                value: _controller.call ?? false,
+                onChanged: enabled ? _controller.setCall : null,
+              ),
             SettingsRow(
               key: const ValueKey('event-option-repeat'),
               icon: Icons.repeat_rounded,

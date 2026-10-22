@@ -193,6 +193,11 @@ const emptyRpc: Record<string, unknown> = {
     photos: [],
     events_made: [],
   },
+  export_my_account_security: {
+    events: [],
+    recovery_codes: { remaining: null, made_at: null },
+    passkeys: [],
+  },
 };
 
 const feedbackAnswer = [{
@@ -520,6 +525,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         photos: [],
         events_made: [],
       },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -551,6 +561,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_honors", args: { target_user_id: me } },
     { name: "export_my_channel_posts", args: { target_user_id: me } },
     { name: "export_my_events2", args: { target_user_id: me } },
+    { name: "export_my_account_security", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -604,6 +615,11 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         check_ins: [],
         photos: [],
         events_made: [],
+      },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
       },
       export_my_moments_more: {
         pinned: [],
@@ -724,6 +740,11 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         photos: [],
         events_made: [],
       },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -758,7 +779,9 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.honors, null);
   assertEquals(data.channelPosts, null);
   assertEquals(data.events2, null);
+  assertEquals(data.accountSecurity, null);
   assertEquals(data.skipped.sort(), [
+    "account security record",
     "circle titles and honors",
     "daily",
     "daily digest",

@@ -551,6 +551,14 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/note-public/index.ts"
 
+[functions.mfa-recovery]
+enabled = true
+# Signed-in people (a session that passed the password but not the code) use
+# one of their recovery codes; the function checks the token again and acts
+# only on that account (G4).
+verify_jwt = true
+entrypoint = "./functions/mfa-recovery/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

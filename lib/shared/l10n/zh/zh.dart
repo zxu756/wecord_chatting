@@ -24,6 +24,7 @@ import 'package:wecord/shared/l10n/zh/zh_digest.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_guard.dart';
 import 'package:wecord/shared/l10n/zh/zh_guard2.dart';
 import 'package:wecord/shared/l10n/zh/zh_account.dart';
+import 'package:wecord/shared/l10n/zh/zh_account_security.dart';
 import 'package:wecord/shared/l10n/zh/zh_albums.dart';
 import 'package:wecord/shared/l10n/zh/zh_audit.dart';
 import 'package:wecord/shared/l10n/zh/zh_auto_translate.dart';
@@ -193,6 +194,7 @@ const zhAreas = <Map<String, String>>[
   zhMemberHonors,
   zhChannelTypes,
   zhEvents2,
+  zhAccountSecurity,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

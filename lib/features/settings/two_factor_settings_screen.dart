@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wecord/features/auth/two_factor.dart';
+import 'package:wecord/features/settings/recovery_codes_screen.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -120,6 +121,9 @@ class _TwoFactorSettingsScreenState
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(content: Text(tr('Two-step verification is on.'))),
     );
+    // The session has just passed a code, so the first set can be made
+    // without asking again.
+    await makeRecoveryCodes(context, ref, askForCode: false);
   }
 
   Future<void> _cancelSetup() async {
@@ -221,9 +225,11 @@ class _TwoFactorSettingsScreenState
                   style: TextStyle(fontSize: 13.5, color: c.dangerText),
                 ),
               ),
-            if (factorId != null)
-              _enabled(factorId)
-            else if (_setup case final setup?)
+            if (factorId != null) ...[
+              _enabled(factorId),
+              const SizedBox(height: 12),
+              const RecoveryCodesCard(),
+            ] else if (_setup case final setup?)
               _settingUp(setup)
             else
               _disabled(),

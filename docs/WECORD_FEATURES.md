@@ -28,6 +28,9 @@
 - **注册 / 登录**：邮箱 + 密码，注册时选用户名和显示名；首次登录自动创建资料（profile bootstrap）。
 - **找回密码**：邮件链接 → 设置新密码页面（`/reset-password`）。
 - **两步验证（TOTP）**：设置里开启，用身份验证器 App 扫码绑定；登录时要求输入 6 位验证码；关闭需要验证码。
+- **两步验证恢复码（G4）**：开启两步验证后立刻显示 10 个一次性恢复码（`XXXXX-XXXXX`，10 位字母数字，去掉易混淆的 0 O 1 I），只显示一次，可复制或分享，勾选「我已保存」才能点完成，未保存就返回会先确认。库里只存加盐 SHA-256（`mfa_recovery_codes`），任何接口都读不到原码；设置 → 两步验证里的「恢复码」卡片显示还剩几个（≤3 个提醒重新生成）。重新生成需要先输入一次当前验证码（令牌里 `amr` 的 totp 时间在 10 分钟内，服务端校验），旧码全部作废，每小时最多 5 次。丢了身份验证器时，在登录后的验证码页点「身份验证器丢了？使用恢复码」：`mfa-recovery` 函数校验令牌 → `consume_mfa_recovery_code` 限次（连错 5 次锁 30 分钟）→ 用 Auth Admin API 删除该账号的 TOTP 因子（两步验证关闭，其余恢复码作废，需要到设置里重新开启）→ `finish_mfa_recovery` 写安全记录；删因子失败会把这个码还回去。
+- **通行密钥（Passkey，G4）**：用 Supabase Auth 自带的 Passkey（WebAuthn，Beta）：登录页「使用通行密钥登录」，设置 → 通行密钥可添加、重命名、移除（账号开了两步验证时先输入验证码）。目前只在网页版可添加和登录；iPhone / Mac / Android 的原生调用需要付费 Apple 开发者账号的 Associated Domains（`webcredentials`）和 Android 的 assetlinks，代码已接好（`passkeys` 插件），构建时加 `--dart-define=WECORD_NATIVE_PASSKEYS=true` 才打开，网站上的 `/.well-known/apple-app-site-association` 已备好。`passkeys` 插件要求 macOS 13.5+，Mac 版最低系统因此从 12 提到 13.5。网页里的 `PasskeyAuthenticator` 接口是 `web/index.html` 内联的一小段脚本（不下载第三方 bundle.js）。Supabase 控制台里要手动开启 Passkeys 并填 RP ID（见交接说明）。通行密钥登录后，开了两步验证的账号仍要输验证码。
+- **安全记录（G4）**：`account_security_events` 记下：生成恢复码、使用恢复码、恢复码被锁、通行密钥新增或删除（后两者由 `auth.webauthn_credentials` 上的触发器写，装不上时只是不记）。每条都会推送给本人所有设备（按订阅语言和时区，不受免打扰影响），在通知页「安全」芯片出现卡片，「是我本人」/「不是我」（后者引导改密码和查看设备）；设置 → 安全记录列出近 30 天。账号删除时一并清除；数据导出新增 `data/account_security.json` 与 `pages/account_security.html`（事件、剩余恢复码数、通行密钥名称与日期，绝不含哈希或密钥）。
 - **退出登录**：退出当前设备；会先停止实时位置共享、注销推送。
 - **设备管理**（设置 → 隐私与安全 → 设备）：列出所有登录中的会话（设备名、平台、应用版本、最近活跃），可单独登出某台设备或「登出其他所有设备」；不显示 IP 和位置。
 - **新登录提醒**：新设备首次登记时（`user_devices` 新增一行，令牌刷新不算；首次登录不提醒），其他设备收到推送（按订阅的语言和时区），通知页「安全」芯片出现卡片（设备名、平台、时间，不含 IP 和位置）；「是我本人」关闭提醒，「不是我」通过 `sessions` 函数登出那台设备并引导修改密码。

@@ -151,54 +151,64 @@ class _GroupTabStripState extends ConsumerState<GroupTabStrip> {
           if (open)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: SizedBox(
-                height: 38,
-                child: ListView(
-                  key: const ValueKey('group-tabs-row'),
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    if (pinned != null)
+              // Opaque, so the messages scrolling under it do not show
+              // through the gaps between the chips.
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                decoration: BoxDecoration(
+                  color: c.panel,
+                  borderRadius: BorderRadius.circular(WeCordRadii.lg),
+                  border: Border.all(color: c.lineSoft),
+                ),
+                child: SizedBox(
+                  height: MediaQuery.textScalerOf(context).scale(36),
+                  child: ListView(
+                    key: const ValueKey('group-tabs-row'),
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      if (pinned != null)
+                        _chip(
+                          key: const ValueKey('group-tab-pinned-note'),
+                          label: pinned.title.trim().isEmpty
+                              ? tr('Untitled')
+                              : '${pinned.icon} ${pinned.title}',
+                          icon: Icons.push_pin_outlined,
+                          onPressed: () => openWorkspace(
+                            context,
+                            conversationId: widget.conversationId,
+                            noteId: pinned.id,
+                            title: widget.title,
+                          ),
+                        ),
+                      for (final tab in shown)
+                        _chip(
+                          key: ValueKey('group-tab-${tab.id}'),
+                          label: tab.icon == null
+                              ? tab.title
+                              : '${tab.icon} ${tab.title}',
+                          icon: registry.kindOf(tab.kind)!.icon,
+                          locked: tab.closed,
+                          onPressed: () =>
+                              registry.kindOf(tab.kind)!.open(_ctx(), tab),
+                        ),
                       _chip(
-                        key: const ValueKey('group-tab-pinned-note'),
-                        label: pinned.title.trim().isEmpty
-                            ? tr('Untitled')
-                            : '${pinned.icon} ${pinned.title}',
-                        icon: Icons.push_pin_outlined,
-                        onPressed: () => openWorkspace(
-                          context,
-                          conversationId: widget.conversationId,
-                          noteId: pinned.id,
-                          title: widget.title,
+                        key: const ValueKey('group-tabs-all'),
+                        label: tabs?.canManage ?? false
+                            ? tr('Manage')
+                            : tr('All'),
+                        icon: Icons.tune_rounded,
+                        onPressed: () => unawaited(
+                          showGroupTabsSheet(
+                            context,
+                            conversationId: widget.conversationId,
+                            title: widget.title,
+                            circleId: widget.circleId,
+                            canSend: widget.canSend,
+                          ),
                         ),
                       ),
-                    for (final tab in shown)
-                      _chip(
-                        key: ValueKey('group-tab-${tab.id}'),
-                        label: tab.icon == null
-                            ? tab.title
-                            : '${tab.icon} ${tab.title}',
-                        icon: registry.kindOf(tab.kind)!.icon,
-                        locked: tab.closed,
-                        onPressed: () =>
-                            registry.kindOf(tab.kind)!.open(_ctx(), tab),
-                      ),
-                    _chip(
-                      key: const ValueKey('group-tabs-all'),
-                      label: tabs?.canManage ?? false
-                          ? tr('Manage')
-                          : tr('All'),
-                      icon: Icons.tune_rounded,
-                      onPressed: () => unawaited(
-                        showGroupTabsSheet(
-                          context,
-                          conversationId: widget.conversationId,
-                          title: widget.title,
-                          circleId: widget.circleId,
-                          canSend: widget.canSend,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -222,7 +232,6 @@ class _GroupTabStripState extends ConsumerState<GroupTabStrip> {
         semanticLabel: label,
         icon: locked ? Icons.lock_outline_rounded : icon,
         onPressed: onPressed,
-        onPaper: true,
       ),
     );
   }

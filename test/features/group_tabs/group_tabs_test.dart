@@ -10,7 +10,6 @@ import 'package:wecord/features/group_tabs/group_tab_kinds_registrations.dart';
 import 'package:wecord/features/group_tabs/group_tab_models.dart';
 import 'package:wecord/features/group_tabs/group_tab_pickers.dart';
 import 'package:wecord/features/group_tabs/group_tab_strip.dart';
-import 'package:wecord/features/group_tabs/group_tabs_repository.dart';
 import 'package:wecord/features/group_tabs/group_tabs_sheet.dart';
 import 'package:wecord/features/notes/note_models.dart';
 import 'package:wecord/features/lists/list_models.dart';
@@ -518,6 +517,7 @@ void main() {
       final row = find.byKey(const ValueKey('group-tab-row-t3'));
       final data = tester.getSemantics(row);
       expect(data, isNotNull);
+      // ignore: deprecated_member_use
       tester.binding.pipelineOwner.semanticsOwner!.performAction(
         tester.getSemantics(row).id,
         SemanticsAction.customAction,

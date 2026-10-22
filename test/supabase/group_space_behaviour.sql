@@ -752,10 +752,23 @@ begin
   perform pg_temp.root();
   delete from public.blocks where blocker_id = pg_temp.i('dan');
 
-  -- A suspended account adds nothing.
+  -- A suspended account adds nothing and changes nothing (K1); reading is fine.
+  insert into public.app_user_suspensions (user_id, reason) values (pg_temp.i('dan'), 'test');
+  perform pg_temp.act(pg_temp.i('dan'));
+  perform pg_temp.expect(pg_temp.state(format('select public.create_group_album(%L, ''Sneaky'')', g1)) = '42501', 'a suspended account cannot make an album');
+  perform pg_temp.expect(pg_temp.state(format('select public.add_album_items_from_messages(%L, %L)', alb, array[pg_temp.i('m3')])) = '42501', 'nor add to one');
+  perform pg_temp.expect(pg_temp.state(format('select public.create_group_folder(%L, ''Sneaky'')', g1)) = '42501', 'nor make a folder');
+  perform pg_temp.expect(pg_temp.state(format('select public.get_group_space(%L)', g1)) = 'ok', 'but can ask what the space allows');
+  perform pg_temp.expect(not (public.get_group_space(g1)->>'can_add')::boolean, 'and is told it cannot add');
+  perform pg_temp.expect((select count(*) from public.list_group_albums(g1)) >= 1, 'and can look');
   perform pg_temp.root();
-  insert into public.app_admins (user_id, role) values (pg_temp.i('ada'), 'owner') on conflict do nothing;
-  perform pg_temp.expect(public.is_user_suspended(pg_temp.i('dan')) = false, 'dan is not suspended');
+  delete from public.app_user_suspensions where user_id = pg_temp.i('dan');
+
+  -- Someone outside the group cannot upload into it either.
+  insert into storage.objects (bucket_id, name, metadata) values ('chat-images', g1::text || '/space/eve.jpg', '{"size": 5}');
+  perform pg_temp.act(pg_temp.i('eve'));
+  perform pg_temp.expect(pg_temp.state(format('select public.add_album_upload(%L, ''chat-images'', %L, ''eve.jpg'', ''image/jpeg'', 5)', alb, g1::text || '/space/eve.jpg')) = '42501', 'an outsider cannot register an upload');
+  perform pg_temp.root();
 end $$;
 
 -- ===================================== 10. the pictures of an event

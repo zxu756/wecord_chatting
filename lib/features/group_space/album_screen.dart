@@ -444,6 +444,16 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen> {
                   )
                 else if (!info.enabled)
                   const SpaceOffNotice(),
+                if (!_isEvent &&
+                    context.touchTargetSize > 0 &&
+                    (items.value?.any((item) => item.canDelete) ?? false))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                    child: Text(
+                      tr('Touch and hold a picture for more.'),
+                      style: TextStyle(fontSize: 12.5, color: c.muted),
+                    ),
+                  ),
                 if (_uploading case final progress?)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -598,7 +608,9 @@ class _ItemTile extends StatelessWidget {
             ),
           ),
         ),
-        if (onMore != null)
+        // A mouse gets a button; a finger touches and holds (a button this
+        // small would be too small to hit).
+        if (onMore != null && context.touchTargetSize == 0)
           Positioned(
             top: 2,
             right: 2,

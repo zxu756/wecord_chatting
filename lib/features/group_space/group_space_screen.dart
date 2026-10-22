@@ -245,7 +245,7 @@ class _AlbumGrid extends StatelessWidget {
             crossAxisCount: columns,
             mainAxisSpacing: gap,
             crossAxisSpacing: gap,
-            mainAxisExtent: width + 10 + 50 * scale.clamp(1, 2.2),
+            mainAxisExtent: width + 14 + 62 * scale.clamp(1, 2.2),
           ),
           itemCount: albums.length,
           itemBuilder: (context, index) =>
@@ -272,7 +272,7 @@ class AlbumTile extends StatelessWidget {
     final c = context.tokens.colors;
     final cover = album.cover;
     final radius = BorderRadius.circular(WeCordRadii.lg);
-    final count = tr('{count} items', {'count': album.itemCount});
+    final count = spaceItemCount(album.itemCount);
     return WeCordPressable(
       key: ValueKey('space-album-${album.id}'),
       onPressed: () => unawaited(

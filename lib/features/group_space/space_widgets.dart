@@ -396,3 +396,11 @@ class SpaceLoadError extends StatelessWidget {
     );
   }
 }
+
+/// "1 item" / "12 items".
+String spaceItemCount(int count) =>
+    count == 1 ? tr('1 item') : tr('{count} items', {'count': count});
+
+/// "1 file" / "12 files".
+String spaceFileCount(int count) =>
+    count == 1 ? tr('1 file') : tr('{count} files', {'count': count});

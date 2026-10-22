@@ -67,6 +67,7 @@ const zhGroupSpace = <String, String>{
   'Nothing in this album yet': '这个相册还是空的',
   'Upload pictures, or long-press a picture in the chat and choose Add to album.':
       '上传图片，或在聊天里长按图片选择「加入相册」。',
+  'Touch and hold a picture for more.': '长按图片可以看到更多操作。',
   'Uploading {done} of {total}': '正在上传 {done}/{total}',
   'video': '视频',
   'Rename folder': '重命名文件夹',

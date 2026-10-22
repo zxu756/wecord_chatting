@@ -125,7 +125,7 @@ class _AlbumChoiceList extends ConsumerWidget {
                       key: ValueKey('space-pick-album-${album.id}'),
                       icon: Icons.photo_album_outlined,
                       title: album.name,
-                      value: tr('{count} items', {'count': album.itemCount}),
+                      value: spaceItemCount(album.itemCount),
                       showChevron: false,
                       onTap: () => Navigator.of(context).pop(album),
                     ),
@@ -288,7 +288,7 @@ class _FolderChoiceList extends ConsumerWidget {
                       key: ValueKey('space-pick-folder-${folder.id}'),
                       icon: Icons.folder_outlined,
                       title: folder.name,
-                      value: tr('{count} files', {'count': folder.fileCount}),
+                      value: spaceFileCount(folder.fileCount),
                       showChevron: false,
                       onTap: () =>
                           Navigator.of(context).pop(FolderChoice(folder)),

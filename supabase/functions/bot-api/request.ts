@@ -33,6 +33,7 @@ export type Route =
   }
   | { name: "send_message"; channelId: string }
   | { name: "add_reaction"; messageId: string; emoji: string }
+  | { name: "edit_message"; messageId: string }
   | { name: "list_commands" }
   | { name: "set_commands" }
   | { name: "poll_interactions"; limit: number }
@@ -103,6 +104,15 @@ export function matchRoute(method: string, url: URL): RouteResult {
       };
     }
     case "messages": {
+      // PATCH /messages/{id}: change the bot's own message (text, components).
+      if (parts.length === 2) {
+        if (!UUID_PATTERN.test(second)) return notFound;
+        if (verb !== "PATCH") return wrongMethod;
+        return {
+          ok: true,
+          route: { name: "edit_message", messageId: second.toLowerCase() },
+        };
+      }
       if (parts.length !== 4 || third !== "reactions") return notFound;
       if (!UUID_PATTERN.test(second)) return notFound;
       if (verb !== "PUT") return wrongMethod;
@@ -179,9 +189,30 @@ export function isJsonContentType(contentType: string | null): boolean {
   return mediaType === "application/json" || mediaType.endsWith("+json");
 }
 
-export type MessageBody = { content: string; replyTo: string | null };
+export type MessageBody = {
+  content: string;
+  replyTo: string | null;
+  /** The components as sent, when the request has any; the database checks them. */
+  components?: unknown[];
+};
 
-/// Validates `{content, reply_to?}` (content: 1 to 2000 characters).
+/// The `components` of a body: absent, null or an empty list mean none; a
+/// list is passed on (the database function checks every part of it).
+function readComponents(
+  record: Record<string, unknown>,
+): { ok: true; components: unknown[] | null } | { ok: false; error: string } {
+  const value = record.components;
+  if (value === undefined || value === null) {
+    return { ok: true, components: null };
+  }
+  if (!Array.isArray(value)) {
+    return { ok: false, error: "components_must_be_array" };
+  }
+  return { ok: true, components: value.length === 0 ? null : value };
+}
+
+/// Validates `{content, reply_to?, components?}` (content: 1 to 2000
+/// characters).
 export function validateMessageBody(
   body: unknown,
 ): { ok: true; value: MessageBody } | { ok: false; error: string } {
@@ -205,7 +236,119 @@ export function validateMessageBody(
     }
     replyTo = record.reply_to.toLowerCase();
   }
-  return { ok: true, value: { content, replyTo } };
+  const components = readComponents(record);
+  if (!components.ok) {
+    return components;
+  }
+  return {
+    ok: true,
+    value: {
+      content,
+      replyTo,
+      ...(components.components ? { components: components.components } : {}),
+    },
+  };
+}
+
+export type EditBody = {
+  /** The new text, or null to leave it. */
+  content: string | null;
+  /** Whether the components are to be replaced (null then removes them). */
+  changeComponents: boolean;
+  components: unknown[] | null;
+};
+
+/// Validates `{content?, components?}` for editing a bot's own message: at
+/// least one of them; `components: null` or `[]` removes the components.
+export function validateEditBody(
+  body: unknown,
+): { ok: true; value: EditBody } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "body_must_be_object" };
+  }
+  const record = body as Record<string, unknown>;
+  let content: string | null = null;
+  if (record.content !== undefined && record.content !== null) {
+    if (typeof record.content !== "string" || record.content.trim() === "") {
+      return { ok: false, error: "content_required" };
+    }
+    content = record.content.trim();
+    if ([...content].length > MAX_CONTENT_LENGTH) {
+      return { ok: false, error: "content_too_long" };
+    }
+  }
+  const changeComponents = "components" in record;
+  const components = readComponents(record);
+  if (!components.ok) {
+    return components;
+  }
+  if (content === null && !changeComponents) {
+    return { ok: false, error: "nothing_to_change" };
+  }
+  return {
+    ok: true,
+    value: { content, changeComponents, components: components.components },
+  };
+}
+
+export type RespondType = "message" | "ephemeral" | "update" | "ack";
+
+export type RespondBody = {
+  type: RespondType;
+  /** What goes to the database function (only the keys the bot sent). */
+  response: Record<string, unknown>;
+};
+
+const RESPOND_TYPES: readonly string[] = [
+  "message",
+  "ephemeral",
+  "update",
+  "ack",
+];
+
+/// Validates the answer to an interaction: `{content}` (as before: a
+/// message) or `{type: message|ephemeral|update|ack, content?, components?}`.
+export function validateRespondBody(
+  body: unknown,
+): { ok: true; value: RespondBody } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "body_must_be_object" };
+  }
+  const record = body as Record<string, unknown>;
+  const type = record.type === undefined ? "message" : record.type;
+  if (typeof type !== "string" || !RESPOND_TYPES.includes(type)) {
+    return { ok: false, error: "invalid_type" };
+  }
+  const response: Record<string, unknown> = { type };
+  if (record.content !== undefined && record.content !== null) {
+    if (typeof record.content !== "string" || record.content.trim() === "") {
+      return { ok: false, error: "content_required" };
+    }
+    const content = record.content.trim();
+    if ([...content].length > MAX_CONTENT_LENGTH) {
+      return { ok: false, error: "content_too_long" };
+    }
+    response.content = content;
+  }
+  if ("components" in record) {
+    const components = readComponents(record);
+    if (!components.ok) {
+      return components;
+    }
+    response.components = components.components;
+  }
+  const hasContent = "content" in response;
+  const hasComponents = "components" in response;
+  if ((type === "message" || type === "ephemeral") && !hasContent) {
+    return { ok: false, error: "content_required" };
+  }
+  if (type === "update" && !hasContent && !hasComponents) {
+    return { ok: false, error: "nothing_to_change" };
+  }
+  if (type === "ack" && (hasContent || hasComponents)) {
+    return { ok: false, error: "ack_has_no_content" };
+  }
+  return { ok: true, value: { type: type as RespondType, response } };
 }
 
 export type CommandDefinition = { name: string; description: string };

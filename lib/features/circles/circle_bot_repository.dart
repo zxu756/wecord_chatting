@@ -87,6 +87,52 @@ class BotCommandInvocation {
   final String command;
 }
 
+/// Where a bot wants presses and commands sent (a callback), as its managers
+/// see it. The secret is only there right after it was made.
+class BotCallback {
+  const BotCallback({
+    this.url,
+    this.enabled = false,
+    this.consecutiveFailures = 0,
+    this.lastStatus,
+    this.lastError,
+    this.lastSuccessAt,
+    this.lastFailureAt,
+    this.secret,
+  });
+
+  factory BotCallback.fromJson(Map<String, dynamic> json) {
+    DateTime? time(Object? value) =>
+        value is String ? DateTime.tryParse(value)?.toUtc() : null;
+    return BotCallback(
+      url: json['url'] as String?,
+      enabled: json['enabled'] == true,
+      consecutiveFailures: (json['consecutive_failures'] as num?)?.toInt() ?? 0,
+      lastStatus: (json['last_status'] as num?)?.toInt(),
+      lastError: json['last_error'] as String?,
+      lastSuccessAt: time(json['last_success_at']),
+      lastFailureAt: time(json['last_failure_at']),
+      secret: json['secret'] as String?,
+    );
+  }
+
+  /// The address presses are sent to; null when the bot has none (it polls).
+  final String? url;
+
+  /// False when it was turned off after too many failures.
+  final bool enabled;
+  final int consecutiveFailures;
+  final int? lastStatus;
+  final String? lastError;
+  final DateTime? lastSuccessAt;
+  final DateTime? lastFailureAt;
+
+  /// Shown once, when the callback is first set or its secret is reset.
+  final String? secret;
+
+  bool get isSet => url != null;
+}
+
 final circleBotRepositoryProvider = Provider<CircleBotRepository>((ref) {
   return CircleBotRepository(
     ref.watch(circleRpcProvider),
@@ -156,6 +202,39 @@ class CircleBotRepository {
   /// then deletes the login with the service role.
   Future<void> deleteBot(String botId) async {
     await _function('bots', {'action': 'delete', 'bot_id': botId});
+  }
+
+  Future<BotCallback> getCallback(String botId) async {
+    return BotCallback.fromJson(
+      rpcObject(await _rpc('get_bot_callback', {'target_bot_id': botId})),
+    );
+  }
+
+  /// Sets the address presses are sent to (https, a public website). The
+  /// first time, the result carries the secret that signs them.
+  Future<BotCallback> setCallback(String botId, String url) async {
+    return BotCallback.fromJson(
+      rpcObject(
+        await _rpc('set_bot_callback', {
+          'target_bot_id': botId,
+          'callback_url': url.trim(),
+        }),
+      ),
+    );
+  }
+
+  /// Makes a new secret; the old one stops working.
+  Future<BotCallback> rotateCallbackSecret(String botId) async {
+    return BotCallback.fromJson(
+      rpcObject(
+        await _rpc('rotate_bot_callback_secret', {'target_bot_id': botId}),
+      ),
+    );
+  }
+
+  /// Forgets the address: the bot polls again.
+  Future<void> clearCallback(String botId) async {
+    await _rpc('clear_bot_callback', {'target_bot_id': botId});
   }
 
   Future<List<BotSlashCommand>> listCommands(String circleId) async {

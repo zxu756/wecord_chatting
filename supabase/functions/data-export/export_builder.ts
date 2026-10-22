@@ -176,6 +176,12 @@ export interface ExportData {
    * callers.
    */
   events2?: Json | null;
+  /**
+   * What I pressed or typed into bots' buttons, lists and forms, and what bots
+   * told me privately (export_my_interactions, migration 202610280660); null
+   * when it could not be read, absent in older callers.
+   */
+  interactions?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -730,6 +736,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.events2) {
     out.push({ path: "data/events.json", value: eventsJson(data) });
+  }
+  if (data.interactions) {
+    out.push({
+      path: "data/bot_interactions.json",
+      value: botInteractionsJson(data),
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -2012,6 +2024,59 @@ ${section("Calls you scheduled", calls, "None.")}`,
   );
 }
 
+/** What I pressed or typed into bots' components, and their private replies. */
+function botInteractionsJson(data: ExportData): Json {
+  const interactions = isObject(data.interactions) ? data.interactions : {};
+  return {
+    presses: objects(interactions["presses"]),
+    private_replies: objects(interactions["private_replies"]),
+  };
+}
+
+/** My presses on bots' buttons and lists, and what bots told me privately. */
+export function buildBotInteractionsHtml(data: ExportData): string {
+  const interactions = isObject(data.interactions) ? data.interactions : {};
+  const presses = objects(interactions["presses"]).map((item) => {
+    const what = item["kind"] === "command"
+      ? `/${str(item["command"]) ?? ""}${
+        item["options"] ? " " + String(item["options"]) : ""
+      }`
+      : str(item["component"]) ?? "";
+    const values = item["values"] === undefined || item["values"] === null
+      ? ""
+      : typeof item["values"] === "string"
+      ? item["values"]
+      : JSON.stringify(item["values"]);
+    const answered = item["answered"] === true ? "answered" : "not answered";
+    return entry(
+      str(item["sent_at"]),
+      `<div><strong>${escapeHtml(what)}</strong> <span class="muted">${
+        escapeHtml(str(item["bot"]) ?? "")
+      } · ${escapeHtml(str(item["circle"]) ?? "")}</span></div>${
+        values ? `<div class="body">${escapeHtml(values)}</div>` : ""
+      }<div class="muted">${answered}</div>`,
+    );
+  }).join("");
+  const replies = objects(interactions["private_replies"]).map((item) =>
+    entry(
+      str(item["received_at"]),
+      `<div><strong>${escapeHtml(str(item["bot"]) ?? "")}</strong></div>${
+        text(item["text"])
+      }`,
+    )
+  ).join("");
+  return page(
+    "Bot buttons and commands — your WeCord data",
+    `${backLink()}<h1>Bot buttons and commands</h1>
+<p class="muted">What you pressed on bots' buttons and lists, typed into their
+forms and used as slash commands in the last 7 days, and what bots told only
+you (until it expires). Bots' own messages and other people's presses are not
+copied.</p>
+${section("Presses and commands", presses, "None.")}
+${section("Private replies", replies, "None.")}`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -2263,6 +2328,19 @@ export function buildSectionPages(
       content: buildEventsHtml(data),
     });
   }
+  if (data.interactions) {
+    const counts = (key: string) =>
+      objects(isObject(data.interactions) ? data.interactions[key] : null)
+        .length;
+    out.push({
+      path: "pages/bot_interactions.html",
+      label: "Bot buttons and commands",
+      summary: `${counts("presses")} presses · ${
+        counts("private_replies")
+      } private replies`,
+      content: buildBotInteractionsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2357,6 +2435,9 @@ data/events.json      The events you signed up to (with your answers), waited
                       for, checked in to, the pictures you added and the
                       events you made, and the calls you scheduled (never
                       a call link's code or other people's answers).
+data/bot_interactions.json What you pressed on bots' buttons and lists, typed
+                      into their forms and used as commands in the last 7
+                      days, and what bots told only you.
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

@@ -13,6 +13,7 @@ import 'package:wecord/shared/l10n/zh/zh_knowledge_base.dart';
 import 'package:wecord/shared/l10n/zh/zh_member_honors.dart';
 import 'package:wecord/shared/l10n/zh/zh_channel_types.dart';
 import 'package:wecord/shared/l10n/zh/zh_events2.dart';
+import 'package:wecord/shared/l10n/zh/zh_interactions.dart';
 import 'package:wecord/shared/l10n/zh/zh_scheduled_calls.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
@@ -194,6 +195,7 @@ const zhAreas = <Map<String, String>>[
   zhMemberHonors,
   zhChannelTypes,
   zhEvents2,
+  zhInteractions,
   zhScheduledCalls,
 ];
 

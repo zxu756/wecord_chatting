@@ -1,4 +1,5 @@
 // Pure helpers of the scheduled-dispatch Edge Function.
+import { callPath } from "../push/call_path.ts";
 
 export interface PushTarget {
   subscription_id: string;
@@ -42,6 +43,9 @@ export interface EventReminderRow {
   event_id: string;
   title: string;
   body: string;
+  /// The event's call link code, for a reminder sent in the last 20 minutes
+  /// before an event with a call (scheduled calls); otherwise null.
+  call_link_code?: string | null;
 }
 
 /// A row of due_list_item_reminders.
@@ -59,8 +63,10 @@ export interface TaskReminderRow {
 }
 
 /// An event reminder as a push: "📅 {event}" / "Starts in 15 minutes". One
-/// tag per event, so the 15 minute reminder replaces the 1 hour one.
+/// tag per event, so the 15 minute reminder replaces the 1 hour one. An event
+/// with a call opens the call when tapped (otherwise the chat).
 export function eventTarget(row: EventReminderRow): PushTarget {
+  const call = callPath(row.call_link_code);
   return {
     subscription_id: row.subscription_id,
     endpoint: row.endpoint,
@@ -71,6 +77,7 @@ export function eventTarget(row: EventReminderRow): PushTarget {
     title: `📅 ${row.title}`,
     body: row.body,
     tag: `event-${row.event_id}`,
+    ...(call ? { url: call } : {}),
   };
 }
 

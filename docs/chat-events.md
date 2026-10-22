@@ -39,8 +39,13 @@ select * from public.claim_chat_event_reminder_pushes();  -- Web Push work, each
   again; cancelled events never remind.
 * `claim_chat_event_reminder_pushes()` marks undelivered reminders (created in
   the last 30 minutes) as pushed and returns one row per device
-  (`endpoint`, `p256dh`, `auth`, `title`, `body`, `conversation_id`),
-  skipping chats the person muted.
+  (`endpoint`, `p256dh`, `auth`, `title`, `body`, `conversation_id`,
+  `call_link_code`), skipping chats the person muted. For an event with a call
+  (scheduled calls, migration 202610280120) the body of a reminder sent in the
+  last 20 minutes before the start ends with "Tap to join the call" and the
+  row carries the call link's code, so both senders open `/#/call/<code>`
+  instead of the chat (a locked chat still opens the chat); the earlier
+  reminder only says the event includes a call.
 
 ### Who calls them
 

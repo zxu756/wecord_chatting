@@ -66,6 +66,8 @@ export type IcsEntry = {
   end?: Date;
   description?: string;
   location?: string;
+  /** Where the entry leads: the call link of a scheduled call. */
+  url?: string;
   categories?: string;
   /** Tasks do not make the person busy. */
   transparent?: boolean;
@@ -113,6 +115,9 @@ export function buildIcsFeed(
     }
     if (entry.location && plain(entry.location)) {
       lines.push(`LOCATION:${icsEscape(plain(entry.location))}`);
+    }
+    if (entry.url && /^https?:\/\/\S+$/.test(entry.url)) {
+      lines.push(`URL:${entry.url}`);
     }
     if (entry.categories) {
       lines.push(`CATEGORIES:${icsEscape(entry.categories)}`);

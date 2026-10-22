@@ -334,8 +334,8 @@ class ComponentButton extends StatelessWidget {
     final c = tokens.colors;
     final (fill, foreground, border) = switch (style) {
       ComponentButtonStyle.primary => (c.accent, c.onAccent, c.accent),
-      ComponentButtonStyle.secondary => (c.raised, c.ink, c.lineSoft),
-      ComponentButtonStyle.danger => (c.raised, c.dangerText, c.danger),
+      ComponentButtonStyle.secondary => (c.panel, c.ink, c.line),
+      ComponentButtonStyle.danger => (c.panel, c.dangerText, c.danger),
     };
     final minHeight = WeCordCareTheme.maybeOf(context)?.buttonHeight ?? 40;
     return WeCordPressable(
@@ -457,9 +457,9 @@ class _SelectField extends StatelessWidget {
             duration: WeCordMotion.quick,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: hovered ? c.raisedStrong : c.raised,
+                color: hovered ? c.raised : c.panel,
                 borderRadius: BorderRadius.circular(WeCordRadii.lg),
-                border: Border.all(color: c.lineSoft),
+                border: Border.all(color: c.line),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(

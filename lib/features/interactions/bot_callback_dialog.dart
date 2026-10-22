@@ -173,7 +173,6 @@ class _CallbackDialogState extends State<_CallbackDialog> {
           WeCordTextField(
             fieldKey: const ValueKey('bot-callback-field'),
             controller: _url,
-            autofocus: true,
             label: tr('https address'),
             hint: tr('https://bots.example.com/wecord'),
             keyboardType: TextInputType.url,

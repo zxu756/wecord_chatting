@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer_registrations.dart';
@@ -178,7 +177,7 @@ void main() {
     test('text is cleaned of controls and direction tricks', () {
       final components = MessageComponents.maybeFromJson([
         [
-          {'type': 'button', 'id': 'a', 'label': ' Go‮ now​ '},
+          {'type': 'button', 'id': 'a', 'label': ' Go\u202e now\u200b '},
           {'type': 'button', 'id': 'a b', 'label': 'bad id'},
           {'type': 'button', 'id': 'dup', 'label': 'One'},
         ],

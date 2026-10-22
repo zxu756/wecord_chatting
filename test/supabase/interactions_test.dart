@@ -144,7 +144,7 @@ void main() {
       final schema = sql['202610280610_interactions_schema.sql']!;
       expect(schema, contains("candidate ~* '^https://"));
       expect(schema, contains('(:443)?'));
-      expect(schema, contains(r'‪-‮'));
+      expect(schema, contains(r'\u202a-\u202e'));
       expect(schema, contains('[[:cntrl:]'));
     });
 

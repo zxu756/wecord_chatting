@@ -4,7 +4,6 @@
 // sheets, the form and the link question; a private reply; and the callback
 // address dialog of a bot - at large text, narrow and with Care mode on.
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/chats/chats_screen.dart';

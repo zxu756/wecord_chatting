@@ -81,7 +81,7 @@ begin
       using errcode = '22023';
   end if;
 
-  if cleaned ~ '[[:cntrl:]​-‏‪-‮⁠-⁤⁦-⁩﻿]' then
+  if cleaned ~ '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2060-⁤\u2066-\u2069\ufeff]' then
     raise exception '% has characters that are not allowed', field_name
       using errcode = '22023';
   end if;

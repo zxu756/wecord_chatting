@@ -644,6 +644,20 @@ export async function collectExportData(
     null,
   );
 
+  // What I pressed or typed into bots' components (export_my_interactions).
+  const interactions = await tryRead<Row | null>(
+    skipped,
+    "bot buttons and commands",
+    async () => {
+      const result = await admin.rpc("export_my_interactions", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -741,6 +755,7 @@ export async function collectExportData(
     honors,
     channelPosts,
     events2,
+    interactions,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

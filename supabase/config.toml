@@ -516,6 +516,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/expire-stories/index.ts"
 
+[functions.bot-callbacks]
+enabled = true
+# Called by the database (a trigger when a bot's button is pressed, and pg_cron
+# every minute for retries) with the shared secret DISPATCH_SECRET as the
+# bearer token, which the function compares itself; sends the press to the
+# callback address of a bot, signed with HMAC-SHA256, only to public https
+# addresses. Users never call it.
+verify_jwt = false
+entrypoint = "./functions/bot-callbacks/index.ts"
+
 [functions.sessions]
 enabled = true
 # Signed-in users sign out their own devices; the function acts as the

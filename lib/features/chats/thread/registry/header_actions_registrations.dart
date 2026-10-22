@@ -14,6 +14,7 @@ import 'package:wecord/features/app_lock/chat_lock_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
 import 'package:wecord/features/circles/channel_types/qa_actions.dart';
+import 'package:wecord/features/group_tabs/group_tabs_chat.dart';
 import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
 
 /// Feature contributions to the header. Append yours here.
@@ -23,6 +24,7 @@ final List<HeaderActionContribution> headerActionExtensions = [
   chatLockHeaderAction,
   threadLockHeaderAction,
   qaSolvedHeaderAction,
+  groupTabsHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.

@@ -8,6 +8,7 @@ import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   attachmentsToSign,
   channelPostFilesToSign,
+  checkInFilesToSign,
   eventFilesToSign,
   EXPORT_LIFETIME_MS,
   type ExportBlob,
@@ -644,6 +645,33 @@ export async function collectExportData(
     null,
   );
 
+  // What I did in group check-ins (export_my_check_ins) and the tabs I added
+  // under chat headers (export_my_group_tabs).
+  const checkIns = await tryRead<Row | null>(
+    skipped,
+    "check-ins",
+    async () => {
+      const result = await admin.rpc("export_my_check_ins", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+  const groupTabs = await tryRead<Row | null>(
+    skipped,
+    "chat tabs",
+    async () => {
+      const result = await admin.rpc("export_my_group_tabs", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -677,6 +705,10 @@ export async function collectExportData(
   }
   // The pictures I added to events and the covers of my events are linked.
   for (const { bucket, path } of eventFilesToSign(events2)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures I added to check-ins are linked.
+  for (const { bucket, path } of checkInFilesToSign(checkIns)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -741,6 +773,8 @@ export async function collectExportData(
     honors,
     channelPosts,
     events2,
+    checkIns,
+    groupTabs,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

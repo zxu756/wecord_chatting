@@ -176,6 +176,18 @@ export interface ExportData {
    * callers.
    */
   events2?: Json | null;
+  /**
+   * What I did in group check-ins (export_my_check_ins, migration
+   * 202610280530): my days with their notes and pictures, my runs and the
+   * check-ins I made; null when it could not be read, absent in older callers.
+   */
+  checkIns?: Json | null;
+  /**
+   * The tabs I added under group chat headers (export_my_group_tabs,
+   * migration 202610280560); null when it could not be read, absent in older
+   * callers.
+   */
+  groupTabs?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -730,6 +742,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.events2) {
     out.push({ path: "data/events.json", value: eventsJson(data) });
+  }
+  if (data.checkIns) {
+    out.push({ path: "data/check_ins.json", value: checkInsJson(data) });
+  }
+  if (data.groupTabs) {
+    out.push({ path: "data/group_tabs.json", value: data.groupTabs });
   }
   const extras = data.extras;
   if (extras) {
@@ -1876,6 +1894,123 @@ export function eventFilesToSign(
   return [...seen.values()];
 }
 
+/** The pictures I added to group check-ins. */
+export function checkInFilesToSign(
+  checkIns: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const item of objects(checkIns?.["check_ins"])) {
+    const photo = item["photo"];
+    if (!isObject(photo)) continue;
+    const bucket = photo["bucket"];
+    const path = photo["path"];
+    if (typeof bucket !== "string" || typeof path !== "string") continue;
+    seen.set(`${bucket}/${path}`, { bucket, path });
+  }
+  return [...seen.values()];
+}
+
+/** Group check-ins: my days (with notes and pictures), my runs, the ones I made. */
+function checkInsJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const checkIns = isObject(data.checkIns) ? data.checkIns : {};
+  return {
+    check_ins: objects(checkIns["check_ins"]).map((item) => {
+      const photo = isObject(item["photo"]) ? item["photo"] : null;
+      return {
+        ...item,
+        photo: photo
+          ? ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"])
+          : null,
+      };
+    }),
+    streaks: objects(checkIns["streaks"]),
+    boards_made: objects(checkIns["boards_made"]),
+  };
+}
+
+/** My group check-ins: days, runs, check-ins I made. */
+export function buildCheckInsHtml(data: ExportData): string {
+  const checkIns = isObject(data.checkIns) ? data.checkIns : {};
+  const ref = fileRefs(data);
+  const days = objects(checkIns["check_ins"]).map((item) => {
+    const photo = isObject(item["photo"]) ? item["photo"] : null;
+    const link = photo
+      ? ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"])
+        ?.download_url
+      : null;
+    return entry(
+      str(item["checked_in_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["check_in"]) ?? "")
+      }</strong> <span class="muted">${escapeHtml(str(item["chat"]) ?? "")} · ${
+        escapeHtml(str(item["day"]) ?? "")
+      }</span></div>${text(item["note"])}${
+        link
+          ? `<div><a href="${escapeHtml(link)}">Picture (link)</a></div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  const streaks = objects(checkIns["streaks"]).map((item) =>
+    entry(
+      str(item["last_day"]),
+      `<div><strong>${
+        escapeHtml(str(item["check_in"]) ?? "")
+      }</strong> <span class="muted">streak ${
+        escapeHtml(String(item["current_streak"] ?? 0))
+      } days, best ${escapeHtml(String(item["best_streak"] ?? 0))}, ${
+        escapeHtml(String(item["total_days"] ?? 0))
+      } days in all</span></div>`,
+    )
+  ).join("");
+  const made = objects(checkIns["boards_made"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["title"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(item["time_zone"]) ?? "")
+      }${item["closed"] === true ? " · closed" : ""}</span></div>${
+        text(item["description"])
+      }`,
+    )
+  ).join("");
+  return page(
+    "Check-ins — your WeCord data",
+    `${backLink()}<h1>Check-ins</h1>
+<p class="muted">The days you checked in to a group check-in, with your note and
+picture, how long your runs were, and the check-ins you made. Other people's
+check-ins, names and pictures are not copied.</p>
+${section("Your days", days, "None.")}
+${section("Your streaks", streaks, "None.")}
+${section("Check-ins you made", made, "None.")}`,
+  );
+}
+
+/** The tabs I added under chat headers. */
+export function buildGroupTabsHtml(data: ExportData): string {
+  const groupTabs = isObject(data.groupTabs) ? data.groupTabs : {};
+  const rows = objects(groupTabs["tabs_added"]).map((item) => {
+    const link = str(item["link"]);
+    return entry(
+      str(item["added_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["title"]) ?? "")
+      }</strong> <span class="muted">${escapeHtml(str(item["kind"]) ?? "")}${
+        item["chat"] ? ` · ${escapeHtml(str(item["chat"]) ?? "")}` : ""
+      }</span></div>${link ? text(link) : ""}`,
+    );
+  }).join("");
+  return page(
+    "Chat tabs — your WeCord data",
+    `${backLink()}<h1>Chat tabs</h1>
+<p class="muted">The tabs you added under the header of a group or a circle
+channel.</p>
+${section("Tabs you added", rows, "None.")}`,
+  );
+}
+
 /** Events: sign-ups (with my answers), waiting, check-ins, pictures, made. */
 function eventsJson(data: ExportData): Json {
   const ref = fileRefs(data);
@@ -2247,6 +2382,27 @@ export function buildSectionPages(
       content: buildEventsHtml(data),
     });
   }
+  if (data.checkIns) {
+    const counts = (key: string) =>
+      objects(isObject(data.checkIns) ? data.checkIns[key] : null).length;
+    out.push({
+      path: "pages/check_ins.html",
+      label: "Check-ins",
+      summary: `${counts("check_ins")} days · ${counts("boards_made")} made`,
+      content: buildCheckInsHtml(data),
+    });
+  }
+  if (data.groupTabs) {
+    const count = objects(
+      isObject(data.groupTabs) ? data.groupTabs["tabs_added"] : null,
+    ).length;
+    out.push({
+      path: "pages/group_tabs.html",
+      label: "Chat tabs",
+      summary: `${count} tab${count === 1 ? "" : "s"}`,
+      content: buildGroupTabsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2340,6 +2496,10 @@ data/channel_posts.json The posts you made in media channels (with a link to
 data/events.json      The events you signed up to (with your answers), waited
                       for, checked in to, the pictures you added and the
                       events you made (never other people's answers).
+data/check_ins.json   The days you checked in to group check-ins (with your
+                      note and a link to your picture), your streaks and the
+                      check-ins you made (never other people's check-ins).
+data/group_tabs.json  The tabs you added under group chat headers.
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

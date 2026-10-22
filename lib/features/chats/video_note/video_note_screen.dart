@@ -10,6 +10,7 @@ import 'package:wecord/features/chats/video_note/video_note_models.dart';
 import 'package:wecord/features/file_preview/viewers/video_preview.dart'
     show videoControllerFactoryProvider;
 import 'package:wecord/shared/l10n/l10n.dart';
+import 'package:wecord/shared/theme/wecord_theme.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
 /// What the recording page hands back when the person sends.
@@ -261,7 +262,7 @@ class _VideoNoteScreenState extends ConsumerState<VideoNoteScreen> {
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     return Theme(
-      data: Theme.of(context).copyWith(brightness: Brightness.dark),
+      data: WeCordTheme.dark(),
       child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0F),
         body: SafeArea(
@@ -674,12 +675,12 @@ class _Controls extends StatelessWidget {
             if (canViewOnce)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: FilterChip(
+                child: WeCordChip(
                   key: const ValueKey('video-note-view-once'),
-                  avatar: const Icon(Icons.timer_outlined, size: 18),
-                  label: Text(tr('View once')),
+                  icon: Icons.timer_outlined,
+                  label: tr('View once'),
                   selected: viewOnce,
-                  onSelected: onViewOnce,
+                  onPressed: () => onViewOnce(!viewOnce),
                 ),
               ),
             Wrap(
@@ -691,20 +692,26 @@ class _Controls extends StatelessWidget {
                   key: const ValueKey('video-note-again'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
+                    backgroundColor: Colors.transparent,
                     side: const BorderSide(color: Colors.white54),
                     minimumSize: const Size(48, 48),
                   ),
                   onPressed: onAgain,
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
                   label: Text(tr('Record again')),
                 ),
                 FilledButton.icon(
                   key: const ValueKey('video-note-send'),
                   style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0B0B0F),
                     minimumSize: const Size(48, 48),
                   ),
                   onPressed: onSend,
-                  icon: const Icon(Icons.send_rounded),
+                  icon: const Icon(
+                    Icons.send_rounded,
+                    color: Color(0xFF0B0B0F),
+                  ),
                   label: Text(tr('Send')),
                 ),
               ],

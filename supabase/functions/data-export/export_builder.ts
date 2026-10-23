@@ -182,6 +182,13 @@ export interface ExportData {
    * when it could not be read, absent in older callers.
    */
   interactions?: Json | null;
+  /**
+   * What I added to the group space of group chats (export_my_group_space,
+   * migration 202610280230): albums and folders I made, the pictures, videos
+   * and files I added; null when it could not be read, absent in older
+   * callers.
+   */
+  groupSpace?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -742,6 +749,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
       path: "data/bot_interactions.json",
       value: botInteractionsJson(data),
     });
+  }
+  if (data.groupSpace) {
+    out.push({ path: "data/group_space.json", value: groupSpaceJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -2077,6 +2087,111 @@ ${section("Private replies", replies, "None.")}`,
   );
 }
 
+/** The pictures, videos and files I added to the group space. */
+export function groupSpaceFilesToSign(
+  space: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const key of ["items", "files"]) {
+    for (const entry of objects(space?.[key])) {
+      const bucket = entry["bucket"];
+      const path = entry["path"];
+      if (typeof path !== "string" || typeof bucket !== "string") continue;
+      seen.set(`${bucket}/${path}`, { bucket, path });
+    }
+  }
+  return [...seen.values()];
+}
+
+/** Group space: albums and folders I made, what I put in them. */
+function groupSpaceJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const space = isObject(data.groupSpace) ? data.groupSpace : {};
+  const withFile = (entry: Json): Json => {
+    const { bucket, path, ...rest } = entry;
+    return {
+      ...rest,
+      file: ref(str(bucket) ?? CHAT_IMAGES_BUCKET, path),
+    };
+  };
+  return {
+    albums: objects(space["albums"]),
+    items: objects(space["items"]).map(withFile),
+    folders: objects(space["folders"]),
+    files: objects(space["files"]).map(withFile),
+  };
+}
+
+/** My part of the group space: what I made and what I added. */
+export function buildGroupSpaceHtml(data: ExportData): string {
+  const space = isObject(data.groupSpace) ? data.groupSpace : {};
+  const ref = fileRefs(data);
+  const where = (item: Json) =>
+    item["group"]
+      ? `<span class="muted">${escapeHtml(str(item["group"]) ?? "")}</span>`
+      : "";
+  const albums = objects(space["albums"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+        where(item)
+      }</div>`,
+    )
+  ).join("");
+  const folders = objects(space["folders"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+        where(item)
+      }</div>`,
+    )
+  ).join("");
+  const added = (list: unknown, parent: "album" | "folder", when: string) =>
+    objects(list).map((item) => {
+      const link = ref(
+        str(item["bucket"]) ?? CHAT_IMAGES_BUCKET,
+        item["path"],
+      )?.download_url;
+      const inside = str(item[parent]);
+      return entry(
+        str(item[when]),
+        `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+          inside ? `<span class="muted">${escapeHtml(inside)}</span> ` : ""
+        }${where(item)}</div>${
+          str(item["description"])
+            ? `<div class="body">${
+              escapeHtml(str(item["description"]) ?? "")
+            }</div>`
+            : ""
+        }${
+          link ? `<div><a href="${escapeHtml(link)}">File (link)</a></div>` : ""
+        }`,
+      );
+    }).join("");
+  return page(
+    "Group space — your WeCord data",
+    `${backLink()}<h1>Group space</h1>
+<p class="muted">The albums and folders you made in group chats, and the pictures,
+videos and files you added to them. What other people added is not copied.</p>
+${section("Albums you made", albums, "None.")}
+${
+      section(
+        "Pictures and videos you added",
+        added(space["items"], "album", "added_at"),
+        "None.",
+      )
+    }
+${section("Folders you made", folders, "None.")}
+${
+      section(
+        "Files you added",
+        added(space["files"], "folder", "added_at"),
+        "None.",
+      )
+    }`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -2341,6 +2456,16 @@ export function buildSectionPages(
       content: buildBotInteractionsHtml(data),
     });
   }
+  if (data.groupSpace) {
+    const counts = (key: string) =>
+      objects(isObject(data.groupSpace) ? data.groupSpace[key] : null).length;
+    out.push({
+      path: "pages/group_space.html",
+      label: "Group space",
+      summary: `${counts("albums")} albums · ${counts("folders")} folders`,
+      content: buildGroupSpaceHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2438,6 +2563,9 @@ data/events.json      The events you signed up to (with your answers), waited
 data/bot_interactions.json What you pressed on bots' buttons and lists, typed
                       into their forms and used as commands in the last 7
                       days, and what bots told only you.
+data/group_space.json The albums and folders you made in group chats and the
+                      pictures, videos and files you added (with links;
+                      never what other people added).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

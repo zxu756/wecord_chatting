@@ -15,6 +15,7 @@ import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions.dart';
 import 'package:wecord/features/chats/thread/registry/message_actions_builtin.dart';
+import 'package:wecord/features/group_space/space_actions.dart';
 import 'package:wecord/features/reports/report_message_action.dart';
 import 'package:wecord/features/stickers/add_to_stickers_action.dart';
 import 'package:wecord/features/urgent/urgent_message_action.dart';
@@ -32,6 +33,8 @@ final List<MessageActionContribution> messageActionExtensions = [
   urgentMessageAction,
   readAloudAction,
   qaAcceptAnswerAction,
+  addToAlbumAction,
+  saveToGroupFilesAction,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

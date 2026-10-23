@@ -23,6 +23,7 @@ import {
   favoriteFilesToSign,
   feedbackFilesToSign,
   formFilesToSign,
+  groupSpaceFilesToSign,
   type Json,
   momentsMoreFilesToSign,
   type OwnedFile,
@@ -658,6 +659,20 @@ export async function collectExportData(
     null,
   );
 
+  // What I added to the group space of group chats (export_my_group_space).
+  const groupSpace = await tryRead<Row | null>(
+    skipped,
+    "group space",
+    async () => {
+      const result = await admin.rpc("export_my_group_space", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -691,6 +706,10 @@ export async function collectExportData(
   }
   // The pictures I added to events and the covers of my events are linked.
   for (const { bucket, path } of eventFilesToSign(events2)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures and files I added to the group space are linked.
+  for (const { bucket, path } of groupSpaceFilesToSign(groupSpace)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -756,6 +775,7 @@ export async function collectExportData(
     channelPosts,
     events2,
     interactions,
+    groupSpace,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

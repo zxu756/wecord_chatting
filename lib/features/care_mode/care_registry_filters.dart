@@ -21,6 +21,8 @@ const careHiddenMessageActionIds = <String>{
   'urgent',
   'edit-history',
   'message-info',
+  'add-to-album',
+  'save-to-group-files',
 };
 
 /// Header actions (the More menu on phones) that Care mode hides.
@@ -32,6 +34,7 @@ const careHiddenHeaderActionIds = <String>{
   'summarize',
   'events',
   'auto-translate',
+  'group-space',
 };
 
 /// "+" menu entries that Care mode hides. Photos, files, contact cards,

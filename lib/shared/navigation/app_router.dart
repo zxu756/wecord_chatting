@@ -49,6 +49,9 @@ import 'package:wecord/features/share_target/protocol_links.dart';
 import 'package:wecord/features/share_target/share_target_screen.dart';
 import 'package:wecord/features/shell/wecord_shell.dart';
 import 'package:wecord/features/events2/event_check_in.dart';
+import 'package:wecord/features/group_space/album_screen.dart';
+import 'package:wecord/features/group_space/folder_screen.dart';
+import 'package:wecord/features/group_space/group_space_screen.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
 import 'package:wecord/features/discovery/public_circle_link.dart';
 import 'package:wecord/features/discovery/public_circle_screen.dart';
@@ -301,6 +304,80 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return ChatLockGate(
                 conversationId: conversationId,
                 child: ChatMediaScreen(conversationId: conversationId),
+              );
+            },
+          ),
+          // A group chat's space (B6): albums and folders. ?tab=albums|files.
+          GoRoute(
+            path: '/chats/:conversationId/space',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: GroupSpaceScreen(
+                  conversationId: conversationId,
+                  initialTab: GroupSpaceScreen.tabFrom(
+                    state.uri.queryParameters,
+                  ),
+                ),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/space/albums/:albumId',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              final albumId = state.pathParameters['albumId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: AlbumScreen(
+                  key: ValueKey('space-album-$albumId'),
+                  conversationId: conversationId,
+                  albumId: albumId,
+                  title: state.extra is String ? state.extra! as String : null,
+                ),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/space/events/:eventId',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              final eventId = state.pathParameters['eventId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: AlbumScreen(
+                  key: ValueKey('space-event-$eventId'),
+                  conversationId: conversationId,
+                  eventId: eventId,
+                  title: state.extra is String ? state.extra! as String : null,
+                ),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/space/files',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: FolderScreen(conversationId: conversationId),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/space/folders/:folderId',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              final folderId = state.pathParameters['folderId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: FolderScreen(
+                  key: ValueKey('space-folder-$folderId'),
+                  conversationId: conversationId,
+                  folderId: folderId,
+                  title: state.extra is String ? state.extra! as String : null,
+                ),
               );
             },
           ),

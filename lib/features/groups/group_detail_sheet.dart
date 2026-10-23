@@ -9,7 +9,6 @@ import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
-import 'package:wecord/features/group_tabs/group_tabs_sheet.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
@@ -238,23 +237,6 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                         ),
                       ),
               ),
-            SettingsRow(
-              key: const ValueKey('group-detail-tabs'),
-              icon: Icons.tab_outlined,
-              title: tr('Tabs'),
-              subtitle: tr(
-                'Notes, lists, forms and links under the chat header',
-              ),
-              onTap: _isSaving
-                  ? null
-                  : () => unawaited(
-                      showGroupTabsSheet(
-                        context,
-                        conversationId: widget.conversationId,
-                        title: detail.title,
-                      ),
-                    ),
-            ),
             // The owner decides whether WeCord AI answers in the group.
             if (detail.currentUserRole == 'owner')
               AiAssistantGroupRow(conversationId: widget.conversationId),

@@ -220,6 +220,10 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280120_scheduled_calls_push.sql
 \i supabase/migrations/202610280130_scheduled_calls_agenda.sql
 \i supabase/migrations/202610280140_scheduled_calls_account.sql
+\i supabase/migrations/202610280200_group_space_schema.sql
+\i supabase/migrations/202610280210_group_space_albums.sql
+\i supabase/migrations/202610280220_group_space_folders.sql
+\i supabase/migrations/202610280230_group_space_account.sql
 \i supabase/migrations/202610280500_checkin_schema.sql
 \i supabase/migrations/202610280510_checkin_rpcs.sql
 \i supabase/migrations/202610280520_checkin_push.sql

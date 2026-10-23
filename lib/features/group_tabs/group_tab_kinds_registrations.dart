@@ -7,24 +7,16 @@
 // needs one `insert` in the package's migration, with target_type 'none' for a
 // kind with no target).
 //
-// Group space (B6), once 8-2 is merged:
-//   1. in that package, write
-//        final spaceGroupTabKind = GroupTabKindContribution(
-//          kind: GroupTabKinds.space, order: 650, label: () => tr('Space'),
-//          icon: Icons.photo_library_outlined,
-//          defaultTitle: () => tr('Space'),
-//          open: (ctx, tab) => openGroupSpace(ctx.context, ctx.conversationId),
-//        );
-//   2. add `spaceGroupTabKind` to the list below.
-// Nothing here imports that package; until it is merged a 'space' tab (none
-// can be added) is simply left out of the strip.
+// Group space (B6): `spaceGroupTabKind` (group_tab_kind_space.dart) opens the
+// space of the group and is listed below.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/group_tabs/group_tab_kinds.dart';
+import 'package:wecord/features/group_tabs/group_tab_kind_space.dart';
 import 'package:wecord/features/group_tabs/group_tab_kinds_builtin.dart';
 
 /// Feature contributions to the kinds of tab. Append yours here.
 final List<GroupTabKindContribution> groupTabKindExtensions = [
-  // spaceGroupTabKind,
+  spaceGroupTabKind,
 ];
 
 /// The kinds the app can open. Tests can override it.

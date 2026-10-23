@@ -199,6 +199,7 @@ const emptyRpc: Record<string, unknown> = {
     presses: [],
     private_replies: [],
   },
+  export_my_group_space: { albums: [], items: [], folders: [], files: [] },
 };
 
 const feedbackAnswer = [{
@@ -532,6 +533,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         presses: [],
         private_replies: [],
       },
+      export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -566,6 +568,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_check_ins", args: { target_user_id: me } },
     { name: "export_my_group_tabs", args: { target_user_id: me } },
     { name: "export_my_interactions", args: { target_user_id: me } },
+    { name: "export_my_group_space", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -626,6 +629,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         presses: [],
         private_replies: [],
       },
+      export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -751,6 +755,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         presses: [],
         private_replies: [],
       },
+      export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -788,6 +793,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.checkIns, null);
   assertEquals(data.groupTabs, null);
   assertEquals(data.interactions, null);
+  assertEquals(data.groupSpace, null);
   assertEquals(data.skipped.sort(), [
     "bot buttons and commands",
     "chat tabs",
@@ -799,6 +805,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "favorites",
     "feedback",
     "forms",
+    "group space",
     "knowledge base pages",
     "moments",
     "note comments and templates",

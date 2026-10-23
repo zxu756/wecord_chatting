@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:wecord/features/group_tabs/group_tab_kind_space.dart';
 import 'package:wecord/features/group_tabs/group_tab_kinds.dart';
 import 'package:wecord/features/group_tabs/group_tab_kinds_builtin.dart';
 import 'package:wecord/features/group_tabs/group_tab_kinds_registrations.dart';
@@ -193,14 +194,19 @@ void main() {
       expect(registry.kinds.indexOf('space'), registry.kinds.indexOf('kb') + 1);
     });
 
+    test('the group space is a kind, for groups only', () {
+      expect(groupTabKindExtensions, contains(spaceGroupTabKind));
+      expect(spaceGroupTabKind.kind, 'space');
+      expect(spaceGroupTabKind.pick, isNull);
+    });
+
     test('the extension list is where a package adds its kind', () {
-      // Empty until B6 (group space) is merged: it appends its kind here.
       expect(groupTabKindExtensions, isA<List<GroupTabKindContribution>>());
       final container = ProviderContainer();
       addTearDown(container.dispose);
       expect(
         container.read(groupTabKindRegistryProvider).kinds,
-        containsAll(['note', 'list', 'form', 'check_in', 'link']),
+        containsAll(['note', 'list', 'form', 'check_in', 'link', 'space']),
       );
     });
   });

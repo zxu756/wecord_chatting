@@ -258,6 +258,13 @@ class _MessageContent extends StatelessWidget {
           child: FormCardView(card: formCard),
         ),
       );
+    } else if (message.checkInCard case final checkInCard?) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 2, bottom: cards ? 0 : 2),
+          child: CheckInCardView(card: checkInCard),
+        ),
+      );
     } else if (message.chatHistoryCard case final historyCard?) {
       content.add(
         Padding(

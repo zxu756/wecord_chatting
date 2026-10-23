@@ -34,6 +34,7 @@ const careHiddenHeaderActionIds = <String>{
   'summarize',
   'events',
   'auto-translate',
+  'group-tabs',
   'group-space',
 };
 
@@ -50,4 +51,5 @@ const careHiddenComposerMenuIds = <String>{
   'form',
   'ask-wecord-ai',
   'send-silently',
+  'check-in',
 };

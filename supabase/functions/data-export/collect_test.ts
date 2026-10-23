@@ -193,6 +193,8 @@ const emptyRpc: Record<string, unknown> = {
     photos: [],
     events_made: [],
   },
+  export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
+  export_my_group_tabs: { tabs_added: [] },
   export_my_interactions: {
     presses: [],
     private_replies: [],
@@ -525,6 +527,8 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         photos: [],
         events_made: [],
       },
+      export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
+      export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
         presses: [],
         private_replies: [],
@@ -561,6 +565,8 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_honors", args: { target_user_id: me } },
     { name: "export_my_channel_posts", args: { target_user_id: me } },
     { name: "export_my_events2", args: { target_user_id: me } },
+    { name: "export_my_check_ins", args: { target_user_id: me } },
+    { name: "export_my_group_tabs", args: { target_user_id: me } },
     { name: "export_my_interactions", args: { target_user_id: me } },
     { name: "export_my_group_space", args: { target_user_id: me } },
   ]);
@@ -617,6 +623,8 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         photos: [],
         events_made: [],
       },
+      export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
+      export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
         presses: [],
         private_replies: [],
@@ -741,6 +749,8 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         photos: [],
         events_made: [],
       },
+      export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
+      export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
         presses: [],
         private_replies: [],
@@ -780,10 +790,14 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.honors, null);
   assertEquals(data.channelPosts, null);
   assertEquals(data.events2, null);
+  assertEquals(data.checkIns, null);
+  assertEquals(data.groupTabs, null);
   assertEquals(data.interactions, null);
   assertEquals(data.groupSpace, null);
   assertEquals(data.skipped.sort(), [
     "bot buttons and commands",
+    "chat tabs",
+    "check-ins",
     "circle titles and honors",
     "daily",
     "daily digest",

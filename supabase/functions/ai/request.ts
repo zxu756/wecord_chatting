@@ -11,6 +11,10 @@ import {
   parseGuardItemRequest,
   parseLinkCheckRequest,
 } from "./guard2_request.ts";
+import {
+  type DraftReplyRequest,
+  parseDraftReplyRequest,
+} from "./draft_reply_request.ts";
 
 export const LANGUAGES = {
   en: "English",
@@ -150,7 +154,10 @@ export type AiRequest =
   /// database with the shared secret.
   | GuardItemRequest
   /// "Ask AI about this link" (link_check.ts).
-  | LinkCheckRequest;
+  | LinkCheckRequest
+  /// "Help me reply" in the message box: two or three replies to the end of
+  /// a chat (draft_reply.ts).
+  | DraftReplyRequest;
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === "string" &&
@@ -400,6 +407,8 @@ export function parseAiRequest(body: unknown): AiRequest | null {
       return parseGuardItemRequest(fields);
     case "link_check":
       return parseLinkCheckRequest(fields);
+    case "draft_reply":
+      return parseDraftReplyRequest(fields);
     default:
       return null;
   }

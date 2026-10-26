@@ -30,6 +30,7 @@ class ComposerMenuActions {
     required this.pickGif,
     this.sendSilently,
     this.pickQuickReply,
+    this.draftReply,
   });
 
   final Future<void> Function() pickPhotosAndVideos;
@@ -52,6 +53,9 @@ class ComposerMenuActions {
 
   /// Picks one of the person's quick replies and puts it in the box.
   final Future<void> Function()? pickQuickReply;
+  /// Opens "Help me reply" (F6), which fills the box and never sends; null
+  /// where it makes no sense (the note to self).
+  final Future<void> Function()? draftReply;
 }
 
 /// What a contribution can look at when the menu opens.

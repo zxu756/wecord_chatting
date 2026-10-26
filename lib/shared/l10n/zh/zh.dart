@@ -18,6 +18,7 @@ import 'package:wecord/shared/l10n/zh/zh_group_checkin_tabs.dart';
 import 'package:wecord/shared/l10n/zh/zh_interactions.dart';
 import 'package:wecord/shared/l10n/zh/zh_scheduled_calls.dart';
 import 'package:wecord/shared/l10n/zh/zh_group_space.dart';
+import 'package:wecord/shared/l10n/zh/zh_ai_suggest.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -207,6 +208,7 @@ const zhAreas = <Map<String, String>>[
   zhScheduledCalls,
   zhGroupSpace,
   zhChatPrivacy,
+  zhAiSuggest,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

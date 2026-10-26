@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/auth/auth_controller.dart';
 import 'package:wecord/features/auth/auth_layout.dart';
+import 'package:wecord/features/auth/passkey_sign_in_button.dart';
 import 'package:wecord/features/auth/password_recovery.dart';
 import 'package:wecord/features/legal/terms_checkbox.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
@@ -153,6 +154,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           loading: busy,
           onPressed: _submit,
         ),
+        if (!creating) const PasskeySignInButton(),
       ],
     );
   }

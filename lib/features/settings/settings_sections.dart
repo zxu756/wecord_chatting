@@ -27,6 +27,8 @@ import 'package:wecord/features/app_lock/app_lock_settings_screen.dart';
 import 'package:wecord/features/privacy/devices_screen.dart';
 import 'package:wecord/features/privacy/privacy_permissions.dart';
 import 'package:wecord/features/privacy/profile_visibility.dart';
+import 'package:wecord/features/settings/passkeys_screen.dart';
+import 'package:wecord/features/settings/security_log_screen.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 import 'package:wecord/features/shell/keyboard_shortcuts.dart';
 import 'package:wecord/features/voice/voice_settings_screen.dart';
@@ -869,6 +871,22 @@ class PrivacySettingsGroup extends ConsumerWidget {
           trailing: twoFactorOn == null ? null : _StateLabel(on: twoFactorOn),
           showChevron: true,
           onTap: () => openTwoFactorSettings(context),
+        ),
+        SettingsRow(
+          key: const ValueKey('passkeys-tile'),
+          icon: Icons.fingerprint_rounded,
+          title: tr('Passkeys'),
+          subtitle: tr('Sign in with your face, fingerprint or device PIN'),
+          showChevron: true,
+          onTap: () => openPasskeys(context),
+        ),
+        SettingsRow(
+          key: const ValueKey('security-log-tile'),
+          icon: Icons.history_rounded,
+          title: tr('Security log'),
+          subtitle: tr('Recovery codes and passkeys: what changed and when'),
+          showChevron: true,
+          onTap: () => openSecurityLog(context),
         ),
         const AppLockSettingsRow(),
         const ProfileVisibilityRow(),

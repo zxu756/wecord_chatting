@@ -6,3 +6,8 @@
   Cache-Control: no-cache
 /manifest.json
   Cache-Control: no-cache
+# Passkeys on iPhone and Mac (G4): the file that lets the app use passkeys
+# made for this site. Apple fetches it without a redirect and wants JSON.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: no-cache

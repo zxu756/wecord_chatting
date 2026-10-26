@@ -203,6 +203,11 @@ const emptyRpc: Record<string, unknown> = {
   },
   export_my_group_space: { albums: [], items: [], folders: [], files: [] },
   export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
+  export_my_account_security: {
+    events: [],
+    recovery_codes: { remaining: null, made_at: null },
+    passkeys: [],
+  },
 };
 
 const feedbackAnswer = [{
@@ -538,6 +543,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -578,6 +588,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_interactions", args: { target_user_id: me } },
     { name: "export_my_chat_privacy", args: { target_user_id: me } },
     { name: "export_my_group_space", args: { target_user_id: me } },
+    { name: "export_my_account_security", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -640,6 +651,11 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -767,6 +783,11 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -806,7 +827,9 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.interactions, null);
   assertEquals(data.groupSpace, null);
   assertEquals(data.chatPrivacy, null);
+  assertEquals(data.accountSecurity, null);
   assertEquals(data.skipped.sort(), [
+    "account security record",
     "advanced chat privacy",
     "bot buttons and commands",
     "chat tabs",

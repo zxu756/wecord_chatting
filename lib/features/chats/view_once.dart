@@ -9,6 +9,8 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/file_preview/viewers/video_preview.dart'
     show videoControllerFactoryProvider;
+import 'package:wecord/features/screen_capture/screen_capture_service.dart';
+import 'package:wecord/features/screen_capture/view_once_screenshots.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/message.dart';
@@ -170,6 +172,26 @@ class _ViewOnceMessageContentState
     if (_opening) {
       return;
     }
+    // A screen that is being recorded would keep the only look: wait until
+    // the recording stops (iPhone and iPad can tell; other devices cannot).
+    final capture = ref.read(screenCaptureServiceProvider);
+    if (await capture.isRecording()) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                'Stop recording your screen, then open it. It can only be opened once.',
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -177,10 +199,27 @@ class _ViewOnceMessageContentState
         title: Text(
           _isVideo ? tr('Open this video once?') : tr('Open this photo once?'),
         ),
-        content: Text(
-          tr(
-            'Once you close it, it is gone and you can\'t open it again. WeCord can\'t stop screenshots or screen recordings, so the sender is trusting you with it.',
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(
+                'Once you close it, it is gone and you can\'t open it again. WeCord can\'t stop screenshots or screen recordings, so the sender is trusting you with it.',
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              capture.detects
+                  ? tr(
+                      'If this device notices a screenshot or a screen recording, the sender is told.',
+                    )
+                  : tr(
+                      'This device can\'t notice screenshots, so the sender is not told about them.',
+                    ),
+              key: const ValueKey('view-once-capture-note'),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -212,7 +251,8 @@ class _ViewOnceMessageContentState
         PageRouteBuilder<void>(
           opaque: true,
           fullscreenDialog: true,
-          pageBuilder: (context, _, _) => ViewOnceViewer(file: file),
+          pageBuilder: (context, _, _) =>
+              ViewOnceViewer(file: file, messageId: widget.message.id),
           transitionsBuilder: (context, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
@@ -248,6 +288,13 @@ class _ViewOnceMessageContentState
         : ref.watch(viewOnceOpensProvider(message.id)).value ??
               const <ViewOnceOpen>[];
     final openedByMe = _openedHere || opens.any((open) => open.userId == me);
+    // Only the sender reads the others' reports (the database says so too).
+    final captureNote = mine && !pending
+        ? viewOnceCaptureNote(
+            ref.watch(viewOnceCaptureReportsProvider(message.id)).value ??
+                const <ViewOnceCaptureReport>[],
+          )
+        : null;
     final kind = _isVideo ? tr('Video') : tr('Photo');
 
     final String status;
@@ -268,11 +315,12 @@ class _ViewOnceMessageContentState
       dim = false;
       status = tr('Tap to open · View once');
     }
+    final statusLine = captureNote == null ? status : '$status · $captureNote';
     final canOpen = !mine && !openedByMe && !pending && !_opening;
     final muted = widget.textColor.withValues(alpha: 0.72);
     final label = tr('{kind}, view once, {status}', {
       'kind': kind,
-      'status': status,
+      'status': statusLine,
     });
 
     final tile = ConstrainedBox(
@@ -299,7 +347,7 @@ class _ViewOnceMessageContentState
                   ),
                 ),
                 Text(
-                  status,
+                  statusLine,
                   key: ValueKey('view-once-status-${message.id}'),
                   style: TextStyle(fontSize: 12.5, color: muted),
                 ),
@@ -392,10 +440,18 @@ class _DashedRingPainter extends CustomPainter {
 
 /// The full-screen look at a view-once photo or video: black, no save, no
 /// share, no forward. Closing it ends the look.
+///
+/// On an iPhone or iPad it also notices a screenshot or a screen recording
+/// (best effort, after the fact): it tells the sender through [messageId], and
+/// while the screen is recorded it hides the picture. Other devices cannot
+/// notice, and the viewer says so.
 class ViewOnceViewer extends ConsumerStatefulWidget {
-  const ViewOnceViewer({required this.file, super.key});
+  const ViewOnceViewer({required this.file, this.messageId, super.key});
 
   final ViewOnceFile file;
+
+  /// The message being looked at; null reports nothing.
+  final String? messageId;
 
   @override
   ConsumerState<ViewOnceViewer> createState() => _ViewOnceViewerState();
@@ -406,12 +462,65 @@ class _ViewOnceViewerState extends ConsumerState<ViewOnceViewer> {
   var _videoReady = false;
   var _videoFailed = false;
 
+  StreamSubscription<ScreenCaptureEvent>? _captureEvents;
+
+  /// The screen is being recorded: the picture is hidden until it stops.
+  var _covered = false;
+
+  /// Shown at the top after a screenshot or recording was noticed.
+  String? _captureNotice;
+
   @override
   void initState() {
     super.initState();
     if (widget.file.isVideo) {
       unawaited(_startVideo());
     }
+    final capture = ref.read(screenCaptureServiceProvider);
+    if (capture.detects) {
+      _captureEvents = capture.events.listen(_onCapture);
+      unawaited(
+        capture.isRecording().then((recording) {
+          if (recording && mounted) {
+            _onCapture(ScreenCaptureEvent.recordingStarted);
+          }
+        }),
+      );
+    }
+  }
+
+  void _onCapture(ScreenCaptureEvent event) {
+    switch (event) {
+      case ScreenCaptureEvent.screenshot:
+        _report(ViewOnceCaptureKind.screenshot);
+        setState(
+          () => _captureNotice = tr('Screenshot noticed. The sender is told.'),
+        );
+      case ScreenCaptureEvent.recordingStarted:
+        _report(ViewOnceCaptureKind.recording);
+        unawaited(_video?.pause());
+        setState(() {
+          _covered = true;
+          _captureNotice = tr('Screen recording noticed. The sender is told.');
+        });
+      case ScreenCaptureEvent.recordingStopped:
+        setState(() => _covered = false);
+    }
+  }
+
+  /// Best effort: a report that cannot be sent is not worth interrupting a
+  /// look for.
+  void _report(ViewOnceCaptureKind kind) {
+    final id = widget.messageId;
+    if (id == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(viewOnceScreenshotRepositoryProvider)
+          .report(id, kind)
+          .then((_) {}, onError: (Object _) {}),
+    );
   }
 
   Future<void> _startVideo() async {
@@ -435,6 +544,7 @@ class _ViewOnceViewerState extends ConsumerState<ViewOnceViewer> {
 
   @override
   void dispose() {
+    unawaited(_captureEvents?.cancel());
     unawaited(_video?.dispose());
     super.dispose();
   }
@@ -476,38 +586,75 @@ class _ViewOnceViewerState extends ConsumerState<ViewOnceViewer> {
         ),
       );
     }
+    final detects = ref.watch(screenCaptureDetectsProvider);
     return Scaffold(
       key: const ValueKey('view-once-viewer'),
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          media,
+          if (_covered)
+            _ViewerNote(
+              key: const ValueKey('view-once-covered'),
+              text: tr('Hidden while your screen is being recorded.'),
+            )
+          else
+            media,
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    WeCordIconButton(
-                      key: const ValueKey('view-once-close'),
-                      icon: Icons.close_rounded,
-                      tooltip: tr('Close'),
-                      variant: WeCordButtonVariant.ghost,
-                      onPressed: () => Navigator.of(context).maybePop(),
+                    Row(
+                      children: [
+                        WeCordIconButton(
+                          key: const ValueKey('view-once-close'),
+                          icon: Icons.close_rounded,
+                          tooltip: tr('Close'),
+                          variant: WeCordButtonVariant.ghost,
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tr('View once · gone when you close it'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        tr('View once · gone when you close it'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
+                    if (_captureNotice != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Container(
+                          key: const ValueKey('view-once-capture-notice'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(WeCordRadii.md),
+                          ),
+                          child: Text(
+                            _captureNotice!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -519,7 +666,13 @@ class _ViewOnceViewerState extends ConsumerState<ViewOnceViewer> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
                 child: Text(
-                  tr('Screenshots and screen recordings can\'t be blocked.'),
+                  detects
+                      ? tr(
+                          'Screenshots and screen recordings can\'t be blocked. This device tells the sender if it notices one.',
+                        )
+                      : tr(
+                          'Screenshots and screen recordings can\'t be blocked, and this device can\'t notice them.',
+                        ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white70,
@@ -537,7 +690,7 @@ class _ViewOnceViewerState extends ConsumerState<ViewOnceViewer> {
 }
 
 class _ViewerNote extends StatelessWidget {
-  const _ViewerNote({required this.text});
+  const _ViewerNote({required this.text, super.key});
 
   final String text;
 

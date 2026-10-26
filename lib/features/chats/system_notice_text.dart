@@ -1,3 +1,4 @@
+import 'package:wecord/features/chat_privacy/chat_privacy_notice.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 // The server writes some chat lines in English, one text for everybody:
@@ -16,6 +17,15 @@ final _pinned = RegExp(r'^(.+) pinned a message\.$');
 final _callStarted = RegExp(r'^(.+) started a call\.$');
 final _joinedCircle = RegExp(r'^(.+) joined the circle$');
 final _callEnded = RegExp(r'^(.+) started a call that lasted (.+)\.$');
+final _privacyChanged = RegExp(
+  r'^(.+) turned (on|off) advanced chat privacy\.$',
+);
+final _screenshot = RegExp(
+  r'^(.+) took a screenshot of a view-once (photo|video)\.$',
+);
+final _recording = RegExp(
+  r'^(.+) was recording the screen while a view-once (photo|video) was open\.$',
+);
 final _hours = RegExp(r'(\d+) hours?');
 final _minutes = RegExp(r'(\d+) minutes?');
 
@@ -38,6 +48,26 @@ String systemNoticeText(String body) {
       'name': match.group(1),
       'length': _callLength(match.group(2)!),
     });
+  }
+  if (_privacyChanged.firstMatch(body) case final match?) {
+    return PrivacyNotice(
+      actorName: match.group(1)!,
+      enabled: match.group(2) == 'on',
+    ).text;
+  }
+  if (_screenshot.firstMatch(body) case final match?) {
+    return ScreenshotNotice(
+      actorName: match.group(1)!,
+      recording: false,
+      video: match.group(2) == 'video',
+    ).text;
+  }
+  if (_recording.firstMatch(body) case final match?) {
+    return ScreenshotNotice(
+      actorName: match.group(1)!,
+      recording: true,
+      video: match.group(2) == 'video',
+    ).text;
   }
   return body;
 }

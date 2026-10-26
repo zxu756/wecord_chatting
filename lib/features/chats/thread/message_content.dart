@@ -16,6 +16,9 @@ class _SystemMessageLine extends StatelessWidget {
     if (PatInfo.maybeFromAttachment(message.attachment) case final pat?) {
       return PatLine(message: message, pat: pat);
     }
+    if (ChatNotice.maybeFromAttachment(message.attachment) case final notice?) {
+      return ChatNoticeLine(notice: notice);
+    }
     if (AutoModAlert.maybeFromJson(message.attachment) case final alert?) {
       return AutoModAlertCard(alert: alert);
     }

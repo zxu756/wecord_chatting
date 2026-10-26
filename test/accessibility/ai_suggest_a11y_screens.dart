@@ -3,12 +3,10 @@
 // new row, the sheet asking what to say, three suggested replies (one of them
 // long), nothing to reply to, and the refusals (a locked chat, the limit).
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/ai/draft_reply/draft_reply_repository.dart';
-import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/shared/models/conversation.dart';
 

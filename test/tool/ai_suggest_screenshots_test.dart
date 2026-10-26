@@ -7,14 +7,12 @@
 // light and dark, English and Chinese. The text uses a system font found on
 // this machine (macOS) so that it can be read in the pictures; without one the
 // layout is still checked.
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/ai/ai_models.dart';
 import 'package:wecord/features/ai/draft_reply/draft_reply_repository.dart';

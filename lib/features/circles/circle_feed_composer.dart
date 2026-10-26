@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
+import 'package:wecord/features/circles/circle_posts_repository.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
+import 'package:wecord/features/hashtags/hashtag_widgets.dart';
+import 'package:wecord/shared/l10n/error_text.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/ui/ui.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 class CircleFeedComposer extends ConsumerStatefulWidget {
   const CircleFeedComposer({
@@ -24,6 +29,9 @@ class CircleFeedComposer extends ConsumerStatefulWidget {
 
 class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
   final _bodyController = TextEditingController();
+  final _titleController = TextEditingController();
+  List<String> _tags = const [];
+  bool _showTopics = false;
   ChatImageUpload? _selectedImage;
   bool _isPickingImage = false;
   bool _isPosting = false;
@@ -32,6 +40,7 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
   @override
   void dispose() {
     _bodyController.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -84,27 +93,36 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
           image: selectedImage,
         );
       }
-      await repository.createPost(
-        circleId: widget.circleId,
-        body: body,
-        image: uploadedImage,
-      );
+      await ref
+          .read(circlePostsRepositoryProvider)
+          .create(
+            circleId: widget.circleId,
+            body: body,
+            title: _titleController.text,
+            tags: _tags,
+            image: uploadedImage,
+          );
       if (!mounted) {
         return;
       }
       _bodyController.clear();
+      _titleController.clear();
       setState(() {
         _selectedImage = null;
+        _tags = const [];
+        _showTopics = false;
         _isPosting = false;
       });
       widget.onPosted();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _isPosting = false;
-        _errorText = tr('Could not post. Try again.');
+        _errorText = error is PostgrestException
+            ? errorText(error)
+            : tr('Could not post. Try again.');
       });
     }
   }
@@ -124,6 +142,19 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           WeCordTextField(
+            controller: _titleController,
+            enabled: !_isPosting,
+            onPaper: true,
+            hint: tr('Title (optional)'),
+            inputFormatters: [
+              LengthLimitingTextInputFormatter(
+                CirclePostsRepository.maxTitleLength,
+              ),
+              FilteringTextInputFormatter.deny(RegExp(r'[\r\n]')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          WeCordTextField(
             controller: _bodyController,
             enabled: !_isPosting,
             minLines: 1,
@@ -132,8 +163,22 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
             hint: tr('Share with this Circle'),
             suffix: Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: _isPickingImage
-                  ? const SizedBox.square(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  WeCordIconButton(
+                    tooltip: _showTopics ? tr('Hide topics') : tr('Add topics'),
+                    icon: Icons.tag_rounded,
+                    variant: _tags.isNotEmpty || _showTopics
+                        ? WeCordButtonVariant.secondary
+                        : WeCordButtonVariant.ghost,
+                    size: 36,
+                    onPressed: _isPosting
+                        ? null
+                        : () => setState(() => _showTopics = !_showTopics),
+                  ),
+                  if (_isPickingImage)
+                    const SizedBox.square(
                       dimension: 44,
                       child: Center(
                         child: SizedBox.square(
@@ -142,15 +187,26 @@ class _CircleFeedComposerState extends ConsumerState<CircleFeedComposer> {
                         ),
                       ),
                     )
-                  : WeCordIconButton(
+                  else
+                    WeCordIconButton(
                       tooltip: tr('Add image'),
                       icon: Icons.image_outlined,
                       variant: WeCordButtonVariant.ghost,
                       size: 36,
                       onPressed: _isPosting ? null : _pickImage,
                     ),
+                ],
+              ),
             ),
           ),
+          if (_showTopics || _tags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            HashtagEditor(
+              tags: _tags,
+              enabled: !_isPosting,
+              onChanged: (tags) => setState(() => _tags = tags),
+            ),
+          ],
           if (selectedImage != null) ...[
             const SizedBox(height: 8),
             Container(

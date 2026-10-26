@@ -8,6 +8,7 @@ import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
+import 'package:wecord/features/hashtags/hashtag_text.dart';
 import 'package:wecord/features/moments/moment_audience_sheet.dart';
 import 'package:wecord/features/moments/moment_mentions.dart';
 import 'package:wecord/features/moments/moment_photos.dart';
@@ -59,6 +60,24 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
   var _picking = false;
   var _posting = false;
   String? _error;
+
+  /// Puts `#tag ` at the end of the text (a topic friends already use).
+  void _addTopic(String tag) {
+    final current = _text.text;
+    final glue =
+        current.isEmpty || current.endsWith(' ') || current.endsWith('\n')
+        ? ''
+        : ' ';
+    final next = '$current$glue#$tag ';
+    if (next.length > maxMomentTextLength) {
+      return;
+    }
+    _text.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    setState(() {});
+  }
 
   @override
   void dispose() {
@@ -350,6 +369,11 @@ class _MomentComposerScreenState extends ConsumerState<MomentComposerScreen> {
                                   color: c.subtle,
                                 ),
                               ),
+                            ),
+                            _TopicSuggestions(
+                              text: _text.text,
+                              enabled: !_posting,
+                              onPick: _addTopic,
                             ),
                             if (!_linkOpen) ...[
                               const SizedBox(height: 14),
@@ -774,6 +798,58 @@ class _VideoDraftTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Under the text: the topics the text already has, and a few friends use
+/// that one press adds.
+class _TopicSuggestions extends ConsumerWidget {
+  const _TopicSuggestions({
+    required this.text,
+    required this.enabled,
+    required this.onPick,
+  });
+
+  final String text;
+  final bool enabled;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final written = extractHashtags(text);
+    final used = ref.watch(momentsTopicsProvider).value ?? const [];
+    final offered = [
+      for (final topic in used)
+        if (!written.contains(topic.tag)) topic.tag,
+    ].take(5).toList();
+    if (written.isEmpty && offered.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        key: const ValueKey('moment-topics'),
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final tag in written)
+            WeCordChip(
+              label: '#$tag',
+              height: 28,
+              selected: true,
+              semanticLabel: tr('Topic {tag}', {'tag': tag}),
+            ),
+          if (enabled)
+            for (final tag in offered)
+              WeCordChip(
+                label: '#$tag',
+                height: 28,
+                semanticLabel: tr('Add topic {tag}', {'tag': tag}),
+                onPressed: () => onPick(tag),
+              ),
+        ],
       ),
     );
   }

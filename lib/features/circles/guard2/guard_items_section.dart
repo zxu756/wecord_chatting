@@ -7,6 +7,7 @@ import 'package:wecord/features/circles/circle_audit_log_screen.dart'
     show formatAuditTime;
 import 'package:wecord/features/circles/circle_ai_guard_repository.dart';
 import 'package:wecord/features/circles/circle_events_screen.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/circles/guard2/guard2_repository.dart';
 import 'package:wecord/features/knowledge_base/kb_screen.dart';
@@ -100,6 +101,10 @@ class _GuardItemCardState extends ConsumerState<GuardItemCard> {
           CircleEventsScreen.pathFor(widget.circleId, eventId: item.itemId),
         ),
       );
+      return;
+    }
+    if (item.type == GuardItemType.circlePost) {
+      unawaited(router.push(circlePostPath(widget.circleId, item.itemId)));
       return;
     }
     final conversationId = item.conversationId;

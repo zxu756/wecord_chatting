@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/circles/circle_event_editor_sheet.dart';
+import 'package:wecord/features/circles/circle_post_editor_sheet.dart';
+import 'package:wecord/features/circles/circle_posts_repository.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
@@ -11,6 +13,7 @@ import 'package:wecord/features/later/saved_actions.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/file_preview/file_preview_screen.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/hashtags/hashtag_widgets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -19,17 +22,29 @@ import 'package:wecord/shared/models/report_reason.dart';
 import 'package:wecord/shared/ui/display_size_image.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-enum _PostAction { save, delete, report }
+enum _PostAction { save, edit, feature, delete, report }
 
 class CirclePostTile extends ConsumerWidget {
   const CirclePostTile({
     required this.post,
     required this.onChanged,
+    this.onOpenTag,
+    this.onOpen,
+    this.commentLimit = 2,
     super.key,
   });
 
   final CirclePost post;
   final VoidCallback onChanged;
+
+  /// Pressing a topic of the post (a pill or a #tag in the text).
+  final ValueChanged<String>? onOpenTag;
+
+  /// Opens the post on its own page; null where the tile is that page.
+  final VoidCallback? onOpen;
+
+  /// How many comments show under the post; null for all of them.
+  final int? commentLimit;
 
   Future<void> _showActions(
     BuildContext context,
@@ -49,6 +64,20 @@ class CirclePostTile extends ConsumerWidget {
               : Icons.bookmark_border_rounded,
           label: saved ? tr('Remove from Saved') : tr('Save for later'),
         ),
+        if (post.isOwnPost)
+          CircleMenuItem(
+            value: _PostAction.edit,
+            icon: Icons.edit_outlined,
+            label: tr('Edit'),
+          ),
+        if (post.canFeaturePost)
+          CircleMenuItem(
+            value: _PostAction.feature,
+            icon: post.isFeatured
+                ? Icons.star_outline_rounded
+                : Icons.star_rounded,
+            label: post.isFeatured ? tr('Remove from Featured') : tr('Feature'),
+          ),
         if (canDelete)
           CircleMenuItem(
             value: _PostAction.delete,
@@ -76,6 +105,10 @@ class CirclePostTile extends ConsumerWidget {
           kind: SavedKind.circlePost,
           targetId: post.id,
         );
+      case _PostAction.edit:
+        await showCirclePostEditSheet(context, post: post, onSaved: onChanged);
+      case _PostAction.feature:
+        await _toggleFeatured(context, ref);
       case _PostAction.delete:
         await _deletePost(context, ref);
       case _PostAction.report:
@@ -124,13 +157,20 @@ class CirclePostTile extends ConsumerWidget {
                         color: c.ink,
                       ),
                     ),
-                    Text(
-                      _formatPostTime(post.createdAt),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: c.subtle,
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          _formatPostTime(post.createdAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: c.subtle,
+                          ),
+                        ),
+                        if (post.isFeatured) const FeaturedBadge(),
+                      ],
                     ),
                   ],
                 ),
@@ -154,14 +194,29 @@ class CirclePostTile extends ConsumerWidget {
               ),
             ],
           ),
-          if (post.body.isNotEmpty) ...[
+          if (post.title != null) ...[
             const SizedBox(height: 10),
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: Text(
+              child: _TitleLine(post: post, onOpen: onOpen),
+            ),
+          ],
+          if (post.body.isNotEmpty) ...[
+            SizedBox(height: post.title == null ? 10 : 4),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: HashtagText(
                 post.body,
+                onTag: onOpenTag,
                 style: TextStyle(fontSize: 15, height: 1.45, color: c.ink),
               ),
+            ),
+          ],
+          if (post.tags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: HashtagPills(tags: post.tags, onTag: onOpenTag),
             ),
           ],
           if (post.imageAttachment != null) ...[
@@ -210,7 +265,10 @@ class CirclePostTile extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final comment in post.comments.take(2))
+                  for (final comment
+                      in commentLimit == null
+                          ? post.comments
+                          : post.comments.take(commentLimit!))
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
                       child: Text.rich(
@@ -248,6 +306,21 @@ class CirclePostTile extends ConsumerWidget {
     onChanged();
   }
 
+  Future<void> _toggleFeatured(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref
+          .read(circlePostsRepositoryProvider)
+          .setFeatured(postId: post.id, featured: !post.isFeatured);
+      onChanged();
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('Could not change this post. Try again.'))),
+        );
+      }
+    }
+  }
+
   Future<void> _deletePost(BuildContext context, WidgetRef ref) async {
     try {
       await ref.read(circlesRepositoryProvider).deletePost(post.id);
@@ -259,6 +332,79 @@ class CirclePostTile extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+/// The "Featured" mark (精华) of a post a moderator picked.
+class FeaturedBadge extends StatelessWidget {
+  const FeaturedBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    return Semantics(
+      label: tr('Featured post'),
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: c.warningSoft,
+          borderRadius: BorderRadius.circular(WeCordRadii.xs),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_rounded, size: 12, color: c.warningText),
+            const SizedBox(width: 3),
+            Text(
+              tr('Featured'),
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: c.warningText,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleLine extends StatelessWidget {
+  const _TitleLine({required this.post, required this.onOpen});
+
+  final CirclePost post;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tokens.colors;
+    final text = Text(
+      post.title!,
+      style: TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        height: 1.3,
+        letterSpacing: -0.2,
+        color: c.ink,
+      ),
+    );
+    if (onOpen == null) {
+      return Semantics(header: true, child: text);
+    }
+    return WeCordPressable(
+      onPressed: onOpen,
+      semanticLabel: post.title,
+      hint: tr('Opens the post'),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.sm),
+      ),
+      pressedScale: 1,
+      builder: (context, states) => text,
+    );
   }
 }
 

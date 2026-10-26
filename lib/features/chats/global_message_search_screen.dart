@@ -22,6 +22,7 @@ import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/features/search/message_search_repository.dart';
 import 'package:wecord/features/search/recent_searches.dart';
 import 'package:wecord/features/search/search_filter_bar.dart';
+import 'package:wecord/features/hashtags/hashtag_overview.dart';
 import 'package:wecord/features/search/search_query.dart';
 import 'package:wecord/features/search/search_results.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
@@ -954,6 +955,7 @@ class _GlobalMessageSearchScreenState
         loading: state.isLoading,
         onSort: _search.setSort,
       ),
+      HashtagSearchStrip(query: _controller.text),
       if (state.discovery.isNotEmpty) _DiscoveryStrip(results: state.discovery),
       if (state.hits.isEmpty)
         SearchHint(

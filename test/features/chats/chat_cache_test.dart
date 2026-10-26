@@ -13,6 +13,7 @@ import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
 import 'package:wecord/features/chats/offline/outbox.dart';
 import 'package:wecord/features/chats/offline/sqlite_chat_cache.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 
 import 'chat_thread_screen_test.dart' as thread_test;
 import 'paged_chat_fakes.dart';
@@ -94,6 +95,7 @@ void main() {
       sqfliteFfiInit();
       cache = await SqliteChatCache.open(
         inMemoryDatabasePath,
+        cipher: sessionLocalCipher,
         factory: databaseFactoryFfi,
       );
     });

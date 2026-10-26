@@ -13,6 +13,8 @@ import 'package:wecord/features/chats/offline/connectivity.dart';
 import 'package:wecord/features/chats/offline/offline_session.dart';
 import 'package:wecord/features/chats/offline/platform_chat_cache.dart';
 import 'package:wecord/features/error_reports/error_reporting_hooks.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
+import 'package:wecord/features/local_search/local_search_providers.dart';
 import 'package:wecord/features/error_reports/error_reporting_wiring.dart';
 import 'package:wecord/features/feature_flags/update_required_screen.dart';
 import 'package:wecord/features/presence/presence_activity_listener.dart';
@@ -44,7 +46,10 @@ Future<void> runWeCordApp() async {
   // device's connection; without them chats work online only. It opens
   // while Supabase reads the saved session, not after it: the first frame
   // waits for both.
-  final chatCacheOpening = openPlatformChatCache();
+  // Its key (the Keychain on iPhone and Mac, a browser-made key on the web)
+  // is read first: what the cache holds is encrypted with it.
+  final cipherOpening = openPlatformLocalCipher();
+  final chatCacheOpening = cipherOpening.then(openPlatformChatCache);
   await Supabase.initialize(
     url: config.supabaseUrl.toString(),
     publishableKey: config.supabaseAnonKey,
@@ -53,6 +58,7 @@ Future<void> runWeCordApp() async {
   );
   watchAuthEvents(Supabase.instance.client.auth, errorReporter);
 
+  final localCipher = await cipherOpening;
   final chatCache = await chatCacheOpening;
   // The app lock's settings, read before the first frame: a locked app must
   // never show its content for a moment before the lock covers it.
@@ -64,6 +70,7 @@ Future<void> runWeCordApp() async {
       retry: noProviderRetry,
       observers: [ErrorReportingProviderObserver(errorReporter)],
       overrides: [
+        localCipherProvider.overrideWithValue(localCipher),
         lockStorageProvider.overrideWithValue(lockStorage),
         careModeStoreProvider.overrideWithValue(careStore),
         if (chatCache != null) chatCacheProvider.overrideWithValue(chatCache),
@@ -88,6 +95,8 @@ class WeCordApp extends ConsumerWidget {
     ref.watch(offlineSessionGuardProvider);
     // Forgets expired cached messages, and old media when the person chose.
     ref.watch(storageJanitorProvider);
+    // Indexes the cached chats for the offline search, a little at a time.
+    ref.watch(localSearchBackfillProvider);
     // Reads the wallpapers kept on this device now, so a chat paints with
     // its own the moment it opens.
     ref.listen(wallpapersLoadedProvider, (previous, next) {});

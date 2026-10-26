@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/local_data/local_cipher.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 /// A member picked from the @mention list while writing a draft, so the
@@ -107,15 +109,25 @@ abstract interface class ComposerDraftStore {
   Future<void> save(String userId, Map<String, ComposerDraft> drafts);
 }
 
+/// Drafts in shared preferences, encrypted with the device key (G8); drafts
+/// saved before that are read as they are and written back encrypted.
 class SharedPreferencesComposerDraftStore implements ComposerDraftStore {
-  const SharedPreferencesComposerDraftStore();
+  SharedPreferencesComposerDraftStore({LocalCipher? cipher})
+    : cipher = cipher ?? sessionLocalCipher;
+
+  final LocalCipher cipher;
 
   static String _key(String userId) => 'wecord.chats.$userId.drafts';
 
   @override
   Future<Map<String, ComposerDraft>> load(String userId) async {
     final preferences = await SharedPreferences.getInstance();
-    return decodeComposerDrafts(preferences.getString(_key(userId)));
+    final opened = await cipher.read(preferences.getString(_key(userId)));
+    final drafts = decodeComposerDrafts(opened.text);
+    if (opened.legacy && drafts.isNotEmpty) {
+      await save(userId, drafts);
+    }
+    return drafts;
   }
 
   @override
@@ -125,7 +137,10 @@ class SharedPreferencesComposerDraftStore implements ComposerDraftStore {
       await preferences.remove(_key(userId));
       return;
     }
-    await preferences.setString(_key(userId), encodeComposerDrafts(drafts));
+    await preferences.setString(
+      _key(userId),
+      await cipher.seal(encodeComposerDrafts(drafts)),
+    );
   }
 }
 
@@ -175,7 +190,9 @@ Map<String, ComposerDraft> decodeComposerDrafts(String? raw) {
 }
 
 final composerDraftStoreProvider = Provider<ComposerDraftStore>(
-  (ref) => const SharedPreferencesComposerDraftStore(),
+  (ref) => SharedPreferencesComposerDraftStore(
+    cipher: ref.watch(localCipherProvider),
+  ),
 );
 
 /// Drafts by conversation id for the signed-in user, kept on this device.

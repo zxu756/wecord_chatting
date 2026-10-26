@@ -14,6 +14,7 @@ import 'package:wecord/features/ai/ask/ask_controller.dart';
 import 'package:wecord/features/ai/ask/ask_panel.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/features/local_search/offline_results_notice.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/search/message_jump.dart';
@@ -954,6 +955,8 @@ class _GlobalMessageSearchScreenState
         loading: state.isLoading,
         onSort: _search.setSort,
       ),
+      // The server could not be reached: these are the messages saved here.
+      if (state.offline) const OfflineResultsNotice(),
       if (state.discovery.isNotEmpty) _DiscoveryStrip(results: state.discovery),
       if (state.hits.isEmpty)
         SearchHint(

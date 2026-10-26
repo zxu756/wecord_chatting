@@ -347,6 +347,7 @@ class SearchPage {
     this.total,
     this.totalCapped = false,
     this.conversationCounts = const {},
+    this.offline = false,
   });
 
   factory SearchPage.fromJson(Map<String, dynamic> json) {
@@ -379,6 +380,10 @@ class SearchPage {
 
   /// Matches per conversation (first page only).
   final Map<String, int> conversationCounts;
+
+  /// Found on this device, among the messages it has saved, because the
+  /// server could not be reached (L3).
+  final bool offline;
 }
 
 /// The messages around a result.

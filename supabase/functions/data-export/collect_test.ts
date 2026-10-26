@@ -201,6 +201,11 @@ const emptyRpc: Record<string, unknown> = {
     private_replies: [],
   },
   export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+  export_my_account_security: {
+    events: [],
+    recovery_codes: { remaining: null, made_at: null },
+    passkeys: [],
+  },
 };
 
 const feedbackAnswer = [{
@@ -536,6 +541,11 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -571,6 +581,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_group_tabs", args: { target_user_id: me } },
     { name: "export_my_interactions", args: { target_user_id: me } },
     { name: "export_my_group_space", args: { target_user_id: me } },
+    { name: "export_my_account_security", args: { target_user_id: me } },
     { name: "export_my_quick_replies", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
@@ -634,6 +645,11 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -761,6 +777,11 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_account_security: {
+        events: [],
+        recovery_codes: { remaining: null, made_at: null },
+        passkeys: [],
+      },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -800,7 +821,9 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.groupTabs, null);
   assertEquals(data.interactions, null);
   assertEquals(data.groupSpace, null);
+  assertEquals(data.accountSecurity, null);
   assertEquals(data.skipped.sort(), [
+    "account security record",
     "bot buttons and commands",
     "chat tabs",
     "check-ins",

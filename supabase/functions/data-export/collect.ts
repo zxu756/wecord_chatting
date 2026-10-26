@@ -700,6 +700,21 @@ export async function collectExportData(
     null,
   );
 
+  // The record of codes made and used and of passkeys, without any hash or
+  // key (export_my_account_security).
+  const accountSecurity = await tryRead<Row | null>(
+    skipped,
+    "account security record",
+    async () => {
+      const result = await admin.rpc("export_my_account_security", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // My quick replies and away auto-reply (export_my_quick_replies).
   const quickReplies = await tryRead<Row | null>(
     skipped,
@@ -824,6 +839,7 @@ export async function collectExportData(
     groupTabs,
     interactions,
     groupSpace,
+    accountSecurity,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

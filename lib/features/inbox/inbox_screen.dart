@@ -41,6 +41,7 @@ import 'package:wecord/features/app_lock/chat_lock_controller.dart';
 import 'package:wecord/features/moments/moments_providers.dart';
 import 'package:wecord/features/notes/note_comment_notifications.dart';
 import 'package:wecord/features/notes/notes2_models.dart';
+import 'package:wecord/features/privacy/account_security_events.dart';
 import 'package:wecord/features/privacy/security_alerts.dart';
 import 'package:wecord/features/urgent/urgent_inbox.dart';
 import 'package:wecord/features/urgent/urgent_models.dart';
@@ -97,7 +98,9 @@ final inboxBadgeCountProvider = Provider.autoDispose<int>((ref) {
       0;
   final moments = ref.watch(momentNotificationsUnreadProvider);
   final invitations = ref.watch(groupInvitationsProvider).value?.length ?? 0;
-  final security = ref.watch(securityAlertsOpenCountProvider);
+  final int security =
+      ref.watch(securityAlertsOpenCountProvider) +
+      ref.watch(accountSecurityOpenCountProvider);
   final joinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
   final readReminders =
       ref.watch(readReminderNoticesProvider).value?.length ?? 0;
@@ -169,6 +172,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       ..invalidate(momentNotificationsProvider)
       ..invalidate(groupInvitationsProvider)
       ..invalidate(securityAlertsProvider)
+      ..invalidate(accountSecurityEventsProvider)
       ..invalidate(myJoinRequestsProvider)
       ..invalidate(readReminderNoticesProvider)
       ..invalidate(announcementsProvider)
@@ -245,7 +249,10 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         ref.watch(groupInvitationsProvider).value ?? const <GroupInvitation>[];
     final securityAlerts =
         ref.watch(securityAlertsProvider).value ?? const <LoginAlert>[];
-    final openSecurityAlerts = ref.watch(securityAlertsOpenCountProvider);
+    final securityEvents = ref.watch(accountSecurityInboxProvider);
+    final int openSecurityAlerts =
+        ref.watch(securityAlertsOpenCountProvider) +
+        ref.watch(accountSecurityOpenCountProvider);
     final joinRequests =
         ref.watch(myJoinRequestsProvider).value ?? const <MyJoinRequest>[];
     final unseenJoinAnswers = ref.watch(joinRequestAnswersUnseenProvider);
@@ -457,6 +464,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             ),
           if (showSecurity)
             for (final alert in securityAlerts) SecurityAlertCard(alert: alert),
+          if (showSecurity)
+            for (final event in securityEvents)
+              AccountSecurityEventCard(event: event),
           if (showJoinRequests)
             for (final request in joinRequests)
               JoinRequestInboxCard(request: request),

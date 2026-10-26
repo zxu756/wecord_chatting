@@ -223,7 +223,6 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610270450_events2_photos.sql
 \i supabase/migrations/202610270460_events2_push_guard.sql
 \i supabase/migrations/202610270470_events2_account.sql
-\i supabase/migrations/202610270470_events2_account.sql
 \i supabase/migrations/202610280100_scheduled_calls_schema.sql
 \i supabase/migrations/202610280110_scheduled_calls_events.sql
 \i supabase/migrations/202610280120_scheduled_calls_push.sql
@@ -237,6 +236,10 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280310_away_auto_reply.sql
 \i supabase/migrations/202610280320_video_notes.sql
 \i supabase/migrations/202610280330_quick_replies_account.sql
+\i supabase/migrations/202610280400_account_security_schema.sql
+\i supabase/migrations/202610280410_mfa_recovery_codes.sql
+\i supabase/migrations/202610280420_account_security_events.sql
+\i supabase/migrations/202610280430_account_security_triggers.sql
 \i supabase/migrations/202610280500_checkin_schema.sql
 \i supabase/migrations/202610280510_checkin_rpcs.sql
 \i supabase/migrations/202610280520_checkin_push.sql

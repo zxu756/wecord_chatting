@@ -1,6 +1,6 @@
 // Sending claimed interactions to bots and reporting what happened.
-import { callbackHeaders } from "./sign.ts";
-import { type Resolver, resolveSafeUrl } from "./ssrf.ts";
+import { callbackHeaders } from "../_shared/sign.ts";
+import { type Resolver, resolveSafeUrl } from "../_shared/ssrf.ts";
 
 export const SEND_TIMEOUT_MS = 5000;
 export const MAX_BODY_BYTES = 16 * 1024;

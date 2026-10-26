@@ -11,9 +11,9 @@
 // 5 seconds, 30 seconds and 2 minutes and then hands the press back to
 // polling. See docs/bot-api.md.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { isAuthorized } from "./auth.ts";
+import { isAuthorized } from "../_shared/auth.ts";
 import { runCallbacks } from "./deliver.ts";
-import { dohResolver, systemResolver } from "./dns.ts";
+import { dohResolver, systemResolver } from "../_shared/dns.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

@@ -5,12 +5,14 @@
 //   GET  /functions/v1/bot-api/me
 //   GET  /functions/v1/bot-api/channels
 //   GET  /functions/v1/bot-api/channels/{id}/messages?limit=50&before=<ISO time>
-//   POST /functions/v1/bot-api/channels/{id}/messages   {"content", "reply_to"?}
+//   POST /functions/v1/bot-api/channels/{id}/messages   {"content", "reply_to"?, "components"?}
+//   PATCH /functions/v1/bot-api/messages/{id}            {"content"?, "components"?}
 //   PUT  /functions/v1/bot-api/messages/{id}/reactions/{emoji}
 //   GET  /functions/v1/bot-api/commands
 //   PUT  /functions/v1/bot-api/commands   [{"name", "description"}]
 //   GET  /functions/v1/bot-api/interactions?limit=25
-//   POST /functions/v1/bot-api/interactions/{id}/respond   {"content"}
+//   POST /functions/v1/bot-api/interactions/{id}/respond
+//        {"type"?: "message"|"ephemeral"|"update"|"ack", "content"?, "components"?}
 //
 // Public on purpose (verify_jwt = false): bots authenticate with their
 // token, which the bot_api_* database functions check against its stored
@@ -25,7 +27,9 @@ import {
   type Route,
   statusForRpcError,
   validateCommands,
+  validateEditBody,
   validateMessageBody,
+  validateRespondBody,
 } from "./request.ts";
 
 function json(body: unknown, status = 200): Response {
@@ -127,6 +131,19 @@ async function handle(
       if (!read.ok) return read.response;
       const checked = validateMessageBody(read.body);
       if (!checked.ok) return json({ error: checked.error }, 400);
+      if (checked.value.components) {
+        // Buttons and lists: the database function checks every part.
+        return call(
+          "bot_api_send_message_with_components",
+          {
+            target_channel_id: route.channelId,
+            content: checked.value.content,
+            reply_to_message_id: checked.value.replyTo,
+            message_components: checked.value.components,
+          },
+          created,
+        );
+      }
       return call(
         "bot_api_send_message",
         {
@@ -135,6 +152,29 @@ async function handle(
           reply_to_message_id: checked.value.replyTo,
         },
         created,
+      );
+    }
+    case "edit_message": {
+      const read = await readJson(request);
+      if (!read.ok) return read.response;
+      const checked = validateEditBody(read.body);
+      if (!checked.ok) return json({ error: checked.error }, 400);
+      return call(
+        "bot_api_edit_message",
+        {
+          target_message_id: route.messageId,
+          new_content: checked.value.content,
+          change_components: checked.value.changeComponents,
+          new_components: checked.value.components,
+        },
+        (data) =>
+          data === true ? json({ id: route.messageId }) : json(
+            {
+              error: "blocked",
+              message: "The circle's AutoMod blocked the change",
+            },
+            403,
+          ),
       );
     }
     case "add_reaction":
@@ -165,15 +205,22 @@ async function handle(
     case "respond_interaction": {
       const read = await readJson(request);
       if (!read.ok) return read.response;
-      const checked = validateMessageBody(read.body);
+      const checked = validateRespondBody(read.body);
       if (!checked.ok) return json({ error: checked.error }, 400);
+      const type = checked.value.type;
       return call(
-        "bot_api_respond_interaction",
+        "bot_api_respond",
         {
           target_interaction_id: route.interactionId,
-          content: checked.value.content,
+          response: checked.value.response,
         },
-        created,
+        (data) => {
+          // An ack shows nothing, so it has no id.
+          if (type === "ack") return json({ ok: true });
+          if (data === null || data === undefined) return created(data);
+          // An update changes something that exists: 200, not 201.
+          return type === "update" ? json({ id: data }) : created(data);
+        },
       );
     }
   }

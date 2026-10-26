@@ -182,6 +182,31 @@ export interface ExportData {
    * callers.
    */
   quickReplies?: Json | null;
+  /**
+   * What I did in group check-ins (export_my_check_ins, migration
+   * 202610280530): my days with their notes and pictures, my runs and the
+   * check-ins I made; null when it could not be read, absent in older callers.
+   */
+  checkIns?: Json | null;
+  /**
+   * The tabs I added under group chat headers (export_my_group_tabs,
+   * migration 202610280560); null when it could not be read, absent in older
+   * callers.
+   */
+  groupTabs?: Json | null;
+  /**
+   * What I pressed or typed into bots' buttons, lists and forms, and what bots
+   * told me privately (export_my_interactions, migration 202610280660); null
+   * when it could not be read, absent in older callers.
+   */
+  interactions?: Json | null;
+  /**
+   * What I added to the group space of group chats (export_my_group_space,
+   * migration 202610280230): albums and folders I made, the pictures, videos
+   * and files I added; null when it could not be read, absent in older
+   * callers.
+   */
+  groupSpace?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -742,6 +767,21 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
       path: "data/quick_replies.json",
       value: quickRepliesJson(data),
     });
+  }
+  if (data.checkIns) {
+    out.push({ path: "data/check_ins.json", value: checkInsJson(data) });
+  }
+  if (data.groupTabs) {
+    out.push({ path: "data/group_tabs.json", value: data.groupTabs });
+  }
+  if (data.interactions) {
+    out.push({
+      path: "data/bot_interactions.json",
+      value: botInteractionsJson(data),
+    });
+  }
+  if (data.groupSpace) {
+    out.push({ path: "data/group_space.json", value: groupSpaceJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -1888,6 +1928,123 @@ export function eventFilesToSign(
   return [...seen.values()];
 }
 
+/** The pictures I added to group check-ins. */
+export function checkInFilesToSign(
+  checkIns: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const item of objects(checkIns?.["check_ins"])) {
+    const photo = item["photo"];
+    if (!isObject(photo)) continue;
+    const bucket = photo["bucket"];
+    const path = photo["path"];
+    if (typeof bucket !== "string" || typeof path !== "string") continue;
+    seen.set(`${bucket}/${path}`, { bucket, path });
+  }
+  return [...seen.values()];
+}
+
+/** Group check-ins: my days (with notes and pictures), my runs, the ones I made. */
+function checkInsJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const checkIns = isObject(data.checkIns) ? data.checkIns : {};
+  return {
+    check_ins: objects(checkIns["check_ins"]).map((item) => {
+      const photo = isObject(item["photo"]) ? item["photo"] : null;
+      return {
+        ...item,
+        photo: photo
+          ? ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"])
+          : null,
+      };
+    }),
+    streaks: objects(checkIns["streaks"]),
+    boards_made: objects(checkIns["boards_made"]),
+  };
+}
+
+/** My group check-ins: days, runs, check-ins I made. */
+export function buildCheckInsHtml(data: ExportData): string {
+  const checkIns = isObject(data.checkIns) ? data.checkIns : {};
+  const ref = fileRefs(data);
+  const days = objects(checkIns["check_ins"]).map((item) => {
+    const photo = isObject(item["photo"]) ? item["photo"] : null;
+    const link = photo
+      ? ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"])
+        ?.download_url
+      : null;
+    return entry(
+      str(item["checked_in_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["check_in"]) ?? "")
+      }</strong> <span class="muted">${escapeHtml(str(item["chat"]) ?? "")} · ${
+        escapeHtml(str(item["day"]) ?? "")
+      }</span></div>${text(item["note"])}${
+        link
+          ? `<div><a href="${escapeHtml(link)}">Picture (link)</a></div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  const streaks = objects(checkIns["streaks"]).map((item) =>
+    entry(
+      str(item["last_day"]),
+      `<div><strong>${
+        escapeHtml(str(item["check_in"]) ?? "")
+      }</strong> <span class="muted">streak ${
+        escapeHtml(String(item["current_streak"] ?? 0))
+      } days, best ${escapeHtml(String(item["best_streak"] ?? 0))}, ${
+        escapeHtml(String(item["total_days"] ?? 0))
+      } days in all</span></div>`,
+    )
+  ).join("");
+  const made = objects(checkIns["boards_made"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["title"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(item["time_zone"]) ?? "")
+      }${item["closed"] === true ? " · closed" : ""}</span></div>${
+        text(item["description"])
+      }`,
+    )
+  ).join("");
+  return page(
+    "Check-ins — your WeCord data",
+    `${backLink()}<h1>Check-ins</h1>
+<p class="muted">The days you checked in to a group check-in, with your note and
+picture, how long your runs were, and the check-ins you made. Other people's
+check-ins, names and pictures are not copied.</p>
+${section("Your days", days, "None.")}
+${section("Your streaks", streaks, "None.")}
+${section("Check-ins you made", made, "None.")}`,
+  );
+}
+
+/** The tabs I added under chat headers. */
+export function buildGroupTabsHtml(data: ExportData): string {
+  const groupTabs = isObject(data.groupTabs) ? data.groupTabs : {};
+  const rows = objects(groupTabs["tabs_added"]).map((item) => {
+    const link = str(item["link"]);
+    return entry(
+      str(item["added_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["title"]) ?? "")
+      }</strong> <span class="muted">${escapeHtml(str(item["kind"]) ?? "")}${
+        item["chat"] ? ` · ${escapeHtml(str(item["chat"]) ?? "")}` : ""
+      }</span></div>${link ? text(link) : ""}`,
+    );
+  }).join("");
+  return page(
+    "Chat tabs — your WeCord data",
+    `${backLink()}<h1>Chat tabs</h1>
+<p class="muted">The tabs you added under the header of a group or a circle
+channel.</p>
+${section("Tabs you added", rows, "None.")}`,
+  );
+}
+
 /** Events: sign-ups (with my answers), waiting, check-ins, pictures, made. */
 function eventsJson(data: ExportData): Json {
   const ref = fileRefs(data);
@@ -1902,6 +2059,8 @@ function eventsJson(data: ExportData): Json {
       added_at: photo["added_at"],
       file: ref(str(photo["bucket"]) ?? CHAT_IMAGES_BUCKET, photo["path"]),
     })),
+    // The events I made with a call (scheduled calls); never a link's code.
+    calls_made: objects(events["calls_made"]),
     events_made: objects(events["events_made"]).map((made) => {
       const cover = isObject(made["cover"]) ? made["cover"] : null;
       return {
@@ -1994,6 +2153,19 @@ export function buildEventsHtml(data: ExportData): string {
       }</div>${bits ? `<div class="muted">${escapeHtml(bits)}</div>` : ""}`,
     );
   }).join("");
+  const calls = objects(events["calls_made"]).map((item) => {
+    const bits = [
+      item["cancelled"] === true ? "cancelled" : "",
+      item["repeats"] ? `repeats ${String(item["repeats"])}` : "",
+      item["link_turned_off"] === true ? "link turned off" : "",
+    ].filter((bit) => bit !== "").join(" · ");
+    return entry(
+      str(item["starts_at"]),
+      `<div><strong>${escapeHtml(str(item["title"]) ?? "")}</strong></div>${
+        bits ? `<div class="muted">${escapeHtml(bits)}</div>` : ""
+      }`,
+    );
+  }).join("");
   return page(
     "Events — your WeCord data",
     `${backLink()}<h1>Events</h1>
@@ -2004,7 +2176,166 @@ ${section("Signed up", signedUp, "None.")}
 ${section("Waiting list", waiting, "None.")}
 ${section("Checked in", checkIns, "None.")}
 ${section("Pictures you added", photos, "None.")}
-${section("Events you made", made, "None.")}`,
+${section("Events you made", made, "None.")}
+${section("Calls you scheduled", calls, "None.")}`,
+  );
+}
+
+/** What I pressed or typed into bots' components, and their private replies. */
+function botInteractionsJson(data: ExportData): Json {
+  const interactions = isObject(data.interactions) ? data.interactions : {};
+  return {
+    presses: objects(interactions["presses"]),
+    private_replies: objects(interactions["private_replies"]),
+  };
+}
+
+/** My presses on bots' buttons and lists, and what bots told me privately. */
+export function buildBotInteractionsHtml(data: ExportData): string {
+  const interactions = isObject(data.interactions) ? data.interactions : {};
+  const presses = objects(interactions["presses"]).map((item) => {
+    const what = item["kind"] === "command"
+      ? `/${str(item["command"]) ?? ""}${
+        item["options"] ? " " + String(item["options"]) : ""
+      }`
+      : str(item["component"]) ?? "";
+    const values = item["values"] === undefined || item["values"] === null
+      ? ""
+      : typeof item["values"] === "string"
+      ? item["values"]
+      : JSON.stringify(item["values"]);
+    const answered = item["answered"] === true ? "answered" : "not answered";
+    return entry(
+      str(item["sent_at"]),
+      `<div><strong>${escapeHtml(what)}</strong> <span class="muted">${
+        escapeHtml(str(item["bot"]) ?? "")
+      } · ${escapeHtml(str(item["circle"]) ?? "")}</span></div>${
+        values ? `<div class="body">${escapeHtml(values)}</div>` : ""
+      }<div class="muted">${answered}</div>`,
+    );
+  }).join("");
+  const replies = objects(interactions["private_replies"]).map((item) =>
+    entry(
+      str(item["received_at"]),
+      `<div><strong>${escapeHtml(str(item["bot"]) ?? "")}</strong></div>${
+        text(item["text"])
+      }`,
+    )
+  ).join("");
+  return page(
+    "Bot buttons and commands — your WeCord data",
+    `${backLink()}<h1>Bot buttons and commands</h1>
+<p class="muted">What you pressed on bots' buttons and lists, typed into their
+forms and used as slash commands in the last 7 days, and what bots told only
+you (until it expires). Bots' own messages and other people's presses are not
+copied.</p>
+${section("Presses and commands", presses, "None.")}
+${section("Private replies", replies, "None.")}`,
+  );
+}
+
+/** The pictures, videos and files I added to the group space. */
+export function groupSpaceFilesToSign(
+  space: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const key of ["items", "files"]) {
+    for (const entry of objects(space?.[key])) {
+      const bucket = entry["bucket"];
+      const path = entry["path"];
+      if (typeof path !== "string" || typeof bucket !== "string") continue;
+      seen.set(`${bucket}/${path}`, { bucket, path });
+    }
+  }
+  return [...seen.values()];
+}
+
+/** Group space: albums and folders I made, what I put in them. */
+function groupSpaceJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const space = isObject(data.groupSpace) ? data.groupSpace : {};
+  const withFile = (entry: Json): Json => {
+    const { bucket, path, ...rest } = entry;
+    return {
+      ...rest,
+      file: ref(str(bucket) ?? CHAT_IMAGES_BUCKET, path),
+    };
+  };
+  return {
+    albums: objects(space["albums"]),
+    items: objects(space["items"]).map(withFile),
+    folders: objects(space["folders"]),
+    files: objects(space["files"]).map(withFile),
+  };
+}
+
+/** My part of the group space: what I made and what I added. */
+export function buildGroupSpaceHtml(data: ExportData): string {
+  const space = isObject(data.groupSpace) ? data.groupSpace : {};
+  const ref = fileRefs(data);
+  const where = (item: Json) =>
+    item["group"]
+      ? `<span class="muted">${escapeHtml(str(item["group"]) ?? "")}</span>`
+      : "";
+  const albums = objects(space["albums"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+        where(item)
+      }</div>`,
+    )
+  ).join("");
+  const folders = objects(space["folders"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+        where(item)
+      }</div>`,
+    )
+  ).join("");
+  const added = (list: unknown, parent: "album" | "folder", when: string) =>
+    objects(list).map((item) => {
+      const link = ref(
+        str(item["bucket"]) ?? CHAT_IMAGES_BUCKET,
+        item["path"],
+      )?.download_url;
+      const inside = str(item[parent]);
+      return entry(
+        str(item[when]),
+        `<div><strong>${escapeHtml(str(item["name"]) ?? "")}</strong> ${
+          inside ? `<span class="muted">${escapeHtml(inside)}</span> ` : ""
+        }${where(item)}</div>${
+          str(item["description"])
+            ? `<div class="body">${
+              escapeHtml(str(item["description"]) ?? "")
+            }</div>`
+            : ""
+        }${
+          link ? `<div><a href="${escapeHtml(link)}">File (link)</a></div>` : ""
+        }`,
+      );
+    }).join("");
+  return page(
+    "Group space — your WeCord data",
+    `${backLink()}<h1>Group space</h1>
+<p class="muted">The albums and folders you made in group chats, and the pictures,
+videos and files you added to them. What other people added is not copied.</p>
+${section("Albums you made", albums, "None.")}
+${
+      section(
+        "Pictures and videos you added",
+        added(space["items"], "album", "added_at"),
+        "None.",
+      )
+    }
+${section("Folders you made", folders, "None.")}
+${
+      section(
+        "Files you added",
+        added(space["files"], "folder", "added_at"),
+        "None.",
+      )
+    }`,
   );
 }
 
@@ -2308,6 +2639,50 @@ export function buildSectionPages(
       content: buildEventsHtml(data),
     });
   }
+  if (data.checkIns) {
+    const counts = (key: string) =>
+      objects(isObject(data.checkIns) ? data.checkIns[key] : null).length;
+    out.push({
+      path: "pages/check_ins.html",
+      label: "Check-ins",
+      summary: `${counts("check_ins")} days · ${counts("boards_made")} made`,
+      content: buildCheckInsHtml(data),
+    });
+  }
+  if (data.groupTabs) {
+    const count = objects(
+      isObject(data.groupTabs) ? data.groupTabs["tabs_added"] : null,
+    ).length;
+    out.push({
+      path: "pages/group_tabs.html",
+      label: "Chat tabs",
+      summary: `${count} tab${count === 1 ? "" : "s"}`,
+      content: buildGroupTabsHtml(data),
+    });
+  }
+  if (data.interactions) {
+    const counts = (key: string) =>
+      objects(isObject(data.interactions) ? data.interactions[key] : null)
+        .length;
+    out.push({
+      path: "pages/bot_interactions.html",
+      label: "Bot buttons and commands",
+      summary: `${counts("presses")} presses · ${
+        counts("private_replies")
+      } private replies`,
+      content: buildBotInteractionsHtml(data),
+    });
+  }
+  if (data.groupSpace) {
+    const counts = (key: string) =>
+      objects(isObject(data.groupSpace) ? data.groupSpace[key] : null).length;
+    out.push({
+      path: "pages/group_space.html",
+      label: "Group space",
+      summary: `${counts("albums")} albums · ${counts("folders")} folders`,
+      content: buildGroupSpaceHtml(data),
+    });
+  }
   if (data.quickReplies) {
     const replies = objects(
       isObject(data.quickReplies) ? data.quickReplies["quick_replies"] : null,
@@ -2411,7 +2786,18 @@ data/channel_posts.json The posts you made in media channels (with a link to
                       and where an answer of yours was accepted.
 data/events.json      The events you signed up to (with your answers), waited
                       for, checked in to, the pictures you added and the
-                      events you made (never other people's answers).
+                      events you made, and the calls you scheduled (never
+                      a call link's code or other people's answers).
+data/check_ins.json   The days you checked in to group check-ins (with your
+                      note and a link to your picture), your streaks and the
+                      check-ins you made (never other people's check-ins).
+data/group_tabs.json  The tabs you added under group chat headers.
+data/bot_interactions.json What you pressed on bots' buttons and lists, typed
+                      into their forms and used as commands in the last 7
+                      days, and what bots told only you.
+data/group_space.json The albums and folders you made in group chats and the
+                      pictures, videos and files you added (with links;
+                      never what other people added).
 data/quick_replies.json The quick replies you keep and your away auto-reply
                       (the auto-replies it sent are with your messages).
 data/moments_more.json The Moments you pinned, the people you reminded to

@@ -1,6 +1,7 @@
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle_emoji.dart';
 import 'package:wecord/shared/models/conversation_thread.dart';
+import 'package:wecord/shared/models/message_components.dart';
 import 'package:wecord/shared/models/message_origin.dart';
 import 'package:wecord/shared/models/poll.dart';
 import 'package:wecord/shared/models/profile.dart';
@@ -105,6 +106,7 @@ class ChatMessage {
     this.reviewState,
     this.silent = false,
     this.autoReply = false,
+    this.components,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -155,6 +157,7 @@ class ChatMessage {
       reviewState: MessageReviewState.maybeFromJson(json['review_state']),
       silent: json['silent'] == true,
       autoReply: json['auto_reply'] == true,
+      components: MessageComponents.maybeFromJson(json['components']),
     );
   }
 
@@ -241,14 +244,18 @@ class ChatMessage {
   /// The server sent it for an away person (A8).
   final bool autoReply;
 
+  /// The buttons, links and lists a bot put on its message (I1); null on every
+  /// other message.
+  final MessageComponents? components;
+
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
 
-  /// A photo or video its recipients can open once.
   /// A round video message (A13), shown as a circle without a bubble. A
   /// view-once one is shown by the view-once viewer instead.
   bool get isVideoNote => !isViewOnce && fileAttachment?.isVideoNote == true;
 
+  /// A photo or video its recipients can open once.
   bool get isViewOnce {
     final value = attachment;
     return (type == MessageType.image || type == MessageType.file) &&
@@ -401,6 +408,7 @@ class ChatMessage {
     Object? album = _sentinel,
     Object? expiresAt = _sentinel,
     Object? reviewState = _sentinel,
+    Object? components = _sentinel,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -478,6 +486,9 @@ class ChatMessage {
           : reviewState as MessageReviewState?,
       silent: silent,
       autoReply: autoReply,
+      components: identical(components, _sentinel)
+          ? this.components
+          : components as MessageComponents?,
     );
   }
 }

@@ -3,6 +3,7 @@
 // sign in; the token is checked inside the database function
 // calendar_feed_items, which only the service role may call. See feed.ts.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { siteOriginFromEnv } from "../push/declarative.ts";
 import { type FeedResult, handleFeedRequest, WindowLimiter } from "./feed.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -21,6 +22,7 @@ Deno.serve((request) =>
   handleFeedRequest(request, {
     now: () => new Date(),
     badTokens,
+    siteOrigin: siteOriginFromEnv(),
     lookup: async (tokenHash, from, to) => {
       if (!admin) throw new Error("not configured");
       const { data, error } = await admin.rpc("calendar_feed_items", {

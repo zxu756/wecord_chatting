@@ -160,6 +160,7 @@ class EventExtras {
     this.checkedInCount = 0,
     this.myCheckedIn = false,
     this.photoCount = 0,
+    this.callLinkCode,
   });
 
   factory EventExtras.fromJson(Map<String, dynamic> json) {
@@ -188,6 +189,10 @@ class EventExtras {
       checkedInCount: (json['checked_in_count'] as num?)?.toInt() ?? 0,
       myCheckedIn: json['my_checked_in'] == true,
       photoCount: (json['photo_count'] as num?)?.toInt() ?? 0,
+      callLinkCode: switch (json['call_link_code']) {
+        final String code when code.isNotEmpty => code,
+        _ => null,
+      },
     );
   }
 
@@ -207,6 +212,12 @@ class EventExtras {
   final bool myCheckedIn;
   final int photoCount;
 
+  /// The code of the event's call link while it works (scheduled calls); null
+  /// for an event without a call.
+  final String? callLinkCode;
+
+  bool get hasCall => callLinkCode != null;
+
   bool get repeats => recurrence != EventRecurrence.none;
   bool get hasQuestions => questions.isNotEmpty;
   bool get hasCapacity => capacity != null;
@@ -219,7 +230,8 @@ class EventExtras {
       !hasCapacity &&
       waitlistCount == 0 &&
       checkedInCount == 0 &&
-      photoCount == 0;
+      photoCount == 0 &&
+      !hasCall;
 
   /// Whether all seats are taken, given how many are.
   bool isFull(int seatsTaken) => capacity != null && seatsTaken >= capacity!;
@@ -237,16 +249,22 @@ class EventOptions {
     this.questions = const [],
     this.capacity,
     this.timeZone,
+    this.call,
   });
 
-  /// The options an event has now, to edit.
-  factory EventOptions.fromExtras(EventExtras extras) {
+  /// The options an event has now, to edit. [supportsCall] is true for the
+  /// events of chats, which can carry a call.
+  factory EventOptions.fromExtras(
+    EventExtras extras, {
+    bool supportsCall = false,
+  }) {
     return EventOptions(
       recurrence: extras.recurrence,
       coverPath: extras.coverPath,
       questions: extras.questions,
       capacity: extras.capacity,
       timeZone: extras.recurrenceTimeZone,
+      call: supportsCall ? extras.hasCall : null,
     );
   }
 
@@ -261,11 +279,17 @@ class EventOptions {
   /// in it, whatever daylight saving does.
   final String? timeZone;
 
+  /// Whether the event carries a call (scheduled calls): true or false for the
+  /// events of chats, null where the event cannot have one (circle events), in
+  /// which case it is not sent.
+  final bool? call;
+
   EventOptions copyWith({
     EventRecurrence? recurrence,
     Object? coverPath = _keep,
     List<EventQuestion>? questions,
     Object? capacity = _keep,
+    bool? call,
   }) {
     return EventOptions(
       recurrence: recurrence ?? this.recurrence,
@@ -275,6 +299,7 @@ class EventOptions {
       questions: questions ?? this.questions,
       capacity: identical(capacity, _keep) ? this.capacity : capacity as int?,
       timeZone: timeZone,
+      call: call ?? this.call,
     );
   }
 
@@ -286,6 +311,7 @@ class EventOptions {
     'cover_path': coverPath,
     'questions': [for (final question in questions) question.toJson()],
     'capacity': capacity,
+    'call': ?call,
   };
 
   @override
@@ -294,11 +320,12 @@ class EventOptions {
       other.recurrence == recurrence &&
       other.coverPath == coverPath &&
       listEquals(other.questions, questions) &&
-      other.capacity == capacity;
+      other.capacity == capacity &&
+      other.call == call;
 
   @override
   int get hashCode =>
-      Object.hash(recurrence, coverPath, questions.length, capacity);
+      Object.hash(recurrence, coverPath, questions.length, capacity, call);
 }
 
 const Object _keep = Object();

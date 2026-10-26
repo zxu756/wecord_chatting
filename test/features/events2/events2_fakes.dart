@@ -263,6 +263,9 @@ class FakeEventsChatRepository implements ChatEventsRepository {
   final created = <ChatEventDraft>[];
   final updated = <(String, ChatEventDraft)>[];
 
+  /// Thrown by [createEvent] when set.
+  Object? createError;
+
   @override
   Future<List<ChatEvent>> listEvents(
     String conversationId, {
@@ -278,6 +281,10 @@ class FakeEventsChatRepository implements ChatEventsRepository {
     String conversationId,
     ChatEventDraft draft,
   ) async {
+    final failure = createError;
+    if (failure != null) {
+      throw failure;
+    }
     created.add(draft);
     return chatEventWith(id: 'new-1', title: draft.title);
   }

@@ -231,6 +231,10 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280210_group_space_albums.sql
 \i supabase/migrations/202610280220_group_space_folders.sql
 \i supabase/migrations/202610280230_group_space_account.sql
+\i supabase/migrations/202610280400_account_security_schema.sql
+\i supabase/migrations/202610280410_mfa_recovery_codes.sql
+\i supabase/migrations/202610280420_account_security_events.sql
+\i supabase/migrations/202610280430_account_security_triggers.sql
 \i supabase/migrations/202610280500_checkin_schema.sql
 \i supabase/migrations/202610280510_checkin_rpcs.sql
 \i supabase/migrations/202610280520_checkin_push.sql

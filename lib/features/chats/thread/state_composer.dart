@@ -157,7 +157,7 @@ extension _ThreadComposerState on _ChatThreadScreenState {
   }
 
   void _updateSlashQuery() {
-    final query = slashCommandQueryAt(_composerController.text);
+    final query = slashQueryAt(_composerController.text);
     if (query == _slashQuery) {
       return;
     }
@@ -195,6 +195,38 @@ extension _ThreadComposerState on _ChatThreadScreenState {
       }
       return false;
     }
+  }
+
+  /// The person's own phrases offered for what is being typed (A8); none
+  /// while editing.
+  List<QuickReply> _quickReplyCandidates() {
+    final query = _slashQuery;
+    if (query == null || _editingMessage != null) {
+      return const [];
+    }
+    return quickReplyCandidates(query, _slashContext.quickReplies);
+  }
+
+  /// [body] with a lone `/shortcut` swapped for the phrase it names (A8):
+  /// sending without picking from the list still sends the phrase. Built-in
+  /// and bot commands were dealt with before this; anything else is sent as
+  /// written.
+  String _bodyAfterQuickReply(String body) {
+    return quickReplyNamedBy(body, _slashContext.quickReplies)?.body ?? body;
+  }
+
+  /// Puts the phrase in the box, ready to read, change and send.
+  void _selectQuickReply(QuickReply reply) {
+    _composerController.value = TextEditingValue(
+      text: reply.body,
+      selection: TextSelection.collapsed(offset: reply.body.length),
+    );
+    setState(() {
+      _slashQuery = null;
+      _slashIndex = 0;
+    });
+    _composerFocus.requestFocus();
+    _handleComposerChanged(reply.body);
   }
 
   /// The bots' commands offered for what is being typed.
@@ -249,9 +281,10 @@ extension _ThreadComposerState on _ChatThreadScreenState {
 
   /// Arrow keys move through the command list; Enter and Tab pick.
   KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
+    final quickReplies = _quickReplyCandidates();
     final commands = _slashCandidates();
     final botCommands = _botSlashCandidates();
-    final count = commands.length + botCommands.length;
+    final count = quickReplies.length + commands.length + botCommands.length;
     if (count == 0) {
       return _handleComposerShortcut(event);
     }
@@ -272,10 +305,14 @@ extension _ThreadComposerState on _ChatThreadScreenState {
             key == LogicalKeyboardKey.numpadEnter ||
             key == LogicalKeyboardKey.tab)) {
       final index = _slashIndex.clamp(0, count - 1);
-      if (index < commands.length) {
-        _selectSlashCommand(commands[index]);
+      if (index < quickReplies.length) {
+        _selectQuickReply(quickReplies[index]);
+      } else if (index < quickReplies.length + commands.length) {
+        _selectSlashCommand(commands[index - quickReplies.length]);
       } else {
-        _selectBotSlashCommand(botCommands[index - commands.length]);
+        _selectBotSlashCommand(
+          botCommands[index - quickReplies.length - commands.length],
+        );
       }
       return KeyEventResult.handled;
     }

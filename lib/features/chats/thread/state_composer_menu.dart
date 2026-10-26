@@ -198,4 +198,30 @@ extension _ThreadComposerMenuState on _ChatThreadScreenState {
       }
     }
   }
+
+  /// Picks one of the person's quick replies and puts it in the box in place
+  /// of what is selected (A8).
+  Future<void> _pickQuickReply() async {
+    final reply = await showQuickReplyPicker(context);
+    if (reply == null || !mounted) {
+      return;
+    }
+    final value = _composerController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final text = value.text.replaceRange(
+      selection.start,
+      selection.end,
+      reply.body,
+    );
+    _composerController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: selection.start + reply.body.length,
+      ),
+    );
+    _composerFocus.requestFocus();
+    _handleComposerChanged(text);
+  }
 }

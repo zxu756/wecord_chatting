@@ -61,8 +61,7 @@ const zhCaptions = <String, String>{
   'There was not enough in the call to write a recap.': '通话内容太少，写不出纪要。',
   'WeCord AI wrote this from the captions people shared. Speech recognition can mishear, so check it before you share it. Nothing is saved until you save it.':
       'WeCord AI 根据大家共享的字幕写了这份纪要。语音识别可能听错，分享前请先检查。你保存之前不会存下任何东西。',
-  'The call was long, so part of the middle was not read.':
-      '通话太长，中间的一部分没有读到。',
+  'The call was long, so part of the middle was not read.': '通话太长，中间的一部分没有读到。',
   'Save as a note and share in the chat': '存成笔记并分享到聊天',
   'Saved and shared': '已保存并分享',
   'Make tasks from the action items': '把待办变成任务',

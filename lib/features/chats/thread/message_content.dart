@@ -179,6 +179,17 @@ class _MessageContent extends StatelessWidget {
       content.add(
         ViewOnceMessageContent(message: message, textColor: textColor),
       );
+    } else if (message.isVideoNote) {
+      content.add(
+        Padding(
+          padding: EdgeInsets.only(top: cards ? 6 : 0),
+          child: VideoNoteBubble(
+            message: message,
+            attachment: message.fileAttachment!,
+            size: desktop ? 220 : 200,
+          ),
+        ),
+      );
     } else if (message.album != null || MessageMediaGroup.isTile(message)) {
       content.add(
         MessageMediaGroup(

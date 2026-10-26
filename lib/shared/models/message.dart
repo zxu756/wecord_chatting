@@ -105,6 +105,7 @@ class ChatMessage {
     this.expiresAt,
     this.reviewState,
     this.silent = false,
+    this.autoReply = false,
     this.components,
   });
 
@@ -155,6 +156,7 @@ class ChatMessage {
       expiresAt: _parseOptionalTimestamp(json['expires_at']),
       reviewState: MessageReviewState.maybeFromJson(json['review_state']),
       silent: json['silent'] == true,
+      autoReply: json['auto_reply'] == true,
       components: MessageComponents.maybeFromJson(json['components']),
     );
   }
@@ -239,12 +241,19 @@ class ChatMessage {
   /// Sent without a push: nobody's device was told about it.
   final bool silent;
 
+  /// The server sent it for an away person (A8).
+  final bool autoReply;
+
   /// The buttons, links and lists a bot put on its message (I1); null on every
   /// other message.
   final MessageComponents? components;
 
   /// Whether the message disappears after a while.
   bool get isDisappearing => expiresAt != null;
+
+  /// A round video message (A13), shown as a circle without a bubble. A
+  /// view-once one is shown by the view-once viewer instead.
+  bool get isVideoNote => !isViewOnce && fileAttachment?.isVideoNote == true;
 
   /// A photo or video its recipients can open once.
   bool get isViewOnce {
@@ -476,6 +485,7 @@ class ChatMessage {
           ? this.reviewState
           : reviewState as MessageReviewState?,
       silent: silent,
+      autoReply: autoReply,
       components: identical(components, _sentinel)
           ? this.components
           : components as MessageComponents?,
@@ -848,6 +858,7 @@ class FileAttachment {
     this.width,
     this.height,
     this.blurhash,
+    this.videoNoteMs,
   });
 
   static FileAttachment? maybeFromJson(Map<String, dynamic>? json) {
@@ -871,6 +882,9 @@ class FileAttachment {
       width: (json['width'] as num?)?.toInt(),
       height: (json['height'] as num?)?.toInt(),
       blurhash: json['blurhash'] as String?,
+      videoNoteMs: json['video_note'] == true
+          ? (json['duration_ms'] as num?)?.toInt() ?? 0
+          : null,
     );
   }
 
@@ -891,6 +905,14 @@ class FileAttachment {
   /// Plays inline instead of showing as a download.
   bool get isVideo => mimeType.startsWith('video/');
 
+  /// For a round video message (A13): how long it runs, in milliseconds.
+  /// Null for any other file. It is an ordinary video with this flag, so
+  /// every place that knows videos still handles it.
+  final int? videoNoteMs;
+
+  /// A round video message: shown as a circle.
+  bool get isVideoNote => isVideo && videoNoteMs != null;
+
   Map<String, dynamic> toJson() {
     return {
       'kind': isVideo ? 'video' : 'file',
@@ -902,6 +924,10 @@ class FileAttachment {
       if (width != null) 'width': width,
       if (height != null) 'height': height,
       if (blurhash != null) 'blurhash': blurhash,
+      if (videoNoteMs != null) ...{
+        'video_note': true,
+        'duration_ms': videoNoteMs,
+      },
     };
   }
 }

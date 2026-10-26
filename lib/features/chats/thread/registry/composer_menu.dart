@@ -29,6 +29,7 @@ class ComposerMenuActions {
     required this.pickSticker,
     required this.pickGif,
     this.sendSilently,
+    this.pickQuickReply,
   });
 
   final Future<void> Function() pickPhotosAndVideos;
@@ -48,6 +49,9 @@ class ComposerMenuActions {
   /// Sends the text in the box without a push; null where that is not
   /// possible (the note to self, a server without it).
   final Future<void> Function()? sendSilently;
+
+  /// Picks one of the person's quick replies and puts it in the box.
+  final Future<void> Function()? pickQuickReply;
 }
 
 /// What a contribution can look at when the menu opens.

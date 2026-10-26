@@ -38,8 +38,7 @@ const zhForms = <String, String>{
   'People can change their answers': '允许修改回答',
   'Who can see the answers': '谁能看到回答',
   'Only you can read the answers.': '只有你能看到回答。',
-  'Everyone can read the answers once they have sent theirs.':
-      '填写后，每个人都能看到回答。',
+  'Everyone can read the answers once they have sent theirs.': '填写后，每个人都能看到回答。',
   'Everyone in the chat can read the answers.': '聊天里的所有人都能看到回答。',
   'People who answered': '已填写的人',
   'Most answers (optional)': '最多收集份数（选填）',
@@ -63,8 +62,7 @@ const zhForms = <String, String>{
       '这是匿名表单，发起人看不到谁填了哪些回答。',
   'This form is closed.': '这个表单已关闭。',
   'This form is closed. Your answers are below.': '这个表单已关闭。你的回答如下。',
-  'You have filled this form in. It can not be changed.':
-      '你已经填写过这个表单，不能再修改。',
+  'You have filled this form in. It can not be changed.': '你已经填写过这个表单，不能再修改。',
   'This form has all the answers it takes.': '这个表单已收满。',
   "This form isn't available any more.": '这个表单已不可用。',
   'Check the answers marked in red.': '请检查标红的回答。',
@@ -121,8 +119,7 @@ const zhForms = <String, String>{
   'Not answered yet ({count})': '还没填写（{count}）',
   '{count} of {total} people answered': '{total} 人中已有 {count} 人填写',
   '{count} answers': '{count} 份回答',
-  'Anonymous: nobody can see who gave which answers.':
-      '匿名：没有人能看到谁填了哪些回答。',
+  'Anonymous: nobody can see who gave which answers.': '匿名：没有人能看到谁填了哪些回答。',
   'Show fewer': '收起',
   'Show all {count}': '显示全部 {count} 条',
   'No answers to this question.': '这个问题还没有回答。',

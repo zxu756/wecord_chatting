@@ -82,6 +82,8 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                 emojiCandidates: _emojiCandidates(),
                 onSelectEmoji: _insertCustomEmoji,
                 slashCommands: _slashCandidates(),
+                quickReplies: _quickReplyCandidates(),
+                onSelectQuickReply: _selectQuickReply,
                 botSlashCommands: _botSlashCandidates(),
                 highlightedSlashIndex: _slashIndex,
                 onSelectSlashCommand: _selectSlashCommand,
@@ -157,6 +159,7 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                               changeWallpaper: openWallpaper,
                               pickSticker: _pickAndSendSticker,
                               pickGif: _pickAndSendGif,
+                              pickQuickReply: _pickQuickReply,
                               sendSilently: _canSendSilently
                                   ? _sendSilently
                                   : null,

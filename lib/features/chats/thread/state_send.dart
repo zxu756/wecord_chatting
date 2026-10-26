@@ -86,7 +86,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
           await _runSlashAction(() => _invokeBotCommand(command, options));
           return;
         }
-        messageBody = body;
+        messageBody = _bodyAfterQuickReply(body);
     }
 
     if (_isSlowedDown) {
@@ -461,7 +461,7 @@ extension _ThreadSendState on _ChatThreadScreenState {
       case SlashSendText(body: final commandBody):
         messageBody = commandBody;
       case null when parseBotSlashCommand(body, _slashContext) == null:
-        messageBody = body;
+        messageBody = _bodyAfterQuickReply(body);
       default:
         _showSnackBar(tr("Commands can't be scheduled."));
         return;

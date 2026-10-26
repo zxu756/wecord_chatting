@@ -21,6 +21,8 @@ class _Composer extends StatelessWidget {
     required this.emojiCandidates,
     required this.onSelectEmoji,
     required this.slashCommands,
+    this.quickReplies = const [],
+    this.onSelectQuickReply,
     this.botSlashCommands = const [],
     required this.highlightedSlashIndex,
     required this.onSelectSlashCommand,
@@ -91,6 +93,10 @@ class _Composer extends StatelessWidget {
 
   /// The commands offered while one is typed after a leading `/`.
   final List<SlashCommand> slashCommands;
+
+  /// The person's own phrases (A8), offered before the commands.
+  final List<QuickReply> quickReplies;
+  final ValueChanged<QuickReply>? onSelectQuickReply;
 
   /// Circle bots' commands, offered after [slashCommands].
   final List<BotSlashCommand> botSlashCommands;
@@ -168,6 +174,7 @@ class _Composer extends StatelessWidget {
     final buttonSize = desktop ? 40.0 : 44.0;
     final canAttach = !isBusy && !isEditing && !isRecordingVoice && !isSlowed;
     final hasSuggestions =
+        quickReplies.isNotEmpty ||
         slashCommands.isNotEmpty ||
         botSlashCommands.isNotEmpty ||
         emojiCandidates.isNotEmpty ||
@@ -536,9 +543,12 @@ class _Composer extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (slashCommands.isNotEmpty ||
+                      if (quickReplies.isNotEmpty ||
+                          slashCommands.isNotEmpty ||
                           botSlashCommands.isNotEmpty)
                         SlashCommandList(
+                          quickReplies: quickReplies,
+                          onSelectQuickReply: onSelectQuickReply,
                           commands: slashCommands,
                           botCommands: botSlashCommands,
                           onSelectBot: onSelectBotSlashCommand,

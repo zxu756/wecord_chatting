@@ -13,6 +13,7 @@ import 'package:wecord/features/ai/ai_catch_up.dart';
 import 'package:wecord/features/ai/ai_composer_button.dart';
 import 'package:wecord/features/ai/ai_rewrite_sheet.dart';
 import 'package:wecord/features/ai/ai_translation.dart';
+import 'package:wecord/features/ai/draft_reply/draft_reply_sheet.dart';
 import 'package:wecord/features/chats/system_notice_text.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/features/accessibility/chat_text_scale.dart';

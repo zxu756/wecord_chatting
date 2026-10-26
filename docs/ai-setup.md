@@ -185,11 +185,12 @@ above. The app finds the function at `http://127.0.0.1:54321/functions/v1/ai`.
 | `guard_item` | `review_id`; only the database may call it (shared secret) | `{ok, state, category}` or `{ok, skipped: true}` / `{ok, state, unchecked: reason}` |
 | `link_check` | `url`, optional `language` (`en`/`zh`), `conversation_id` | `{verdict: safe\|suspicious\|dangerous\|unknown, reason, host}` |
 | `ask` | `question` (up to 500 characters), `scope` (`{type: everywhere}`, or `{type: circle\|conversation, id}`; required), optional `language`, `time_zone`, `utc_offset_minutes` | `{found, answer, sources: [{n, message_id, conversation_id, sender, snippet, type, created_at, place}], keywords, candidate_count, reason?}` |
+| `draft_reply` | `conversation_id`, optional `intent` (one line, up to 300 characters), optional `language` (the app's, as a fallback) | `{replies: [string, ...], message_count, reason?}` (`replies` is empty with `reason: "no_messages"` when the chat is empty and there is no `intent`) |
 
 Errors are `{error: <code>}`: `unauthorized` (401), `invalid_request` (400),
 `ai_not_configured` (503), `ai_disabled_in_circle` (403), `ai_limit_reached`
 (429, with `limit` and `used`), `ai_busy` (503, the provider's own limits),
-`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch, extract_actions, note_assist, meeting_recap: the person turned AI off), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `note_not_found` (404, note_assist), `text_too_long` (413), and for `transcribe`
+`ai_failed` (502), `ai_disabled_for_user` (403, translate_batch, extract_actions, note_assist, meeting_recap, draft_reply: the person turned AI off), `chat_locked` (403, draft_reply: the person locked that chat), `too_many_messages` (400, translate_batch), `conversation_not_found` (404), `note_not_found` (404, note_assist), `text_too_long` (413), and for `transcribe`
 `transcribe_not_configured` (503), `message_not_found` (404), `audio_too_long`
 (413).
 
@@ -651,11 +652,47 @@ against `test/fixtures/link_risk_cases.json`). Deploy order for G5: apply
 migration `202610260220` (the `final_url` column), then
 `supabase functions deploy link-preview` and `supabase functions deploy ai`.
 
+### Reply suggestions (`draft_reply`)
+
+"Help me reply" (roadmap F6) is in the AI menu of the message box (the sparkle
+button; on phones the "+" menu has it too, for an empty box). It is only ever
+started by the person's own tap on "Suggest replies": nothing is suggested on
+its own and no message goes to the model before that. There is no new secret
+and no new provider: it uses `AI_BASE_URL` / `AI_MODEL` like the other actions.
+
+- The function asks the database (`ai_draft_context`, migration
+  `202610280800`, service role only) for the last 20 messages of the chat as
+  the person sees them. It never reads: a chat where the circle, the group's
+  owner or the person turned AI off (`ai_disabled_in_circle`,
+  `ai_disabled_for_user`), a chat the person locked, or the thread of one
+  (`chat_locked`; App lock and chat lock, G2), a chat they cannot read
+  (`conversation_not_found`), recalled or expired messages, messages held by the
+  AI guard or an edit review, view-once pictures, notices, the assistant's own
+  replies, or a sender either side blocked. These are the rules of Ask AI and
+  the daily digest, and no looser. The checks run before anything is counted or
+  sent.
+- The model gets the log as untrusted data (the usual `DATA_RULES`, the fence
+  and the cleaning of `chat.ts`); the person's own lines are marked `[me]`,
+  and nobody else's name can pose as that. The optional `intent` (what the
+  person wants to say; the app offers what is already in the box) is fenced too
+  and read as the content of the message, not as an instruction.
+- It asks for three replies (short and casual, fuller and warmer, another
+  angle), in the language the others use, never inventing facts. The answer is
+  read as JSON (or a list if the model ignores the format); an answer with no
+  usable reply gives the request back.
+- It counts as one request against `AI_DAILY_LIMIT_PER_USER` (given back when
+  the provider fails or the answer is no use). An empty chat with no `intent`
+  asks nothing and counts nothing. Nothing is stored: no table, no cache.
+- The app only puts a picked reply in the message box (replacing the draft the
+  note came from, otherwise below it). It never sends.
+
+Deploy: apply migration `202610280800` first, then `supabase functions deploy ai`.
+
 ## Tests
 
 
 ```sh
 cd supabase/functions/ai && deno test
 cd supabase/functions/link-preview && deno test
-flutter test test/features/safety test/features/circles/guard2_test.dart test/supabase/guard2_test.dart test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/supabase/ai_ask_test.dart test/features/inbox test/features/notes
+flutter test test/features/safety test/features/circles/guard2_test.dart test/supabase/guard2_test.dart test/features/ai test/features/transcribe test/supabase/ai_guard_test.dart test/supabase/ai_assistant_test.dart test/supabase/daily_digest_test.dart test/supabase/ai_ask_test.dart test/supabase/ai_draft_reply_test.dart test/features/inbox test/features/notes
 ```

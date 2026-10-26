@@ -160,6 +160,9 @@ extension _ThreadComposerBuild on _ChatThreadScreenState {
                               sendSilently: _canSendSilently
                                   ? _sendSilently
                                   : null,
+                              draftReply: isNoteToSelf
+                                  ? null
+                                  : () async => _openAiDraftReply(),
                             ),
                           ),
                         ),

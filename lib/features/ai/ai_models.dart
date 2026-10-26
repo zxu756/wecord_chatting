@@ -160,6 +160,11 @@ class AiDisabledInCircleException extends AiException {
   const AiDisabledInCircleException();
 }
 
+/// The person locked this chat (App lock and chat lock): AI never reads it.
+class AiChatLockedException extends AiException {
+  const AiChatLockedException();
+}
+
 /// The conversation or message can't be read, or is too long.
 class AiRejectedException extends AiException {
   const AiRejectedException();
@@ -189,6 +194,8 @@ AiException aiExceptionFor(int? status, Object? details) {
       return const AiDisabledInCircleException();
     case 'ai_disabled_for_user':
       return const AiTurnedOffException();
+    case 'chat_locked':
+      return const AiChatLockedException();
     case 'conversation_not_found' ||
         'note_not_found' ||
         'text_too_long' ||
@@ -224,6 +231,7 @@ String aiErrorMessage(Object error) {
     AiTurnedOffException() => tr(
       'AI features are turned off. You can turn them on in Settings.',
     ),
+    AiChatLockedException() => tr("AI doesn't read chats you've locked."),
     AiRejectedException() => tr("That can't be processed."),
     _ => tr('Something went wrong. Try again.'),
   };

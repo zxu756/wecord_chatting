@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/developer/bot_directory.dart';
 import 'package:wecord/features/ai/assistant/group_ai_row.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
@@ -240,6 +241,11 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             // The owner decides whether WeCord AI answers in the group.
             if (detail.currentUserRole == 'owner')
               AiAssistantGroupRow(conversationId: widget.conversationId),
+            // Everyone sees the bots in the group; the owner brings them in.
+            GroupBotsRow(
+              chatId: widget.conversationId,
+              isOwner: detail.currentUserRole == 'owner',
+            ),
             SettingsRow(
               key: const ValueKey('group-detail-leave'),
               icon: Icons.logout_rounded,

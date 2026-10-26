@@ -1,14 +1,19 @@
 import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
 import {
+  cleanFileName,
   isJsonContentType,
   matchRoute,
   parseBotAuthorization,
   parseLimit,
+  routeTemplate,
   statusForRpcError,
+  storageFileName,
   validateCommands,
   validateEditBody,
   validateMessageBody,
+  validatePollBody,
   validateRespondBody,
+  validateThreadBody,
 } from "./request.ts";
 
 const token = "A".repeat(40) + "_-9";
@@ -338,4 +343,239 @@ Deno.test("validates answers to interactions", () => {
     ok: false,
     error: "body_must_be_object",
   });
+});
+
+Deno.test("routes the endpoints of the bot API 2.0", () => {
+  assertEquals(route("DELETE", `/messages/${id}`), {
+    ok: true,
+    route: { name: "delete_message", messageId: id },
+  });
+  assertEquals(route("DELETE", `/messages/${id}/reactions/%F0%9F%91%8D`), {
+    ok: true,
+    route: { name: "remove_reaction", messageId: id, emoji: "👍" },
+  });
+  assertEquals(route("POST", `/messages/${id}/thread`), {
+    ok: true,
+    route: { name: "create_thread", messageId: id },
+  });
+  assertEquals(route("GET", "/chats"), { ok: true, route: { name: "chats" } });
+  assertEquals(route("GET", `/chats/${id}/messages?limit=7`), {
+    ok: true,
+    route: { name: "list_chat_messages", chatId: id, limit: 7, before: null },
+  });
+  assertEquals(route("POST", `/chats/${id}/messages`), {
+    ok: true,
+    route: { name: "send_chat_message", chatId: id },
+  });
+  assertEquals(route("POST", `/chats/${id}/files`), {
+    ok: true,
+    route: { name: "send_chat_file", chatId: id },
+  });
+  assertEquals(route("POST", `/chats/${id}/polls`), {
+    ok: true,
+    route: { name: "create_poll", chatId: id },
+  });
+  assertEquals(route("GET", `/chats/${id}/members?limit=5&after=${id}`), {
+    ok: true,
+    route: { name: "list_members", chatId: id, limit: 5, after: id },
+  });
+  assertEquals(route("GET", `/chats/${id}/members`), {
+    ok: true,
+    route: { name: "list_members", chatId: id, limit: 100, after: null },
+  });
+  assertEquals(route("GET", `/chats/${id}/members/${id}`), {
+    ok: true,
+    route: { name: "get_member", chatId: id, userId: id },
+  });
+});
+
+Deno.test("refuses the wrong method, the wrong id and the wrong query", () => {
+  assertEquals(route("GET", `/messages/${id}`), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("GET", `/messages/${id}/thread`), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("POST", `/messages/${id}/reactions/x`), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("DELETE", "/chats"), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("PUT", `/chats/${id}/files`), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("POST", `/chats/${id}/members`), {
+    ok: false,
+    status: 405,
+    error: "method_not_allowed",
+  });
+  assertEquals(route("GET", "/chats/not-an-id/messages").ok, false);
+  assertEquals(route("GET", `/chats/${id}/other`).ok, false);
+  assertEquals(route("GET", `/chats/${id}/members/x`).ok, false);
+  assertEquals(route("GET", `/chats/${id}/members?limit=500`), {
+    ok: false,
+    status: 400,
+    error: "invalid_limit",
+  });
+  assertEquals(route("GET", `/chats/${id}/members?after=x`), {
+    ok: false,
+    status: 400,
+    error: "invalid_after",
+  });
+  assertEquals(route("GET", `/chats/${id}/messages?before=yesterday-ish`), {
+    ok: false,
+    status: 400,
+    error: "invalid_before",
+  });
+});
+
+Deno.test("the call log keeps templates, never ids", () => {
+  const samples: [string, string, string][] = [
+    ["GET", `/chats/${id}/messages`, "/chats/{id}/messages"],
+    ["POST", `/chats/${id}/files`, "/chats/{id}/files"],
+    ["GET", `/chats/${id}/members/${id}`, "/chats/{id}/members/{user}"],
+    ["DELETE", `/messages/${id}`, "/messages/{id}"],
+    ["PUT", `/messages/${id}/reactions/x`, "/messages/{id}/reactions/{emoji}"],
+    ["POST", `/messages/${id}/thread`, "/messages/{id}/thread"],
+    ["GET", "/me", "/me"],
+    ["PUT", "/commands", "/commands"],
+    ["POST", `/interactions/${id}/respond`, "/interactions/{id}/respond"],
+  ];
+  for (const [method, path, expected] of samples) {
+    const matched = route(method, path);
+    assert(matched.ok);
+    assertEquals(routeTemplate(matched.route), expected);
+    assertFalse(routeTemplate(matched.route).includes(id));
+  }
+});
+
+Deno.test("validates a poll", () => {
+  assertEquals(
+    validatePollBody({
+      question: " Where? ",
+      options: ["Lake", " Ridge "],
+      multiple: true,
+      duration_hours: 24,
+    }),
+    {
+      ok: true,
+      value: {
+        question: "Where?",
+        options: ["Lake", "Ridge"],
+        multi: true,
+        durationHours: 24,
+        anonymous: false,
+      },
+    },
+  );
+  assertEquals(validatePollBody({ question: "", options: ["a", "b"] }), {
+    ok: false,
+    error: "question_required",
+  });
+  assertEquals(validatePollBody({ question: "q", options: "a" }), {
+    ok: false,
+    error: "options_must_be_array",
+  });
+  assertEquals(validatePollBody({ question: "q", options: ["only"] }), {
+    ok: false,
+    error: "options_must_be_2_to_10",
+  });
+  assertEquals(
+    validatePollBody({
+      question: "q",
+      options: Array.from({ length: 11 }, (_, i) => `o${i}`),
+    }),
+    { ok: false, error: "options_must_be_2_to_10" },
+  );
+  assertEquals(validatePollBody({ question: "q", options: ["a", " "] }), {
+    ok: false,
+    error: "invalid_option",
+  });
+  assertEquals(validatePollBody({ question: "q", options: ["a", "A"] }), {
+    ok: false,
+    error: "duplicate_option",
+  });
+  assertEquals(
+    validatePollBody({ question: "q", options: ["a", "x".repeat(101)] }),
+    { ok: false, error: "option_too_long" },
+  );
+  assertEquals(
+    validatePollBody({ question: "x".repeat(301), options: ["a", "b"] }),
+    { ok: false, error: "question_too_long" },
+  );
+  assertEquals(
+    validatePollBody({ question: "q", options: ["a", "b"], duration_hours: 0 }),
+    { ok: false, error: "invalid_duration_hours" },
+  );
+  assertEquals(
+    validatePollBody({
+      question: "q",
+      options: ["a", "b"],
+      duration_hours: 24.5,
+    }),
+    { ok: false, error: "invalid_duration_hours" },
+  );
+  assertEquals(
+    validatePollBody({ question: "q", options: ["a", "b"], anonymous: "yes" }),
+    { ok: false, error: "invalid_anonymous" },
+  );
+  assertEquals(validatePollBody([]), {
+    ok: false,
+    error: "body_must_be_object",
+  });
+});
+
+Deno.test("validates a thread title; no body is fine", () => {
+  assertEquals(validateThreadBody(null), { ok: true, value: { title: null } });
+  assertEquals(validateThreadBody({}), { ok: true, value: { title: null } });
+  assertEquals(validateThreadBody({ title: " Plans " }), {
+    ok: true,
+    value: { title: "Plans" },
+  });
+  assertEquals(validateThreadBody({ title: "x".repeat(101) }), {
+    ok: false,
+    error: "title_too_long",
+  });
+  assertEquals(validateThreadBody({ title: "  " }), {
+    ok: false,
+    error: "invalid_title",
+  });
+  assertEquals(validateThreadBody([]), {
+    ok: false,
+    error: "body_must_be_object",
+  });
+});
+
+Deno.test("file names lose folders and hidden characters", () => {
+  assertEquals(cleanFileName("notes.txt"), "notes.txt");
+  assertEquals(cleanFileName("../../etc/passwd"), "passwd");
+  assertEquals(cleanFileName("C:\\Users\\me\\a.pdf"), "a.pdf");
+  assertEquals(cleanFileName("a\u202etxt.exe"), "atxt.exe");
+  assertEquals(cleanFileName("zero\u200bwidth.txt"), "zerowidth.txt");
+  assertEquals(cleanFileName("line\nbreak.txt"), "linebreak.txt");
+  assertEquals(cleanFileName(".."), "file");
+  assertEquals(cleanFileName("   "), "file");
+  assertEquals([...cleanFileName("x".repeat(500))].length, 120);
+  assertEquals(storageFileName("Résumé final.pdf"), "R_sum__final.pdf");
+  assertEquals(storageFileName(".hidden"), "_hidden");
+  assertEquals(storageFileName("a/b/c.txt"), "c.txt");
+  assert(storageFileName("x".repeat(500)).length <= 100);
+  assertEquals(storageFileName(""), "file");
+});
+
+Deno.test("maps the database errors the new routes raise", () => {
+  assertEquals(statusForRpcError("23505").status, 409);
+  assertEquals(statusForRpcError("54000").status, 400);
+  assertEquals(statusForRpcError("P0002").status, 404);
 });

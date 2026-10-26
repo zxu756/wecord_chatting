@@ -20,9 +20,9 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { collectExportData } from "./collect.ts";
 import {
   buildExportZip,
-  type ExportStage,
   exportExpiresAt,
   exportObjectPath,
+  type ExportStage,
   stageProgress,
 } from "./export_builder.ts";
 
@@ -70,9 +70,9 @@ export async function purgeExpired(
   const { data } = await admin.from("data_exports").select("id, file_path")
     .eq("status", "ready").lt("expires_at", now.toISOString()).limit(200);
   const expired = (data ?? []) as { id: string; file_path: string | null }[];
-  const paths = expired.map((row) => row.file_path).filter((path): path is string =>
-    typeof path === "string"
-  );
+  const paths = expired.map((row) => row.file_path).filter((
+    path,
+  ): path is string => typeof path === "string");
   if (paths.length > 0) {
     await admin.storage.from(BUCKET).remove(paths);
   }
@@ -97,9 +97,9 @@ async function removeOtherExports(
   const { data } = await admin.from("data_exports").select("id, file_path")
     .eq("user_id", userId).eq("status", "ready").neq("id", keepId);
   const others = (data ?? []) as { id: string; file_path: string | null }[];
-  const paths = others.map((row) => row.file_path).filter((path): path is string =>
-    typeof path === "string"
-  );
+  const paths = others.map((row) => row.file_path).filter((
+    path,
+  ): path is string => typeof path === "string");
   if (paths.length > 0) {
     await admin.storage.from(BUCKET).remove(paths);
   }

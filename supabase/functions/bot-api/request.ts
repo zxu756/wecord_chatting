@@ -4,6 +4,10 @@
 export const MAX_BODY_BYTES = 32 * 1024;
 export const MAX_CONTENT_LENGTH = 2000;
 export const MAX_COMMANDS = 25;
+/// The biggest file a bot can post through the API (the request is read into
+/// memory, so it is kept small; the app itself takes up to 50 MB).
+export const MAX_FILE_BYTES = 8 * 1024 * 1024;
+export const MAX_CAPTION_LENGTH = 2000;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,7 +41,27 @@ export type Route =
   | { name: "list_commands" }
   | { name: "set_commands" }
   | { name: "poll_interactions"; limit: number }
-  | { name: "respond_interaction"; interactionId: string };
+  | { name: "respond_interaction"; interactionId: string }
+  | { name: "delete_message"; messageId: string }
+  | { name: "remove_reaction"; messageId: string; emoji: string }
+  | { name: "create_thread"; messageId: string }
+  | { name: "chats" }
+  | {
+    name: "list_chat_messages";
+    chatId: string;
+    limit: number;
+    before: string | null;
+  }
+  | { name: "send_chat_message"; chatId: string }
+  | { name: "send_chat_file"; chatId: string }
+  | { name: "create_poll"; chatId: string }
+  | {
+    name: "list_members";
+    chatId: string;
+    limit: number;
+    after: string | null;
+  }
+  | { name: "get_member"; chatId: string; userId: string };
 
 export type RouteResult =
   | { ok: true; route: Route }
@@ -104,26 +128,109 @@ export function matchRoute(method: string, url: URL): RouteResult {
       };
     }
     case "messages": {
-      // PATCH /messages/{id}: change the bot's own message (text, components).
+      if (!UUID_PATTERN.test(second ?? "")) return notFound;
+      const messageId = second.toLowerCase();
+      // PATCH /messages/{id}: change the bot's own message (text, components);
+      // DELETE /messages/{id}: delete it.
       if (parts.length === 2) {
-        if (!UUID_PATTERN.test(second)) return notFound;
-        if (verb !== "PATCH") return wrongMethod;
-        return {
-          ok: true,
-          route: { name: "edit_message", messageId: second.toLowerCase() },
-        };
+        if (verb === "PATCH") {
+          return { ok: true, route: { name: "edit_message", messageId } };
+        }
+        if (verb === "DELETE") {
+          return { ok: true, route: { name: "delete_message", messageId } };
+        }
+        return wrongMethod;
+      }
+      // POST /messages/{id}/thread: start a thread from a message.
+      if (parts.length === 3 && third === "thread") {
+        if (verb !== "POST") return wrongMethod;
+        return { ok: true, route: { name: "create_thread", messageId } };
       }
       if (parts.length !== 4 || third !== "reactions") return notFound;
-      if (!UUID_PATTERN.test(second)) return notFound;
-      if (verb !== "PUT") return wrongMethod;
+      if (verb !== "PUT" && verb !== "DELETE") return wrongMethod;
       const emoji = fourth.trim();
       if ([...emoji].length < 1 || emoji.length > 64) {
         return { ok: false, status: 400, error: "invalid_emoji" };
       }
       return {
         ok: true,
-        route: { name: "add_reaction", messageId: second.toLowerCase(), emoji },
+        route: {
+          name: verb === "PUT" ? "add_reaction" : "remove_reaction",
+          messageId,
+          emoji,
+        },
       };
+    }
+    case "chats": {
+      if (parts.length === 1) {
+        return verb === "GET"
+          ? { ok: true, route: { name: "chats" } }
+          : wrongMethod;
+      }
+      if (!UUID_PATTERN.test(second)) return notFound;
+      const chatId = second.toLowerCase();
+      if (parts.length === 3 && third === "messages") {
+        if (verb === "POST") {
+          return { ok: true, route: { name: "send_chat_message", chatId } };
+        }
+        if (verb !== "GET") return wrongMethod;
+        const limit = parseLimit(url.searchParams.get("limit"), 50, 100);
+        if (limit === null) {
+          return { ok: false, status: 400, error: "invalid_limit" };
+        }
+        const before = url.searchParams.get("before");
+        if (before !== null && Number.isNaN(Date.parse(before))) {
+          return { ok: false, status: 400, error: "invalid_before" };
+        }
+        return {
+          ok: true,
+          route: { name: "list_chat_messages", chatId, limit, before },
+        };
+      }
+      if (parts.length === 3 && third === "files") {
+        return verb === "POST"
+          ? { ok: true, route: { name: "send_chat_file", chatId } }
+          : wrongMethod;
+      }
+      if (parts.length === 3 && third === "polls") {
+        return verb === "POST"
+          ? { ok: true, route: { name: "create_poll", chatId } }
+          : wrongMethod;
+      }
+      if (parts.length === 3 && third === "members") {
+        if (verb !== "GET") return wrongMethod;
+        const limit = parseLimit(url.searchParams.get("limit"), 100, 200);
+        if (limit === null) {
+          return { ok: false, status: 400, error: "invalid_limit" };
+        }
+        const after = url.searchParams.get("after");
+        if (after !== null && !UUID_PATTERN.test(after)) {
+          return { ok: false, status: 400, error: "invalid_after" };
+        }
+        return {
+          ok: true,
+          route: {
+            name: "list_members",
+            chatId,
+            limit,
+            after: after === null ? null : after.toLowerCase(),
+          },
+        };
+      }
+      if (parts.length === 4 && third === "members") {
+        if (!UUID_PATTERN.test(fourth)) return notFound;
+        return verb === "GET"
+          ? {
+            ok: true,
+            route: {
+              name: "get_member",
+              chatId,
+              userId: fourth.toLowerCase(),
+            },
+          }
+          : wrongMethod;
+      }
+      return notFound;
     }
     case "commands":
       if (parts.length !== 1) return notFound;
@@ -349,6 +456,180 @@ export function validateRespondBody(
     return { ok: false, error: "ack_has_no_content" };
   }
   return { ok: true, value: { type: type as RespondType, response } };
+}
+
+export type PollBody = {
+  question: string;
+  options: string[];
+  multi: boolean;
+  durationHours: number | null;
+  anonymous: boolean;
+};
+
+/// Validates `{question, options, multiple?, duration_hours?, anonymous?}`:
+/// a question of 1 to 300 characters, 2 to 10 different options of 1 to 100
+/// (the database checks again).
+export function validatePollBody(
+  body: unknown,
+): { ok: true; value: PollBody } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, error: "body_must_be_object" };
+  }
+  const record = body as Record<string, unknown>;
+  if (typeof record.question !== "string" || record.question.trim() === "") {
+    return { ok: false, error: "question_required" };
+  }
+  const question = record.question.trim();
+  if ([...question].length > 300) {
+    return { ok: false, error: "question_too_long" };
+  }
+  if (!Array.isArray(record.options)) {
+    return { ok: false, error: "options_must_be_array" };
+  }
+  if (record.options.length < 2 || record.options.length > 10) {
+    return { ok: false, error: "options_must_be_2_to_10" };
+  }
+  const options: string[] = [];
+  for (const option of record.options) {
+    if (typeof option !== "string" || option.trim() === "") {
+      return { ok: false, error: "invalid_option" };
+    }
+    const text = option.trim();
+    if ([...text].length > 100) {
+      return { ok: false, error: "option_too_long" };
+    }
+    options.push(text);
+  }
+  const distinct = new Set(options.map((option) => option.toLowerCase()));
+  if (distinct.size !== options.length) {
+    return { ok: false, error: "duplicate_option" };
+  }
+  for (const key of ["multiple", "anonymous"]) {
+    const value = record[key];
+    if (value !== undefined && value !== null && typeof value !== "boolean") {
+      return { ok: false, error: `invalid_${key}` };
+    }
+  }
+  let durationHours: number | null = null;
+  if (record.duration_hours !== undefined && record.duration_hours !== null) {
+    const hours = record.duration_hours;
+    if (
+      typeof hours !== "number" || !Number.isInteger(hours) || hours < 1 ||
+      hours > 168
+    ) {
+      return { ok: false, error: "invalid_duration_hours" };
+    }
+    durationHours = hours;
+  }
+  return {
+    ok: true,
+    value: {
+      question,
+      options,
+      multi: record.multiple === true,
+      durationHours,
+      anonymous: record.anonymous === true,
+    },
+  };
+}
+
+/// Validates `{title?}` for starting a thread (up to 100 characters); no body
+/// at all is fine.
+export function validateThreadBody(
+  body: unknown,
+): { ok: true; value: { title: string | null } } | {
+  ok: false;
+  error: string;
+} {
+  if (body === undefined || body === null) {
+    return { ok: true, value: { title: null } };
+  }
+  if (typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, error: "body_must_be_object" };
+  }
+  const title = (body as Record<string, unknown>).title;
+  if (title === undefined || title === null) {
+    return { ok: true, value: { title: null } };
+  }
+  if (typeof title !== "string" || title.trim() === "") {
+    return { ok: false, error: "invalid_title" };
+  }
+  if ([...title.trim()].length > 100) {
+    return { ok: false, error: "title_too_long" };
+  }
+  return { ok: true, value: { title: title.trim() } };
+}
+
+/// Control characters, zero-width characters and the ones that turn text
+/// around (the same set the database refuses in names).
+function isHiddenCharacter(code: number): boolean {
+  return code < 0x20 || code === 0x7f ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x2064) ||
+    (code >= 0x2066 && code <= 0x2069) ||
+    code === 0xfeff;
+}
+
+/// A file name that is safe to show and keep: no folders, no control or
+/// direction characters, at most 120 characters.
+export function cleanFileName(name: string): string {
+  const visible = [...name].filter((char) =>
+    !isHiddenCharacter(char.codePointAt(0)!)
+  ).join("");
+  const last = visible.split(/[\\/]/).pop() ?? "";
+  const limited = [...last.trim()].slice(0, 120).join("").trim();
+  return limited === "" || limited === "." || limited === ".."
+    ? "file"
+    : limited;
+}
+
+/// The last part of a storage path: ASCII only, no leading dots.
+export function storageFileName(name: string): string {
+  const safe = cleanFileName(name).replace(/[^A-Za-z0-9._-]/g, "_");
+  return safe.slice(-100).replace(/^\.+/, "_") || "file";
+}
+
+/// The endpoint as a template, which is what the call log keeps: no ids and
+/// no text a bot sent.
+export function routeTemplate(route: Route): string {
+  switch (route.name) {
+    case "me":
+      return "/me";
+    case "channels":
+      return "/channels";
+    case "list_messages":
+    case "send_message":
+      return "/channels/{id}/messages";
+    case "add_reaction":
+    case "remove_reaction":
+      return "/messages/{id}/reactions/{emoji}";
+    case "edit_message":
+    case "delete_message":
+      return "/messages/{id}";
+    case "create_thread":
+      return "/messages/{id}/thread";
+    case "list_commands":
+    case "set_commands":
+      return "/commands";
+    case "poll_interactions":
+      return "/interactions";
+    case "respond_interaction":
+      return "/interactions/{id}/respond";
+    case "chats":
+      return "/chats";
+    case "list_chat_messages":
+    case "send_chat_message":
+      return "/chats/{id}/messages";
+    case "send_chat_file":
+      return "/chats/{id}/files";
+    case "create_poll":
+      return "/chats/{id}/polls";
+    case "list_members":
+      return "/chats/{id}/members";
+    case "get_member":
+      return "/chats/{id}/members/{user}";
+  }
 }
 
 export type CommandDefinition = { name: string; description: string };

@@ -762,6 +762,21 @@ export async function collectExportData(
     null,
   );
 
+  // The bots I made, with their settings and event addresses, never a token
+  // or a secret (export_my_developer).
+  const developer = await tryRead<Row | null>(
+    skipped,
+    "bots I made",
+    async () => {
+      const result = await admin.rpc("export_my_developer", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -873,6 +888,7 @@ export async function collectExportData(
     chatPrivacy,
     groupSpace,
     accountSecurity,
+    developer,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

@@ -48,6 +48,7 @@ import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type TitlePushRow, titleTarget } from "./titles.ts";
 import { type QaPushRow, qaTarget } from "./qa.ts";
 import { type EventNoticePushRow, eventNoticeTarget } from "./events2.ts";
+import { type CheckInPushRow, checkInTarget } from "./check_in.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -273,6 +274,18 @@ Deno.serve(async (request) => {
   targets.push(
     ...((eventNotices ?? []) as EventNoticePushRow[]).map(eventNoticeTarget),
   );
+
+  // "You have not checked in today" (D3): check_in_sweep wakes this function
+  // when it writes the day's notices. The row carries its chat, so a locked
+  // chat is masked and quiet hours hold it back below like the rest.
+  const { data: checkIns, error: checkInsError } = await admin.rpc(
+    "claim_check_in_pushes",
+  );
+  if (checkInsError) {
+    // Not fatal: the other pushes still go out.
+    console.error("claim_check_in_pushes failed", checkInsError.message);
+  }
+  targets.push(...((checkIns ?? []) as CheckInPushRow[]).map(checkInTarget));
 
   // The push of an official notice (K6), a batch of devices at a time: in
   // the language of each device, held back in quiet hours below like the

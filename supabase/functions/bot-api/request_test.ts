@@ -6,7 +6,9 @@ import {
   parseLimit,
   statusForRpcError,
   validateCommands,
+  validateEditBody,
   validateMessageBody,
+  validateRespondBody,
 } from "./request.ts";
 
 const token = "A".repeat(40) + "_-9";
@@ -44,6 +46,10 @@ Deno.test("routes every endpoint", () => {
     ok: true,
     route: { name: "add_reaction", messageId: id, emoji: "👍" },
   });
+  assertEquals(route("PATCH", `/messages/${id.toUpperCase()}`), {
+    ok: true,
+    route: { name: "edit_message", messageId: id },
+  });
   assertEquals(route("GET", "/commands"), {
     ok: true,
     route: { name: "list_commands" },
@@ -76,6 +82,7 @@ Deno.test("unknown paths are 404 and wrong methods 405", () => {
       "/channels/not-a-uuid/messages",
       `/channels/${id}/pins`,
       `/messages/${id}/reactions`,
+      "/messages/not-a-uuid",
       `/interactions/${id}`,
       "/channels/%E0%A4%A/messages",
     ]
@@ -91,6 +98,8 @@ Deno.test("unknown paths are 404 and wrong methods 405", () => {
       ["GET", `/messages/${id}/reactions/x`],
       ["POST", "/commands"],
       ["GET", `/interactions/${id}/respond`],
+      ["PUT", `/messages/${id}`],
+      ["GET", `/messages/${id}`],
     ]
   ) {
     const result = route(method, path);
@@ -195,4 +204,138 @@ Deno.test("maps database errors to statuses", () => {
   assertEquals(statusForRpcError("BT429").status, 429);
   assertEquals(statusForRpcError("P0001").error, "slowmode");
   assertEquals(statusForRpcError(undefined).status, 500);
+});
+
+const button = { type: "button", id: "go", label: "Go" };
+
+Deno.test("message bodies carry components through", () => {
+  assertEquals(validateMessageBody({ content: "hi", components: [[button]] }), {
+    ok: true,
+    value: { content: "hi", replyTo: null, components: [[button]] },
+  });
+  // None, null and an empty list mean no components.
+  for (const components of [undefined, null, []]) {
+    assertEquals(validateMessageBody({ content: "hi", components }), {
+      ok: true,
+      value: { content: "hi", replyTo: null },
+    });
+  }
+  assertEquals(validateMessageBody({ content: "hi", components: "x" }), {
+    ok: false,
+    error: "components_must_be_array",
+  });
+  assertEquals(validateMessageBody({ content: "hi", components: {} }), {
+    ok: false,
+    error: "components_must_be_array",
+  });
+});
+
+Deno.test("validates edits of the bot's own message", () => {
+  assertEquals(validateEditBody({ content: " new " }), {
+    ok: true,
+    value: { content: "new", changeComponents: false, components: null },
+  });
+  assertEquals(validateEditBody({ components: [[button]] }), {
+    ok: true,
+    value: { content: null, changeComponents: true, components: [[button]] },
+  });
+  // null and [] take the components off.
+  assertEquals(validateEditBody({ components: null }), {
+    ok: true,
+    value: { content: null, changeComponents: true, components: null },
+  });
+  assertEquals(validateEditBody({ components: [] }), {
+    ok: true,
+    value: { content: null, changeComponents: true, components: null },
+  });
+  assertEquals(validateEditBody({}), { ok: false, error: "nothing_to_change" });
+  assertEquals(validateEditBody({ content: "  " }), {
+    ok: false,
+    error: "content_required",
+  });
+  assertEquals(validateEditBody({ content: "x".repeat(2001) }), {
+    ok: false,
+    error: "content_too_long",
+  });
+  assertEquals(validateEditBody([]), {
+    ok: false,
+    error: "body_must_be_object",
+  });
+  assertEquals(validateEditBody({ components: 5 }), {
+    ok: false,
+    error: "components_must_be_array",
+  });
+});
+
+Deno.test("validates answers to interactions", () => {
+  // The old form: a message.
+  assertEquals(validateRespondBody({ content: " pong " }), {
+    ok: true,
+    value: { type: "message", response: { type: "message", content: "pong" } },
+  });
+  assertEquals(
+    validateRespondBody({
+      type: "ephemeral",
+      content: "psst",
+      components: [[button]],
+    }),
+    {
+      ok: true,
+      value: {
+        type: "ephemeral",
+        response: {
+          type: "ephemeral",
+          content: "psst",
+          components: [[button]],
+        },
+      },
+    },
+  );
+  assertEquals(validateRespondBody({ type: "update", components: null }), {
+    ok: true,
+    value: {
+      type: "update",
+      response: { type: "update", components: null },
+    },
+  });
+  assertEquals(validateRespondBody({ type: "ack" }), {
+    ok: true,
+    value: { type: "ack", response: { type: "ack" } },
+  });
+  assertEquals(validateRespondBody({ type: "shout", content: "x" }), {
+    ok: false,
+    error: "invalid_type",
+  });
+  assertEquals(validateRespondBody({ type: 5 }), {
+    ok: false,
+    error: "invalid_type",
+  });
+  assertEquals(validateRespondBody({ type: "message" }), {
+    ok: false,
+    error: "content_required",
+  });
+  assertEquals(validateRespondBody({ type: "ephemeral", content: "" }), {
+    ok: false,
+    error: "content_required",
+  });
+  assertEquals(validateRespondBody({ type: "update" }), {
+    ok: false,
+    error: "nothing_to_change",
+  });
+  assertEquals(validateRespondBody({ type: "ack", content: "x" }), {
+    ok: false,
+    error: "ack_has_no_content",
+  });
+  assertEquals(validateRespondBody({ content: "x".repeat(2001) }), {
+    ok: false,
+    error: "content_too_long",
+  });
+  assertEquals(validateRespondBody({ content: "x", components: "no" }), {
+    ok: false,
+    error: "components_must_be_array",
+  });
+  assertEquals(validateRespondBody("x"), {
+    ok: false,
+    error: "body_must_be_object",
+  });
 });

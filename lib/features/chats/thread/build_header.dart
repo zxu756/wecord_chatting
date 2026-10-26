@@ -201,8 +201,17 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
       :circleId,
       :canCall,
       :desktop,
+      :isThread,
+      :canSend,
     ) = f;
     final _ThreadLayoutFacts(:inlineSearch, :resultLabel) = l;
+    // Groups and circle channels can pin tabs under the header (D8). While
+    // there are any, the pinned note is the first of them, not a banner.
+    final hasTabs =
+        !isThread &&
+        (conversationType == ConversationType.group ||
+            conversationType == ConversationType.channel) &&
+        ref.watch(groupTabsPresentProvider(widget.conversationId));
     final catchUpBanner = AiCatchUpBanner(
       key: ValueKey('ai-catch-up-${widget.conversationId}'),
       conversationId: widget.conversationId,
@@ -232,7 +241,18 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
           conversationId: widget.conversationId,
           announcement: conversationSummary!.announcement.trim(),
         ),
-      if (pinnedNote != null)
+      if (!isThread &&
+          (conversationType == ConversationType.group ||
+              conversationType == ConversationType.channel))
+        GroupTabStrip(
+          conversationId: widget.conversationId,
+          title: title,
+          circleId: circleId,
+          pinnedNote: pinnedNote,
+          canSend: canSend,
+          desktop: desktop,
+        ),
+      if (pinnedNote != null && !hasTabs)
         Padding(
           padding: desktop
               ? const EdgeInsets.fromLTRB(20, 10, 20, 0)

@@ -55,6 +55,7 @@ class MessageInteraction {
     required this.command,
     required this.userName,
     this.userId,
+    this.componentLabel,
   });
 
   /// Null for anything that is not an interaction object.
@@ -63,17 +64,25 @@ class MessageInteraction {
       return null;
     }
     final command = json['command'];
-    if (command is! String || command.isEmpty) {
+    final label = json['component_label'];
+    final hasCommand = command is String && command.isNotEmpty;
+    final hasLabel = label is String && label.isNotEmpty;
+    if (!hasCommand && !hasLabel) {
       return null;
     }
     return MessageInteraction(
-      command: command,
+      command: hasCommand ? command : '',
+      componentLabel: hasLabel ? label : null,
       userName: json['user_name'] as String? ?? '',
       userId: json['user_id'] as String?,
     );
   }
 
+  /// The slash command used; empty for the answer to a press on a component.
   final String command;
+
+  /// The button (or list) pressed, for the answer to a press on a component.
+  final String? componentLabel;
   final String userName;
   final String? userId;
 }

@@ -22,10 +22,6 @@
 
 /* Begin PBXBuildFile section */
 		14AB0E11B1A5FF93F91A6B9F /* QuickLookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */; };
-		E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */; };
-		E1B0F00000000000000000B4 /* TranscribePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B3 /* TranscribePlugin.swift */; };
-		E1B0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000001C1 /* ImageTextPlugin.swift */; };
-		E1B0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */; };
 		1CFCDF6946D6E46C361A5BB5 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C4A12A8F95DD2503ED91AF6 /* Pods_RunnerTests.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -35,6 +31,10 @@
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		741638FF0CAB455DF3DC3DEE /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3C05366FC43703238FDA0CAA /* Pods_Runner.framework */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
+		E1B0F00000000000000000B2 /* VideoEffectsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */; };
+		E1B0F00000000000000000B4 /* TranscribePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000000B3 /* TranscribePlugin.swift */; };
+		E1B0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000001C1 /* ImageTextPlugin.swift */; };
+		E1B0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,11 +95,11 @@
 		9490E8A4C6CC8E2ABD75AE04 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		B7196CAC6E58DBC7149DFF74 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
-		F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLookPlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000000B1 /* VideoEffectsPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEffectsPlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000000B3 /* TranscribePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TranscribePlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000001C1 /* ImageTextPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageTextPlugin.swift; sourceTree = "<group>"; };
 		E1B0F00000000000000002A1 /* StickerCutoutPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StickerCutoutPlugin.swift; sourceTree = "<group>"; };
+		F11D9A54E2FFE86C16AFFFA4 /* QuickLookPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickLookPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -259,6 +259,7 @@
 				33CC10EB2044A3C60003C045 /* Resources */,
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
+				0B2D796B1612EE607FC32087 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -347,6 +348,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0B2D796B1612EE607FC32087 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		2241ACA180B38EAD95E76915 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -569,7 +587,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -651,7 +669,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
@@ -701,7 +719,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;

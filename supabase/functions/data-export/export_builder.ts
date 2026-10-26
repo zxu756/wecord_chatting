@@ -207,6 +207,14 @@ export interface ExportData {
    * when it could not be read, absent in older callers.
    */
   circlePosts?: Json | null;
+  /**
+   * The security record: recovery codes made or used, recovery locked,
+   * passkeys added or removed, how many recovery codes are left and the names
+   * and dates of my passkeys (export_my_account_security, migration
+   * 202610280420); never a code, a hash or a key. Null when it could not be
+   * read, absent in older callers.
+   */
+  accountSecurity?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -779,6 +787,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.circlePosts) {
     out.push({ path: "data/circle_posts.json", value: circlePostsJson(data) });
+  }
+  if (data.accountSecurity) {
+    out.push({
+      path: "data/account_security.json",
+      value: data.accountSecurity,
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -2473,6 +2487,72 @@ circles where you chose to stay out of honors.</p>
   );
 }
 
+const securityEventLabels: Record<string, string> = {
+  recovery_codes_generated: "New recovery codes were made",
+  recovery_code_used: "A recovery code was used (two-step verification off)",
+  recovery_locked: "Too many wrong recovery codes (locked for 30 minutes)",
+  passkey_added: "A passkey was added",
+  passkey_removed: "A passkey was removed",
+};
+
+/** The security record: codes, passkeys and what was done with them (G4). */
+export function buildAccountSecurityHtml(data: ExportData): string {
+  const security = isObject(data.accountSecurity) ? data.accountSecurity : {};
+  const events = objects(security["events"]).map((event) => {
+    const kind = str(event["kind"]) ?? "";
+    const detail = isObject(event["detail"]) ? event["detail"] : {};
+    const name = str(detail["name"]);
+    const answer = str(event["answer"]);
+    return entry(
+      str(event["at"]),
+      `<div><strong>${escapeHtml(securityEventLabels[kind] ?? kind)}</strong>${
+        name ? ` <span class="muted">${escapeHtml(name)}</span>` : ""
+      }${
+        answer
+          ? ` <span class="muted">${
+            answer === "denied" ? "You said it was not you" : "You confirmed it"
+          }</span>`
+          : ""
+      }</div>`,
+    );
+  }).join("");
+  const passkeys = objects(security["passkeys"]).map((key) =>
+    entry(
+      str(key["added_at"]),
+      `<div><strong>${
+        escapeHtml(str(key["name"]) ?? "Passkey")
+      }</strong> <span class="muted">${
+        key["last_used_at"]
+          ? `last used ${escapeHtml(str(key["last_used_at"]) ?? "")}`
+          : "never used to sign in"
+      }</span></div>`,
+    )
+  ).join("");
+  const codes = isObject(security["recovery_codes"])
+    ? security["recovery_codes"]
+    : {};
+  const remaining = Number(codes["remaining"] ?? 0) || 0;
+  return page(
+    "Account security — your WeCord data",
+    `${backLink()}<h1>Account security</h1>
+<p class="muted">What the account's security record holds. Recovery codes are
+never exported, and only a salted hash of each is stored; passkeys are listed
+by name and date, never by key.</p>
+<h2>Recovery codes</h2>
+<div class="card"><div class="row">${remaining} unused recovery code${
+      remaining === 1 ? "" : "s"
+    } left.</div></div>
+<h2>Passkeys</h2>
+<div class="card">${
+      passkeys || '<div class="row muted">No passkeys.</div>'
+    }</div>
+<h2>Record</h2>
+<div class="card">${
+      events || '<div class="row muted">Nothing recorded.</div>'
+    }</div>`,
+  );
+}
+
 /** Comments on notes, personal templates and published pages (D5). */
 export function buildNoteExtrasHtml(data: ExportData): string {
   const extras = isObject(data.noteExtras) ? data.noteExtras : {};
@@ -2722,6 +2802,22 @@ export function buildSectionPages(
       content: buildCirclePostsHtml(data),
     });
   }
+  if (data.accountSecurity) {
+    const events = objects(
+      isObject(data.accountSecurity) ? data.accountSecurity["events"] : null,
+    ).length;
+    const passkeys = objects(
+      isObject(data.accountSecurity) ? data.accountSecurity["passkeys"] : null,
+    ).length;
+    out.push({
+      path: "pages/account_security.html",
+      label: "Account security",
+      summary: `${events} event${
+        events === 1 ? "" : "s"
+      } · ${passkeys} passkey${passkeys === 1 ? "" : "s"}`,
+      content: buildAccountSecurityHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2829,6 +2925,10 @@ data/group_space.json The albums and folders you made in group chats and the
 data/circle_posts.json The posts you wrote in circles: title, text, topics,
                       whether they were featured, and a link to the picture
                       (never other people's posts).
+data/account_security.json The record of your recovery codes and passkeys:
+                      codes made or used, passkeys added or removed, how many
+                      codes are left and your passkeys' names and dates (never
+                      a code, a hash or a key).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

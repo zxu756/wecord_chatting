@@ -715,6 +715,21 @@ export async function collectExportData(
     null,
   );
 
+  // The record of codes made and used and of passkeys, without any hash or
+  // key (export_my_account_security).
+  const accountSecurity = await tryRead<Row | null>(
+    skipped,
+    "account security record",
+    async () => {
+      const result = await admin.rpc("export_my_account_security", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -829,6 +844,7 @@ export async function collectExportData(
     interactions,
     groupSpace,
     circlePosts,
+    accountSecurity,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

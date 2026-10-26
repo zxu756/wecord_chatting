@@ -60,6 +60,7 @@ dependencies:
   zxing2: ^0.2.4
   local_auth: ^3.0.2
   flutter_tts: ^4.2.5
+  passkeys: ^2.23.1
 
 dev_dependencies:
   flutter_test:

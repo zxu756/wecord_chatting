@@ -125,6 +125,8 @@ import 'package:wecord/features/file_preview/preview_file.dart';
 import 'package:wecord/features/later/later_time.dart';
 import 'package:wecord/features/note_to_self/note_to_self.dart';
 import 'package:wecord/features/notes/note_models.dart' show NoteMeta;
+import 'package:wecord/features/chat_privacy/chat_privacy_notice.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_ui.dart';
 import 'package:wecord/features/pat/pat_avatar.dart';
 import 'package:wecord/features/pat/pat_info.dart';
 import 'package:wecord/features/pat/pat_line.dart';

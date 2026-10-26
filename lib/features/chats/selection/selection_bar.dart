@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_repository.dart';
 import 'package:wecord/features/chats/selection/selection_actions.dart';
 import 'package:wecord/features/chats/selection/selection_controller.dart';
 import 'package:wecord/features/chats/selection/selection_forward_sheet.dart';
@@ -114,9 +115,18 @@ class ChatSelectionBar extends ConsumerWidget {
     final state = ref.watch(chatSelectionProvider(environment.conversationId));
     final messages = state.ordered;
     final actions = SelectionActions(context, ref, environment);
-    final canForward = messages.any(canForwardMessage);
-    final canSave = messages.any(canSaveMessage);
+    // Advanced chat privacy (G6) turns these four off; the server refuses
+    // them as well.
+    final restricted = ref.watch(
+      restrictSharingProvider(environment.conversationId),
+    );
+    final restrictedHint = restricted
+        ? tr('Turned off by advanced chat privacy.')
+        : null;
+    final canForward = !restricted && messages.any(canForwardMessage);
+    final canSave = !restricted && messages.any(canSaveMessage);
     final canCopy =
+        !restricted &&
         copyTextOfSelection(messages, nameOf: environment.senderName) != null;
     final canDelete = canDeleteSelection(
       messages,
@@ -129,6 +139,7 @@ class ChatSelectionBar extends ConsumerWidget {
         key: const ValueKey('selection-forward'),
         icon: Icons.shortcut_rounded,
         label: tr('Forward'),
+        hint: restrictedHint,
         onPressed: canForward
             ? () => unawaited(actions.forward(SelectionForwardMode.oneByOne))
             : null,
@@ -137,6 +148,7 @@ class ChatSelectionBar extends ConsumerWidget {
         key: const ValueKey('selection-merge'),
         icon: Icons.library_books_outlined,
         label: tr('Merge & forward'),
+        hint: restrictedHint,
         onPressed: canForward
             ? () => unawaited(actions.forward(SelectionForwardMode.merged))
             : null,
@@ -145,12 +157,14 @@ class ChatSelectionBar extends ConsumerWidget {
         key: const ValueKey('selection-save'),
         icon: Icons.bookmark_border_rounded,
         label: tr('Save'),
+        hint: restrictedHint,
         onPressed: canSave ? () => unawaited(actions.save()) : null,
       ),
       _BarItem(
         key: const ValueKey('selection-copy'),
         icon: Icons.copy_rounded,
         label: tr('Copy'),
+        hint: restrictedHint,
         onPressed: canCopy ? () => unawaited(actions.copy()) : null,
       ),
       _BarItem(

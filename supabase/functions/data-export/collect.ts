@@ -31,6 +31,7 @@ import {
   ownedFiles,
   storyFilesToSign,
 } from "./export_builder.ts";
+import { isMissingFunction, withholdRestricted } from "./chat_privacy.ts";
 
 /** The most messages one export carries. */
 export const MAX_MESSAGES = 200_000;
@@ -392,6 +393,37 @@ export async function collectExportData(
     }
   }, undefined);
 
+  // Chats with advanced chat privacy on (migration 202610280900) keep their
+  // words and files out of the archive. This fails closed: when the database
+  // cannot say which chats are restricted, the export stops instead of
+  // handing out what it could not check. A database without the migration
+  // has no such chats.
+  const restrictedChats = new Set<string>();
+  {
+    const askedAbout = [
+      ...new Set([
+        ...conversationIds,
+        ...messages.map((message) => message.conversationId),
+      ]),
+    ];
+    for (const batch of chunk(askedAbout, 200)) {
+      const result = await admin.rpc("restricted_conversation_ids", {
+        p_ids: batch,
+      });
+      if (result.error) {
+        if (isMissingFunction(result.error)) break;
+        throw result.error;
+      }
+      for (const id of (result.data ?? []) as unknown[]) {
+        if (typeof id === "string") restrictedChats.add(id);
+      }
+    }
+  }
+  const exportedMessages = withholdRestricted(messages, restrictedChats);
+  for (const conversation of conversations) {
+    if (restrictedChats.has(conversation.id)) conversation.restricted = true;
+  }
+
   await stage("circles");
   const circleMemberships = await tryRead<Row[]>(
     skipped,
@@ -686,6 +718,21 @@ export async function collectExportData(
     null,
   );
 
+  // The chats I asked to restrict and the screenshot reports I caused
+  // (export_my_chat_privacy).
+  const chatPrivacy = await tryRead<Row | null>(
+    skipped,
+    "advanced chat privacy",
+    async () => {
+      const result = await admin.rpc("export_my_chat_privacy", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // What I added to the group space of group chats (export_my_group_space).
   const groupSpace = await tryRead<Row | null>(
     skipped,
@@ -704,7 +751,7 @@ export async function collectExportData(
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
   const byBucket = new Map<string, string[]>();
-  for (const { bucket, path } of attachmentsToSign(messages)) {
+  for (const { bucket, path } of attachmentsToSign(exportedMessages)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // The pictures I attached to answers of forms are linked.
@@ -789,7 +836,7 @@ export async function collectExportData(
     friendRequests,
     blocked,
     conversations,
-    messages,
+    messages: exportedMessages,
     circles,
     moments,
     extras,
@@ -808,6 +855,7 @@ export async function collectExportData(
     checkIns,
     groupTabs,
     interactions,
+    chatPrivacy,
     groupSpace,
     files,
     attachmentLinks,

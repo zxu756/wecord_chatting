@@ -35,6 +35,8 @@ export interface ExportConversation {
   joinedAt: string | null;
   role: string | null;
   createdAt: string | null;
+  /** The chat has advanced chat privacy on: its messages are withheld. */
+  restricted?: boolean;
 }
 
 export interface ExportMessage {
@@ -46,6 +48,12 @@ export interface ExportMessage {
   createdAt: string;
   editedAt: string | null;
   recalledAt: string | null;
+  /**
+   * The chat has advanced chat privacy on (migration 202610280900): the text
+   * and the file are left out of the archive, the rest (that it was sent and
+   * when) is kept.
+   */
+  withheld?: boolean;
 }
 
 export interface ExportCircle {
@@ -194,6 +202,12 @@ export interface ExportData {
    * when it could not be read, absent in older callers.
    */
   interactions?: Json | null;
+  /**
+   * The chats I asked to restrict (advanced chat privacy) and the screenshot
+   * reports I caused (export_my_chat_privacy, migration 202610280940); null
+   * when it could not be read, absent in older callers.
+   */
+  chatPrivacy?: Json | null;
   /**
    * What I added to the group space of group chats (export_my_group_space,
    * migration 202610280230): albums and folders I made, the pictures, videos
@@ -436,6 +450,9 @@ function messageJson(
     sent_at: message.createdAt,
     edited_at: message.editedAt,
     deleted_at: message.recalledAt,
+    ...(message.withheld
+      ? { withheld: "This chat has advanced chat privacy on." }
+      : {}),
     attachment: attachment
       ? {
         kind: attachment.kind,
@@ -608,6 +625,11 @@ export function buildConversationHtml(
       : message.editedAt
       ? ` · edited ${escapeHtml(readableTime(message.editedAt))}`
       : "";
+    if (message.withheld) {
+      return `<div class="msg"><div class="when">${
+        escapeHtml(readableTime(message.createdAt))
+      }${state}</div><div class="muted">Text and files are left out: this chat has advanced chat privacy on.</div></div>`;
+    }
     return `<div class="msg"><div class="when">${
       escapeHtml(readableTime(message.createdAt))
     }${state}</div>${
@@ -770,6 +792,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.groupSpace) {
     out.push({ path: "data/group_space.json", value: groupSpaceJson(data) });
+  }
+  if (data.chatPrivacy) {
+    out.push({
+      path: "data/chat_privacy.json",
+      value: chatPrivacyJson(data),
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -2169,6 +2197,61 @@ ${section("Calls you scheduled", calls, "None.")}`,
   );
 }
 
+/** The chats I asked to restrict, and the screenshot reports I caused. */
+function chatPrivacyJson(data: ExportData): Json {
+  const privacy = isObject(data.chatPrivacy) ? data.chatPrivacy : {};
+  const names = new Map(data.conversations.map((c) => [c.id, c.name]));
+  const withName = (item: Json): Json => ({
+    ...item,
+    chat: names.get(str(item["conversation_id"]) ?? "") ?? null,
+  });
+  return {
+    note:
+      "Chats with advanced chat privacy on are in the archive without their text and files.",
+    requested_in: objects(privacy["requested_in"]).map(withName),
+    screenshot_reports: objects(privacy["screenshot_reports"]).map(withName),
+  };
+}
+
+/** The chats I asked to restrict, and the screenshot reports I caused. */
+export function buildChatPrivacyHtml(data: ExportData): string {
+  const privacy = isObject(data.chatPrivacy) ? data.chatPrivacy : {};
+  const names = new Map(data.conversations.map((c) => [c.id, c.name]));
+  const chatName = (item: Json) =>
+    names.get(str(item["conversation_id"]) ?? "") ?? "A conversation";
+  const requested = objects(privacy["requested_in"]).map((item) =>
+    entry(
+      null,
+      `<div><strong>${
+        escapeHtml(chatName(item))
+      }</strong> <span class="muted">${
+        item["restricted_now"] === true ? "restricted now" : "open now"
+      }</span></div>`,
+    )
+  ).join("");
+  const reports = objects(privacy["screenshot_reports"]).map((item) =>
+    entry(
+      str(item["reported_at"]),
+      `<div><strong>${
+        item["event"] === "recording" ? "Screen recording" : "Screenshot"
+      }</strong> <span class="muted">${
+        escapeHtml(chatName(item))
+      }</span></div>`,
+    )
+  ).join("");
+  return page(
+    "Advanced chat privacy — your WeCord data",
+    `${backLink()}<h1>Advanced chat privacy</h1>
+<p class="muted">Chats you asked to keep private, and the reports your iPhone
+sent when a view-once photo or video was open while you took a screenshot or
+the screen was recorded. A chat with advanced chat privacy on is in this
+archive without its text and files. Other people's requests and reports are
+not copied.</p>
+${section("Chats you asked to restrict", requested, "None.")}
+${section("Screenshot reports you caused", reports, "None.")}`,
+  );
+}
+
 /** What I pressed or typed into bots' components, and their private replies. */
 function botInteractionsJson(data: ExportData): Json {
   const interactions = isObject(data.interactions) ? data.interactions : {};
@@ -2612,6 +2695,19 @@ export function buildSectionPages(
       content: buildBotInteractionsHtml(data),
     });
   }
+  if (data.chatPrivacy) {
+    const counts = (key: string) =>
+      objects(isObject(data.chatPrivacy) ? data.chatPrivacy[key] : null)
+        .length;
+    out.push({
+      path: "pages/chat_privacy.html",
+      label: "Advanced chat privacy",
+      summary: `${counts("requested_in")} chats · ${
+        counts("screenshot_reports")
+      } screenshot reports`,
+      content: buildChatPrivacyHtml(data),
+    });
+  }
   if (data.groupSpace) {
     const counts = (key: string) =>
       objects(isObject(data.groupSpace) ? data.groupSpace[key] : null).length;
@@ -2723,6 +2819,9 @@ data/group_tabs.json  The tabs you added under group chat headers.
 data/bot_interactions.json What you pressed on bots' buttons and lists, typed
                       into their forms and used as commands in the last 7
                       days, and what bots told only you.
+data/chat_privacy.json The chats you asked to keep private (advanced chat
+                      privacy) and the screenshot reports you caused. Chats
+                      with it on are here without their text and files.
 data/group_space.json The albums and folders you made in group chats and the
                       pictures, videos and files you added (with links;
                       never what other people added).

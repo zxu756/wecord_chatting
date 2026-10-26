@@ -8,6 +8,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/care_mode/care_registry_filters.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_filters.dart';
 import 'package:wecord/features/chats/chat_polish/silent_send.dart';
 import 'package:wecord/features/forms/forms_chat.dart';
 import 'package:wecord/features/check_in/check_in_chat.dart';
@@ -34,6 +35,6 @@ final composerMenuRegistryProvider = Provider<ComposerMenuRegistry>((ref) {
       ...composerMenuExtensions,
     ])
       if (!simple || !careHiddenComposerMenuIds.contains(contribution.id))
-        contribution,
+        hideComposerEntryWhenRestricted(contribution),
   ]);
 });

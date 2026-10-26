@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_models.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_repository.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/chat_status.dart';
@@ -179,7 +180,11 @@ class _AiCatchUpBannerState extends ConsumerState<AiCatchUpBanner> {
   @override
   Widget build(BuildContext context) {
     final available = ref.watch(aiAvailableProvider(widget.circleId));
-    if (!available || _phase == _Phase.hidden) {
+    // A chat with advanced chat privacy on does not go to AI (G6).
+    final restricted = ref.watch(
+      restrictSharingProvider(widget.conversationId),
+    );
+    if (!available || restricted || _phase == _Phase.hidden) {
       return const SizedBox.shrink();
     }
     if (_phase == _Phase.offer && _dismissedOffer) {

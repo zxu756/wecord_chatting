@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:wecord/features/chat_privacy/chat_privacy_ui.dart';
 import 'package:wecord/features/settings/data_export.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -872,6 +873,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
         const AppLockSettingsRow(),
         const ProfileVisibilityRow(),
         const ReadReceiptsRow(),
+        const ChatPrivacySettingsRow(),
         SettingsRow(
           key: const ValueKey('devices-tile'),
           icon: Icons.devices_other_rounded,

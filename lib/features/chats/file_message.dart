@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_repository.dart';
 import 'package:wecord/features/file_preview/file_actions.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/file_preview_scope.dart';
@@ -96,6 +97,11 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
   Widget build(BuildContext context) {
     final file = _file;
     final kind = file.kind;
+    // No download button while the chat has advanced chat privacy on (G6).
+    final conversationId = widget.conversationId;
+    final restricted =
+        conversationId != null &&
+        ref.watch(restrictSharingProvider(conversationId));
     final c = context.tokens.colors;
     final foreground = widget.card ? c.ink : widget.textColor;
     final muted = foreground.withValues(alpha: 0.65);
@@ -139,41 +145,47 @@ class _FileMessageContentState extends ConsumerState<FileMessageContent> {
             ],
           ),
         ),
-        const SizedBox(width: 6),
-        WeCordPressable(
-          key: ValueKey('file-message-download-${file.path}'),
-          onPressed: _saving ? null : () => unawaited(_save()),
-          tooltip: tr('Download'),
-          semanticLabel: tr('Download'),
-          shape: const CircleBorder(),
-          pressedScale: 0.92,
-          builder: (context, states) => SizedBox.square(
-            dimension: WeCordSizes.touchTarget,
-            child: Center(
-              child: AnimatedContainer(
-                duration: WeCordMotion.quick,
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: states.contains(WidgetState.hovered)
-                      ? foreground.withValues(alpha: 0.18)
-                      : buttonFill,
-                  shape: BoxShape.circle,
-                ),
-                child: _saving
-                    ? SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: muted,
+        if (!restricted) ...[
+          const SizedBox(width: 6),
+          WeCordPressable(
+            key: ValueKey('file-message-download-${file.path}'),
+            onPressed: _saving ? null : () => unawaited(_save()),
+            tooltip: tr('Download'),
+            semanticLabel: tr('Download'),
+            shape: const CircleBorder(),
+            pressedScale: 0.92,
+            builder: (context, states) => SizedBox.square(
+              dimension: WeCordSizes.touchTarget,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: WeCordMotion.quick,
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: states.contains(WidgetState.hovered)
+                        ? foreground.withValues(alpha: 0.18)
+                        : buttonFill,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _saving
+                      ? SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: muted,
+                          ),
+                        )
+                      : Icon(
+                          Icons.download_rounded,
+                          size: 18,
+                          color: foreground,
                         ),
-                      )
-                    : Icon(Icons.download_rounded, size: 18, color: foreground),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
 

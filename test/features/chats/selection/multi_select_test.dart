@@ -6,8 +6,10 @@ import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_repository.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/media_send/album_grid.dart';
@@ -20,6 +22,7 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
+import '../../chat_privacy/chat_privacy_fakes.dart';
 import '../../file_preview/file_preview_fakes.dart';
 import '../../later/later_fakes.dart';
 import '../chat_thread_screen_test.dart' as thread_test;
@@ -49,8 +52,10 @@ void main() {
   late FakeMergedForwardRepository merged;
   late FakeSavedMessagesRepository saved;
   String? clipboard;
+  var extraOverrides = <Override>[];
 
   setUp(() {
+    extraOverrides = [];
     merged = FakeMergedForwardRepository();
     saved = FakeSavedMessagesRepository();
     clipboard = null;
@@ -110,6 +115,7 @@ void main() {
           thread_test.FakeSettingsRepository(),
         ),
         ...filePreviewOverrides(),
+        ...extraOverrides,
         authRepositoryProvider.overrideWithValue(
           thread_test.FakeAuthRepository()
             ..user = const AuthUser(id: 'user-1', email: 'me@example.com'),
@@ -507,6 +513,33 @@ void main() {
 
       expect(chats.recalledMessageIds, isEmpty);
       expect(find.byKey(const ValueKey('chat-selection-bar')), findsOneWidget);
+    });
+
+    testWidgets('advanced chat privacy turns off Forward, Merge, Save, Copy', (
+      tester,
+    ) async {
+      extraOverrides = [
+        chatPrivacyRepositoryProvider.overrideWithValue(
+          FakeChatPrivacyRepository(
+            chats: {
+              'conversation-1': const ChatPrivacy(
+                restricted: true,
+                requestedBy: {'user-2'},
+              ),
+            },
+          ),
+        ),
+      ];
+      await open(tester);
+      await select(tester, 'Meet at 7?');
+      for (final key in [
+        'selection-forward',
+        'selection-merge',
+        'selection-save',
+        'selection-copy',
+      ]) {
+        expect(_enabled(tester, key), isFalse, reason: key);
+      }
     });
   });
 }

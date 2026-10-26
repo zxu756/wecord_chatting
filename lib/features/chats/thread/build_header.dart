@@ -262,6 +262,14 @@ extension _ThreadHeaderBuild on _ChatThreadScreenState {
             note: pinnedNote,
           ),
         ),
+      if (canCall)
+        ChatPrivacyBanner(
+          conversationId: widget.conversationId,
+          isGroup: conversationType == ConversationType.group,
+          canChange:
+              conversationType == ConversationType.direct ||
+              (f.groupDetail?.canManageGroup ?? false),
+        ),
       if (canCall) ChatEventStrip(conversationId: widget.conversationId),
       if (canCall)
         LiveLocationBanner(

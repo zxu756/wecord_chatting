@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { collectExportData } from "./collect.ts";
 import type { ExportStage } from "./export_builder.ts";
@@ -88,7 +88,9 @@ function fakeClient(
   const client = {
     rpc: (name: string, args: Row) => {
       rpcCalls.push({ name, args });
-      const answer = rpcAnswers[name];
+      const answer = rpcAnswers[name] ??
+        // Nothing is restricted unless a test says so.
+        (name === "restricted_conversation_ids" ? [] : undefined);
       return Promise.resolve(
         answer === undefined || answer instanceof Error
           ? { data: null, error: answer ?? new Error("no such function") }
@@ -200,6 +202,7 @@ const emptyRpc: Record<string, unknown> = {
     private_replies: [],
   },
   export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+  export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
 };
 
 const feedbackAnswer = [{
@@ -534,6 +537,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -551,6 +555,10 @@ Deno.test("Moments and the rest come from the database functions, for this perso
   });
   const data = await collectExportData(client, { userId: me, now });
   assertEquals(rpcCalls, [
+    {
+      name: "restricted_conversation_ids",
+      args: { p_ids: ["c-1", "c-2", "c-3"] },
+    },
     { name: "export_my_moments", args: { target_user_id: me } },
     { name: "export_my_extras", args: { target_user_id: me } },
     { name: "export_my_forms", args: { target_user_id: me } },
@@ -568,6 +576,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_check_ins", args: { target_user_id: me } },
     { name: "export_my_group_tabs", args: { target_user_id: me } },
     { name: "export_my_interactions", args: { target_user_id: me } },
+    { name: "export_my_chat_privacy", args: { target_user_id: me } },
     { name: "export_my_group_space", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
@@ -630,6 +639,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -756,6 +766,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         private_replies: [],
       },
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
+      export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -794,7 +805,9 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.groupTabs, null);
   assertEquals(data.interactions, null);
   assertEquals(data.groupSpace, null);
+  assertEquals(data.chatPrivacy, null);
   assertEquals(data.skipped.sort(), [
+    "advanced chat privacy",
     "bot buttons and commands",
     "chat tabs",
     "check-ins",
@@ -816,4 +829,56 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   ]);
   assertEquals(data.messages.length, 2);
   assertEquals(data.files, []);
+});
+
+Deno.test("a restricted chat's messages are withheld from the export and not linked", async () => {
+  const { client, signed, rpcCalls } = fakeClient(world, {
+    rpc: { ...emptyRpc, restricted_conversation_ids: ["c-1"] },
+  });
+  const data = await collectExportData(client, { userId: me, now });
+  const restricted = data.messages.find((m) => m.id === "m-1")!;
+  assertEquals(restricted.body, "");
+  assertEquals(restricted.attachment, null);
+  assertEquals(restricted.withheld, true);
+  assertEquals(data.messages.find((m) => m.id === "m-3")!.body, "hello crew");
+  assertEquals(
+    data.conversations.find((c) => c.id === "c-1")!.restricted,
+    true,
+  );
+  assertEquals(
+    data.conversations.find((c) => c.id === "c-2")!.restricted,
+    undefined,
+  );
+  // The file of a withheld message is not signed for download.
+  assertEquals(signed, []);
+  assertEquals(data.attachmentLinks, {});
+  const asked = rpcCalls.find((c) => c.name === "restricted_conversation_ids")!;
+  assert((asked.args["p_ids"] as string[]).includes("c-1"));
+  assertEquals(data.chatPrivacy, { requested_in: [], screenshot_reports: [] });
+});
+
+Deno.test("when the database cannot say which chats are restricted, the export stops", async () => {
+  const { client } = fakeClient(world, {
+    rpc: {
+      ...emptyRpc,
+      restricted_conversation_ids: Object.assign(new Error("timeout"), {
+        code: "57014",
+      }),
+    },
+  });
+  await assertRejects(() => collectExportData(client, { userId: me, now }));
+});
+
+Deno.test("a database without advanced chat privacy exports as before", async () => {
+  const { client } = fakeClient(world, {
+    rpc: {
+      ...emptyRpc,
+      restricted_conversation_ids: Object.assign(new Error("missing"), {
+        code: "PGRST202",
+      }),
+    },
+  });
+  const data = await collectExportData(client, { userId: me, now });
+  assertEquals(data.messages.map((m) => m.withheld), [undefined, undefined]);
+  assertEquals(data.messages[0].body, "plan");
 });

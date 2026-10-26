@@ -91,6 +91,7 @@ import 'group_space_a11y_screens.dart';
 import 'chat_privacy_a11y_screens.dart';
 import 'ai_suggest_a11y_screens.dart';
 import 'hashtags_posts_a11y_screens.dart';
+import 'local_data_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -858,4 +859,5 @@ final allA11yScreens = <A11yScreen>[
   ...chatPrivacyA11yScreens,
   ...aiSuggestA11yScreens,
   ...hashtagsPostsA11yScreens,
+  ...localDataA11yScreens,
 ];

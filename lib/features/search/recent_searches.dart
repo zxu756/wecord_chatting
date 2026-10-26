@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wecord/features/local_data/local_cipher.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 
 final recentSearchesStoreProvider = Provider<RecentSearchesStore>((ref) {
-  return const SharedPreferencesRecentSearchesStore();
+  return SharedPreferencesRecentSearchesStore(
+    cipher: ref.watch(localCipherProvider),
+  );
 });
 
 /// The searches run on this device, newest first.
@@ -20,25 +25,53 @@ abstract interface class RecentSearchesStore {
   Future<void> save(List<String> searches);
 }
 
+/// Recent searches in shared preferences, encrypted with the device key
+/// (G8): what someone searched for is as private as what they read. An
+/// earlier version kept them as a plain list under another name; that list
+/// is read once, moved over and removed.
 class SharedPreferencesRecentSearchesStore implements RecentSearchesStore {
-  const SharedPreferencesRecentSearchesStore();
+  SharedPreferencesRecentSearchesStore({LocalCipher? cipher})
+    : cipher = cipher ?? sessionLocalCipher;
 
-  static const _key = 'wecord.search.recent';
+  final LocalCipher cipher;
+
+  static const _key = 'wecord.search.recent.v2';
+  static const _legacyKey = 'wecord.search.recent';
 
   @override
   Future<List<String>> load() async {
     final preferences = await SharedPreferences.getInstance();
-    return preferences.getStringList(_key) ?? const [];
+    final sealed = preferences.getString(_key);
+    if (sealed != null) {
+      final text = await cipher.open(sealed);
+      if (text != null) {
+        try {
+          return [
+            for (final item in jsonDecode(text) as List<dynamic>) '$item',
+          ];
+        } on Object {
+          return const [];
+        }
+      }
+    }
+    final legacy = preferences.getStringList(_legacyKey);
+    if (legacy != null) {
+      await save(legacy);
+      await preferences.remove(_legacyKey);
+      return legacy;
+    }
+    return const [];
   }
 
   @override
   Future<void> save(List<String> searches) async {
     final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_legacyKey);
     if (searches.isEmpty) {
       await preferences.remove(_key);
       return;
     }
-    await preferences.setStringList(_key, searches);
+    await preferences.setString(_key, await cipher.seal(jsonEncode(searches)));
   }
 }
 

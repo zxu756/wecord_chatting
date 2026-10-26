@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/features/local_data/local_protection_card.dart';
 import 'package:wecord/features/settings/settings_page.dart';
 import 'package:wecord/features/storage/local_storage_service.dart';
 import 'package:wecord/features/storage/storage_providers.dart';
@@ -270,6 +271,9 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
           ],
         ),
       ],
+      const SizedBox(height: 4),
+      // How saved chats are protected on this device (G8).
+      const LocalProtectionCard(),
       SizedBox(height: 12, child: ColoredBox(color: c.paper)),
     ];
   }

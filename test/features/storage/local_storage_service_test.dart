@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/sqlite_chat_cache.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 import 'package:wecord/features/file_preview/cache_layout.dart';
 import 'package:wecord/features/image_text/image_text_cache.dart';
 import 'package:wecord/features/storage/disk_cache_io.dart';
@@ -403,6 +404,7 @@ void main() {
       sqfliteFfiInit();
       cache = await SqliteChatCache.open(
         inMemoryDatabasePath,
+        cipher: sessionLocalCipher,
         factory: databaseFactoryFfi,
       );
       await cache.writeConversations('user-1', [

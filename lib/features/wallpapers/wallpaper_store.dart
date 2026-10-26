@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
+import 'package:wecord/features/local_data/sealed_wallpaper_photo_store.dart';
 import 'package:wecord/features/wallpapers/wallpaper_model.dart';
 import 'package:wecord/features/wallpapers/wallpaper_photo_store_io.dart'
     if (dart.library.js_interop) 'package:wecord/features/wallpapers/wallpaper_photo_store_web.dart'
@@ -109,6 +111,10 @@ final wallpaperSettingsStoreProvider = Provider<WallpaperSettingsStore>(
   (ref) => const SharedPreferencesWallpaperSettingsStore(),
 );
 
+/// The photos are kept encrypted with the device key (G8).
 final wallpaperPhotoStoreProvider = Provider<WallpaperPhotoStore>(
-  (ref) => platform.createWallpaperPhotoStore(),
+  (ref) => SealedWallpaperPhotoStore(
+    platform.createWallpaperPhotoStore(),
+    ref.watch(localCipherProvider),
+  ),
 );

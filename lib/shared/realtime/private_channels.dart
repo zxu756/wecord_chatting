@@ -26,6 +26,10 @@ String chatActivityTopic(String conversationId) {
 /// Who is in a note, and where their cursor is.
 String notePresenceTopic(String noteId) => 'note-presence-$noteId';
 
+/// Who is on a whiteboard, where their pointers are and the stroke they are
+/// drawing right now (migration 202610281430_whiteboard_files_realtime.sql).
+String whiteboardLiveTopic(String boardId) => 'whiteboard-live-$boardId';
+
 /// A live location share's positions.
 String liveLocationTopic(String shareId) => 'live-location:$shareId';
 

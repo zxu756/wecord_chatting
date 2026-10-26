@@ -198,6 +198,141 @@
       window.addEventListener('load', function () { setTimeout(register, 20000); });
     })();
   </script>
+  <!-- Passkeys (G4). The passkeys plugin's web half talks to a global
+       PasskeyAuthenticator, which its docs want from a downloaded bundle.js.
+       This is the same small interface written here instead (about 80 lines,
+       no third-party code in the page that holds the session), inline so it
+       is there even on an offline start, where the plugin would otherwise
+       fail to register. Options come as JSON with base64url fields (the
+       WebAuthn JSON form); the credential goes back the same way. -->
+  <script>
+    (function () {
+      function toBuffer(text) {
+        var s = text.replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';
+        var bin = atob(s), bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes.buffer;
+      }
+      function toText(buffer) {
+        var bytes = new Uint8Array(buffer), bin = '';
+        for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+      // JSON.parse without the nulls: an absent option is no option.
+      function parse(text) {
+        return JSON.parse(text, function (_, value) { return value === null ? undefined : value; });
+      }
+      function descriptors(list) {
+        return (list || []).map(function (item) {
+          var out = { type: item.type || 'public-key', id: toBuffer(item.id) };
+          if (item.transports && item.transports.length) out.transports = item.transports;
+          return out;
+        });
+      }
+      function prfInput(publicKey, extensions) {
+        var first = extensions && extensions.prf && extensions.prf.eval && extensions.prf.eval.first;
+        if (!first) return;
+        var evalInput = { first: toBuffer(first) };
+        if (extensions.prf.eval.second) evalInput.second = toBuffer(extensions.prf.eval.second);
+        publicKey.extensions = Object.assign({}, publicKey.extensions || {}, { prf: { eval: evalInput } });
+      }
+      function results(credential) {
+        var out = {};
+        try {
+          var raw = credential.getClientExtensionResults() || {};
+          Object.keys(raw).forEach(function (key) { out[key] = raw[key]; });
+          if (raw.prf) {
+            var prf = {};
+            if (typeof raw.prf.enabled === 'boolean') prf.enabled = raw.prf.enabled;
+            if (raw.prf.results && raw.prf.results.first) {
+              prf.results = { first: toText(raw.prf.results.first) };
+              if (raw.prf.results.second) prf.results.second = toText(raw.prf.results.second);
+            }
+            out.prf = prf;
+          }
+        } catch (_) { /* no extension results */ }
+        return out;
+      }
+      function failure(error) {
+        var name = error && error.name;
+        var code = name === 'NotAllowedError' ? 'cancelled'
+          : name === 'SecurityError' ? 'domain-not-associated'
+          : name === 'NotSupportedError' ? 'deviceNotSupported'
+          : name === 'InvalidStateError' ? 'exclude-credentials-match'
+          : error === 'operation aborted by user.' ? 'suppressed'
+          : name || 'unknown';
+        return JSON.stringify({ code: code, message: (error && error.message) || String(error), details: '' });
+      }
+      var controller = null;
+      window.PasskeyAuthenticator = {
+        init: function () { controller = null; },
+        hasPasskeySupport: function () { return Boolean(window.PublicKeyCredential); },
+        isUserVerifyingPlatformAuthenticatorAvailable: function () {
+          if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return Promise.resolve(undefined);
+          return PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return undefined; });
+        },
+        isConditionalMediationAvailable: function () {
+          if (!window.PublicKeyCredential || !PublicKeyCredential.isConditionalMediationAvailable) return Promise.resolve(undefined);
+          return PublicKeyCredential.isConditionalMediationAvailable().catch(function () { return undefined; });
+        },
+        cancelCurrentAuthenticatorOperation: function () {
+          if (controller) controller.abort('operation aborted by user.');
+        },
+        register: function (text) {
+          return new Promise(function (resolve, reject) {
+            var options = parse(text), publicKey = options.publicKey;
+            publicKey.challenge = toBuffer(publicKey.challenge);
+            publicKey.user.id = toBuffer(publicKey.user.id);
+            publicKey.excludeCredentials = descriptors(publicKey.excludeCredentials);
+            prfInput(publicKey, publicKey.extensions);
+            navigator.credentials.create({ publicKey: publicKey }).then(function (credential) {
+              var response = credential.response;
+              resolve(JSON.stringify({
+                id: credential.id,
+                rawId: toText(credential.rawId),
+                type: credential.type,
+                authenticatorAttachment: credential.authenticatorAttachment || null,
+                response: {
+                  clientDataJSON: toText(response.clientDataJSON),
+                  attestationObject: toText(response.attestationObject),
+                  transports: response.getTransports ? response.getTransports() : []
+                },
+                clientExtensionResults: results(credential)
+              }));
+            }).catch(function (error) { reject(failure(error)); });
+          });
+        },
+        login: function (text) {
+          return new Promise(function (resolve, reject) {
+            var options = parse(text), publicKey = options.publicKey;
+            controller = new AbortController();
+            publicKey.challenge = toBuffer(publicKey.challenge);
+            publicKey.allowCredentials = descriptors(publicKey.allowCredentials);
+            prfInput(publicKey, publicKey.extensions);
+            var request = { publicKey: publicKey, signal: controller.signal };
+            if (options.mediation) request.mediation = options.mediation;
+            navigator.credentials.get(request).then(function (credential) {
+              var response = credential.response;
+              resolve(JSON.stringify({
+                id: credential.id,
+                rawId: toText(credential.rawId),
+                type: credential.type,
+                authenticatorAttachment: credential.authenticatorAttachment || null,
+                response: {
+                  clientDataJSON: toText(response.clientDataJSON),
+                  authenticatorData: toText(response.authenticatorData),
+                  signature: toText(response.signature),
+                  userHandle: response.userHandle ? toText(response.userHandle) : null
+                },
+                clientExtensionResults: results(credential)
+              }));
+            }).catch(function (error) { reject(failure(error)); });
+          });
+        }
+      };
+    })();
+  </script>
 </head>
 <body>
   <!-- The loading screen: a lightweight stand-in for the blank page while the

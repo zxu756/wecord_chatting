@@ -193,6 +193,22 @@ Deno.serve(async (request) => {
   }
   targets.push(...((security ?? []) as SecurityPushRow[]).map(securityTarget));
 
+  // The account's own security record (G4): recovery codes made or used,
+  // recovery locked, a passkey added or removed. Same row shape as the
+  // new-login alerts above, to all of the person's devices.
+  const { data: accountSecurity, error: accountSecurityError } = await admin
+    .rpc("claim_account_security_pushes");
+  if (accountSecurityError) {
+    // Not fatal: the other pushes still go out.
+    console.error(
+      "claim_account_security_pushes failed",
+      accountSecurityError.message,
+    );
+  }
+  targets.push(
+    ...((accountSecurity ?? []) as SecurityPushRow[]).map(securityTarget),
+  );
+
   // Answers to circle join requests ("approved" / "declined"), to the
   // applicant's devices (decide_join_request wakes this function).
   const { data: joinAnswers, error: joinAnswersError } = await admin.rpc(

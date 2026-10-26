@@ -7,11 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthUser;
 import 'package:wecord/bootstrap/app_bootstrap.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/auth/recovery_codes.dart';
 import 'package:wecord/features/auth/two_factor.dart';
 import 'package:wecord/features/auth/two_factor_challenge_screen.dart';
 import 'package:wecord/features/settings/two_factor_settings_screen.dart';
 
 import '../../shared/navigation/app_router_test.dart' as router_fakes;
+import 'account_security_fakes.dart';
 
 class FakeTwoFactorRepository implements TwoFactorRepository {
   FakeTwoFactorRepository({this.needsCode = false, this.factorId});
@@ -182,7 +184,12 @@ void main() {
     final repository = FakeTwoFactorRepository();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [twoFactorRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          twoFactorRepositoryProvider.overrideWithValue(repository),
+          recoveryCodesRepositoryProvider.overrideWithValue(
+            FakeRecoveryCodesRepository(),
+          ),
+        ],
         child: const MaterialApp(home: TwoFactorSettingsScreen()),
       ),
     );
@@ -207,6 +214,13 @@ void main() {
       FakeTwoFactorRepository.goodCode,
     );
     await tester.tap(find.byKey(const ValueKey('two-factor-confirm')));
+    await tester.pumpAndSettle();
+
+    // Turning it on shows the first recovery codes before anything else.
+    expect(find.byKey(const ValueKey('recovery-codes-screen')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('recovery-codes-saved')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('recovery-codes-done')));
     await tester.pumpAndSettle();
 
     expect(find.text('Two-step verification is on'), findsOneWidget);

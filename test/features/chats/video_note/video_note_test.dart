@@ -532,7 +532,11 @@ void main() {
       expect(players.single.lastVolume, 0);
       expect(players.single.looping, isTrue);
       expect(players.single.value.isPlaying, isTrue);
-      expect(find.bySemanticsLabel('Video message, 0:12'), findsOneWidget);
+      // The message reads as one stop that names the video and its length.
+      expect(
+        find.bySemanticsLabel(RegExp('Video message, 0:12')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('with reduced motion nothing loops', (tester) async {

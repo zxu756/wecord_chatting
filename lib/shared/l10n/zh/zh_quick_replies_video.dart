@@ -56,6 +56,7 @@ const zhQuickRepliesVideo = <String, String>{
 
   // Round video messages
   'Video message': '视频消息',
+  'Watch video message': '观看视频消息',
   'Video message, {time}': '视频消息，{time}',
   'Video message, sending': '视频消息，发送中',
   'Double tap to watch': '双击观看',

@@ -457,6 +457,7 @@ class _CircleStage extends StatelessWidget {
             button: reviewing,
             onTap: reviewing ? onTapPlayer : null,
             child: GestureDetector(
+              excludeFromSemantics: true,
               onTap: reviewing ? onTapPlayer : null,
               child: ClipOval(
                 child: Container(

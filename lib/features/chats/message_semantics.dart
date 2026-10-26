@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:wecord/features/chats/gif_search.dart';
 import 'package:wecord/features/chats/merged_forward/merged_forward_models.dart';
 import 'package:wecord/features/chats/message_markdown.dart';
+import 'package:wecord/features/chats/video_note/video_note_bubble.dart'
+    show videoNoteLength;
 import 'package:wecord/features/contact_cards/contact_card_models.dart';
 import 'package:wecord/features/moments/moment_card_view.dart';
 import 'package:wecord/features/stories/stories_models.dart';
@@ -74,6 +76,14 @@ String messageSpokenContent(ChatMessage message, {required String senderName}) {
         senderName,
         alt: message.imageAttachment?.alt,
       ),
+      if (body.isNotEmpty) plainTextFromMarkdown(body),
+    ].join(', '),
+    MessageType.file when message.isVideoNote => [
+      (message.fileAttachment?.videoNoteMs ?? 0) > 0
+          ? tr('Video message, {time}', {
+              'time': videoNoteLength(message.fileAttachment!.videoNoteMs!),
+            })
+          : tr('Video message'),
       if (body.isNotEmpty) plainTextFromMarkdown(body),
     ].join(', '),
     MessageType.file => [

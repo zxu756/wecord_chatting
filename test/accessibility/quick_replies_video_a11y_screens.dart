@@ -302,7 +302,21 @@ Future<void> _videoThread(WidgetTester tester, PhoneWorld world) async {
 
 Future<void> _videoThreadCare(WidgetTester tester, PhoneWorld world) async {
   _care(world);
-  await _videoThread(tester, world);
+  _videoWorld(world);
+  // The day line above the first message is measured with the whole row, so
+  // the row that carries it is the round video, which has no fill.
+  world.chats.messages = [
+    phoneMessage(
+      'm2',
+      bart,
+      '',
+      minutesAgo: 39,
+      type: MessageType.file,
+      attachment: _noteAttachment(23000),
+    ),
+    phoneMessage('m3', me, 'Ha! Hold on, a reply', minutesAgo: 30),
+  ];
+  await _openThread(tester, world);
 }
 
 Future<void> _videoViewer(WidgetTester tester, PhoneWorld world) async {

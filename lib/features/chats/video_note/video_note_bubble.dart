@@ -30,6 +30,26 @@ String videoNoteLength(int milliseconds) {
   return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }
 
+/// Opens the round video of [message] in the viewer. A screen reader's
+/// action on the message calls it, since the message reads as one stop.
+Future<void> openVideoNoteMessage(BuildContext context, ChatMessage message) {
+  final attachment = message.fileAttachment;
+  if (attachment == null || isPendingMessageId(message.id)) {
+    return Future.value();
+  }
+  return showVideoNoteViewer(
+    context,
+    file: PreviewFile.fromFileAttachment(
+      attachment,
+      messageId: message.id,
+      conversationId: message.conversationId,
+      senderName: message.senderNickname ?? message.sender?.displayName,
+      sentAt: message.createdAt,
+    ),
+    durationMs: attachment.videoNoteMs ?? 0,
+  );
+}
+
 /// A round video message in the chat (A13): a circle that plays muted and
 /// loops while it is in view, with its length at the bottom; a tap opens it
 /// larger, with sound.
@@ -426,6 +446,8 @@ class _VideoNoteViewerState extends ConsumerState<VideoNoteViewer> {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // The labelled Close button is the way out for a screen reader.
+                excludeFromSemantics: true,
                 onTap: () => Navigator.of(context).maybePop(),
               ),
             ),

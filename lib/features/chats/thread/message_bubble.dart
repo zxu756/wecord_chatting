@@ -359,7 +359,8 @@ class _MessageBubble extends StatelessWidget {
       return true;
     }
     return switch (message.type) {
-      MessageType.voice || MessageType.file || MessageType.poll => false,
+      MessageType.file => message.isVideoNote,
+      MessageType.voice || MessageType.poll => false,
       MessageType.text =>
         message.album == null &&
             message.locationCard == null &&
@@ -396,6 +397,11 @@ class _MessageBubble extends StatelessWidget {
         MessageSemanticAction(
           tr('Open Moment'),
           () => unawaited(context.push('/moments/$momentId')),
+        ),
+      if (message.isVideoNote)
+        MessageSemanticAction(
+          tr('Watch video message'),
+          () => unawaited(openVideoNoteMessage(context, message)),
         ),
       for (final action in _actions(context))
         MessageSemanticAction(action.label, action.onSelected),

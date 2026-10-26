@@ -253,6 +253,11 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280640_interactions_bot_api.sql
 \i supabase/migrations/202610280650_interactions_callbacks.sql
 \i supabase/migrations/202610280660_interactions_account.sql
+\i supabase/migrations/202610280900_chat_privacy_schema.sql
+\i supabase/migrations/202610280910_chat_privacy_rpc.sql
+\i supabase/migrations/202610280920_chat_privacy_enforce.sql
+\i supabase/migrations/202610280930_view_once_screenshots.sql
+\i supabase/migrations/202610280940_chat_privacy_account.sql
 \o /dev/null
 
 create temp table failures (msg text);

@@ -9,6 +9,7 @@ import {
   attachmentsToSign,
   channelPostFilesToSign,
   checkInFilesToSign,
+  circlePostsFilesToSign,
   eventFilesToSign,
   EXPORT_LIFETIME_MS,
   type ExportBlob,
@@ -747,6 +748,20 @@ export async function collectExportData(
     null,
   );
 
+  // The circle posts I wrote (export_my_circle_posts).
+  const circlePosts = await tryRead<Row | null>(
+    skipped,
+    "circle posts",
+    async () => {
+      const result = await admin.rpc("export_my_circle_posts", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // The record of codes made and used and of passkeys, without any hash or
   // key (export_my_account_security).
   const accountSecurity = await tryRead<Row | null>(
@@ -769,6 +784,20 @@ export async function collectExportData(
     "bots I made",
     async () => {
       const result = await admin.rpc("export_my_developer", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
+  // My quick replies and away auto-reply (export_my_quick_replies).
+  const quickReplies = await tryRead<Row | null>(
+    skipped,
+    "quick replies",
+    async () => {
+      const result = await admin.rpc("export_my_quick_replies", {
         target_user_id: userId,
       });
       if (result.error) throw result.error;
@@ -818,6 +847,10 @@ export async function collectExportData(
   }
   // The pictures and files I added to the group space are linked.
   for (const { bucket, path } of groupSpaceFilesToSign(groupSpace)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures of my circle posts are linked.
+  for (const { bucket, path } of circlePostsFilesToSign(circlePosts)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -882,11 +915,13 @@ export async function collectExportData(
     honors,
     channelPosts,
     events2,
+    quickReplies,
     checkIns,
     groupTabs,
     interactions,
     chatPrivacy,
     groupSpace,
+    circlePosts,
     accountSecurity,
     developer,
     files,

@@ -60,7 +60,11 @@ dependencies:
   zxing2: ^0.2.4
   local_auth: ^3.0.2
   flutter_tts: ^4.2.5
+  camera: ^0.12.1
+  camera_macos: ^0.1.1
   passkeys: ^2.23.1
+  flutter_secure_storage: ^11.2.0
+  cryptography: ^2.9.0
 
 dev_dependencies:
   flutter_test:

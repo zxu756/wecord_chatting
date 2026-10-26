@@ -499,6 +499,8 @@ IconData circleAuditIcon(String action) {
     'thread_archive' => Icons.archive_outlined,
     'thread_unarchive' => Icons.unarchive_outlined,
     'post_delete' => Icons.delete_outline,
+    'post_feature' => Icons.star_rounded,
+    'post_unfeature' => Icons.star_outline_rounded,
     'forum_tag_create' => Icons.new_label_outlined,
     'forum_tag_update' => Icons.label_outline,
     'forum_tag_delete' => Icons.label_off_outlined,
@@ -703,6 +705,11 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     'thread_archive' => (tr('{actor} archived thread {target}'), {}),
     'thread_unarchive' => (tr('{actor} unarchived thread {target}'), {}),
     'post_delete' => (tr('{actor} deleted a post by {target}'), {}),
+    'post_feature' => (tr('{actor} featured a post by {target}'), {}),
+    'post_unfeature' => (
+      tr('{actor} removed a post by {target} from Featured'),
+      {},
+    ),
     'forum_tag_create' =>
       inChannel == null
           ? (tr('{actor} created tag {target}'), {})
@@ -869,6 +876,7 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
     'guard_item_flag' => switch (changes['item_type']) {
       'circle_event' => (tr('AI guard flagged an event by {target}'), {}),
       'note' => (tr('AI guard flagged a note by {target}'), {}),
+      'circle_post' => (tr('AI guard flagged a post by {target}'), {}),
       'task_list' ||
       'task_item' => (tr('AI guard flagged a task by {target}'), {}),
       _ => (tr('AI guard flagged something made by {target}'), {}),

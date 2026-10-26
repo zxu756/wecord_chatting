@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wecord/features/accessibility/image_alt_sheet.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/message_markdown_text.dart';
+import 'package:wecord/features/hashtags/hashtag_routes.dart';
+import 'package:wecord/features/hashtags/hashtag_widgets.dart';
 import 'package:wecord/features/later/saved_actions.dart';
 import 'package:wecord/features/later/saved_messages_repository.dart';
 import 'package:wecord/features/moments/moment_photo_viewer.dart';
@@ -546,9 +549,13 @@ class MomentCard extends ConsumerWidget {
     this.maxComments,
     this.onShare,
     this.onTogglePin,
+    this.onOpenTag,
     this.showPinned = false,
     super.key,
   });
+
+  /// Pressing a topic in the text; by default it opens that topic's page.
+  final ValueChanged<String>? onOpenTag;
 
   final MomentPost post;
   final String? myUserId;
@@ -572,6 +579,16 @@ class MomentCard extends ConsumerWidget {
 
   /// On a person's page: mark a pinned Moment.
   final bool showPinned;
+
+  /// A topic in the text opens the Moments with it (a filter of the feed).
+  void _openTopic(BuildContext context, String tag) {
+    final onTag = onOpenTag;
+    if (onTag != null) {
+      onTag(tag);
+      return;
+    }
+    GoRouter.maybeOf(context)?.push(momentTagPath(tag));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -658,9 +675,11 @@ class MomentCard extends ConsumerWidget {
             const SizedBox(height: 10),
             _Tappable(
               onTap: onOpen,
-              child: SelectableText(
+              child: HashtagText(
                 post.body,
-                key: ValueKey('moment-body-${post.id}'),
+                selectable: true,
+                textKey: ValueKey('moment-body-${post.id}'),
+                onTag: (tag) => _openTopic(context, tag),
                 style: TextStyle(fontSize: 15.5, height: 1.45, color: c.ink),
               ),
             ),

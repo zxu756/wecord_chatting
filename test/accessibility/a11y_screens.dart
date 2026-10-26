@@ -84,11 +84,15 @@ import 'knowledge_base_a11y_screens.dart';
 import 'member_honors_a11y_screens.dart';
 import 'channel_types_a11y_screens.dart';
 import 'events2_a11y_screens.dart';
+import 'quick_replies_video_a11y_screens.dart';
 import 'account_security_a11y_screens.dart';
 import 'group_checkin_tabs_a11y_screens.dart';
 import 'scheduled_calls_a11y_screens.dart';
 import 'group_space_a11y_screens.dart';
 import 'chat_privacy_a11y_screens.dart';
+import 'ai_suggest_a11y_screens.dart';
+import 'hashtags_posts_a11y_screens.dart';
+import 'local_data_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -847,6 +851,7 @@ final allA11yScreens = <A11yScreen>[
   ...memberHonorsA11yScreens,
   ...channelTypesA11yScreens,
   ...events2A11yScreens,
+  ...quickRepliesVideoA11yScreens,
   ...accountSecurityA11yScreens,
   ...groupCheckinTabsA11yScreens,
   ...interactionsA11yScreens,
@@ -854,4 +859,7 @@ final allA11yScreens = <A11yScreen>[
   ...groupSpaceA11yScreens,
   ...chatPrivacyA11yScreens,
   ...developerA11yScreens,
+  ...aiSuggestA11yScreens,
+  ...hashtagsPostsA11yScreens,
+  ...localDataA11yScreens,
 ];

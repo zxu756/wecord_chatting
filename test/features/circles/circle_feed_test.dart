@@ -8,6 +8,10 @@ import 'package:go_router/go_router.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
+import 'package:wecord/features/circles/circle_post_grid_card.dart';
+import 'package:wecord/features/circles/circle_posts_screens.dart';
+import 'package:wecord/features/circles/circle_routes.dart';
+import 'package:wecord/features/circles/circle_rpc.dart';
 import 'package:wecord/features/circles/circles_repository.dart';
 import 'package:wecord/shared/models/channel_webhook.dart';
 import 'package:wecord/shared/models/circle.dart';
@@ -34,12 +38,49 @@ void main() {
 
     await tester.tap(find.text('Feed'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'Weekend photos');
+    await tester.enterText(_bodyField(), 'Weekend photos');
     await tester.tap(find.byTooltip('Post'));
     await tester.pumpAndSettle();
 
-    expect(repository.createdPostBody, 'Weekend photos');
-    expect(repository.createdPostCircleId, 'circle-1');
+    final call = _calls('create_circle_post').single;
+    expect(call.name, 'create_circle_post');
+    expect(call.params['body'], 'Weekend photos');
+    expect(call.params['target_circle_id'], 'circle-1');
+    expect(call.params['post_title'], isNull);
+    expect(call.params['post_tags'], isEmpty);
+  });
+
+  testWidgets('feed composer sends a title and picked topics', (tester) async {
+    final repository = FakeCirclesRepository()..detail = _detail(posts: []);
+    final router = _router();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(_app(repository, router: router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Feed'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Title (optional)'),
+      '  Lake   trip ',
+    );
+    await tester.enterText(_bodyField(), 'Pictures #lake');
+    await tester.tap(find.byTooltip('Add topics'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Add a topic'),
+      '#Hiking',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('#hiking'), findsOneWidget);
+    await tester.tap(find.byTooltip('Post'));
+    await tester.pumpAndSettle();
+
+    final call = _calls('create_circle_post').single;
+    expect(call.params['post_title'], 'Lake trip');
+    expect(call.params['post_tags'], ['hiking']);
+    expect(call.params['body'], 'Pictures #lake');
   });
 
   testWidgets('feed composer uploads image posts', (tester) async {
@@ -62,12 +103,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add image'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'A snapshot');
+    await tester.enterText(_bodyField(), 'A snapshot');
     await tester.tap(find.byTooltip('Post'));
     await tester.pumpAndSettle();
 
     expect(repository.uploadedImageFileName, 'photo.png');
-    expect(repository.createdPostImage?.path, 'circle-1/photo.png');
+    expect(
+      (_calls('create_circle_post').single.params['attachment']
+          as Map<String, dynamic>)['path'],
+      'circle-1/photo.png',
+    );
   });
 
   testWidgets('post tile likes, comments, and deletes posts', (tester) async {
@@ -123,16 +168,220 @@ void main() {
     expect(repository.reportedPostId, 'post-1');
     expect(repository.reportedReason, ReportReason.spam);
   });
+
+  group('circle posts 2.0', () {
+    Future<void> openFeed(
+      WidgetTester tester,
+      List<CirclePost> posts, {
+      String location = '/circles/circle-1',
+    }) async {
+      tester.view.physicalSize = const Size(500, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repository = FakeCirclesRepository()
+        ..detail = _detail(posts: posts);
+      final router = _router(location: location);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(_app(repository, router: router));
+      await tester.pumpAndSettle();
+      if (location == '/circles/circle-1') {
+        await tester.tap(find.text('Feed'));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    testWidgets('a post shows its title, topics and featured mark', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await openFeed(tester, [
+        _postV2(
+          title: 'Lake trip',
+          tags: ['lake', 'hiking'],
+          featured: true,
+          body: 'Pictures from #lake',
+        ),
+      ]);
+
+      expect(find.text('Lake trip'), findsOneWidget);
+      expect(find.text('#hiking'), findsWidgets);
+      expect(find.text('Featured'), findsWidgets);
+      expect(find.bySemanticsLabel(RegExp('Featured post')), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('a moderator features and un-features a post', (tester) async {
+      await openFeed(tester, [
+        _postV2(id: 'a', canFeature: true),
+        _postV2(id: 'b', canFeature: true, featured: true),
+      ]);
+
+      await tester.tap(find.byTooltip('Post actions').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Feature'));
+      await tester.pumpAndSettle();
+      var call = _calls('set_circle_post_featured').single;
+      expect(call.params['target_post_id'], 'a');
+      expect(call.params['featured'], true);
+
+      await tester.tap(find.byTooltip('Post actions').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove from Featured'));
+      await tester.pumpAndSettle();
+      call = _calls('set_circle_post_featured').last;
+      expect(call.params['target_post_id'], 'b');
+      expect(call.params['featured'], false);
+    });
+
+    testWidgets('a member who cannot feature does not see the action', (
+      tester,
+    ) async {
+      await openFeed(tester, [_postV2(canFeature: false)]);
+      await tester.tap(find.byTooltip('Post actions'));
+      await tester.pumpAndSettle();
+      expect(find.text('Feature'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+    });
+
+    testWidgets('the author edits the title, the text and the topics', (
+      tester,
+    ) async {
+      await openFeed(tester, [
+        _postV2(
+          isOwn: true,
+          title: 'Old title',
+          tags: ['lake', 'hiking'],
+          body: 'Pictures from #lake',
+        ),
+      ]);
+
+      await tester.tap(find.byTooltip('Post actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      // The topic written in the text comes back from the text; only the
+      // picked one is in the editor.
+      expect(find.text('#hiking'), findsWidgets);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Title (optional)').last,
+        'New title',
+      );
+      await tester.tap(find.widgetWithText(WeCordButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final call = _calls('update_circle_post').single;
+      expect(call.params['target_post_id'], 'post-1');
+      expect(call.params['post_title'], 'New title');
+      expect(call.params['body'], 'Pictures from #lake');
+      expect(call.params['post_tags'], ['hiking']);
+    });
+
+    testWidgets('the filters keep the featured posts or one topic', (
+      tester,
+    ) async {
+      await openFeed(tester, [
+        _postV2(id: 'a', title: 'Alpha', tags: ['lake']),
+        _postV2(id: 'b', title: 'Beta', tags: ['city'], featured: true),
+      ]);
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(WeCordChip, 'Featured'));
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsNothing);
+      expect(find.text('Beta'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(WeCordChip, 'All'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(WeCordChip, '#lake').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsNothing);
+
+      // Pressing the chosen topic again lets go of it.
+      await tester.tap(find.widgetWithText(WeCordChip, '#lake').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Beta'), findsOneWidget);
+    });
+
+    testWidgets('a filter with nothing in it says so', (tester) async {
+      await openFeed(tester, [_postV2(title: 'Alpha')]);
+      await tester.tap(find.widgetWithText(WeCordChip, 'Featured'));
+      await tester.pumpAndSettle();
+      expect(find.text('No posts match'), findsOneWidget);
+    });
+
+    testWidgets('the grid shows cards that open the post', (tester) async {
+      await openFeed(tester, [
+        _postV2(id: 'a', title: 'Alpha', featured: true),
+        _postV2(id: 'b', title: 'Beta'),
+      ]);
+      await tester.tap(find.byTooltip('Grid view'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CirclePostGridCard), findsNWidgets(2));
+      expect(find.byTooltip('List view'), findsOneWidget);
+
+      await tester.tap(find.text('Beta'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CirclePostDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('the post page shows every comment', (tester) async {
+      await openFeed(tester, [
+        _postV2(
+          id: 'a',
+          title: 'Alpha',
+          comments: [
+            for (var i = 1; i <= 4; i++) _comment('c$i', 'Comment $i'),
+          ],
+        ),
+      ], location: circlePostPath('circle-1', 'a'));
+      for (var i = 1; i <= 4; i++) {
+        expect(find.textContaining('Comment $i'), findsOneWidget);
+      }
+    });
+
+    testWidgets('a post that is gone says so', (tester) async {
+      await openFeed(
+        tester,
+        const [],
+        location: circlePostPath('circle-1', 'gone'),
+      );
+      expect(find.text('This post is not available.'), findsOneWidget);
+    });
+
+    testWidgets('the posts page opens filtered by a topic', (tester) async {
+      await openFeed(tester, [
+        _postV2(id: 'a', title: 'Alpha', tags: ['lake']),
+        _postV2(id: 'b', title: 'Beta', tags: ['city']),
+      ], location: circlePostsPath('circle-1', tag: 'lake'));
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsNothing);
+    });
+  });
 }
+
+/// The calls the circle post repository made, with their parameters.
+final rpcCalls = <({String name, Map<String, dynamic> params})>[];
+
+Iterable<({String name, Map<String, dynamic> params})> _calls(String name) =>
+    rpcCalls.where((call) => call.name == name);
+
+Finder _bodyField() => find.widgetWithText(TextField, 'Share with this Circle');
 
 Widget _app(
   FakeCirclesRepository repository, {
   required GoRouter router,
   ImagePickerService? imagePicker,
 }) {
+  rpcCalls.clear();
   return ProviderScope(
     overrides: [
       circlesRepositoryProvider.overrideWithValue(repository),
+      circleRpcProvider.overrideWithValue((name, params) async {
+        rpcCalls.add((name: name, params: params));
+        return name == 'set_circle_post_featured' ? true : 'post-new';
+      }),
       if (imagePicker != null)
         imagePickerServiceProvider.overrideWithValue(imagePicker),
     ],
@@ -140,14 +389,33 @@ Widget _app(
   );
 }
 
-GoRouter _router() {
+GoRouter _router({String location = '/circles/circle-1'}) {
   return GoRouter(
-    initialLocation: '/circles/circle-1',
+    initialLocation: location,
     routes: [
       GoRoute(
         path: '/circles/:circleId',
         builder: (context, state) =>
             CircleDetailScreen(circleId: state.pathParameters['circleId']!),
+        routes: [
+          GoRoute(
+            path: 'posts',
+            builder: (context, state) => CirclePostsScreen(
+              circleId: state.pathParameters['circleId']!,
+              tag: state.uri.queryParameters['tag'],
+              featuredOnly: state.uri.queryParameters['featured'] == '1',
+            ),
+            routes: [
+              GoRoute(
+                path: ':postId',
+                builder: (context, state) => CirclePostDetailScreen(
+                  circleId: state.pathParameters['circleId']!,
+                  postId: state.pathParameters['postId']!,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
@@ -201,6 +469,48 @@ CirclePost _post({required bool isOwnPost, bool canManagePost = false}) {
     canManagePost: canManagePost,
     likeCount: 2,
     commentCount: 1,
+  );
+}
+
+CirclePostComment _comment(String id, String body) {
+  return CirclePostComment(
+    id: id,
+    postId: 'post-1',
+    authorId: 'user-2',
+    body: body,
+    createdAt: DateTime.utc(2026, 5, 19, 2),
+    updatedAt: DateTime.utc(2026, 5, 19, 2),
+    author: _profile(id: 'user-2', username: 'grace', name: 'Grace'),
+  );
+}
+
+CirclePost _postV2({
+  String id = 'post-1',
+  String? title,
+  List<String> tags = const [],
+  bool featured = false,
+  bool canFeature = false,
+  bool isOwn = false,
+  String body = 'Some text',
+  List<CirclePostComment> comments = const [],
+}) {
+  return CirclePost(
+    id: id,
+    circleId: 'circle-1',
+    authorId: 'user-1',
+    body: body,
+    title: title,
+    tags: tags,
+    featuredAt: featured ? DateTime.utc(2026, 5, 20) : null,
+    canFeaturePost: canFeature,
+    createdAt: DateTime.utc(2026, 5, 19, 1),
+    updatedAt: DateTime.utc(2026, 5, 19, 1),
+    author: _profile(id: 'user-1', username: 'xu', name: 'Xu'),
+    comments: comments,
+    isOwnPost: isOwn,
+    canManagePost: isOwn,
+    likeCount: 2,
+    commentCount: comments.length,
   );
 }
 

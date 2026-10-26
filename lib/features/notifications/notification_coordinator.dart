@@ -516,7 +516,8 @@ class NotificationCoordinator {
         return;
       }
       try {
-        final locked = _lockedChatIds?.call().contains(conversation.id) ?? false;
+        final locked =
+            _lockedChatIds?.call().contains(conversation.id) ?? false;
         await _notificationService.showMessageNotification(
           conversationId: conversation.id,
           // A locked chat is told without a name or a word of it.

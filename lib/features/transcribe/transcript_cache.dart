@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/local_data/local_cipher.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 import 'package:wecord/features/transcribe/transcribe_models.dart';
 
 /// A transcript kept on this device.
@@ -66,11 +68,18 @@ abstract interface class TranscriptCache {
 
 /// Transcripts in shared preferences, one entry per signed-in user, newest
 /// [maxEntries] kept. Without a user (nobody signed in) nothing is stored.
+/// What is stored is encrypted with the device key (G8); transcripts saved
+/// before that are read as they are and written back encrypted.
 class SharedPreferencesTranscriptCache implements TranscriptCache {
-  SharedPreferencesTranscriptCache({this.userId, this.maxEntries = 300});
+  SharedPreferencesTranscriptCache({
+    this.userId,
+    this.maxEntries = 300,
+    LocalCipher? cipher,
+  }) : cipher = cipher ?? sessionLocalCipher;
 
   final String? userId;
   final int maxEntries;
+  final LocalCipher cipher;
   Map<String, CachedTranscript>? _entries;
   Future<void> _saving = Future.value();
 
@@ -82,9 +91,13 @@ class SharedPreferencesTranscriptCache implements TranscriptCache {
       return loaded;
     }
     final entries = <String, CachedTranscript>{};
+    var legacy = false;
     if (userId != null) {
       final preferences = await SharedPreferences.getInstance();
-      final raw = preferences.getString(_key);
+      final stored = preferences.getString(_key);
+      final opened = await cipher.read(stored);
+      legacy = opened.legacy;
+      final raw = opened.text;
       if (raw != null) {
         try {
           final decoded = jsonDecode(raw);
@@ -102,7 +115,12 @@ class SharedPreferencesTranscriptCache implements TranscriptCache {
       }
     }
     // Entries added while loading win.
-    return _entries ??= entries;
+    final result = _entries ??= entries;
+    if (legacy && result.isNotEmpty) {
+      // Saved in the clear by an earlier version: written back encrypted.
+      unawaited(_save(result));
+    }
+    return result;
   }
 
   Future<void> _save(Map<String, CachedTranscript> entries) {
@@ -120,7 +138,7 @@ class SharedPreferencesTranscriptCache implements TranscriptCache {
           if (entries.isEmpty) {
             await preferences.remove(_key);
           } else {
-            await preferences.setString(_key, snapshot);
+            await preferences.setString(_key, await cipher.seal(snapshot));
           }
         })
         .catchError((Object _) {});
@@ -246,5 +264,6 @@ final transcriptUserIdProvider = Provider<String?>((ref) {
 final transcriptCacheProvider = Provider<TranscriptCache>((ref) {
   return SharedPreferencesTranscriptCache(
     userId: ref.watch(transcriptUserIdProvider),
+    cipher: ref.watch(localCipherProvider),
   );
 });

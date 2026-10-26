@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wecord/features/auth/auth_repository.dart';
+import 'package:wecord/features/local_data/local_cipher.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 
 /// The text read from a picture, kept on this device. An empty [text] means
 /// the picture was read and holds no text.
@@ -64,11 +66,18 @@ String imageTextKey({String? messageId, required String storagePath}) =>
 
 /// Texts in shared preferences, one entry per signed-in user, the newest
 /// [maxEntries] kept. Without a user (nobody signed in) nothing is stored.
+/// What is stored is encrypted with the device key (G8); texts saved before
+/// that are read as they are and written back encrypted.
 class SharedPreferencesImageTextCache implements ImageTextCache {
-  SharedPreferencesImageTextCache({this.userId, this.maxEntries = 200});
+  SharedPreferencesImageTextCache({
+    this.userId,
+    this.maxEntries = 200,
+    LocalCipher? cipher,
+  }) : cipher = cipher ?? sessionLocalCipher;
 
   final String? userId;
   final int maxEntries;
+  final LocalCipher cipher;
   Map<String, CachedImageText>? _entries;
   Future<void> _saving = Future.value();
 
@@ -80,9 +89,13 @@ class SharedPreferencesImageTextCache implements ImageTextCache {
       return loaded;
     }
     final entries = <String, CachedImageText>{};
+    var legacy = false;
     if (userId != null) {
       final preferences = await SharedPreferences.getInstance();
-      final raw = preferences.getString(_key);
+      final stored = preferences.getString(_key);
+      final opened = await cipher.read(stored);
+      legacy = opened.legacy;
+      final raw = opened.text;
       if (raw != null) {
         try {
           final decoded = jsonDecode(raw);
@@ -99,7 +112,12 @@ class SharedPreferencesImageTextCache implements ImageTextCache {
         }
       }
     }
-    return _entries ??= entries;
+    final result = _entries ??= entries;
+    if (legacy && result.isNotEmpty) {
+      // Saved in the clear by an earlier version: written back encrypted.
+      unawaited(_save(result));
+    }
+    return result;
   }
 
   Future<void> _save(Map<String, CachedImageText> entries) {
@@ -115,7 +133,7 @@ class SharedPreferencesImageTextCache implements ImageTextCache {
           if (entries.isEmpty) {
             await preferences.remove(_key);
           } else {
-            await preferences.setString(_key, snapshot);
+            await preferences.setString(_key, await cipher.seal(snapshot));
           }
         })
         .catchError((Object _) {});
@@ -238,5 +256,6 @@ final imageTextUserIdProvider = Provider<String?>((ref) {
 final imageTextCacheProvider = Provider<ImageTextCache>((ref) {
   return SharedPreferencesImageTextCache(
     userId: ref.watch(imageTextUserIdProvider),
+    cipher: ref.watch(localCipherProvider),
   );
 });

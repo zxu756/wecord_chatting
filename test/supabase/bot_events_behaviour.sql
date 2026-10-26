@@ -235,6 +235,10 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280210_group_space_albums.sql
 \i supabase/migrations/202610280220_group_space_folders.sql
 \i supabase/migrations/202610280230_group_space_account.sql
+\i supabase/migrations/202610280300_quick_replies.sql
+\i supabase/migrations/202610280310_away_auto_reply.sql
+\i supabase/migrations/202610280320_video_notes.sql
+\i supabase/migrations/202610280330_quick_replies_account.sql
 \i supabase/migrations/202610280400_account_security_schema.sql
 \i supabase/migrations/202610280410_mfa_recovery_codes.sql
 \i supabase/migrations/202610280420_account_security_events.sql
@@ -252,6 +256,15 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280640_interactions_bot_api.sql
 \i supabase/migrations/202610280650_interactions_callbacks.sql
 \i supabase/migrations/202610280660_interactions_account.sql
+\i supabase/migrations/202610280700_hashtags_schema.sql
+\i supabase/migrations/202610280710_circle_posts_rpcs.sql
+\i supabase/migrations/202610280720_circle_posts_read.sql
+\i supabase/migrations/202610280730_moments_hashtags.sql
+\i supabase/migrations/202610280740_posts_guard.sql
+\i supabase/migrations/202610280750_featured_posts_tab.sql
+\i supabase/migrations/202610280760_featured_push.sql
+\i supabase/migrations/202610280770_hashtags_account.sql
+\i supabase/migrations/202610280800_ai_draft_reply.sql
 \i supabase/migrations/202610280900_chat_privacy_schema.sql
 \i supabase/migrations/202610280910_chat_privacy_rpc.sql
 \i supabase/migrations/202610280920_chat_privacy_enforce.sql

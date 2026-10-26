@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/message_reactions.dart';
+import 'package:wecord/features/chats/quick_replies/away_reply_sheet.dart';
+import 'package:wecord/features/chats/quick_replies/quick_replies_repository.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/profile_social_repository.dart';
 import 'package:wecord/features/profile/status_visibility_picker.dart';
@@ -203,6 +207,31 @@ class _CustomStatusSheetState extends ConsumerState<CustomStatusSheet> {
               ),
               StatusVisibilityPicker(
                 onChanged: (choice) => _visibility = choice,
+              ),
+              const SizedBox(height: 12),
+              // Auto-reply for when the person is away (A8).
+              SettingsGroup(
+                color: c.raised,
+                separatorIndent: 14,
+                children: [
+                  SettingsRow(
+                    key: const ValueKey('custom-status-away'),
+                    icon: Icons.beach_access_outlined,
+                    tone: SettingsTone.warning,
+                    title: tr('Auto-reply when away'),
+                    subtitle: ref
+                        .watch(awayReplyProvider)
+                        .when(
+                          data: (away) =>
+                              awayReplySummary(context, away, DateTime.now()),
+                          loading: () => '…',
+                          error: (_, _) => tr('Off'),
+                        ),
+                    onTap: _saving
+                        ? null
+                        : () => unawaited(showAwayReplySheet(context)),
+                  ),
+                ],
               ),
               if (_errorText != null) ...[
                 const SizedBox(height: 12),

@@ -288,8 +288,8 @@ void _handleConversationAction(
           ? repository.markConversationRead(conversation.id)
           : repository.markConversationUnread(conversation.id),
     // Handled by the caller: it opens a sheet of its own.
-    _ConversationAction.folders || _ConversationAction.lock =>
-      Future<void>.value(),
+    _ConversationAction.folders ||
+    _ConversationAction.lock => Future<void>.value(),
     _ConversationAction.hide => repository.hideConversation(conversation.id),
   };
 

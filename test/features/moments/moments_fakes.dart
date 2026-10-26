@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart' show XFile;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
+import 'package:wecord/features/hashtags/hashtag_text.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
 import 'package:wecord/features/moments/moment_photos.dart';
 import 'package:wecord/features/moments/moments_models.dart';
@@ -84,6 +85,9 @@ class FakeMomentsRepository implements MomentsRepository {
   final deletedPosts = <String>[];
   final feedCalls =
       <({DateTime? beforeAt, String? beforeId, String? authorId})>[];
+
+  /// The topics [topics] returns.
+  var topicList = <MomentTopic>[];
   final readNotifications = <List<String>?>[];
   final ranges = <MomentsRange>[];
   var coversSet = 0;
@@ -103,16 +107,24 @@ class FakeMomentsRepository implements MomentsRepository {
   }
 
   @override
+  Future<List<MomentTopic>> topics({int limit = 20}) async =>
+      topicList.take(limit).toList();
+
+  @override
   Future<List<MomentPost>> feed({
     int limit = 20,
     DateTime? beforeAt,
     String? beforeId,
     String? authorId,
+    String? tag,
   }) async {
     feedCalls.add((beforeAt: beforeAt, beforeId: beforeId, authorId: authorId));
+    final wanted = cleanHashtag(tag);
     final all = [
       for (final post in posts)
-        if (authorId == null || post.authorId == authorId) post,
+        if ((authorId == null || post.authorId == authorId) &&
+            (tag == null || extractHashtags(post.body).contains(wanted)))
+          post,
     ]..sort(_newestFirst);
     final after = beforeAt == null
         ? all

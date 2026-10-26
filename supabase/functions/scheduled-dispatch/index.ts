@@ -47,7 +47,12 @@ import { type JoinRequestPushRow, joinRequestTarget } from "./join_requests.ts";
 import { type ModerationPushRow, moderationTarget } from "./moderation.ts";
 import { type TitlePushRow, titleTarget } from "./titles.ts";
 import { type QaPushRow, qaTarget } from "./qa.ts";
+import {
+  type FeaturedPostPushRow,
+  featuredPostTarget,
+} from "./featured_posts.ts";
 import { type EventNoticePushRow, eventNoticeTarget } from "./events2.ts";
+import { awayReplyTargets } from "./away_replies.ts";
 import { type CheckInPushRow, checkInTarget } from "./check_in.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
@@ -141,6 +146,11 @@ Deno.serve(async (request) => {
       })),
     );
   }
+
+  // Away auto-replies (A8): ordinary messages from the away person, written
+  // by the database; pushed like a scheduled message the sender just sent.
+  // The trigger and a cron job of their own wake this function.
+  targets.push(...await awayReplyTargets(admin));
 
   // Reminders that came due: "Reminder" / "{sender}: {text}".
   const { data: reminders, error: reminderError } = await admin.rpc(
@@ -364,6 +374,25 @@ Deno.serve(async (request) => {
   }
   const urgentTargets = ((urgent ?? []) as UrgentPushRow[]).map(
     urgentRowTarget,
+  );
+
+  // "A moderator featured your post" (B8): set_circle_post_featured wakes
+  // this function. Not a chat, so nothing to lock; quiet hours hold it back
+  // below like the rest.
+  const { data: featuredPosts, error: featuredPostsError } = await admin.rpc(
+    "claim_featured_post_pushes",
+  );
+  if (featuredPostsError) {
+    // Not fatal: the other pushes still go out.
+    console.error(
+      "claim_featured_post_pushes failed",
+      featuredPostsError.message,
+    );
+  }
+  targets.push(
+    ...((featuredPosts ?? []) as FeaturedPostPushRow[]).map(
+      featuredPostTarget,
+    ),
   );
 
   // Files of expired disappearing messages. Not a push, but it needs the

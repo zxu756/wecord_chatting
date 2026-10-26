@@ -14,6 +14,7 @@ import 'package:wecord/features/ai/ask/ask_controller.dart';
 import 'package:wecord/features/ai/ask/ask_panel.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/home/home_avatars.dart';
+import 'package:wecord/features/local_search/offline_results_notice.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
 import 'package:wecord/features/search/message_jump.dart';
@@ -22,6 +23,7 @@ import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/features/search/message_search_repository.dart';
 import 'package:wecord/features/search/recent_searches.dart';
 import 'package:wecord/features/search/search_filter_bar.dart';
+import 'package:wecord/features/hashtags/hashtag_overview.dart';
 import 'package:wecord/features/search/search_query.dart';
 import 'package:wecord/features/search/search_results.dart';
 import 'package:wecord/shared/l10n/error_text.dart';
@@ -954,6 +956,9 @@ class _GlobalMessageSearchScreenState
         loading: state.isLoading,
         onSort: _search.setSort,
       ),
+      HashtagSearchStrip(query: _controller.text),
+      // The server could not be reached: these are the messages saved here.
+      if (state.offline) const OfflineResultsNotice(),
       if (state.discovery.isNotEmpty) _DiscoveryStrip(results: state.discovery),
       if (state.hits.isEmpty)
         SearchHint(

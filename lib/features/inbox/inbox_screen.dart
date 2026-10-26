@@ -56,9 +56,7 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/navigation/paper_page_header.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-final inboxProvider = FutureProvider.autoDispose<List<InboxItem>>((
-  ref,
-) async {
+final inboxProvider = FutureProvider.autoDispose<List<InboxItem>>((ref) async {
   // New messages (and reads) show up in the conversation list first.
   ref.listen(conversationsProvider, (previous, next) {
     if (previous != null && previous.hasValue && next is AsyncData) {
@@ -378,7 +376,8 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
         id: reminder.id,
         senderName: reminder.available ? reminder.senderName : '',
         senderAvatarUrl: reminder.available ? reminder.senderAvatarUrl : null,
-        preview: ref
+        preview:
+            ref
                 .watch(lockedConversationIdsProvider)
                 .contains(reminder.conversationId)
             ? tr('Locked chat')

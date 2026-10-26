@@ -73,6 +73,7 @@ class MediaToQueue {
     this.originalMimeType,
     this.originalQuality = false,
     this.alt,
+    this.videoNoteMs,
   });
 
   final OutboxMediaKind kind;
@@ -98,6 +99,9 @@ class MediaToQueue {
 
   /// What a picture shows, written by the sender; null when none.
   final String? alt;
+
+  /// A round video message (A13): how long it runs, in milliseconds.
+  final int? videoNoteMs;
 }
 
 class OutboxNotifier extends Notifier<List<OutboxEntry>> {
@@ -353,6 +357,7 @@ class OutboxNotifier extends Notifier<List<OutboxEntry>> {
               // A view-once picture shows nothing of itself before it is
               // opened, and nor does its description.
               alt: viewOnce ? null : item.alt,
+              videoNoteMs: item.videoNoteMs,
             ),
           ),
         );

@@ -13,10 +13,13 @@ import 'package:wecord/shared/l10n/zh/zh_knowledge_base.dart';
 import 'package:wecord/shared/l10n/zh/zh_member_honors.dart';
 import 'package:wecord/shared/l10n/zh/zh_channel_types.dart';
 import 'package:wecord/shared/l10n/zh/zh_events2.dart';
+import 'package:wecord/shared/l10n/zh/zh_quick_replies_video.dart';
 import 'package:wecord/shared/l10n/zh/zh_group_checkin_tabs.dart';
 import 'package:wecord/shared/l10n/zh/zh_interactions.dart';
 import 'package:wecord/shared/l10n/zh/zh_scheduled_calls.dart';
 import 'package:wecord/shared/l10n/zh/zh_group_space.dart';
+import 'package:wecord/shared/l10n/zh/zh_ai_suggest.dart';
+import 'package:wecord/shared/l10n/zh/zh_local_data.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -103,6 +106,7 @@ import 'package:wecord/shared/l10n/zh/zh_ai_ask.dart';
 import 'package:wecord/shared/l10n/zh/zh_favorites2.dart';
 import 'package:wecord/shared/l10n/zh/zh_platforms.dart';
 import 'package:wecord/shared/l10n/zh/zh_developer.dart';
+import 'package:wecord/shared/l10n/zh/zh_hashtags_posts.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -201,12 +205,16 @@ const zhAreas = <Map<String, String>>[
   zhMemberHonors,
   zhChannelTypes,
   zhEvents2,
+  zhQuickRepliesVideo,
   zhAccountSecurity,
   zhGroupCheckinTabs,
   zhInteractions,
   zhScheduledCalls,
   zhGroupSpace,
   zhChatPrivacy,
+  zhAiSuggest,
+  zhHashtagsPosts,
+  zhLocalData,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

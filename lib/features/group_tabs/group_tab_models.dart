@@ -17,6 +17,9 @@ abstract final class GroupTabKinds {
 
   /// The group space (B6): registered by that package when it is merged.
   static const space = 'space';
+
+  /// The circle's featured posts (B8): needs a circle channel, no target.
+  static const featuredPosts = 'featured_posts';
 }
 
 /// The most tabs a chat can have.

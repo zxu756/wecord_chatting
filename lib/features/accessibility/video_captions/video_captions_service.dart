@@ -9,6 +9,8 @@ import 'package:wecord/features/accessibility/video_captions/video_captions_mode
 import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
 import 'package:wecord/features/file_preview/preview_file.dart';
+import 'package:wecord/features/local_data/local_cipher.dart';
+import 'package:wecord/features/local_data/local_cipher_provider.dart';
 import 'package:wecord/features/transcribe/transcribe_models.dart';
 
 /// Why captions could not be made for a video.
@@ -183,11 +185,19 @@ abstract interface class VideoCaptionCache {
 
 /// Captions in shared preferences, one entry per signed-in user, the newest
 /// [maxEntries] kept. Without a user nothing is stored.
+///
+/// What is stored is encrypted with the device key (G8); captions saved
+/// before that are read as they are and written back encrypted.
 class SharedPreferencesVideoCaptionCache implements VideoCaptionCache {
-  SharedPreferencesVideoCaptionCache({this.userId, this.maxEntries = 20});
+  SharedPreferencesVideoCaptionCache({
+    this.userId,
+    this.maxEntries = 20,
+    LocalCipher? cipher,
+  }) : cipher = cipher ?? sessionLocalCipher;
 
   final String? userId;
   final int maxEntries;
+  final LocalCipher cipher;
   Map<String, VideoCaptions>? _entries;
   Future<void> _saving = Future.value();
 
@@ -199,9 +209,12 @@ class SharedPreferencesVideoCaptionCache implements VideoCaptionCache {
       return loaded;
     }
     final entries = <String, VideoCaptions>{};
+    var legacy = false;
     if (userId != null) {
       final preferences = await SharedPreferences.getInstance();
-      final raw = preferences.getString(_key);
+      final opened = await cipher.read(preferences.getString(_key));
+      legacy = opened.legacy;
+      final raw = opened.text;
       if (raw != null) {
         try {
           final decoded = jsonDecode(raw);
@@ -218,7 +231,12 @@ class SharedPreferencesVideoCaptionCache implements VideoCaptionCache {
         }
       }
     }
-    return _entries ??= entries;
+    final result = _entries ??= entries;
+    if (legacy && result.isNotEmpty) {
+      // Saved in the clear by an earlier version: written back encrypted.
+      unawaited(_save(result));
+    }
+    return result;
   }
 
   static String _encode(Map<String, VideoCaptions> entries) => jsonEncode({
@@ -237,7 +255,7 @@ class SharedPreferencesVideoCaptionCache implements VideoCaptionCache {
           if (entries.isEmpty) {
             await preferences.remove(_key);
           } else {
-            await preferences.setString(_key, snapshot);
+            await preferences.setString(_key, await cipher.seal(snapshot));
           }
         })
         .catchError((Object _) {});
@@ -371,6 +389,7 @@ final videoCaptionUserIdProvider = Provider<String?>((ref) {
 final videoCaptionCacheProvider = Provider<VideoCaptionCache>((ref) {
   return SharedPreferencesVideoCaptionCache(
     userId: ref.watch(videoCaptionUserIdProvider),
+    cipher: ref.watch(localCipherProvider),
   );
 });
 

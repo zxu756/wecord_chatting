@@ -10,9 +10,12 @@ import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/care_mode/care_registry_filters.dart';
 import 'package:wecord/features/chat_privacy/chat_privacy_filters.dart';
 import 'package:wecord/features/chats/chat_polish/silent_send.dart';
+import 'package:wecord/features/chats/quick_replies/quick_reply_picker.dart';
+import 'package:wecord/features/chats/video_note/video_note_entry.dart';
 import 'package:wecord/features/forms/forms_chat.dart';
 import 'package:wecord/features/check_in/check_in_chat.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
+import 'package:wecord/features/ai/draft_reply/draft_reply_chat.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
 import 'package:wecord/features/chats/thread/registry/composer_menu_builtin.dart';
 
@@ -22,7 +25,10 @@ final List<ComposerMenuContribution> composerMenuExtensions = [
   formComposerEntry,
   askAssistantEntry,
   silentSendComposerEntry,
+  quickRepliesComposerEntry,
+  videoNoteComposerEntry,
   checkInComposerEntry,
+  draftReplyComposerEntry,
 ];
 
 /// The menu's registry. Tests can override it to add or drop entries.

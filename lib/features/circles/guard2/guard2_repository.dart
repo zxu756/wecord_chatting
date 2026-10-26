@@ -48,7 +48,10 @@ enum GuardItemType {
   circleEvent('circle_event'),
   note('note'),
   taskList('task_list'),
-  taskItem('task_item');
+  taskItem('task_item'),
+
+  /// A post in the circle's feed (B8).
+  circlePost('circle_post');
 
   const GuardItemType(this.key);
 
@@ -64,6 +67,7 @@ enum GuardItemType {
     GuardItemType.note => tr('Note'),
     GuardItemType.taskList => tr('Task list'),
     GuardItemType.taskItem => tr('Task'),
+    GuardItemType.circlePost => tr('Post'),
   };
 }
 

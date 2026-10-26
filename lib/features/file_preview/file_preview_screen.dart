@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_repository.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/file_preview/file_actions.dart';
 import 'package:wecord/features/file_preview/file_fetcher.dart';
@@ -196,6 +197,22 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
 
   PreviewFile get _current => _items[_index];
 
+  /// The file's chat has advanced chat privacy on (G6): nothing here takes
+  /// the file off the chat. The storage rules differ by file type, so the
+  /// server is not the only guard.
+  bool get _restricted {
+    final chat = _current.conversationId ?? widget.conversationId;
+    return chat != null && ref.read(restrictSharingProvider(chat));
+  }
+
+  bool _blockIfRestricted() {
+    if (!_restricted) {
+      return false;
+    }
+    _toast(tr('Turned off by advanced chat privacy.'));
+    return true;
+  }
+
   bool get _isMediaGallery => _items.first.kind.isGalleryMedia;
 
   @override
@@ -332,6 +349,9 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   void _save() {
+    if (_blockIfRestricted()) {
+      return;
+    }
     final file = _current;
     unawaited(
       _run(_FileAction.save, (onProgress) async {
@@ -361,6 +381,9 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
   }
 
   void _share(BuildContext buttonContext) {
+    if (_blockIfRestricted()) {
+      return;
+    }
     final file = _current;
     final origin = _originOf(buttonContext);
     unawaited(
@@ -374,6 +397,9 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
   }
 
   void _openIn(BuildContext buttonContext) {
+    if (_blockIfRestricted()) {
+      return;
+    }
     final file = _current;
     final origin = _originOf(buttonContext);
     unawaited(
@@ -453,6 +479,9 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
       );
     }
 
+    final currentChat = _current.conversationId ?? widget.conversationId;
+    final restrictedChat =
+        currentChat != null && ref.watch(restrictSharingProvider(currentChat));
     final topBar = _TopBar(
       file: _current,
       position: _items.length > 1 ? (_index + 1, _items.length) : null,
@@ -463,7 +492,8 @@ class _FilePreviewScreenState extends ConsumerState<FilePreviewScreen>
       onSave: _save,
       onShare: _share,
       onOpenIn: _openIn,
-      onCopyText: _current.kind == PreviewKind.image
+      restricted: restrictedChat,
+      onCopyText: _current.kind == PreviewKind.image && !restrictedChat
           ? () => unawaited(showImageTextSheet(context, file: _current))
           : null,
     );
@@ -742,6 +772,7 @@ class _TopBar extends StatelessWidget {
     required this.onSave,
     required this.onShare,
     required this.onOpenIn,
+    this.restricted = false,
     this.onCopyText,
   });
 
@@ -754,6 +785,9 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onSave;
   final ValueChanged<BuildContext> onShare;
   final ValueChanged<BuildContext> onOpenIn;
+
+  /// The chat has advanced chat privacy on: no Download, Share or Open in.
+  final bool restricted;
 
   /// Opens "Copy text from picture"; null for what is not a picture.
   final VoidCallback? onCopyText;
@@ -865,20 +899,21 @@ class _TopBar extends StatelessWidget {
                   size: 40,
                   onPressed: busy == null ? onCopyText : null,
                 ),
-              action(
-                _FileAction.save,
-                Icons.download_rounded,
-                tr('Download'),
-                (_) => onSave(),
-              ),
-              if (actions.canShare)
+              if (!restricted)
+                action(
+                  _FileAction.save,
+                  Icons.download_rounded,
+                  tr('Download'),
+                  (_) => onSave(),
+                ),
+              if (!restricted && actions.canShare)
                 action(
                   _FileAction.share,
                   Icons.ios_share_rounded,
                   tr('Share'),
                   onShare,
                 ),
-              if (actions.canOpenIn)
+              if (!restricted && actions.canOpenIn)
                 action(
                   _FileAction.openIn,
                   Icons.open_in_new_rounded,

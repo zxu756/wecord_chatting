@@ -10,6 +10,7 @@ import 'package:wecord/features/care_mode/care_registry_filters.dart';
 import 'package:wecord/features/care_mode/read_aloud.dart';
 import 'package:wecord/features/circles/channel_types/qa_actions.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_filters.dart';
 import 'package:wecord/features/chats/chat_polish/quote_reply.dart';
 import 'package:wecord/features/chats/edit_history/edit_history_chat.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
@@ -47,6 +48,6 @@ final messageActionRegistryProvider = Provider<MessageActionRegistry>((ref) {
       ...messageActionExtensions,
     ])
       if (!simple || !careHiddenMessageActionIds.contains(contribution.id))
-        contribution,
+        hideWhenRestricted(contribution),
   ]);
 });

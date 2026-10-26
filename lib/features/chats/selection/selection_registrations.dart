@@ -7,6 +7,7 @@
 // They sit after the built-in buttons, in `order`.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/actions/extract_actions_chat.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_filters.dart';
 import 'package:wecord/features/chats/selection/selection_registry.dart';
 
 /// Feature contributions to the selection bar. Append yours here.
@@ -17,5 +18,8 @@ final List<SelectionBarContribution> selectionBarExtensions = [
 
 /// The registry. Tests can override it to add or drop buttons.
 final selectionBarRegistryProvider = Provider<SelectionBarRegistry>(
-  (ref) => SelectionBarRegistry(selectionBarExtensions),
+  (ref) => SelectionBarRegistry([
+    for (final contribution in selectionBarExtensions)
+      hideSelectionButtonWhenRestricted(contribution),
+  ]),
 );

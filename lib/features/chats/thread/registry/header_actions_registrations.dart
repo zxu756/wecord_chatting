@@ -11,6 +11,8 @@ import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/care_mode/care_registry_filters.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
 import 'package:wecord/features/app_lock/chat_lock_actions.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_filters.dart';
+import 'package:wecord/features/chat_privacy/chat_privacy_ui.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions.dart';
 import 'package:wecord/features/chats/thread/registry/header_actions_builtin.dart';
 import 'package:wecord/features/circles/channel_types/qa_actions.dart';
@@ -29,6 +31,7 @@ final List<HeaderActionContribution> headerActionExtensions = [
   groupTabsHeaderAction,
   scheduleCallHeaderAction,
   groupSpaceHeaderAction,
+  chatPrivacyHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.
@@ -41,6 +44,6 @@ final headerActionRegistryProvider = Provider<HeaderActionRegistry>((ref) {
       ...headerActionExtensions,
     ])
       if (!simple || !careHiddenHeaderActionIds.contains(contribution.id))
-        contribution,
+        hideHeaderActionWhenRestricted(contribution),
   ]);
 });

@@ -25,10 +25,10 @@ import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
-/// "Quick replies" in the "+" menu, after Send silently (850).
+/// "Quick replies" in the "+" menu, at the end, after Ask AI (1350); a long menu must not push the older entries out of reach.
 final quickRepliesComposerEntry = ComposerMenuContribution(
   id: 'quick-replies',
-  order: 860,
+  order: 1400,
   build: (ctx) {
     final pick = ctx.actions.pickQuickReply;
     if (pick == null) {

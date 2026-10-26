@@ -593,10 +593,9 @@ void main() {
   });
 
   group('the + menu entry', () {
-    test('is registered after Send silently', () {
+    test('is registered at the end of the menu', () {
       expect(quickRepliesComposerEntry.id, 'quick-replies');
-      expect(quickRepliesComposerEntry.order, greaterThan(850));
-      expect(quickRepliesComposerEntry.order, lessThan(900));
+      expect(quickRepliesComposerEntry.order, greaterThan(1350));
     });
   });
 }

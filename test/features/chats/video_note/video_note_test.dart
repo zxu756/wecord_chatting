@@ -634,9 +634,9 @@ void main() {
   });
 
   group('the menu entry', () {
-    test('sits after Photos and videos and before Files', () {
+    test('sits at the end of the menu, after Quick replies', () {
       expect(videoNoteComposerEntry.id, 'video-message');
-      expect(videoNoteComposerEntry.order, inInclusiveRange(101, 199));
+      expect(videoNoteComposerEntry.order, greaterThan(1400));
       expect(
         composerMenuExtensions.map((entry) => entry.id),
         contains('video-message'),

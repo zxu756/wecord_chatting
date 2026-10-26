@@ -25,11 +25,11 @@ import 'package:wecord/features/chats/video_note/video_note_models.dart';
 import 'package:wecord/features/chats/video_note/video_note_screen.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
-/// "Video message" in the "+" menu, after Photos and videos (100). Offered
+/// "Video message" in the "+" menu, at the end of the menu, after Quick replies (1400). Offered
 /// where the device or browser can record one.
 final videoNoteComposerEntry = ComposerMenuContribution(
   id: 'video-message',
-  order: 150,
+  order: 1450,
   build: (ctx) {
     if (!ctx.container.read(videoNoteSupportedProvider)) {
       return null;

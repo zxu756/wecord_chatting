@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/hashtags/hashtag_routes.dart';
 import 'package:wecord/features/inbox/inbox_screen.dart';
 import 'package:wecord/features/moments/moment_actions.dart';
 import 'package:wecord/features/moments/moment_composer_screen.dart';
@@ -21,14 +22,19 @@ import 'package:wecord/shared/ui/ui.dart';
 
 /// Moments (朋友圈): the feed of friends' posts with the person's cover,
 /// avatar and name on top, newest first with pages loaded as they scroll.
-/// With [userId] it is that friend's page instead.
+/// With [userId] it is that friend's page instead; with [tag] it is the feed
+/// kept to the Moments written with that topic (#话题), still only the ones
+/// the person may see.
 class MomentsScreen extends ConsumerStatefulWidget {
-  const MomentsScreen({this.userId, super.key});
+  const MomentsScreen({this.userId, this.tag, super.key});
 
   static const path = '/moments';
 
   /// A friend's page; null for the feed.
   final String? userId;
+
+  /// A topic: the feed of the Moments that use it.
+  final String? tag;
 
   @override
   ConsumerState<MomentsScreen> createState() => _MomentsScreenState();
@@ -37,8 +43,13 @@ class MomentsScreen extends ConsumerStatefulWidget {
 class _MomentsScreenState extends ConsumerState<MomentsScreen> {
   final _scroll = ScrollController();
 
+  /// The person's own feed, not a friend's page nor a topic.
+  bool get _isFeed => widget.userId == null && widget.tag == null;
+
   NotifierProvider<MomentsFeedController, MomentsFeedState> get _provider =>
-      widget.userId == null
+      widget.tag != null
+      ? momentsTagFeedProvider(widget.tag!)
+      : widget.userId == null
       ? momentsFeedProvider
       : momentsPageProvider(widget.userId!);
 
@@ -46,7 +57,7 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-    if (widget.userId == null) {
+    if (_isFeed) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _markSeen());
     }
   }
@@ -81,7 +92,7 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
 
   Future<void> _refresh() async {
     await ref.read(_provider.notifier).refresh();
-    if (widget.userId == null) {
+    if (_isFeed) {
       unawaited(_markSeen());
     }
     ref
@@ -101,7 +112,7 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
       );
     }
     await ref.read(_provider.notifier).showNew();
-    if (widget.userId == null) {
+    if (_isFeed) {
       unawaited(_markSeen());
     }
   }
@@ -170,22 +181,34 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
           controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: MomentsCoverHeader(
-                  name: profile?.name ?? '',
-                  avatarUrl: profile?.avatarUrl,
-                  coverPath: profile?.coverPath,
-                  isMine: isMine,
-                  onChangeCover: _changeCover,
-                  onOpenAvatar: widget.userId == null && myId != null
-                      ? () => context.push('${MomentsScreen.path}/of/$myId')
-                      : null,
+            if (widget.tag != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    tr('Only Moments you can see are listed.'),
+                    key: const ValueKey('moments-topic-note'),
+                    style: TextStyle(fontSize: 13, height: 1.4, color: c.muted),
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: MomentsCoverHeader(
+                    name: profile?.name ?? '',
+                    avatarUrl: profile?.avatarUrl,
+                    coverPath: profile?.coverPath,
+                    isMine: isMine,
+                    onChangeCover: _changeCover,
+                    onOpenAvatar: widget.userId == null && myId != null
+                        ? () => context.push('${MomentsScreen.path}/of/$myId')
+                        : null,
+                  ),
                 ),
               ),
-            ),
-            if (widget.userId == null && unread > 0)
+            if (_isFeed && unread > 0)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -196,9 +219,11 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _EmptyMoments(
+                  topic: widget.tag,
                   feed: widget.userId == null,
                   name: profile?.name ?? '',
-                  canPost: isMine || widget.userId == null,
+                  canPost:
+                      widget.tag == null && (isMine || widget.userId == null),
                 ),
               )
             else
@@ -298,11 +323,21 @@ class _MomentsScreenState extends ConsumerState<MomentsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 PaperPageHeader(
-                  title: widget.userId == null || isMine
+                  title: widget.tag != null
+                      ? '#${widget.tag}'
+                      : widget.userId == null || isMine
                       ? tr('Moments')
                       : tr("{name}'s Moments", {'name': profile?.name ?? ''}),
                   actions: [
-                    if (widget.userId == null || isMine)
+                    if (_isFeed)
+                      WeCordIconButton(
+                        key: const ValueKey('moments-topics'),
+                        icon: Icons.tag_rounded,
+                        tooltip: tr('Topics'),
+                        variant: WeCordButtonVariant.onPaper,
+                        onPressed: () => context.push(momentTopicsPath),
+                      ),
+                    if (widget.tag == null && (widget.userId == null || isMine))
                       WeCordIconButton(
                         key: const ValueKey('moments-compose'),
                         icon: Icons.add_a_photo_outlined,
@@ -565,8 +600,11 @@ class _EmptyMoments extends StatelessWidget {
     required this.feed,
     required this.name,
     required this.canPost,
+    this.topic,
   });
 
+  /// Set on a topic's page.
+  final String? topic;
   final bool feed;
   final String name;
   final bool canPost;
@@ -587,7 +625,11 @@ class _EmptyMoments extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            feed ? tr('No Moments yet') : tr('Nothing to see here yet'),
+            topic != null
+                ? tr('No Moments with this topic')
+                : feed
+                ? tr('No Moments yet')
+                : tr('Nothing to see here yet'),
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -595,7 +637,11 @@ class _EmptyMoments extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            feed
+            topic != null
+                ? tr('Moments you can see that use #{tag} show up here.', {
+                    'tag': topic,
+                  })
+                : feed
                 ? tr('Share a photo or a thought with your friends.')
                 : tr('{name} has not shared anything with you.', {
                     'name': name,

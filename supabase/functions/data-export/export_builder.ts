@@ -201,6 +201,12 @@ export interface ExportData {
    * callers.
    */
   groupSpace?: Json | null;
+  /**
+   * The circle posts I wrote (export_my_circle_posts, migration
+   * 202610280770): title, text, topics, whether featured, the picture; null
+   * when it could not be read, absent in older callers.
+   */
+  circlePosts?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -770,6 +776,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.groupSpace) {
     out.push({ path: "data/group_space.json", value: groupSpaceJson(data) });
+  }
+  if (data.circlePosts) {
+    out.push({ path: "data/circle_posts.json", value: circlePostsJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -2327,6 +2336,86 @@ ${
   );
 }
 
+/** The pictures of the circle posts I wrote. */
+export function circlePostsFilesToSign(
+  posts: Json | null | undefined,
+): { bucket: string; path: string }[] {
+  const seen = new Map<string, { bucket: string; path: string }>();
+  for (const entry of objects(posts?.["posts"])) {
+    const bucket = entry["bucket"];
+    const path = entry["path"];
+    if (typeof path !== "string" || typeof bucket !== "string") continue;
+    seen.set(`${bucket}/${path}`, { bucket, path });
+  }
+  return [...seen.values()];
+}
+
+/** The circle posts I wrote, with a link to the picture of each. */
+function circlePostsJson(data: ExportData): Json {
+  const ref = fileRefs(data);
+  const posts = isObject(data.circlePosts) ? data.circlePosts : {};
+  return {
+    posts: objects(posts["posts"]).map((post) => {
+      const { bucket, path, ...rest } = post;
+      return path === undefined || path === null
+        ? rest
+        : { ...rest, file: ref(str(bucket) ?? CHAT_IMAGES_BUCKET, path) };
+    }),
+  };
+}
+
+/** The circle posts I wrote: title, text, topics, the featured mark. */
+export function buildCirclePostsHtml(data: ExportData): string {
+  const posts = isObject(data.circlePosts) ? data.circlePosts : {};
+  const ref = fileRefs(data);
+  const rows = objects(posts["posts"]).map((post) => {
+    const link = post["path"] === undefined ? undefined : ref(
+      str(post["bucket"]) ?? CHAT_IMAGES_BUCKET,
+      post["path"],
+    )?.download_url;
+    const tags = Array.isArray(post["tags"])
+      ? post["tags"].filter((t): t is string => typeof t === "string")
+      : [];
+    return entry(
+      str(post["written_at"]),
+      `<div>${
+        str(post["title"])
+          ? `<strong>${escapeHtml(str(post["title"]) ?? "")}</strong> `
+          : ""
+      }${
+        str(post["circle"])
+          ? `<span class="muted">${
+            escapeHtml(str(post["circle"]) ?? "")
+          }</span>`
+          : ""
+      }${
+        post["featured"] === true ? ` <span class="muted">Featured</span>` : ""
+      }</div>${
+        str(post["text"])
+          ? `<div class="body">${escapeHtml(str(post["text"]) ?? "")}</div>`
+          : ""
+      }${
+        tags.length > 0
+          ? `<div class="muted">${
+            tags.map((t) => `#${escapeHtml(t)}`).join(" ")
+          }</div>`
+          : ""
+      }${
+        link
+          ? `<div><a href="${escapeHtml(link)}">Picture (link)</a></div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  return page(
+    "Circle posts — your WeCord data",
+    `${backLink()}<h1>Circle posts</h1>
+<p class="muted">The posts you wrote in circles, with their titles and topics.
+Other people's posts and comments are not copied.</p>
+${section("Posts you wrote", rows, "None.")}`,
+  );
+}
+
 /** The titles circles gave me and my honors (C7). */
 export function buildHonorsHtml(data: ExportData): string {
   const honors = isObject(data.honors) ? data.honors : {};
@@ -2622,6 +2711,17 @@ export function buildSectionPages(
       content: buildGroupSpaceHtml(data),
     });
   }
+  if (data.circlePosts) {
+    const count = objects(
+      isObject(data.circlePosts) ? data.circlePosts["posts"] : null,
+    ).length;
+    out.push({
+      path: "pages/circle_posts.html",
+      label: "Circle posts",
+      summary: `${count} post${count === 1 ? "" : "s"}`,
+      content: buildCirclePostsHtml(data),
+    });
+  }
   if (data.noteExtras) {
     const counts = (key: string) =>
       objects(isObject(data.noteExtras) ? data.noteExtras[key] : null).length;
@@ -2726,6 +2826,9 @@ data/bot_interactions.json What you pressed on bots' buttons and lists, typed
 data/group_space.json The albums and folders you made in group chats and the
                       pictures, videos and files you added (with links;
                       never what other people added).
+data/circle_posts.json The posts you wrote in circles: title, text, topics,
+                      whether they were featured, and a link to the picture
+                      (never other people's posts).
 data/moments_more.json The Moments you pinned, the people you reminded to
                       read, the reminders you got (never their words) and
                       the pictures on your comments.

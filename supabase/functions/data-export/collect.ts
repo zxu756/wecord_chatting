@@ -9,6 +9,7 @@ import {
   attachmentsToSign,
   channelPostFilesToSign,
   checkInFilesToSign,
+  circlePostsFilesToSign,
   eventFilesToSign,
   EXPORT_LIFETIME_MS,
   type ExportBlob,
@@ -700,6 +701,20 @@ export async function collectExportData(
     null,
   );
 
+  // The circle posts I wrote (export_my_circle_posts).
+  const circlePosts = await tryRead<Row | null>(
+    skipped,
+    "circle posts",
+    async () => {
+      const result = await admin.rpc("export_my_circle_posts", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -741,6 +756,10 @@ export async function collectExportData(
   }
   // The pictures and files I added to the group space are linked.
   for (const { bucket, path } of groupSpaceFilesToSign(groupSpace)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
+  // The pictures of my circle posts are linked.
+  for (const { bucket, path } of circlePostsFilesToSign(circlePosts)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
@@ -809,6 +828,7 @@ export async function collectExportData(
     groupTabs,
     interactions,
     groupSpace,
+    circlePosts,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

@@ -247,10 +247,13 @@ class MomentsFeedState {
 /// The feed (no [authorId]) or one person's page, a page at a time (the
 /// server pages by time and id, so new posts never shift what was loaded).
 class MomentsFeedController extends Notifier<MomentsFeedState> {
-  MomentsFeedController(this.authorId);
+  MomentsFeedController(this.authorId, {this.tag});
 
   /// Null: everyone's Moments.
   final String? authorId;
+
+  /// Only the Moments with this topic (a filter of the feed).
+  final String? tag;
 
   @override
   MomentsFeedState build() {
@@ -288,6 +291,7 @@ class MomentsFeedController extends Notifier<MomentsFeedState> {
       final posts = await _repository.feed(
         limit: momentsPageSize,
         authorId: authorId,
+        tag: tag,
       );
       ref.read(momentPostsStoreProvider.notifier).putAll(posts);
       final known = state.ids.toSet();
@@ -316,6 +320,7 @@ class MomentsFeedController extends Notifier<MomentsFeedState> {
       final posts = await _repository.feed(
         limit: momentsPageSize,
         authorId: authorId,
+        tag: tag,
       );
       ref.read(momentPostsStoreProvider.notifier).putAll(posts);
       state = MomentsFeedState(
@@ -345,6 +350,7 @@ class MomentsFeedController extends Notifier<MomentsFeedState> {
         beforeAt: last.createdAt,
         beforeId: last.id,
         authorId: authorId,
+        tag: tag,
       );
       ref.read(momentPostsStoreProvider.notifier).putAll(posts);
       final known = state.ids.toSet();
@@ -396,6 +402,20 @@ final momentsPageProvider = NotifierProvider.autoDispose
     .family<MomentsFeedController, MomentsFeedState, String>(
       MomentsFeedController.new,
     );
+
+/// The Moments with one topic, as far as the person may see them.
+final momentsTagFeedProvider = NotifierProvider.autoDispose
+    .family<MomentsFeedController, MomentsFeedState, String>(
+      (tag) => MomentsFeedController(null, tag: tag),
+    );
+
+/// The topics friends use in their Moments.
+final momentsTopicsProvider = FutureProvider.autoDispose<List<MomentTopic>>((
+  ref,
+) {
+  ref.watch(momentsUserIdProvider);
+  return ref.watch(momentsRepositoryProvider).topics();
+});
 
 /// New Moments from friends since the person last opened Moments.
 final momentsUnseenProvider = FutureProvider.autoDispose<MomentsUnseen>((

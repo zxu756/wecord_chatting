@@ -143,12 +143,20 @@ abstract interface class MomentsRepository {
   /// The feed (without [authorId]) or one person's page, newest first. Pass
   /// the last post's time and id as [beforeAt] and [beforeId] for the next
   /// page.
+  ///
+  /// With [tag] only the Moments written with that topic (#话题) the
+  /// person may see: a filter on the feed, never a public page.
   Future<List<MomentPost>> feed({
     int limit = 20,
     DateTime? beforeAt,
     String? beforeId,
     String? authorId,
+    String? tag,
   });
+
+  /// The topics the person's and their friends' recent Moments use, with
+  /// how many of those Moments the person may see.
+  Future<List<MomentTopic>> topics({int limit = 20});
 
   /// One Moment, or null when it is gone or the person may not see it.
   Future<MomentPost?> post(String id);
@@ -275,6 +283,7 @@ class SupabaseMomentsRepository implements MomentsRepository {
     DateTime? beforeAt,
     String? beforeId,
     String? authorId,
+    String? tag,
   }) async {
     final rows = await _client.rpc<dynamic>(
       'moments_feed',
@@ -283,9 +292,19 @@ class SupabaseMomentsRepository implements MomentsRepository {
         'p_before_at': beforeAt?.toUtc().toIso8601String(),
         'p_before_id': beforeId,
         'p_author_id': authorId,
+        'p_tag': ?tag,
       },
     );
     return [for (final row in _rows(rows)) MomentPost.fromJson(row)];
+  }
+
+  @override
+  Future<List<MomentTopic>> topics({int limit = 20}) async {
+    final rows = await _client.rpc<dynamic>(
+      'list_moment_hashtags',
+      params: {'p_limit': limit},
+    );
+    return [for (final row in _rows(rows)) MomentTopic.fromJson(row)];
   }
 
   @override
@@ -808,7 +827,11 @@ class UninitializedMomentsRepository implements MomentsRepository {
     DateTime? beforeAt,
     String? beforeId,
     String? authorId,
+    String? tag,
   }) async => const [];
+
+  @override
+  Future<List<MomentTopic>> topics({int limit = 20}) async => const [];
 
   @override
   Future<MomentPost?> post(String id) async => null;

@@ -13,6 +13,19 @@ abstract final class CircleRoutes {
   static const path = '/circles';
 }
 
+/// A circle's posts, optionally filtered by a topic or to the featured ones.
+String circlePostsPath(String circleId, {String? tag, bool featured = false}) {
+  final query = <String, String>{'tag': ?tag, if (featured) 'featured': '1'};
+  return Uri(
+    path: '${CircleRoutes.path}/$circleId/posts',
+    queryParameters: query.isEmpty ? null : query,
+  ).toString();
+}
+
+/// One post of a circle on its own page.
+String circlePostPath(String circleId, String postId) =>
+    '${CircleRoutes.path}/$circleId/posts/$postId';
+
 enum _AddCircleChoice { create, join, explore }
 
 /// Asks whether to create a circle or join one with an invite, then does it.

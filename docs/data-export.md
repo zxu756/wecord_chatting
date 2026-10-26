@@ -49,6 +49,7 @@ data/group_tabs.json        tabs_added (tabs under chat headers)
 data/events.json            signed_up, waiting, check_ins, photos, events_made (events 2.0), calls_made (scheduled calls)
 data/bot_interactions.json presses, private_replies (bot buttons, forms and commands)
 data/group_space.json       albums, items, folders, files (albums and folders of group chats)
+data/circle_posts.json      posts (circle posts you wrote: title, text, tags, featured, picture)
 data/friend_tags.json        tags (with who is in them), starred_friends
 data/chains.json  data/notes.json  data/task_lists.json
 data/saved_messages.json  data/reminders.json  data/scheduled_messages.json
@@ -81,6 +82,7 @@ The rule per section:
 | Events 2.0 | the events you signed up to (circle or chat, while you still belong) with the answers you gave to their questions, the waiting lists you are on, where you checked in, the pictures you added (links), and the events you made with their settings (repeat and its zone, seats, the questions asked, cover), and the events you made that carry a call (title, start and end, whether cancelled or repeating, until when its link works; migration 202610280140, `export_my_scheduled_calls`); `data/events.json` and `pages/events.html` (migration 202610270470, `export_my_events2`) | other people's answers, names and pictures, and the call link's code |
 | Bot buttons and commands | what you pressed on bots' buttons and lists, typed into their forms and used as commands in the last 7 days, and the private replies bots sent only you | other people's presses, bots' callback secrets |
 | Group space (albums and folders) | the albums and folders you made in group chats (name, the group's title while you are still in it, time) and the pictures, videos and files you added (name, size, the description you wrote, a link, the album or folder); `data/group_space.json` and `pages/group_space.html` (migration 202610280230, `export_my_group_space`) | what other members put in the same albums and folders, and their names |
+| Circle posts (titles and topics) | the posts you wrote in circles: title, text, topics (#tags), whether a moderator featured them and when, the circle's name while you still belong, when you wrote it, and a link to the picture with its description; `data/circle_posts.json` and `pages/circle_posts.html` (migration 202610280770, `export_my_circle_posts`). The topics of your Moments are in `data/moments.json` (the `tags` of each post) | other people's posts and comments, the likes |
 | Moments 2.0 (pins, reminders, comment pictures) | which of your posts are pinned and when, the people you reminded to read each post (names), the reminders you got (who and when, never their words), the pictures on the comments you wrote with their descriptions as links, and the descriptions of your own photos; `data/moments_more.json` and extra lines on `pages/moments.html` (migration 202610260650, `export_my_moments_more`) | what others wrote in reminders, others' posts and pictures |
 | Friend tags | your tags and who is in them (names) | anyone else's tags |
 | Starred friends | your stars (names) | anyone else's stars |

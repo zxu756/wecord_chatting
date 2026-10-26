@@ -742,6 +742,10 @@ class CirclePost {
     required this.comments,
     this.attachment,
     this.deletedAt,
+    this.title,
+    this.tags = const [],
+    this.featuredAt,
+    this.canFeaturePost = false,
     this.isOwnPost = false,
     this.canManagePost = false,
     this.likeCount = 0,
@@ -751,6 +755,15 @@ class CirclePost {
 
   factory CirclePost.fromJson(Map<String, dynamic> json) {
     return CirclePost(
+      title: (json['title'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (json['title'] as String).trim(),
+      tags: [
+        for (final tag in (json['tags'] as List<dynamic>? ?? const []))
+          tag as String,
+      ],
+      featuredAt: _parseOptionalTimestamp(json['featured_at']),
+      canFeaturePost: json['can_feature_post'] as bool? ?? false,
       id: json['id'] as String,
       circleId: json['circle_id'] as String,
       authorId: json['author_id'] as String,
@@ -779,11 +792,35 @@ class CirclePost {
   final DateTime? deletedAt;
   final Profile author;
   final List<CirclePostComment> comments;
+
+  /// The headline of the post, when the author gave one (B8).
+  final String? title;
+
+  /// The topics of the post, lower case, without the hash.
+  final List<String> tags;
+
+  /// When a moderator featured the post (精华); null when it is not.
+  final DateTime? featuredAt;
+
+  /// Whether the caller may feature and un-feature posts.
+  final bool canFeaturePost;
   final bool isOwnPost;
   final bool canManagePost;
   final int likeCount;
   final int commentCount;
   final bool likedByCurrentUser;
+
+  bool get isFeatured => featuredAt != null;
+
+  /// The title, or the first words of the text when there is none.
+  String get headline {
+    final own = title;
+    if (own != null && own.isNotEmpty) {
+      return own;
+    }
+    final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return flat.length <= 60 ? flat : '${flat.substring(0, 60)}...';
+  }
 
   ImageAttachment? get imageAttachment {
     final value = attachment;

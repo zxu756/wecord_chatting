@@ -225,6 +225,16 @@ class _AwayReplySheetState extends ConsumerState<AwayReplySheet> {
                     ),
                   ),
                 ),
+                if (_currentEnd != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+                    child: Text(
+                      tr('Now ends {time}', {
+                        'time': _formatMoment(context, _currentEnd!),
+                      }),
+                      style: TextStyle(fontSize: 13.5, color: c.muted),
+                    ),
+                  ),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -232,9 +242,7 @@ class _AwayReplySheetState extends ConsumerState<AwayReplySheet> {
                     if (_currentEnd != null)
                       WeCordChip(
                         key: const ValueKey('away-reply-duration-keep'),
-                        label: tr('Keep {time}', {
-                          'time': _formatMoment(context, _currentEnd!),
-                        }),
+                        label: tr('Keep'),
                         selected: _keepCurrent,
                         onPressed: _saving
                             ? null

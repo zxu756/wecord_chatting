@@ -113,7 +113,9 @@ class _EventsDialogState extends State<_EventsDialog> {
   late final Set<String> _events = {
     ...widget.current.isSet ? widget.current.events : defaultBotEvents,
   };
+  final _fieldKey = GlobalKey();
   String? _error;
+  String? _eventsError;
 
   @override
   void dispose() {
@@ -121,14 +123,31 @@ class _EventsDialogState extends State<_EventsDialog> {
     super.dispose();
   }
 
+  /// The address is at the top of a dialog that can be taller than the
+  /// screen; bring it back into view so its error is seen.
+  void _showAddressError(String message) {
+    setState(() => _error = message);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final field = _fieldKey.currentContext;
+      if (mounted && field != null) {
+        unawaited(
+          Scrollable.ensureVisible(
+            field,
+            duration: const Duration(milliseconds: 200),
+          ),
+        );
+      }
+    });
+  }
+
   void _save() {
     final text = _url.text.trim();
     if (!text.toLowerCase().startsWith('https://')) {
-      setState(() => _error = tr('The address must start with https://'));
+      _showAddressError(tr('The address must start with https://'));
       return;
     }
     if (_events.isEmpty) {
-      setState(() => _error = tr('Choose at least one kind of event.'));
+      setState(() => _eventsError = tr('Choose at least one kind of event.'));
       return;
     }
     Navigator.of(context).pop(
@@ -155,6 +174,7 @@ class _EventsDialogState extends State<_EventsDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           WeCordTextField(
+            key: _fieldKey,
             fieldKey: const ValueKey('bot-events-field'),
             controller: _url,
             label: tr('https address'),
@@ -195,11 +215,20 @@ class _EventsDialogState extends State<_EventsDialog> {
                     } else {
                       _events.remove(name);
                     }
-                    _error = null;
+                    _eventsError = null;
                   }),
                 ),
             ],
           ),
+          if (_eventsError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 8, 2, 0),
+              child: Text(
+                _eventsError!,
+                key: const ValueKey('bot-events-error'),
+                style: TextStyle(fontSize: 13, color: c.dangerText),
+              ),
+            ),
         ],
       ),
       actions: [

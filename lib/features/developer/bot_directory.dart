@@ -305,6 +305,7 @@ class _BotResultRow extends StatelessWidget {
       key: ValueKey('find-bot-${bot.userId}'),
       padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ThingAvatar(
             label: bot.name,
@@ -319,21 +320,19 @@ class _BotResultRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        bot.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: c.ink,
-                        ),
+                    Text(
+                      bot.name,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink,
                       ),
                     ),
-                    const SizedBox(width: 6),
                     CircleTag(
                       label: tr('BOT'),
                       background: c.accent,
@@ -345,7 +344,7 @@ class _BotResultRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     bot.description!.trim(),
-                    maxLines: 3,
+                    maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12.5,
@@ -354,20 +353,20 @@ class _BotResultRow extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (allowed) ...[
+                  const SizedBox(height: 8),
+                  WeCordButton(
+                    key: ValueKey('find-bot-action-${bot.userId}'),
+                    label: adding ? tr('Add') : tr('Message'),
+                    size: WeCordButtonSize.small,
+                    variant: WeCordButtonVariant.secondary,
+                    loading: busy,
+                    onPressed: onAction,
+                  ),
+                ],
               ],
             ),
           ),
-          if (allowed) ...[
-            const SizedBox(width: 8),
-            WeCordButton(
-              key: ValueKey('find-bot-action-${bot.userId}'),
-              label: adding ? tr('Add') : tr('Message'),
-              size: WeCordButtonSize.small,
-              variant: WeCordButtonVariant.secondary,
-              loading: busy,
-              onPressed: onAction,
-            ),
-          ],
         ],
       ),
     );

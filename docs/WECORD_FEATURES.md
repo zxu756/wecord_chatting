@@ -452,6 +452,14 @@
   - **机器人怎么回应**（`POST /interactions/{id}/respond`，一次点按只能回应一次）：`message` 在频道发一条消息（消息上方显示「xx 点了「按钮」」）、`ephemeral` 只有点的人看得到的私密回复、`update` 修改被点的那条消息（文字和 / 或组件）、`ack` 什么都不显示。私密回复存在单独的表 `bot_ephemeral_messages`，不是消息：不进聊天历史、未读、搜索、推送、AI 守护和别人的导出，只有本人能读（RLS），每人每个聊天最多留 20 条，保留 1 天，可以关闭；显示在被点的那条消息下面，「仅你可见」。机器人也可以用 `PATCH /messages/{id}` 修改自己消息的文字和组件，也可以发消息时直接带 `components`。
   - **账号与导出**：注销账号时清掉该账号点过的按钮、填过的表单和机器人给他的私密回复；数据导出新增 `data/bot_interactions.json` 和 `pages/bot_interactions.html`（`export_my_interactions`：最近 7 天点过的按钮和斜杠命令、填过的表单内容、机器人私下对我说的话，不含任何令牌或密钥）。
   - **审计**：设置、重置密钥和移除回调地址都写进圈子审计日志（`bot_callback_set` / `bot_callback_rotate` / `bot_callback_clear`，不含密钥）。
+- **事件订阅（I2）与 Bot API 2.0 + 开发者页面（I3）**（迁移 `202610281100`–`202610281160`，客户端在 `lib/features/developer/`，文档 `docs/bot-api.md`，静态参考 `web/developers/`）：
+  - **事件订阅**：设置 → 开发者 → 某个机器人 → 事件地址，选择要收到的事件（`message.created` / `message.mentioned` / `message.updated` / `message.deleted` / `reaction.added` / `member.joined` / `member.left` / `interaction.created`），事件由新函数 `bot-events`（`verify_jwt = false`，用 `DISPATCH_SECRET` 当 bearer，和 `bot-callbacks` 一样由数据库唤醒）POST 出去。签名、SSRF 检查、DNS 检查、重试和暂停沿用 I1，代码移到 `supabase/functions/_shared`，两个函数共用：`X-WeCord-Signature: v1=<HMAC-SHA256(密钥, "时间戳.请求体")>`，多一个 `X-WeCord-Event`；失败 5 秒 / 30 秒 / 2 分钟 / 10 分钟 / 1 小时后重试，再失败丢弃，连续 20 个彻底失败自动暂停，设置人不再管理圈子也暂停，6 小时没发出去的丢弃，7 天后清理。每个机器人每分钟最多 300 个事件、最多 1000 个排队。密钥只在设置和重置时显示一次，可以发「测试事件」，页面上能看到最近 30 次发送结果（状态和简短原因，不含对方服务器返回的内容）。
+  - **只给机器人看得到的**：事件只发给在这个聊天里的机器人（`bot_conversation_access`），入队时和发送前各查一次；被屏蔽、隐私设置、G2 上锁的聊天、G6 受限聊天（`conversation_restricts_sharing`）、限时消息和阅后即焚的消息只发「发生了」，不带正文和文件信息（`content_withheld`）。
+  - **Bot API 2.0**（`bot-api` 函数扩展）：`GET /chats`、`GET/POST /chats/{id}/messages`、`POST /chats/{id}/files`（multipart，最大 8 MB）、`POST /chats/{id}/polls`、`POST /messages/{id}/thread`、`DELETE /messages/{id}`（只能删自己发的，附件一并删除）、`DELETE /messages/{id}/reactions/{emoji}`、`GET /chats/{id}/members[/{user}]`。每次调用记入 `bot_api_calls`（方法、路由模板、状态，不记内容和 id，保留 7 天）。
+  - **私聊和群里的机器人**：机器人所属圈子的管理者可以在开发者页打开「任何人可以给它发消息」和「群主可以添加它」，并写简介；联系人页「查找机器人」按名字搜索开放的机器人并开始私聊；群主在群详情「机器人」里添加 / 移除（每个群最多 5 个，开启高级聊天隐私的群不能加）；群里所有人都能看到有哪些机器人。
+  - **开发者页面**：设置 → 隐私 → 开发者，只对管理某个圈子的人显示：我的机器人、令牌（重置 / 吊销）、API 地址、事件地址、回调地址、可用范围、最近的事件和 API 调用。
+  - **账号与导出**：注销账号时清掉该账号设置的事件订阅和排队事件；数据导出新增 `data/developer.json` 和 `pages/developer.html`（`export_my_developer`：我做的机器人、设置、事件地址和事件类型，不含令牌和密钥）。
+  - **审计**：`bot_events_set` / `bot_events_rotate` / `bot_events_clear` / `bot_open_update`。pg_cron：`wecord-bot-events-retry`（每分钟）、`wecord-bot-events-purge`、`wecord-bot-api-calls-purge`（每小时）；没有改 `run_later_dispatch()`。
 - **Webhook**（`webhook` 函数）：外部服务往频道发消息；公告频道转发。
 - **链接预览**（`link-preview` 函数）。
 - **GIF 搜索**（`gif-search` 函数，GIPHY）。

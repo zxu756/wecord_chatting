@@ -295,6 +295,182 @@ the callback is paused (the managers see why and saving the address again turns
 it on); you can always poll meanwhile. Setting, resetting and removing a
 callback is in the circle's audit log.
 
+## Bot API 2.0: chats, files, polls, threads and members
+
+Version 2 adds everything a bot needs in a **chat**: a channel, a thread, a
+group the bot was added to, or a direct chat people started with it. The
+endpoints below take a `chat_id` (the `id` of a chat in `GET /chats`; for a
+circle channel it is the channel's `id`, so the channel endpoints above keep
+working). Everything a bot may read or write follows the same rule: the bot
+sees a chat only if it is a member of it and, in a circle channel, its roles
+allow it.
+
+### Chats the bot is in
+
+```bash
+curl -H "Authorization: Bot $TOKEN" $BASE/chats
+# [{"id":"…","kind":"channel|thread|group|direct","name":"general","member_count":12,
+#   "peer":{"id":"…","username":"ann","name":"Ann"},"restricted":false,
+#   "circle_id":"…", …}, …]
+```
+
+`restricted` is true for chats with Advanced chat privacy (G6): in those
+the bot gets **no message text** from the API or from events, only that a
+message exists.
+
+### Messages of a chat
+
+```bash
+# Recent messages, newest first. limit 1-100 (default 50), before = an ISO time.
+curl -H "Authorization: Bot $TOKEN" "$BASE/chats/$CHAT/messages?limit=20"
+
+# Send a text message, optionally a reply or with buttons (see below).
+curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"content":"Hello","reply_to":"<message id>"}' $BASE/chats/$CHAT/messages
+
+# Delete one of the bot's own messages (only its own); an uploaded file goes with it.
+curl -X DELETE -H "Authorization: Bot $TOKEN" $BASE/messages/$MESSAGE
+```
+
+Messages hidden from the bot by the rules above (a chat the bot is not in,
+a locked chat, a restricted chat, a blocked person) come back as `404`, or
+without their text where the chat itself is allowed.
+
+### Send a file or an image
+
+`multipart/form-data` with a `file` field and an optional `caption` (at
+most 2000 characters). Files are up to **8 MB**; the name is cleaned (no
+folders, no hidden characters). Images are posted as file messages.
+
+```bash
+curl -X POST -H "Authorization: Bot $TOKEN" \
+  -F "file=@map.png" -F "caption=Route for Saturday" $BASE/chats/$CHAT/files
+```
+
+### Polls and threads
+
+```bash
+curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"question":"Where to?","options":["Lake","Ridge"],"multiple":false,
+       "duration_hours":24,"anonymous":false}' $BASE/chats/$CHAT/polls
+# question up to 300 characters, 2 to 10 different options of up to 100 each.
+
+curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"title":"Plans"}' $BASE/messages/$MESSAGE/thread
+# {"chat_id":"…","title":"Plans","root_message_id":"…","parent_chat_id":"…"}
+```
+
+### Reactions
+
+`PUT /messages/{id}/reactions/{emoji}` adds one (as before),
+`DELETE /messages/{id}/reactions/{emoji}` takes the bot's own reaction back.
+The emoji is URL-encoded.
+
+### Members
+
+```bash
+curl -H "Authorization: Bot $TOKEN" "$BASE/chats/$CHAT/members?limit=100&after=<user id>"
+curl -H "Authorization: Bot $TOKEN" $BASE/chats/$CHAT/members/$USER
+# {"id":"…","username":"ann","name":"Ann","is_bot":false,"role":"member"}
+```
+
+Members are listed by id (page with `after`). The list gives names and
+roles only, never e-mail addresses, phone numbers or private settings.
+
+## Bots in direct chats and groups
+
+By default a bot lives in its circle only. A circle manager can open it up in
+**Settings → Developer → the bot → Availability**:
+
+- **People can message this bot**: anyone can find it (Friends → Find a bot) and
+  start a direct chat with it. The chat is a normal direct chat; the bot reads
+  and writes in it through `/chats/{chat_id}/…`.
+- **Group owners can add this bot**: the owner of a group chat can add it from
+  the group's details (Bots → Add a bot), up to 5 bots per group, and remove it
+  again. Everyone in the group sees which bots are there. A group with Advanced
+  chat privacy cannot have bots.
+- **Description**: what people see when they find the bot.
+
+A bot only ever sees chats it is in. It never sees other chats of the people
+who use it.
+
+## Event subscriptions
+
+Instead of polling `/chats/{id}/messages`, give a bot an **event address**
+(Settings → Developer → the bot → Event address) and the kinds of event it
+wants. WeCord then POSTs each event to the address as it happens, as JSON,
+signed with a secret that is shown once.
+
+| Event | When |
+| --- | --- |
+| `message.created` | A message was sent in a chat the bot is in |
+| `message.mentioned` | The bot was mentioned in a message |
+| `message.updated` | A message was edited |
+| `message.deleted` | A message was deleted (only the id) |
+| `reaction.added` | Someone reacted to a message |
+| `member.joined`, `member.left` | Someone joined or left a chat the bot is in (or its circle) |
+| `interaction.created` | A button press or slash command (also available as a callback) |
+
+```json
+{"version": 1, "type": "event", "event": "message.created",
+ "event_id": "…", "bot_id": "…", "circle_id": "…",
+ "occurred_at": "2026-10-28T09:00:00Z", "attempt": 1,
+ "data": {
+   "chat": {"id": "…", "kind": "channel", "name": "general", "circle_id": "…"},
+   "message": {"id": "…", "type": "text", "content": "hi",
+               "created_at": "…", "edited_at": null, "reply_to_message_id": null,
+               "author": {"id": "…", "username": "ann", "name": "Ann", "is_bot": false},
+               "attachment": null}}}
+```
+
+`data` differs by event: `reaction.added` has `message_id`, `emoji` and `user`;
+`member.*` has `chat` and `user`; `interaction.created` has the same
+`interaction` as a poll; `message.deleted` has only the message `id` and
+`deleted_at`. A test event (`ping`) has `data.message` and `data.bot`.
+
+**What a bot never gets.** The rules that hide something from the bot in the
+API hide it from events too, checked when the event is queued and again just
+before it is sent (so a chat that became private in between sends nothing):
+
+- the chat is not one the bot is in, or the person who set up the subscription no
+  longer manages the circle (the subscription pauses);
+- in a chat with Advanced chat privacy (restricted), or one a member has
+  locked, or for disappearing and view-once messages, the event still arrives
+  but the message has **no text or file details**: `content_withheld` says why
+  (`restricted`, `locked`, `disappearing`, `view_once`);
+- messages are cut at 4000 characters (`truncated: true`).
+
+**Check every request.** The headers and the signature are exactly those of a
+callback (see below): `X-WeCord-Timestamp`, `X-WeCord-Signature`
+(`v1=` + HMAC-SHA256 of `"<timestamp>.<body>"` with your event secret) and
+`X-WeCord-Delivery`, plus `X-WeCord-Event` with the kind of event. Reject
+timestamps more than five minutes off and de-duplicate on `X-WeCord-Delivery`
+(the event can come twice). Any `2xx` answer counts as delivered.
+
+**Rules of the sender** (shared with callbacks): `https://` address with a real
+website name on the usual port, no IP addresses or inner names, the name is
+looked up before every send and every address must be public, no redirects, 5
+second timeout. A failed event is tried again after 5 seconds, 30 seconds, 2
+minutes, 10 minutes and 1 hour, then it is lost. After **20 events in a row**
+lost for good the subscription is **paused** (Developer shows why; saving the
+address again turns it on). Events that waited more than 6 hours are dropped.
+A bot is held to **300 events a minute** and **1000 waiting events**; extra
+events are skipped (counted on the Developer page). **Send a test event** and
+**Recent events** on the Developer page show what happened to each send (the
+status and a short reason, never what your server answered). Setting,
+resetting and removing the address is in the circle's audit log.
+
+## The developer page
+
+**Settings → Developer** is for people who manage a circle (it is not shown to
+anyone else). It lists the bots of those circles and, for each: reset or revoke
+the token, the API address, the event address and secret, the callback address,
+availability, the latest events sent and the latest API calls (method, route and
+status, never bodies). Calls are kept for 7 days. The static reference is at
+`/developers/` on the web app, with the OpenAPI file `/developers/openapi.json`.
+Bots made by an account and their settings are part of **Download my data**
+(never tokens or secrets) and are deleted with the account.
+
 ## Errors and limits
 
 Errors are JSON `{"error": "…", "message": "…"}`:
@@ -307,11 +483,11 @@ Errors are JSON `{"error": "…", "message": "…"}`:
 | 404 | Unknown endpoint, or a channel / message / interaction the bot cannot see |
 | 405 | Wrong method for the endpoint |
 | 409 | Command name taken in the circle, or interaction already answered |
-| 413 | Body over 32 KB |
+| 413 | Body over 32 KB (a file upload: over 8 MB) |
 | 429 | More than 60 writes per minute (`rate_limited`), or channel slowmode (`slowmode`) |
 
-Writes are sending messages, changing them, reacting, setting commands and
-answering interactions. A refused component comes back as `400
+Writes are sending messages and files, polls and threads, changing or deleting
+messages, reacting, setting commands and answering interactions. A refused component comes back as `400
 invalid_request` with the reason in `message`.
 
 ## Deploying
@@ -322,6 +498,16 @@ which only the service role may call. Deploy it with
 `supabase functions deploy bot-api` after pushing the migrations
 (`202610160030_bot_api.sql`, and `202610280610`-`202610280660` for components,
 private replies and callbacks).
+
+Events are sent by the `bot-events` function, woken by the database the same
+way (`verify_jwt = false`, the shared secret `DISPATCH_SECRET` as the bearer
+token). Deploy it with `supabase functions deploy bot-events`. The signing,
+address check and DNS check live in `supabase/functions/_shared`, used by both
+`bot-callbacks` and `bot-events`, so redeploy `bot-callbacks`, `bot-api` and
+`data-export` too. Migrations `202610281100`-`202610281160` add the event
+subscriptions, the new `bot_api_*` functions, availability and the developer
+page; three crons clean up and retry (`wecord-bot-events-retry`,
+`wecord-bot-events-purge`, `wecord-bot-api-calls-purge`).
 
 Callbacks are sent by the `bot-callbacks` function, which is called only by
 the database with the shared secret `DISPATCH_SECRET` as the bearer token

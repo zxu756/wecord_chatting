@@ -78,6 +78,7 @@ import 'moments2_a11y_screens.dart';
 import 'guard2_a11y_screens.dart';
 import 'app_lock_a11y_screens.dart';
 import 'care_mode_a11y_screens.dart';
+import 'developer_a11y_screens.dart';
 import 'interactions_a11y_screens.dart';
 import 'knowledge_base_a11y_screens.dart';
 import 'member_honors_a11y_screens.dart';
@@ -852,4 +853,5 @@ final allA11yScreens = <A11yScreen>[
   ...scheduledCallsA11yScreens,
   ...groupSpaceA11yScreens,
   ...chatPrivacyA11yScreens,
+  ...developerA11yScreens,
 ];

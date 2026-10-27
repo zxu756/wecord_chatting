@@ -1,5 +1,5 @@
 // Pure helpers of the webhook function: path parsing, body validation and
-// mapping post_webhook_message errors to HTTP statuses.
+// mapping post_webhook_message_rich errors to HTTP statuses.
 
 export const MAX_BODY_BYTES = 16 * 1024;
 export const MAX_CONTENT_LENGTH = 2000;
@@ -61,27 +61,68 @@ export function isDeclaredTooLarge(contentLength: string | null): boolean {
   return Number.isFinite(length) && length > MAX_BODY_BYTES;
 }
 
+export const MAX_EMBEDS = 3;
+export const MAX_COMPONENT_ROWS = 5;
+
 export interface WebhookPayload {
+  /** Empty when the message is only cards. */
   content: string;
   username: string | null;
   avatarUrl: string | null;
+  /** Cards (I6), checked in depth by the database (normalize_message_embeds). */
+  embeds: Record<string, unknown>[] | null;
+  /** Rows of link buttons (I1 rules), checked in depth by the database. */
+  components: unknown[][] | null;
 }
 
 export type PayloadResult =
   | { ok: true; payload: WebhookPayload }
   | { ok: false; error: string };
 
-/// Validates a parsed JSON body `{content, username?, avatar_url?}`.
+/// Validates a parsed JSON body `{content?, username?, avatar_url?, embeds?,
+/// components?}`: text, cards or both. Only the shape is checked here; what
+/// is inside a card and a button is checked by the database, with the rules
+/// of the bots' components (I1).
 export function validatePayload(body: unknown): PayloadResult {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, error: "body_must_be_object" };
   }
   const record = body as Record<string, unknown>;
-  if (typeof record.content !== "string") {
-    return { ok: false, error: "content_required" };
+
+  let embeds: Record<string, unknown>[] | null = null;
+  if (record.embeds !== undefined && record.embeds !== null) {
+    if (
+      !Array.isArray(record.embeds) || record.embeds.length > MAX_EMBEDS ||
+      !record.embeds.every(isPlainObject)
+    ) {
+      return { ok: false, error: "invalid_embeds" };
+    }
+    embeds = record.embeds.length === 0
+      ? null
+      : record.embeds as Record<string, unknown>[];
   }
-  const content = record.content.trim();
-  if (content.length === 0) {
+  let components: unknown[][] | null = null;
+  if (record.components !== undefined && record.components !== null) {
+    if (
+      !Array.isArray(record.components) ||
+      record.components.length > MAX_COMPONENT_ROWS ||
+      !record.components.every(Array.isArray)
+    ) {
+      return { ok: false, error: "invalid_components" };
+    }
+    components = record.components.length === 0
+      ? null
+      : record.components as unknown[][];
+  }
+
+  let content = "";
+  if (record.content !== undefined && record.content !== null) {
+    if (typeof record.content !== "string") {
+      return { ok: false, error: "content_required" };
+    }
+    content = record.content.trim();
+  }
+  if (content.length === 0 && embeds === null) {
     return { ok: false, error: "content_required" };
   }
   if ([...content].length > MAX_CONTENT_LENGTH) {
@@ -112,7 +153,14 @@ export function validatePayload(body: unknown): PayloadResult {
     avatarUrl = trimmed === "" ? null : trimmed;
   }
 
-  return { ok: true, payload: { content, username, avatarUrl } };
+  return {
+    ok: true,
+    payload: { content, username, avatarUrl, embeds, components },
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function isHttpUrl(value: string): boolean {
@@ -129,7 +177,7 @@ export function isHttpUrl(value: string): boolean {
 }
 
 /// The HTTP status and error name for an error code raised by
-/// post_webhook_message.
+/// post_webhook_message_rich.
 export function statusForRpcError(
   code: string | undefined,
 ): { status: number; error: string } {

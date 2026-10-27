@@ -86,6 +86,8 @@ Deno.test("validates content, username and avatar", () => {
         content: "**Build** passed",
         username: "CI",
         avatarUrl: "https://example.com/ci.png",
+        embeds: null,
+        components: null,
       },
     },
   );
@@ -93,7 +95,13 @@ Deno.test("validates content, username and avatar", () => {
     validatePayload({ content: "hi", username: "", avatar_url: "" }),
     {
       ok: true,
-      payload: { content: "hi", username: null, avatarUrl: null },
+      payload: {
+        content: "hi",
+        username: null,
+        avatarUrl: null,
+        embeds: null,
+        components: null,
+      },
     },
   );
   assertEquals(validatePayload({ content: "x".repeat(2000) }).ok, true);
@@ -117,6 +125,64 @@ Deno.test("validates content, username and avatar", () => {
       "invalid_avatar_url",
     ],
     [{ content: "hi", avatar_url: 3 }, "invalid_avatar_url"],
+  ];
+  for (const [body, error] of failures) {
+    assertEquals(validatePayload(body), { ok: false, error }, String(body));
+  }
+});
+
+Deno.test("accepts cards and link buttons, with or without text", () => {
+  const card = { title: "v1.2 shipped", description: "3 fixes" };
+  const row = [{ type: "link", label: "Open", url: "https://example.com" }];
+  assertEquals(validatePayload({ embeds: [card] }), {
+    ok: true,
+    payload: {
+      content: "",
+      username: null,
+      avatarUrl: null,
+      embeds: [card],
+      components: null,
+    },
+  });
+  assertEquals(
+    validatePayload({ content: " hi ", embeds: [card], components: [row] }),
+    {
+      ok: true,
+      payload: {
+        content: "hi",
+        username: null,
+        avatarUrl: null,
+        embeds: [card],
+        components: [row],
+      },
+    },
+  );
+  // Empty lists are the same as none.
+  assertEquals(validatePayload({ content: "hi", embeds: [], components: [] }), {
+    ok: true,
+    payload: {
+      content: "hi",
+      username: null,
+      avatarUrl: null,
+      embeds: null,
+      components: null,
+    },
+  });
+
+  const failures: [unknown, string][] = [
+    [{ embeds: [] }, "content_required"],
+    [{ content: "  ", embeds: [] }, "content_required"],
+    [{ content: "hi", embeds: "card" }, "invalid_embeds"],
+    [{ content: "hi", embeds: [card, card, card, card] }, "invalid_embeds"],
+    [{ content: "hi", embeds: ["text"] }, "invalid_embeds"],
+    [{ content: "hi", embeds: [[card]] }, "invalid_embeds"],
+    [{ content: "hi", embeds: [null] }, "invalid_embeds"],
+    [{ content: "hi", embeds: [card], components: row }, "invalid_components"],
+    [
+      { content: "hi", embeds: [card], components: [[], [], [], [], [], []] },
+      "invalid_components",
+    ],
+    [{ embeds: [card], content: 5 }, "content_required"],
   ];
   for (const [body, error] of failures) {
     assertEquals(validatePayload(body), { ok: false, error }, String(body));

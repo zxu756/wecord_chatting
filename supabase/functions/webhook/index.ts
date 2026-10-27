@@ -2,7 +2,12 @@
 //
 //   POST /functions/v1/webhook/{id}/{token}
 //   Content-Type: application/json
-//   {"content": "…", "username": "…"?, "avatar_url": "https://…"?}
+//   {"content": "…"?, "username": "…"?, "avatar_url": "https://…"?,
+//    "embeds": [card…]?, "components": [[link button…]]?}
+//
+// Text, cards or both (I6; docs/bot-api.md has the card fields). Cards and
+// link buttons follow the rules of the bots' components (I1) and are checked
+// by the database; a 400 carries a short `detail` saying what is wrong.
 //
 // Public on purpose (verify_jwt = false): external services authenticate
 // with the secret token in the URL, which post_webhook_message checks
@@ -100,19 +105,32 @@ Deno.serve(async (request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error } = await admin.rpc("post_webhook_message", {
+  const { error } = await admin.rpc("post_webhook_message_rich", {
     target_webhook_id: path.id,
     webhook_token: path.token,
     content: checked.payload.content,
     username: checked.payload.username,
     avatar_url: checked.payload.avatarUrl,
+    embeds: checked.payload.embeds,
+    components: checked.payload.components,
   });
   if (error) {
     const mapped = statusForRpcError(error.code);
     if (mapped.status === 500) {
-      console.error("post_webhook_message failed", error.code, error.message);
+      console.error(
+        "post_webhook_message_rich failed",
+        error.code,
+        error.message,
+      );
     }
-    return json({ error: mapped.error }, mapped.status);
+    // The database's own words about a bad card or button (22023) help the
+    // person writing the integration; they name fields, never data.
+    return json(
+      mapped.status === 400 && error.message
+        ? { error: mapped.error, detail: error.message.slice(0, 200) }
+        : { error: mapped.error },
+      mapped.status,
+    );
   }
   return new Response(null, { status: 204 });
 });

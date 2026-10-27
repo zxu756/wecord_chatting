@@ -579,6 +579,28 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/mfa-recovery/index.ts"
 
+[functions.feed-fetch]
+enabled = true
+# Called by the database (pg_cron job wecord-feed-fetch, every 5 minutes, only
+# when a feed is due) with the shared secret DISPATCH_SECRET as the bearer
+# token, which the function compares itself; reads the RSS and Atom feeds that
+# channels follow (public https addresses only, checked with a DNS lookup
+# before every request and redirect; 8 seconds, 512 KB) and posts new items as
+# cards (I6). Users never call it. Deploy with: supabase functions deploy
+# feed-fetch
+verify_jwt = false
+entrypoint = "./functions/feed-fetch/index.ts"
+
+[functions.github]
+enabled = true
+# Public: GitHub sends no WeCord login. Every delivery is checked against the
+# connection's own secret (X-Hub-Signature-256, HMAC-SHA256 of the raw body,
+# constant-time compare; the secret is made when the connection is added and
+# shown once) before anything in the body is read, and nothing is posted
+# without a good signature. Deploy with: supabase functions deploy github
+verify_jwt = false
+entrypoint = "./functions/github/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

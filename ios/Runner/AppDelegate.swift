@@ -34,5 +34,8 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ScreenCapturePlugin") {
       ScreenCapturePlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OnDeviceAiPlugin") {
+      OnDeviceAiPlugin.register(with: registrar)
+    }
   }
 }

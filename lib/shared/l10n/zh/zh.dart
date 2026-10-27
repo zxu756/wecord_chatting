@@ -23,6 +23,7 @@ import 'package:wecord/shared/l10n/zh/zh_ai_suggest.dart';
 import 'package:wecord/shared/l10n/zh/zh_local_data.dart';
 import 'package:wecord/shared/l10n/zh/zh_whiteboard.dart';
 import 'package:wecord/shared/l10n/zh/zh_workflows.dart';
+import 'package:wecord/shared/l10n/zh/zh_on_device_ai.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -221,6 +222,7 @@ const zhAreas = <Map<String, String>>[
   zhWhiteboard,
   zhWorkflows,
   zhScale,
+  zhOnDeviceAi,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

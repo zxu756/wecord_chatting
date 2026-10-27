@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_repository.dart';
+import 'package:wecord/features/ai/on_device/on_device_ai.dart';
+import 'package:wecord/features/ai/on_device/on_device_ai_row.dart';
 import 'package:wecord/features/ai/translate_settings_sheets.dart';
 import 'package:wecord/features/inbox/digest/digest_settings_screen.dart';
 import 'package:wecord/features/transcribe/transcribe_controller.dart';
@@ -29,6 +31,9 @@ class _AiSettingsGroupState extends ConsumerState<AiSettingsGroup> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.invalidate(aiStatusProvider);
+        // Apple Intelligence may have been switched on, or finished
+        // downloading, since the app started.
+        ref.invalidate(onDeviceAiStatusProvider);
       }
     });
   }
@@ -74,6 +79,11 @@ class _AiSettingsGroupState extends ConsumerState<AiSettingsGroup> {
         if (configured) const DontTranslateRow(),
         // A summary of the chats the person follows, once a day.
         if (configured) const DigestSettingsRow(),
+        // The iPhone and Mac apps can run summaries, rewriting and translation
+        // on the device itself (F8); other platforms don't show the choice.
+        if (configured &&
+            ref.watch(onDeviceAiBackendProvider).isSupportedPlatform)
+          const OnDeviceAiRow(),
         // Voice messages turn into text on the device itself, so this does
         // not depend on the server's AI. Only where the device can do it.
         if (ref.watch(voiceTranscriberProvider).runsOnDevice)

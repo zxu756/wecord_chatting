@@ -71,6 +71,8 @@ class MainFlutterWindow: NSWindow {
       with: flutterViewController.registrar(forPlugin: "ImageTextPlugin"))
     StickerCutoutPlugin.register(
       with: flutterViewController.registrar(forPlugin: "StickerCutoutPlugin"))
+    OnDeviceAiPlugin.register(
+      with: flutterViewController.registrar(forPlugin: "OnDeviceAiPlugin"))
 
     super.awakeFromNib()
   }

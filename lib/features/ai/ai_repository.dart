@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wecord/features/ai/ai_models.dart';
+import 'package:wecord/features/ai/on_device/on_device_ai_repository.dart';
 import 'package:wecord/features/ai/translate_repository.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -395,7 +396,12 @@ class NoAiRepository implements AiRepository, TranslateRepository {
 
 final aiRepositoryProvider = Provider<AiRepository>((ref) {
   try {
-    return SupabaseAiRepository(ref.watch(supabaseClientProvider));
+    // On iOS and macOS the device's own model goes first (roadmap F8); the
+    // server's repository stays behind it.
+    return withOnDeviceAi(
+      ref,
+      SupabaseAiRepository(ref.watch(supabaseClientProvider)),
+    );
   } on ProviderException {
     return const NoAiRepository();
   } on Object {

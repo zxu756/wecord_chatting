@@ -688,6 +688,49 @@ and no new provider: it uses `AI_BASE_URL` / `AI_MODEL` like the other actions.
 
 Deploy: apply migration `202610280800` first, then `supabase functions deploy ai`.
 
+### On-device AI (Apple Intelligence, roadmap F8)
+
+Nothing to configure on the server: this is a second path next to the `ai`
+function, in the iPhone and Mac apps only (the web and Android never show it).
+Settings → AI → "Prefer on-device AI" (on by default) sends summaries,
+composer rewriting and translation (message menu, auto-translate, text from a
+picture) to the device's own model, Apple's Foundation Models framework,
+instead of the function. Text then never leaves the device and does not count
+against `AI_DAILY_LIMIT_PER_USER`.
+
+- **Needs** iOS 26 / macOS 26 or later, a device that supports Apple
+  Intelligence (an Apple silicon Mac, an iPhone 15 Pro or later; an iPhone with
+  an A16 chip does not), Apple Intelligence switched on in the system Settings,
+  and the model downloaded. The app is still built for iOS 15 / macOS 13.5:
+  the framework is weak linked and only touched behind `#available`.
+- **When it is not available** (any of the above missing) the app uses this
+  function exactly as before: same daily limit, same switches. The native
+  plugin (`OnDeviceAiPlugin`, channel `wecord/on_device_ai`) answers
+  `availability` with `os_too_old`, `device_not_eligible`, `not_enabled`,
+  `model_not_ready` or `unavailable`, and the settings row shows the reason.
+- **When it is available but a request fails** (the system's safety check
+  refuses the text, it is too long, the language is not supported) the app
+  shows an error and does not send the text to the server.
+- **The same rules hold.** Before reading a chat the app checks the person's AI
+  switch, `conversation_ai_allowed` (the circle's or group's AI switch and
+  advanced chat privacy, G6: the same database function the function asks), and
+  the chat lock (G2, threads included); a rule it cannot check counts as no.
+  Messages are read as the caller, leaving out recalled, expired, held and
+  view-once ones.
+- **Small model.** The context window is about 4,000 tokens, so long chats are
+  summarized in parts and merged (at most the latest 200 messages, 100 for
+  "recent"), and long drafts are cut at sentences and joined again. The
+  prompts are the function's own, in Swift.
+- **Still the server's:** the status and daily count, Ask AI, to-dos, reply
+  suggestions, note AI, the digest, @AI, call recaps and the AI guard. The AI
+  entry points still need the server to have AI set up.
+- **Check it on a Mac:** `tool/on_device_ai_check.sh` compiles the Swift core
+  (`macos/Runner/OnDeviceAiCore.swift`, identical to the iOS copy) with a small
+  test program and runs it: the cleaning and parsing checks always, a real
+  translation, rewrite, summary and a prompt-injection check when the model is
+  available. Exit code 2 means the model is not usable on this Mac (the reason
+  is printed). Tests: `flutter test test/features/ai/on_device`.
+
 ## Tests
 
 

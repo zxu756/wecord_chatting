@@ -24,6 +24,8 @@
 		E1A0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000001C1 /* ImageTextPlugin.swift */; };
 		E1A0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000002A1 /* StickerCutoutPlugin.swift */; };
 		E1A0F00000000000000009B2 /* ScreenCapturePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F00000000000000009B1 /* ScreenCapturePlugin.swift */; };
+		E1A0F000000000000000F812 /* OnDeviceAiCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F000000000000000F811 /* OnDeviceAiCore.swift */; };
+		E1A0F000000000000000F822 /* OnDeviceAiPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A0F000000000000000F821 /* OnDeviceAiPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +74,8 @@
 		E1A0F00000000000000001C1 /* ImageTextPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageTextPlugin.swift; sourceTree = "<group>"; };
 		E1A0F00000000000000002A1 /* StickerCutoutPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StickerCutoutPlugin.swift; sourceTree = "<group>"; };
 		E1A0F00000000000000009B1 /* ScreenCapturePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenCapturePlugin.swift; sourceTree = "<group>"; };
+		E1A0F000000000000000F811 /* OnDeviceAiCore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnDeviceAiCore.swift; sourceTree = "<group>"; };
+		E1A0F000000000000000F821 /* OnDeviceAiPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnDeviceAiPlugin.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -185,6 +189,8 @@
 				E1A0F00000000000000001C1 /* ImageTextPlugin.swift */,
 				E1A0F00000000000000002A1 /* StickerCutoutPlugin.swift */,
 				E1A0F00000000000000009B1 /* ScreenCapturePlugin.swift */,
+				E1A0F000000000000000F811 /* OnDeviceAiCore.swift */,
+				E1A0F000000000000000F821 /* OnDeviceAiPlugin.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -398,6 +404,8 @@
 				E1A0F00000000000000001C2 /* ImageTextPlugin.swift in Sources */,
 				E1A0F00000000000000002A2 /* StickerCutoutPlugin.swift in Sources */,
 				E1A0F00000000000000009B2 /* ScreenCapturePlugin.swift in Sources */,
+				E1A0F000000000000000F812 /* OnDeviceAiCore.swift in Sources */,
+				E1A0F000000000000000F822 /* OnDeviceAiPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

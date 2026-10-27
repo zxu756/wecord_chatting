@@ -233,6 +233,60 @@ String aiErrorMessage(Object error) {
     ),
     AiChatLockedException() => tr("AI doesn't read chats you've locked."),
     AiRejectedException() => tr("That can't be processed."),
+    AiOnDeviceFailedException(:final kind) => switch (kind) {
+      OnDeviceAiFailureKind.tooLong => tr(
+        'That is too long for the on-device AI. Try a shorter text.',
+      ),
+      OnDeviceAiFailureKind.refused => tr(
+        "The on-device AI wouldn't process that text.",
+      ),
+      OnDeviceAiFailureKind.language => tr(
+        "The on-device AI doesn't support that language.",
+      ),
+      OnDeviceAiFailureKind.busy => tr(
+        'The on-device AI is busy right now. Try again in a moment.',
+      ),
+      OnDeviceAiFailureKind.failed => tr(
+        "The on-device AI couldn't do that. Try again, or turn off Prefer on-device AI in Settings.",
+      ),
+    },
     _ => tr('Something went wrong. Try again.'),
   };
+}
+
+/// Why a request to the on-device model failed although it was available.
+enum OnDeviceAiFailureKind {
+  /// The text is too long for the model's small context window.
+  tooLong,
+
+  /// The system's own safety check refused to process the text.
+  refused,
+
+  /// The model doesn't know the language.
+  language,
+
+  /// The model is busy with another request.
+  busy,
+
+  /// Anything else.
+  failed;
+
+  static OnDeviceAiFailureKind fromCode(Object? code) {
+    return switch (code) {
+      'context_too_long' => tooLong,
+      'refused' => refused,
+      'unsupported_language' => language,
+      'busy' => busy,
+      _ => failed,
+    };
+  }
+}
+
+/// The on-device model (Settings → AI → Prefer on-device AI) was available
+/// but could not process the text. The server is not asked instead: the text
+/// was meant to stay on the device.
+class AiOnDeviceFailedException extends AiException {
+  const AiOnDeviceFailedException(this.kind);
+
+  final OnDeviceAiFailureKind kind;
 }

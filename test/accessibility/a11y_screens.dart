@@ -95,6 +95,7 @@ import 'hashtags_posts_a11y_screens.dart';
 import 'local_data_a11y_screens.dart';
 import 'whiteboard_a11y_screens.dart';
 import 'workflows_a11y_screens.dart';
+import 'on_device_ai_a11y_screens.dart';
 import '../features/voice/call_links_fakes.dart';
 import '../features/wallpapers/wallpaper_fakes.dart';
 import '../features/privacy/privacy_fakes.dart';
@@ -866,4 +867,5 @@ final allA11yScreens = <A11yScreen>[
   ...localDataA11yScreens,
   ...whiteboardA11yScreens,
   ...workflowsA11yScreens,
+  ...onDeviceAiA11yScreens,
 ];

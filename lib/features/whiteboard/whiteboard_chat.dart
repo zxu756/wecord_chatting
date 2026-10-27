@@ -8,11 +8,11 @@ import 'package:wecord/features/chats/thread/registry/composer_menu.dart';
 import 'package:wecord/features/whiteboard/whiteboard_routes.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
-/// "Whiteboard" in the "+" menu, after Daily check-in (460) and before
-/// Contact card (500).
+/// "Whiteboard" in the "+" menu, after Send GIF (1300): the menu scrolls, and
+/// the entries people use most (stickers, GIFs) keep their places.
 final whiteboardComposerEntry = ComposerMenuContribution(
   id: 'whiteboard',
-  order: 470,
+  order: 1400,
   build: (ctx) => GlassMenuEntry(
     key: const ValueKey('composer-whiteboard-entry'),
     icon: Icons.draw_outlined,

@@ -791,6 +791,21 @@ export async function collectExportData(
     null,
   );
 
+  // The whiteboards I started and what I drew or wrote on boards of my chats
+  // (export_my_whiteboards).
+  const whiteboards = await tryRead<Row | null>(
+    skipped,
+    "whiteboards",
+    async () => {
+      const result = await admin.rpc("export_my_whiteboards", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -907,6 +922,7 @@ export async function collectExportData(
     chatPrivacy,
     groupSpace,
     circlePosts,
+    whiteboards,
     accountSecurity,
     files,
     attachmentLinks,

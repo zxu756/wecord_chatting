@@ -82,6 +82,18 @@ class WhiteboardInkInProgress {
   List<double> get flat => [
     for (final p in points) ...[p.dx, p.dy],
   ];
+
+  /// The newest [count] points as x, y pairs: all the others need of a
+  /// preview.
+  List<double> tail(int count) {
+    final from = points.length > count ? points.length - count : 0;
+    return [
+      for (var i = from; i < points.length; i++) ...[
+        points[i].dx,
+        points[i].dy,
+      ],
+    ];
+  }
 }
 
 /// Everything a person does on one board, apart from painting it: loading,
@@ -343,6 +355,7 @@ class WhiteboardController extends ChangeNotifier {
         at: Offset(pointer.x, pointer.y),
         seen: DateTime.now(),
       );
+      _sweepCursors();
       _paintOnly();
     });
     _liveStrokesSub = live.strokes.listen((stroke) {
@@ -353,12 +366,21 @@ class WhiteboardController extends ChangeNotifier {
       }
       _paintOnly();
     });
-    _cursorSweep = Timer.periodic(const Duration(seconds: 4), (_) {
+  }
+
+  /// Pointers that stopped moving fade away; the timer runs only while
+  /// somebody's pointer is shown.
+  void _sweepCursors() {
+    _cursorSweep ??= Timer.periodic(const Duration(seconds: 4), (timer) {
       final limit = DateTime.now().subtract(const Duration(seconds: 8));
       final before = pointers.length;
       pointers.removeWhere((_, value) => value.seen.isBefore(limit));
       if (pointers.length != before) {
         _paintOnly();
+      }
+      if (pointers.isEmpty) {
+        timer.cancel();
+        _cursorSweep = null;
       }
     });
   }
@@ -645,7 +667,7 @@ class WhiteboardController extends ChangeNotifier {
       WhiteboardLiveStroke(
         userId: userId,
         strokeId: current.id,
-        points: current.flat,
+        points: current.tail(400),
         color: current.color,
         width: current.width,
         highlighter: current.highlighter,
@@ -684,6 +706,8 @@ class WhiteboardController extends ChangeNotifier {
     final simplified = simplifyStroke(
       current.points,
       current.usesPressure ? current.pressures : null,
+      // Long lines are cut into pieces below, not thinned out.
+      maxPoints: WhiteboardLimits.maxStrokePoints * 10,
     );
     final pieces = splitStroke(simplified.points, simplified.pressures);
     if (!_hasRoomFor(pieces.length)) {

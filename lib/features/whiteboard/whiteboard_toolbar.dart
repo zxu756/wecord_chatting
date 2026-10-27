@@ -345,8 +345,8 @@ class _Swatch extends StatelessWidget {
         onTap: onPressed,
         customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           child: Center(
             child: Container(
               width: 30,
@@ -393,7 +393,7 @@ class _WidthChoice extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: 52,
-          height: 44,
+          height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? c.accentSoft : Colors.transparent,
@@ -442,8 +442,8 @@ class _IconChoice extends StatelessWidget {
           onTap: onPressed,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: selected ? c.accentSoft : Colors.transparent,
@@ -485,7 +485,7 @@ class _ActionChip extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
+          constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: danger ? c.dangerSoft : c.well,

@@ -49,11 +49,17 @@ class WhiteboardPage extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.boardId,
     this.title,
+    this.controller,
     super.key,
   });
 
   final String conversationId;
   final String boardId;
+
+  /// A controller made and loaded by a test; the page then does not load it
+  /// again (it still disposes it with the page).
+  @visibleForTesting
+  final WhiteboardController? controller;
 
   /// Shown until the board has loaded.
   final String? title;
@@ -80,17 +86,27 @@ class _WhiteboardPageState extends ConsumerState<WhiteboardPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final user = ref.read(authRepositoryProvider).currentUser;
-    _controller = WhiteboardController(
-      boardId: widget.boardId,
-      repository: ref.read(whiteboardRepositoryProvider),
-      drafts: ref.read(whiteboardDraftStoreProvider),
-      userId: user?.id ?? '',
-      userName: _selfName(user?.id),
-    )..measureWords = ((text, size) => measureWhiteboardText(text, size));
+    final given = widget.controller;
+    if (given != null) {
+      _controller = given..measureWords = measureWhiteboardText;
+      _needsLoad = false;
+    } else {
+      final user = ref.read(authRepositoryProvider).currentUser;
+      _controller = WhiteboardController(
+        boardId: widget.boardId,
+        repository: ref.read(whiteboardRepositoryProvider),
+        drafts: ref.read(whiteboardDraftStoreProvider),
+        userId: user?.id ?? '',
+        userName: _selfName(user?.id),
+      )..measureWords = measureWhiteboardText;
+    }
     _controller.addListener(_onController);
-    unawaited(_controller.load());
+    if (_needsLoad) {
+      unawaited(_controller.load());
+    }
   }
+
+  var _needsLoad = true;
 
   String _selfName(String? userId) {
     final members = ref

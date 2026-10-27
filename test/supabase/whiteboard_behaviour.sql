@@ -258,6 +258,16 @@ set local client_min_messages = warning;
 \i supabase/migrations/202610280920_chat_privacy_enforce.sql
 \i supabase/migrations/202610280930_view_once_screenshots.sql
 \i supabase/migrations/202610280940_chat_privacy_account.sql
+\i supabase/migrations/202610281100_bot_events_schema.sql
+\i supabase/migrations/202610281110_bot_events_enqueue.sql
+\i supabase/migrations/202610281120_bot_api2_core.sql
+\i supabase/migrations/202610281130_bot_api2_chats.sql
+\i supabase/migrations/202610281140_bot_api2_access.sql
+\i supabase/migrations/202610281150_developer_page.sql
+\i supabase/migrations/202610281160_developer_account.sql
+\i supabase/migrations/202610281200_l6_hot_queries.sql
+\i supabase/migrations/202610281210_l6_member_pages.sql
+\i supabase/migrations/202610281220_l6_push_pages.sql
 \i supabase/migrations/202610281300_workflows_schema.sql
 \i supabase/migrations/202610281310_workflows_rpcs.sql
 \i supabase/migrations/202610281320_workflows_events.sql

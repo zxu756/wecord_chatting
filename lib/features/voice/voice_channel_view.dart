@@ -9,6 +9,7 @@ import 'package:wecord/features/voice/background/video_background.dart';
 import 'package:wecord/features/voice/call_links/call_link_sheet.dart';
 import 'package:wecord/features/voice/captions/captions_sheets.dart';
 import 'package:wecord/features/voice/captions/captions_strip.dart';
+import 'package:wecord/features/voice/watch/watch_strip.dart';
 import 'package:wecord/features/voice/call_links/call_links.dart';
 import 'package:wecord/features/voice/mini_player/call_surfaces.dart';
 import 'package:wecord/features/voice/reactions/floating_reactions.dart';
@@ -206,7 +207,16 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
     }
 
     // Shown here, so the mini player stays away.
-    final shownBody = connected ? CallSurface(child: body) : body;
+    final callBody = connected ? CallSurface(child: body) : body;
+    // Watching together (E4) sits above the people, on a stage never.
+    final shownBody = connected && !widget.isStage
+        ? Column(
+            children: [
+              const WatchTogetherStrip(),
+              Expanded(child: callBody),
+            ],
+          )
+        : callBody;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -316,6 +326,8 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                             ),
                           ),
                         if (connected) const CaptionsButton(),
+                        if (connected && !widget.isStage)
+                          const WatchTogetherButton(),
                         if (chatBuilder != null && !connected)
                           VoiceHeaderButton(
                             key: const ValueKey('voice-chat-button'),

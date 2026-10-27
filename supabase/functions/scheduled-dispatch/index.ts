@@ -54,6 +54,7 @@ import {
 import { type EventNoticePushRow, eventNoticeTarget } from "./events2.ts";
 import { awayReplyTargets } from "./away_replies.ts";
 import { type CheckInPushRow, checkInTarget } from "./check_in.ts";
+import { workflowMessageTargets } from "./workflows.ts";
 import { type OpsAlertPushRow, opsAlertTarget } from "./ops_alerts.ts";
 import { type SecurityPushRow, securityTarget } from "./security.ts";
 import {
@@ -151,6 +152,10 @@ Deno.serve(async (request) => {
   // by the database; pushed like a scheduled message the sender just sent.
   // The trigger and a cron job of their own wake this function.
   targets.push(...await awayReplyTargets(admin));
+
+  // Messages a workflow (D9) sent as its creator: the database wrote them
+  // and queued them; pushed like a scheduled message the sender just sent.
+  targets.push(...await workflowMessageTargets(admin));
 
   // Reminders that came due: "Reminder" / "{sender}: {text}".
   const { data: reminders, error: reminderError } = await admin.rpc(

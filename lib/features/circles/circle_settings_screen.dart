@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/ai/ai_settings.dart';
@@ -24,6 +26,8 @@ import 'package:wecord/features/circles/mod_tools/member_tools_screen.dart';
 import 'package:wecord/features/circles/mod_tools/raid_protection.dart';
 import 'package:wecord/features/discovery/circle_discovery_settings_screen.dart';
 import 'package:wecord/features/profile/support_links_editor.dart';
+import 'package:wecord/features/workflows/workflow_list_page.dart';
+import 'package:wecord/features/workflows/workflow_repository.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/ui/ui.dart';
@@ -229,6 +233,15 @@ class _ManageGroup extends ConsumerWidget {
           title: tr('Discovery'),
           subtitle: tr('Public listing in Explore'),
           onTap: () => openCircleDiscoverySettings(context, detail),
+        ),
+        SettingsRow(
+          key: const ValueKey('circle-settings-workflows'),
+          icon: Icons.bolt_rounded,
+          tone: SettingsTone.accent,
+          title: tr('Workflows'),
+          subtitle: tr('Do things when something happens'),
+          onTap: () =>
+              unawaited(openWorkflows(context, WorkflowScope.circle(circleId))),
         ),
       ],
       if (canReview)

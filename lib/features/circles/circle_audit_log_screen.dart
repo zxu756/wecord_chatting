@@ -446,6 +446,7 @@ IconData circleAuditGroupIcon(CircleAuditActionGroup group) {
     CircleAuditActionGroup.event => Icons.event_outlined,
     CircleAuditActionGroup.webhook => Icons.smart_toy_outlined,
     CircleAuditActionGroup.discovery => Icons.explore_outlined,
+    CircleAuditActionGroup.workflow => Icons.bolt_rounded,
     CircleAuditActionGroup.join => Icons.how_to_reg_outlined,
     _ => Icons.history,
   };
@@ -554,6 +555,10 @@ IconData circleAuditIcon(String action) {
     'invites_pause' => Icons.pause_circle_outline,
     'invites_resume' => Icons.play_circle_outline,
     'discovery_update' => Icons.explore_outlined,
+    'workflow_create' || 'workflow_update' => Icons.bolt_rounded,
+    'workflow_pause' => Icons.pause_circle_outline,
+    'workflow_resume' => Icons.play_circle_outline,
+    'workflow_delete' => Icons.delete_outline,
     'slug_update' => Icons.link_rounded,
     'edit_window_update' => Icons.history_toggle_off,
     'bot_callback_set' ||
@@ -974,6 +979,11 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       false => (tr('{actor} made the circle private'), {}),
       _ => (tr('{actor} updated the discovery settings'), {}),
     },
+    'workflow_create' => (tr('{actor} created the workflow {target}'), {}),
+    'workflow_update' => (tr('{actor} changed the workflow {target}'), {}),
+    'workflow_pause' => (tr('{actor} paused the workflow {target}'), {}),
+    'workflow_resume' => (tr('{actor} resumed the workflow {target}'), {}),
+    'workflow_delete' => (tr('{actor} deleted the workflow {target}'), {}),
     'slug_update' => (tr("{actor} changed the circle's short link"), {}),
     'bot_callback_set' => (
       tr('{actor} set the callback address of bot {target}'),

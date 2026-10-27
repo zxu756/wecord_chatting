@@ -213,6 +213,7 @@ const emptyRpc: Record<string, unknown> = {
     passkeys: [],
   },
   export_my_developer: { bots: [] },
+  export_my_integrations: { feeds: [], github: [] },
 };
 
 const feedbackAnswer = [{
@@ -558,6 +559,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         passkeys: [],
       },
       export_my_developer: { bots: [] },
+      export_my_integrations: { feeds: [], github: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -601,6 +603,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_circle_posts", args: { target_user_id: me } },
     { name: "export_my_account_security", args: { target_user_id: me } },
     { name: "export_my_developer", args: { target_user_id: me } },
+    { name: "export_my_integrations", args: { target_user_id: me } },
     { name: "export_my_quick_replies", args: { target_user_id: me } },
     { name: "export_my_whiteboards", args: { target_user_id: me } },
     { name: "export_my_workflows", args: { target_user_id: me } },
@@ -676,6 +679,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         passkeys: [],
       },
       export_my_developer: { bots: [] },
+      export_my_integrations: { feeds: [], github: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -813,6 +817,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         passkeys: [],
       },
       export_my_developer: { bots: [] },
+      export_my_integrations: { feeds: [], github: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -858,6 +863,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.workflows, null);
   assertEquals(data.accountSecurity, null);
   assertEquals(data.developer, null);
+  assertEquals(data.integrations, null);
   assertEquals(data.skipped.sort(), [
     "account security record",
     "advanced chat privacy",
@@ -872,6 +878,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "events",
     "favorites",
     "feedback",
+    "feeds and GitHub connections I added",
     "forms",
     "group space",
     "knowledge base pages",

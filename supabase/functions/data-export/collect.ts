@@ -792,6 +792,21 @@ export async function collectExportData(
     null,
   );
 
+  // The RSS feeds and GitHub connections I added, never a secret
+  // (export_my_integrations).
+  const integrations = await tryRead<Row | null>(
+    skipped,
+    "feeds and GitHub connections I added",
+    async () => {
+      const result = await admin.rpc("export_my_integrations", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // My quick replies and away auto-reply (export_my_quick_replies).
   const quickReplies = await tryRead<Row | null>(
     skipped,
@@ -955,6 +970,7 @@ export async function collectExportData(
     workflows,
     accountSecurity,
     developer,
+    integrations,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

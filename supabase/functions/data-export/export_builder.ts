@@ -255,6 +255,13 @@ export interface ExportData {
    * callers.
    */
   developer?: Json | null;
+  /**
+   * The RSS feeds and GitHub connections I added: where, the address of the
+   * feed, the name, the events and whether it is on
+   * (export_my_integrations, migration 202610290230); never a secret. Null
+   * when it could not be read, absent in older callers.
+   */
+  integrations?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -862,6 +869,12 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.developer) {
     out.push({ path: "data/developer.json", value: developerJson(data) });
+  }
+  if (data.integrations) {
+    out.push({
+      path: "data/integrations.json",
+      value: integrationsJson(data),
+    });
   }
   const extras = data.extras;
   if (extras) {
@@ -2836,6 +2849,65 @@ ${section("Bots", bots, "None.")}`,
   );
 }
 
+/** The feeds and GitHub connections I added (I6): never a secret. */
+function integrationsJson(data: ExportData): Json {
+  const integrations = isObject(data.integrations) ? data.integrations : {};
+  return {
+    feeds: objects(integrations["feeds"]),
+    github: objects(integrations["github"]),
+  };
+}
+
+function integrationState(item: Json): string {
+  if (item["running"] === true) return "on";
+  const reason = str(item["paused_reason"]);
+  return reason ? `paused (${reason.replaceAll("_", " ")})` : "paused";
+}
+
+/** The feeds and GitHub connections I added, with how they are set up. */
+export function buildIntegrationsHtml(data: ExportData): string {
+  const integrations = isObject(data.integrations) ? data.integrations : {};
+  const where = (item: Json) =>
+    `${escapeHtml(str(item["circle"]) ?? "")} · #${
+      escapeHtml(str(item["channel"]) ?? "")
+    }`;
+  const feeds = objects(integrations["feeds"]).map((feed) =>
+    entry(
+      str(feed["added_at"]),
+      `<div><strong>${
+        escapeHtml(str(feed["title"]) ?? str(feed["address"]) ?? "")
+      }</strong> <span class="muted">${
+        where(feed)
+      }</span></div><div class="muted">${
+        escapeHtml(str(feed["address"]) ?? "")
+      } · ${escapeHtml(integrationState(feed))}</div>`,
+    )
+  ).join("");
+  const github = objects(integrations["github"]).map((hook) => {
+    const events = Array.isArray(hook["events"])
+      ? hook["events"].map(String).join(", ")
+      : "";
+    return entry(
+      str(hook["added_at"]),
+      `<div><strong>${
+        escapeHtml(str(hook["name"]) ?? "")
+      }</strong> <span class="muted">${
+        where(hook)
+      }</span></div><div class="muted">${escapeHtml(events)} · ${
+        escapeHtml(integrationState(hook))
+      }</div>`,
+    );
+  }).join("");
+  return page(
+    "Feeds and GitHub connections — your WeCord data",
+    `${backLink()}<h1>Feeds and GitHub connections</h1>
+<p class="muted">The RSS feeds and GitHub connections you added to channels.
+Secrets are never in this archive, and neither is anything they posted.</p>
+${section("RSS feeds", feeds, "None.")}
+${section("GitHub connections", github, "None.")}`,
+  );
+}
+
 /** The security record: codes, passkeys and what was done with them (G4). */
 export function buildAccountSecurityHtml(data: ExportData): string {
   const security = isObject(data.accountSecurity) ? data.accountSecurity : {};
@@ -3206,6 +3278,17 @@ export function buildSectionPages(
       content: buildDeveloperHtml(data),
     });
   }
+  if (data.integrations) {
+    const integrations = isObject(data.integrations) ? data.integrations : {};
+    const feeds = objects(integrations["feeds"]).length;
+    const hooks = objects(integrations["github"]).length;
+    out.push({
+      path: "pages/integrations.html",
+      label: "Feeds and GitHub connections",
+      summary: `${feeds} feed${feeds === 1 ? "" : "s"} · ${hooks} GitHub`,
+      content: buildIntegrationsHtml(data),
+    });
+  }
   if (data.quickReplies) {
     const replies = objects(
       isObject(data.quickReplies) ? data.quickReplies["quick_replies"] : null,
@@ -3340,6 +3423,9 @@ data/account_security.json The record of your recovery codes and passkeys:
 data/developer.json  The bots you made: their circle, settings, and the address
                       and kinds of events they send to (never a token or a
                       secret).
+data/integrations.json The RSS feeds and GitHub connections you added to
+                      channels: where, the feed address, the name, the events
+                      and whether they are on (never a secret).
 data/quick_replies.json The quick replies you keep and your away auto-reply
                       (the auto-replies it sent are with your messages).
 data/moments_more.json The Moments you pinned, the people you reminded to

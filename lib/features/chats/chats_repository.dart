@@ -25,6 +25,13 @@ import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/pinned_message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
+/// How many members of a group are loaded when its details open; a bigger
+/// group's others come a page at a time (L6).
+const groupMemberPageSize = 100;
+
+const _groupMemberColumns =
+    'role,circle_nickname,joined_at,profile:profiles(id,username,display_name,avatar_url,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))';
+
 final chatsRepositoryProvider = Provider<ChatsRepository>((ref) {
   try {
     final push = ref.watch(pushRepositoryProvider);
@@ -311,7 +318,16 @@ abstract interface class ChatsDataSource {
 
   Future<List<Map<String, dynamic>>> listReadMarkers(String conversationId);
 
+  /// The first members of a group in joining order: at most
+  /// [groupMemberPageSize] + 1 (the extra one says there are more).
   Future<List<Map<String, dynamic>>> listGroupMembers(String conversationId);
+
+  /// One member's row, as [listGroupMembers] gives it; null when they are not
+  /// a member (or cannot be seen).
+  Future<Map<String, dynamic>?> getGroupMember(
+    String conversationId,
+    String userId,
+  );
 
   Future<String?> latestMessageId(String conversationId);
 
@@ -721,10 +737,32 @@ class SupabaseChatsRepository
 
   @override
   Future<GroupDetail> getGroupDetail(String conversationId) async {
-    final (conversation, memberRows) = await (
+    final (conversation, loadedRows) = await (
       getConversationSummary(conversationId),
       _dataSource.listGroupMembers(conversationId),
     ).wait;
+    var memberRows = loadedRows;
+    GroupMembersCursor? moreAfter;
+    if (memberRows.length > groupMemberPageSize) {
+      // A big group (L6): the first page of its members, not thousands of
+      // profiles. The rest comes a page at a time (list_conversation_members_page).
+      memberRows = memberRows.take(groupMemberPageSize).toList();
+      moreAfter = GroupMembersCursor.after(
+        _groupMemberFromJson(memberRows.last),
+      );
+      final currentUserId = _currentUserId();
+      if (currentUserId != null && _currentUserRole(memberRows) == null) {
+        // The current user is somewhere after the first page: their role
+        // decides what the sheet lets them do.
+        final own = await _dataSource.getGroupMember(
+          conversationId,
+          currentUserId,
+        );
+        if (own != null) {
+          memberRows = [...memberRows, own];
+        }
+      }
+    }
     return GroupDetail(
       conversationId: conversationId,
       title: conversation?.title ?? conversationId,
@@ -734,6 +772,8 @@ class SupabaseChatsRepository
       announcementUpdatedBy: conversation?.announcementUpdatedBy,
       currentUserRole: _currentUserRole(memberRows),
       members: memberRows.map(_groupMemberFromJson).toList(growable: false),
+      totalMemberCount: moreAfter == null ? null : conversation?.memberCount,
+      moreMembersAfter: moreAfter,
     );
   }
 
@@ -2204,12 +2244,25 @@ class SupabaseChatsDataSource implements ChatsDataSource {
   ) async {
     final rows = await _client
         .from('conversation_members')
-        .select(
-          'role,circle_nickname,profile:profiles(id,username,display_name,avatar_url,created_at,updated_at,contact_alias:contact_aliases!contact_aliases_friend_id_fkey(alias))',
-        )
+        .select(_groupMemberColumns)
         .eq('conversation_id', conversationId)
-        .order('joined_at', ascending: true);
+        .order('joined_at', ascending: true)
+        .order('user_id', ascending: true)
+        .limit(groupMemberPageSize + 1);
     return rows.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getGroupMember(
+    String conversationId,
+    String userId,
+  ) async {
+    return await _client
+        .from('conversation_members')
+        .select(_groupMemberColumns)
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId)
+        .maybeSingle();
   }
 
   @override

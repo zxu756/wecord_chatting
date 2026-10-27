@@ -17,6 +17,11 @@
 // All answer 503 push_not_configured until VAPID_PUBLIC_KEY and
 // VAPID_PRIVATE_KEY (and optionally VAPID_SUBJECT) are set.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  claimPushBatches,
+  forEachLimited,
+  SEND_CONCURRENCY,
+} from "./claim_pages.ts";
 import { maskLockedPushes } from "./locked_chats.ts";
 import { dropQuietPushes } from "./quiet_hours.ts";
 import { dropSilentPushes } from "./silent_messages.ts";
@@ -153,81 +158,103 @@ Deno.serve(async (request) => {
   ) {
     return json({ error: "invalid_message" }, 400);
   }
-  // Checks the caller sent it and claims it, so it is pushed only once.
-  const { data, error } = isMomentsPush
-    ? await admin.rpc("claim_moments_pushes", {
-      caller_id: user.id,
-      target_post_id: momentsPostId,
-    })
-    : isTaskPush
-    ? await admin.rpc("claim_task_assignment_push", {
-      target_item_id: taskItemId,
-      caller_id: user.id,
-    })
-    : isReadReminderPush
-    ? await admin.rpc("claim_read_reminder_pushes", {
-      target_message_id: readReminderMessageId,
-      caller_id: user.id,
-    })
-    : await admin.rpc("claim_push_delivery", {
-      target_message_id: messageId,
-      caller_id: user.id,
-    });
-  if (error) {
-    return json({ error: "lookup_failed" }, 500);
-  }
-
-  // A message sent silently is told to nobody (it is still in the chats).
-  const claimed = await dropSilentPushes(
-    admin,
-    (data ?? []) as PushTarget[],
-    isMomentsPush || isTaskPush || isReadReminderPush
-      ? null
-      : (messageId as string),
-  );
-  // Quiet hours hold back what is not for the recipient's exceptions (the
-  // inbox is written elsewhere and does not depend on this).
-  const audible = await dropQuietPushes(
-    admin,
-    claimed,
-    Math.floor(Date.now() / 1000),
-    isMomentsPush || isTaskPush || isReadReminderPush
-      ? null
-      : (messageId as string),
-  );
-  // A chat the subscriber locked is told without its words (G2).
-  const unrevealing = await maskLockedPushes(admin, audible);
-  // Times in the text are written for each subscriber's zone and language.
-  const targets = await writeTimesForTargets(
-    admin,
-    unrevealing,
-    Math.floor(Date.now() / 1000),
-  );
+  const isChatPush = !isMomentsPush && !isTaskPush && !isReadReminderPush;
+  // A reminder, a task or a Moment is not a message: no message id for the
+  // silent and quiet-hours checks.
+  const silentKey = isMomentsPush || isTaskPush || isReadReminderPush
+    ? null
+    : (messageId as string);
   const gone: string[] = [];
   let sent = 0;
   // How it went, as three numbers for the monitoring (K3).
   const tally = newTally();
-  await Promise.all(targets.map(async (target) => {
-    try {
-      const status = await sendWebPush(keys, target, {
-        title: target.title,
-        body: target.body,
-        tag: target.tag ?? target.conversation_id ?? undefined,
-        url: targetPath(target),
-      }, { nowSeconds: Math.floor(Date.now() / 1000) });
-      tallyPush(tally, status);
-      if (status === 404 || status === 410) {
-        gone.push(target.subscription_id);
-      } else if (status >= 200 && status < 300) {
-        sent++;
+
+  // Tells the people of one batch of claimed rows: the checks, then the
+  // devices, a few dozen at a time.
+  const deliver = async (rows: PushTarget[]) => {
+    // A message sent silently is told to nobody (it is still in the chats).
+    const claimed = await dropSilentPushes(admin, rows, silentKey);
+    // Quiet hours hold back what is not for the recipient's exceptions (the
+    // inbox is written elsewhere and does not depend on this).
+    const audible = await dropQuietPushes(
+      admin,
+      claimed,
+      Math.floor(Date.now() / 1000),
+      silentKey,
+    );
+    // A chat the subscriber locked is told without its words (G2).
+    const unrevealing = await maskLockedPushes(admin, audible);
+    // Times in the text are written for each subscriber's zone and language.
+    const targets = await writeTimesForTargets(
+      admin,
+      unrevealing,
+      Math.floor(Date.now() / 1000),
+    );
+    const goneHere: string[] = [];
+    await forEachLimited(targets, SEND_CONCURRENCY, async (target) => {
+      try {
+        const status = await sendWebPush(keys, target, {
+          title: target.title,
+          body: target.body,
+          tag: target.tag ?? target.conversation_id ?? undefined,
+          url: targetPath(target),
+        }, { nowSeconds: Math.floor(Date.now() / 1000) });
+        tallyPush(tally, status);
+        if (status === 404 || status === 410) {
+          goneHere.push(target.subscription_id);
+        } else if (status >= 200 && status < 300) {
+          sent++;
+        }
+      } catch {
+        // One unreachable push service doesn't stop the others.
+        tallyPush(tally, null);
       }
-    } catch {
-      // One unreachable push service doesn't stop the others.
-      tallyPush(tally, null);
+    });
+    if (goneHere.length > 0) {
+      await admin.rpc("remove_push_subscriptions", { target_ids: goneHere });
+      gone.push(...goneHere);
     }
-  }));
-  if (gone.length > 0) {
-    await admin.rpc("remove_push_subscriptions", { target_ids: gone });
+  };
+
+  // Checks the caller sent it and claims it, so it is pushed only once. A
+  // chat message comes in batches of people (a big group has thousands of
+  // devices); the others are small.
+  if (isChatPush) {
+    const { error: claimError, batches } = await claimPushBatches<
+      PushTarget & { recipient_id?: string | null }
+    >(
+      admin,
+      messageId as string,
+      user.id,
+      deliver,
+    );
+    if (claimError) {
+      if (batches === 0) {
+        return json({ error: "lookup_failed" }, 500);
+      }
+      // Some batches went out; the rest are not retried (the message is
+      // claimed), so say so in the log.
+      console.error("claim_push_delivery stopped", claimError);
+    }
+  } else {
+    const { data, error } = isMomentsPush
+      ? await admin.rpc("claim_moments_pushes", {
+        caller_id: user.id,
+        target_post_id: momentsPostId,
+      })
+      : isTaskPush
+      ? await admin.rpc("claim_task_assignment_push", {
+        target_item_id: taskItemId,
+        caller_id: user.id,
+      })
+      : await admin.rpc("claim_read_reminder_pushes", {
+        target_message_id: readReminderMessageId,
+        caller_id: user.id,
+      });
+    if (error) {
+      return json({ error: "lookup_failed" }, 500);
+    }
+    await deliver((data ?? []) as PushTarget[]);
   }
   await recordPushOutcome(admin, tally);
   return json({ sent, removed: gone.length });

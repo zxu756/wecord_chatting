@@ -810,6 +810,85 @@ void main() {
     expect(detail.members.single.nickname, 'Countess');
   });
 
+  group('getGroupDetail of a big group', () {
+    Map<String, dynamic> memberRow(int n, {String role = 'member'}) => {
+      'role': role,
+      'joined_at': DateTime.utc(2026, 1, 1, 0, 0, n).toIso8601String(),
+      'profile': {
+        'id': 'user-$n',
+        'username': 'user$n',
+        'display_name': 'User $n',
+        'avatar_url': null,
+        'bio': '',
+        'created_at': '2026-05-18T04:32:00.000Z',
+        'updated_at': '2026-05-18T04:33:00.000Z',
+      },
+    };
+
+    FakeChatsDataSource bigGroup(int members, {required int adminIndex}) {
+      return FakeChatsDataSource()
+        ..conversationRows = [
+          {
+            'id': 'conversation-1',
+            'type': 'group',
+            'title': 'Big',
+            'unread_count': 0,
+            'is_muted': false,
+            'is_marked_unread': false,
+            'member_count': members,
+          },
+        ]
+        ..groupMemberRows = [
+          for (var n = 1; n <= members; n++)
+            memberRow(n, role: n == adminIndex ? 'admin' : 'member'),
+        ];
+    }
+
+    test('loads one page, the total and where the rest continues', () async {
+      final repository = SupabaseChatsRepository.withDataSource(
+        bigGroup(5000, adminIndex: 3),
+        currentUserId: () => 'user-3',
+      );
+
+      final detail = await repository.getGroupDetail('conversation-1');
+
+      expect(detail.members, hasLength(groupMemberPageSize));
+      expect(detail.memberCount, 5000);
+      expect(detail.hasMoreMembers, isTrue);
+      expect(detail.moreMembersAfter?.userId, 'user-$groupMemberPageSize');
+      expect(detail.currentUserRole, 'admin');
+    });
+
+    test('adds the current user when they are after the first page', () async {
+      final repository = SupabaseChatsRepository.withDataSource(
+        bigGroup(5000, adminIndex: 4000),
+        currentUserId: () => 'user-4000',
+      );
+
+      final detail = await repository.getGroupDetail('conversation-1');
+
+      expect(detail.members, hasLength(groupMemberPageSize + 1));
+      expect(detail.members.last.profile.id, 'user-4000');
+      expect(detail.currentUserRole, 'admin');
+      expect(detail.canManageGroup, isTrue);
+      // The page still continues after the 100th, not after the user.
+      expect(detail.moreMembersAfter?.userId, 'user-$groupMemberPageSize');
+    });
+
+    test('a group of exactly one page has nothing more', () async {
+      final repository = SupabaseChatsRepository.withDataSource(
+        bigGroup(groupMemberPageSize, adminIndex: 1),
+        currentUserId: () => 'user-1',
+      );
+
+      final detail = await repository.getGroupDetail('conversation-1');
+
+      expect(detail.members, hasLength(groupMemberPageSize));
+      expect(detail.hasMoreMembers, isFalse);
+      expect(detail.memberCount, groupMemberPageSize);
+    });
+  });
+
   test('conversationChanges emits when the data source invalidates', () async {
     final dataSource = FakeChatsDataSource();
     final repository = SupabaseChatsRepository.withDataSource(
@@ -2954,7 +3033,21 @@ class FakeChatsDataSource implements ChatsDataSource {
     String conversationId,
   ) async {
     listGroupMemberCalls.add(conversationId);
-    return groupMemberRows;
+    // As the real one: at most one page and one more.
+    return groupMemberRows.take(groupMemberPageSize + 1).toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getGroupMember(
+    String conversationId,
+    String userId,
+  ) async {
+    for (final row in groupMemberRows) {
+      if ((row['profile'] as Map<String, dynamic>)['id'] == userId) {
+        return row;
+      }
+    }
+    return null;
   }
 
   @override

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/circles/circle_members_source.dart';
 import 'package:wecord/features/chats/chat_thread_screen.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
@@ -511,6 +514,7 @@ class _CircleWorkspaceState extends ConsumerState<CircleWorkspace> {
       circleMemberIds: {
         for (final member in widget.detail.members) member.profile.id,
       },
+      circleMemberCount: widget.detail.memberCount,
       isAnnouncementChannel: channel.isAnnouncement,
       onOpenThread: (thread) => setState(() => _openThread = thread),
     );
@@ -752,7 +756,7 @@ void showCircleChannelCreationSheet(
 /// hoisted role (highest role first), the remaining online members, then
 /// everyone offline. Names take their highest coloured role's colour; a
 /// menu views profiles, changes nicknames, manages roles and kicks.
-class CircleMemberList extends ConsumerWidget {
+class CircleMemberList extends ConsumerStatefulWidget {
   const CircleMemberList({
     required this.detail,
     required this.onlineUserIds,
@@ -783,11 +787,111 @@ class CircleMemberList extends ConsumerWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CircleMemberList> createState() => _CircleMemberListState();
+}
+
+class _CircleMemberListState extends ConsumerState<CircleMemberList> {
+  // A big circle's members (L6): the details hold the first page; "show more"
+  // adds the next ones and a search asks the database.
+  final _searchController = TextEditingController();
+  var _extra = const <CircleMember>[];
+  CircleMembersCursor? _cursor;
+  var _started = false;
+  var _exhausted = false;
+  var _loading = false;
+  var _query = '';
+  List<CircleMember>? _searchResults;
+  Timer? _searchTimer;
+  var _searchToken = 0;
+
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    _searchTimer?.cancel();
+    final query = value.trim();
+    final token = ++_searchToken;
+    if (query.isEmpty) {
+      setState(() => _searchResults = null);
+      return;
+    }
+    _searchTimer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final found = await ref
+            .read(circleMembersSourceProvider)
+            .search(widget.detail.circle.id, query);
+        if (mounted && token == _searchToken) {
+          setState(() => _searchResults = found);
+        }
+      } catch (_) {
+        if (mounted && token == _searchToken) {
+          setState(() => _searchResults = const []);
+        }
+      }
+    });
+  }
+
+  Future<void> _loadMore() async {
+    final after = _started ? _cursor : null;
+    setState(() => _loading = true);
+    try {
+      final page = await ref
+          .read(circleMembersSourceProvider)
+          .page(widget.detail.circle.id, after: after, pageSize: 100);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _started = true;
+        _extra = [..._extra, ...page.members];
+        _cursor = page.next;
+        _exhausted = page.next == null;
+      });
+    } catch (_) {
+      // The button stays; trying again asks again.
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  /// The members the list shows: for a big circle the pages loaded so far
+  /// (the first page is in the details), or the database's answer to a search.
+  List<CircleMember> _shownMembers() {
+    final detail = widget.detail;
+    if (!detail.hasMoreMembers) {
+      return detail.members;
+    }
+    if (_query.trim().isNotEmpty) {
+      return _searchResults ?? const [];
+    }
+    final seen = <String>{};
+    return [
+      ...detail.members,
+      ..._extra,
+    ].where((member) => seen.add(member.profile.id)).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = widget.detail;
+    final onlineUserIds = widget.onlineUserIds;
+    final onChangeNickname = widget.onChangeNickname;
+    final width = widget.width;
+    final color = widget.color;
+    final scrollController = widget.scrollController;
+    final compact = widget.compact;
+    final searching = detail.hasMoreMembers && _query.trim().isNotEmpty;
     final hoisted = <String, List<CircleMember>>{};
     final online = <CircleMember>[];
     final offline = <CircleMember>[];
-    for (final member in detail.members) {
+    for (final member in _shownMembers()) {
       if (!onlineUserIds.contains(member.profile.id)) {
         offline.add(member);
         continue;
@@ -838,6 +942,26 @@ class CircleMemberList extends ConsumerWidget {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
+            if (detail.hasMoreMembers)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
+                child: WeCordTextField(
+                  key: const ValueKey('circle-member-search'),
+                  controller: _searchController,
+                  hint: tr('Search members'),
+                  prefixIcon: Icons.search_rounded,
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+            if (searching && _searchResults != null && _searchResults!.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  tr('No members found'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: c.muted),
+                ),
+              ),
             for (final (index, (label, groupMembers, isOnline))
                 in groups.indexed)
               if (groupMembers.isNotEmpty) ...[
@@ -947,6 +1071,18 @@ class CircleMemberList extends ConsumerWidget {
                         : null,
                   ),
               ],
+            if (detail.hasMoreMembers && !searching && !_exhausted)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: WeCordButton(
+                  key: const ValueKey('circle-members-more'),
+                  label: tr('Show more members'),
+                  variant: WeCordButtonVariant.secondary,
+                  expand: true,
+                  loading: _loading,
+                  onPressed: _loading ? null : _loadMore,
+                ),
+              ),
           ],
         ),
       ),

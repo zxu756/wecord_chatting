@@ -260,6 +260,7 @@ class _CircleChannelThreadScreenState
             circleMemberIds: detail == null
                 ? null
                 : {for (final member in detail.members) member.profile.id},
+            circleMemberCount: detail?.memberCount,
             isAnnouncementChannel: channel?.isAnnouncement ?? false,
             onOpenThread: (thread) => context.push(
               CircleChannelThreadScreen.pathFor(

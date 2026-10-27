@@ -37,7 +37,13 @@ Deno.test("each claimed reply is pushed as a message from the away person", asyn
     "claim_away_reply_pushes",
     "claim_push_delivery",
   ]);
-  assertEquals(calls[1].args, { target_message_id: "m1", caller_id: "ada" });
+  // The first batch of people; a small chat is one batch.
+  assertEquals(calls[1].args, {
+    target_message_id: "m1",
+    caller_id: "ada",
+    after_user_id: null,
+    page_size: 200,
+  });
   assertEquals(targets.length, 1);
   // The message id rides along so silent messages and quiet hours can look
   // at it.

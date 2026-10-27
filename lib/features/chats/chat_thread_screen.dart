@@ -149,6 +149,7 @@ import 'package:wecord/features/location/location_actions.dart';
 import 'package:wecord/features/location/location_cards.dart';
 import 'package:wecord/features/location/location_models.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/groups/group_members_source.dart';
 import 'package:wecord/features/notifications/notification_coordinator.dart';
 import 'package:wecord/features/presence/presence_indicator.dart';
 import 'package:wecord/features/presence/presence_repository.dart';
@@ -259,6 +260,7 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
     this.slowmodeSeconds,
     this.topic,
     this.circleMemberIds,
+    this.circleMemberCount,
     this.forumPost = false,
     this.onBack,
     this.isAnnouncementChannel = false,
@@ -300,6 +302,10 @@ class ChatThreadScreen extends ConsumerStatefulWidget {
   /// The ids of the circle's members, for a channel without a topic: its
   /// header then says "16 members · 4 online" like a group's.
   final Set<String>? circleMemberIds;
+
+  /// How many members the circle has, when [circleMemberIds] is only the
+  /// first page of a big circle.
+  final int? circleMemberCount;
 
   /// A forum post: its first message shows as the opening post, larger and
   /// with the post's title, and the rest as replies. Posts read top down:
@@ -367,6 +373,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   var _messageSearchQuery = '';
   var _isMentioning = false;
   var _mentionQuery = '';
+
+  /// In a big group (only its first page of members is loaded) the people
+  /// matching the mention being typed come from the database (L6).
+  var _remoteMentions = const <GroupMember>[];
+  Timer? _mentionSearchTimer;
+  var _mentionSearchToken = 0;
   final _mentionDraft = MentionDraft();
 
   /// `@here` and the roles the current user may mention here, and who
@@ -559,6 +571,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     _voiceTimer?.cancel();
     _voiceSecondsLeft.dispose();
     _typingTimer?.cancel();
+    _mentionSearchTimer?.cancel();
     _expiryTimer?.cancel();
     _highlightTimer?.cancel();
     unawaited(_draftsController.flush());

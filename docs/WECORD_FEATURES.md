@@ -14,7 +14,7 @@
 | 客户端 | Flutter + Riverpod 3 + go_router；约 607 个 Dart 文件、17.5 万行 |
 | 后端 | Supabase（Postgres + RLS + Realtime + Storage + Edge Functions + pg_cron + pg_net + Vault），项目 `zpfternchrwboweellka` |
 | 数据库 | 147 个迁移（`supabase/migrations/`），几乎所有业务规则都在 SQL（RLS + security definer 函数）里强制执行 |
-| Edge Functions | 17 个：`ai`、`bot-api`、`bots`、`chat-event-reminders`、`data-export`、`delete-account`、`expire-messages`、`expire-stories`、`gif-search`、`link-preview`、`livekit-token`、`office-preview`、`push`、`scheduled-dispatch`、`sessions`、`sound-upload`、`webhook` |
+| Edge Functions | 19 个：`ai`、`bot-api`、`bots`、`chat-event-reminders`、`data-export`、`delete-account`、`expire-messages`、`expire-stories`、`feed-fetch`、`gif-search`、`github`、`link-preview`、`livekit-token`、`office-preview`、`push`、`scheduled-dispatch`、`sessions`、`sound-upload`、`webhook` |
 | 外部服务 | LiveKit Cloud（语音/视频）、Gotenberg on Google Cloud Run（Office→PDF 预览）、GIPHY（GIF 搜索）、OpenCode Go（AI，OpenAI 兼容接口，可切换）、OpenStreetMap/Nominatim/Overpass（地图，可配置）、Krisp（降噪，LiveKit 插件） |
 | 测试 | 278 个测试文件、约 3822 个测试（单元 + 组件 + 无障碍守卫 + SQL 行为脚本 + Deno 测试），上线前全量通过 |
 | 语言 | 中文（简体）+ 英文；`tr()` 翻译体系，覆盖率测试保证不漏翻 |
@@ -498,6 +498,13 @@
   - **账号与导出**：注销账号时清掉该账号设置的事件订阅和排队事件；数据导出新增 `data/developer.json` 和 `pages/developer.html`（`export_my_developer`：我做的机器人、设置、事件地址和事件类型，不含令牌和密钥）。
   - **审计**：`bot_events_set` / `bot_events_rotate` / `bot_events_clear` / `bot_open_update`。pg_cron：`wecord-bot-events-retry`（每分钟）、`wecord-bot-events-purge`、`wecord-bot-api-calls-purge`（每小时）；没有改 `run_later_dispatch()`。
 - **Webhook**（`webhook` 函数）：外部服务往频道发消息；公告频道转发。
+- **富 Webhook、RSS 订阅和 GitHub 集成（I6）**（迁移 `202610290200`–`202610290230`，客户端在 `lib/features/integrations/`，文档 `docs/bot-api.md`）：频道设置 → 集成（需要「管理 webhook」，文字频道和公告频道）。
+  - **卡片**：`webhook` 函数多收 `embeds`（最多 3 张，Discord 风格：标题、链接、描述、颜色条、作者、最多 10 个字段、图片和缩略图、页脚、时间）和 `components`（只允许链接按钮，规则同 I1），存在新列 `messages.embeds`（不是 `components`：触发器 `messages_guard_components` 仍然拒绝 webhook 消息带组件）。`normalize_message_embeds` 逐项重建并清洗（文字去掉控制和改变方向的字符，地址必须是 https 的真实网站名，整体 ≤6000 字、≤8 KB），触发器 `messages_guard_embeds` 保证只有 webhook 的文字消息能带卡片、客户端不能自己写、撤回时清掉。只有卡片的消息，正文是一行摘要（`embeds.summary`），给会话列表、通知和搜索用，聊天页只画卡片（`message_content.dart` 里一处判断，卡片本身通过气泡下方附注注册表 `embedCardsFooterEntry` 接入）。所有文字按纯文字画，链接点了先问。AutoMod 也检查卡片文字。`post_webhook_message_rich` 只给服务角色，旧的 `post_webhook_message` 没动；限频还是每分钟 30 条。
+  - **RSS**：「订阅一个 RSS」，一个圈子最多 10 个、一个频道最多 5 个。每个订阅有隐藏的 webhook 行（`circle_webhooks.kind = 'rss'`，消息显示订阅源的网站名和 BOT 标记）。独立的 pg_cron `wecord-feed-fetch`（每 5 分钟）经 `wake_feed_fetch_if_due()` 用 Vault 的 `wecord_functions_url` 和 `wecord_dispatch_secret` 唤醒新函数 `feed-fetch`（`verify_jwt = false`，只认 `DISPATCH_SECRET`），没有改 `run_later_dispatch()`。数据库决定谁到期（`claim_channel_feeds`：同一网站一次只一个、租约 5 分钟、跳过被下架的圈子、添加者失去发言权限的订阅自动暂停），函数只管读网页：每个地址和每次跳转都过 `_shared/ssrf.ts` 的检查，https 默认端口，最多跳 3 次，8 秒、512 KB，`ETag` / `Last-Modified` 条件请求，严格解析 RSS 2.0 / Atom / RSS 1.0（拒绝 DOCTYPE 和实体），只取标题、链接、摘要和日期，文字去掉 HTML。首次读取只记住已有条目、不发；之后每次最多发 5 条最新的新条目、每个订阅一天最多 48 条；约每 15 分钟读一次，失败按 30 分钟到 6 小时退避，连续失败 8 次、地址已失效（410）或根本不是订阅源就暂停（`paused_reason`），恢复后重试。
+  - **GitHub**：「连接代码仓库」，每个连接自己生成密钥（只显示一次，可重新生成；不需要 GitHub App、OAuth 或新的函数密钥），地址是 `<项目地址>/functions/v1/github/<连接 id>`（新函数 `github`，`verify_jwt = false`：调用方是 GitHub，不是登录用户；改用每个连接自己的密钥校验 `X-Hub-Signature-256`，常数时间比较，先校验再读内容）。事件按连接选择：推送、合并请求、议题、评论、发行版、工作流运行，格式化成卡片，噪音（加标签、指派、同步、没有提交的推送、跳过的运行、编辑的评论）不发；`ping` 回 200，其他事件 202；GitHub 的投递 id 记 10 分钟防重复；正文最大 1 MB；格式不对回 415。一个圈子最多 10 个、一个频道最多 5 个。
+  - **谁在背后**：订阅和连接都挂在添加者名下：添加者退出圈子、失去发言权限、账号被停用或注销，就自动暂停（不删除），有权限的人点「恢复」会改成自己名下。被下架（suspend）的圈子收不到任何这类消息。
+  - **账号与导出**：注销账号时暂停这个人添加的订阅和连接并清掉隐藏 webhook 的创建者；数据导出新增 `data/integrations.json` 和 `pages/integrations.html`（`export_my_integrations`：地址、名称、事件、是否开着，不含密钥）。
+  - **审计**：`feed_add` / `feed_pause` / `feed_resume` / `feed_remove` / `github_add` / `github_update` / `github_regenerate` / `github_pause` / `github_resume` / `github_remove`（不含密钥）。pg_cron：`wecord-feed-fetch`（每 5 分钟）、`wecord-integrations-purge`（每小时清理投递记录）。
 - **链接预览**（`link-preview` 函数）。
 - **GIF 搜索**（`gif-search` 函数，GIPHY）。
 

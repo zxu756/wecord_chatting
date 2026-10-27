@@ -124,6 +124,7 @@ Future<ProviderContainer> pumpWatchRoom(
   WatchStage stage, {
   List<ConversationMediaItem>? media,
   bool moderator = false,
+  bool idleEntry = false,
 }) async {
   watchWorld(world, moderator: moderator);
   await pumpStandalone(
@@ -132,17 +133,17 @@ Future<ProviderContainer> pumpWatchRoom(
     VoiceRoomTheme(
       child: Scaffold(
         backgroundColor: WeCordTokens.dark.colors.paper,
-        body: const SafeArea(
+        body: SafeArea(
           child: Column(
             children: [
-              Align(
+              const Align(
                 alignment: Alignment.centerRight,
                 child: Padding(
                   padding: EdgeInsets.all(8),
                   child: WatchTogetherButton(),
                 ),
               ),
-              WatchTogetherStrip(),
+              WatchTogetherStrip(idleEntry: idleEntry),
             ],
           ),
         ),

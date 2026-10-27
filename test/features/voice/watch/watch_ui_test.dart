@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/watch/watch_controller.dart';
@@ -25,6 +24,25 @@ void main() {
       const Scaffold(body: WatchTogetherButton()),
     );
     expect(key('voice-watch-button'), findsNothing);
+    await world.close(tester);
+  });
+
+  testWidgets('a narrow room offers the entry above the people', (
+    tester,
+  ) async {
+    final world = PhoneWorld();
+    final stage = WatchStage();
+    await pumpWatchRoom(
+      tester,
+      world,
+      stage,
+      media: watchChatMedia(),
+      idleEntry: true,
+    );
+    expect(key('voice-watch-entry'), findsOneWidget);
+    await tester.tap(key('voice-watch-entry'));
+    await settle(tester);
+    expect(find.text('Movie night trailer.mp4'), findsOneWidget);
     await world.close(tester);
   });
 

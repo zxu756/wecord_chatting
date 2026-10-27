@@ -50,10 +50,18 @@ class WatchTogetherButton extends ConsumerWidget {
 /// Wraps [child] in a column under the watching bar. Used where a call's
 /// picture area is shared with the people.
 class WatchTogetherStrip extends StatelessWidget {
-  const WatchTogetherStrip({this.compact = false, super.key});
+  const WatchTogetherStrip({
+    this.compact = false,
+    this.idleEntry = false,
+    super.key,
+  });
 
   /// A smaller picture, for the call card in a chat.
   final bool compact;
+
+  /// While nothing is on, show a small "Watch together" button here. For
+  /// narrow headers that have no room for the round button.
+  final bool idleEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -61,23 +69,43 @@ class WatchTogetherStrip extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
-        child: _StripBody(compact: compact),
+        child: _StripBody(compact: compact, idleEntry: idleEntry),
       ),
     );
   }
 }
 
 class _StripBody extends ConsumerWidget {
-  const _StripBody({required this.compact});
+  const _StripBody({required this.compact, required this.idleEntry});
 
   final bool compact;
+  final bool idleEntry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(voiceSessionProvider);
     final watch = ref.watch(watchTogetherProvider);
-    if (session == null || !session.isConnected || !watch.active) {
+    if (session == null || !session.isConnected) {
       return const SizedBox.shrink();
+    }
+    if (!watch.active) {
+      if (!idleEntry || session.stageListener || session.stage) {
+        return const SizedBox.shrink();
+      }
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+          child: WeCordButton(
+            key: const ValueKey('voice-watch-entry'),
+            label: tr('Watch together'),
+            icon: Icons.live_tv_outlined,
+            variant: WeCordButtonVariant.ghost,
+            size: WeCordButtonSize.small,
+            onPressed: () => unawaited(showWatchStartSheet(context)),
+          ),
+        ),
+      );
     }
     final c = context.tokens.colors;
     final controller = ref.read(watchTogetherProvider.notifier);

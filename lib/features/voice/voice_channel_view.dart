@@ -209,10 +209,13 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
     // Shown here, so the mini player stays away.
     final callBody = connected ? CallSurface(child: body) : body;
     // Watching together (E4) sits above the people, on a stage never.
+    // A phone header has no room for one more round button: the entry
+    // sits above the people there instead.
+    final roomyHeader = MediaQuery.sizeOf(context).width >= 520;
     final shownBody = connected && !widget.isStage
         ? Column(
             children: [
-              const WatchTogetherStrip(),
+              WatchTogetherStrip(idleEntry: !roomyHeader),
               Expanded(child: callBody),
             ],
           )
@@ -326,7 +329,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                             ),
                           ),
                         if (connected) const CaptionsButton(),
-                        if (connected && !widget.isStage)
+                        if (connected && !widget.isStage && roomyHeader)
                           const WatchTogetherButton(),
                         if (chatBuilder != null && !connected)
                           VoiceHeaderButton(

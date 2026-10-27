@@ -136,7 +136,7 @@ class _WatchStartViewState extends ConsumerState<WatchStartView> {
               child: Text(
                 key: const ValueKey('watch-start-failed'),
                 tr('Could not start. Check your connection and try again.'),
-                style: TextStyle(fontSize: 13.5, color: c.danger),
+                style: TextStyle(fontSize: 13.5, color: c.dangerText),
               ),
             ),
           if (_tab == _StartTab.chat) _chatFiles() else _linkForm(),
@@ -271,7 +271,7 @@ class _WatchStartViewState extends ConsumerState<WatchStartView> {
           Text(
             _problemText(_problem)!,
             key: const ValueKey('watch-link-problem'),
-            style: TextStyle(fontSize: 13.5, height: 1.4, color: c.danger),
+            style: TextStyle(fontSize: 13.5, height: 1.4, color: c.dangerText),
           ),
         ],
         const SizedBox(height: 8),

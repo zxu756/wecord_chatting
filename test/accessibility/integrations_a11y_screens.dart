@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/care_mode/care_mode_settings.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
+import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/message_embeds.dart';
 
@@ -159,9 +160,9 @@ Future<FakeIntegrationsBackend> _openSettings(
   world.extraOverrides = [backend.override];
   world.chats.messages = richMessages(withThread: true);
   await world.open(tester, _route, extra: _extra);
-  await tester.tap(find.byTooltip('More'));
+  await tester.tap(find.byTooltip(tr('More')));
   await settle(tester);
-  await tester.tap(find.text('Channel settings'));
+  await tester.tap(find.text(tr('Channel settings')));
   await settle(tester);
   await scrollIntoView(tester, find.byKey(const ValueKey('feed-add-button')));
   await tester.ensureVisible(find.byKey(const ValueKey('feed-add-button')));

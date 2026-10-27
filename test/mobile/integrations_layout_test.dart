@@ -213,12 +213,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('GitHub connected'), findsOneWidget);
-    for (final key in [
-      'github-payload-url',
-      'github-secret',
-      'github-copy-url',
-      'github-copy-secret',
-    ]) {
+    for (final key in ['github-payload-url', 'github-secret']) {
       final finder = find.byKey(ValueKey(key));
       await tester.ensureVisible(finder);
       await settle(tester);

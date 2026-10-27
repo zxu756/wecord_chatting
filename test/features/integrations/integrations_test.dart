@@ -12,7 +12,6 @@ import 'package:wecord/shared/api/supabase_providers.dart';
 import 'package:wecord/shared/config/app_config.dart';
 import 'package:wecord/shared/models/circle.dart';
 import 'package:wecord/shared/models/conversation.dart';
-import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/message_embeds.dart';
 
 import '../../mobile/phone_test_support.dart';
@@ -333,7 +332,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('whs_first_0123456789'), findsOneWidget);
-      await tester.tap(_key('github-copy-secret'));
+      await tester.tap(_key('github-secret'));
       await tester.pump();
       expect(copied, 'whs_first_0123456789');
       await tester.tap(find.text('Done'));

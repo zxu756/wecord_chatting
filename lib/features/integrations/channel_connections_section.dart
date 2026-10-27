@@ -926,25 +926,13 @@ class _GithubSecretDialog extends StatelessWidget {
             tr(
               'In the repository: Settings, Webhooks, Add webhook. Paste the '
               'URL and the secret, set Content type to application/json, and '
-              'pick the events you chose here.',
+              'pick the events you chose here. Press a value to copy it.',
             ),
             style: TextStyle(fontSize: 12.5, color: c.muted, height: 1.4),
           ),
         ],
       ),
       actions: [
-        if (payloadUrl case final url?)
-          CircleDialogAction(
-            key: const ValueKey('github-copy-url'),
-            label: tr('Copy URL'),
-            onPressed: () => copy(context, url, tr('URL copied.')),
-          ),
-        if (secret case final text?)
-          CircleDialogAction(
-            key: const ValueKey('github-copy-secret'),
-            label: tr('Copy secret'),
-            onPressed: () => copy(context, text, tr('Secret copied.')),
-          ),
         CircleDialogAction.primary(
           label: tr('Done'),
           onPressed: () => Navigator.of(context).pop(),

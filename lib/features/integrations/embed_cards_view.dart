@@ -94,7 +94,10 @@ class EmbedCardView extends ConsumerWidget {
         _AuthorRow(author: author, onOpen: open),
       if (card.title case final title?)
         Padding(
-          padding: EdgeInsets.only(top: card.author == null ? 0 : 6),
+          // A link is grown to a comfortable tap size, which is the space.
+          padding: EdgeInsets.only(
+            top: card.author == null || card.author!.url != null ? 0 : 6,
+          ),
           child: card.url == null
               ? Text(
                   title,
@@ -119,7 +122,9 @@ class EmbedCardView extends ConsumerWidget {
         ),
       if (card.description case final description?)
         Padding(
-          padding: const EdgeInsets.only(top: 6),
+          padding: EdgeInsets.only(
+            top: card.title != null && card.url != null ? 0 : 6,
+          ),
           child: Text(
             description,
             style: TextStyle(fontSize: 14, height: 1.4, color: c.ink),

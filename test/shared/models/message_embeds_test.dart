@@ -124,7 +124,7 @@ void main() {
       expect(cut.description, endsWith('…'));
       // Hidden characters go; line breaks stay.
       final plain = EmbedCard.maybeFromJson({
-        'title': '‮Evil​',
+        'title': '\u202eEvil\u200b',
         'description': 'a\r\nb\u0007c',
       })!;
       expect(plain.title, 'Evil');

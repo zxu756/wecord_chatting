@@ -79,16 +79,14 @@ const zhIntegrations = <String, String>{
   'Payload URL': '回调地址',
   'Secret': '密钥',
   'No secret to show.': '没有可显示的密钥。',
-  'Copy URL': '复制地址',
-  'Copy secret': '复制密钥',
   'Secret copied.': '密钥已复制。',
   'Copy the secret now: it is shown only once. Anyone with it can post in '
           'this channel as GitHub.':
       '请现在复制密钥：它只显示这一次。拿到它的人可以冒充 GitHub 在这个频道发消息。',
   'In the repository: Settings, Webhooks, Add webhook. Paste the URL and the '
           'secret, set Content type to application/json, and pick the events '
-          'you chose here.':
-      '在仓库里依次打开：Settings、Webhooks、Add webhook。粘贴地址和密钥，Content type 选 application/json，并勾选和这里一致的事件。',
+          'you chose here. Press a value to copy it.':
+      '在仓库里依次打开：Settings、Webhooks、Add webhook。粘贴地址和密钥，Content type 选 application/json，并勾选和这里一致的事件。点一下数值即可复制。',
   'GitHub posts pushes, pull requests, issues and releases here. You add the '
           "webhook in the repository's settings with the address and secret "
           'shown once after connecting.':

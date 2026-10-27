@@ -7,7 +7,7 @@ import {
   isPublicIPv6,
   type Resolver,
   resolveSafeUrl,
-} from "./ssrf.ts";
+} from "../_shared/ssrf.ts";
 
 Deno.test("addresses on the public internet pass", () => {
   for (

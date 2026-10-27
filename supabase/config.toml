@@ -526,6 +526,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/bot-callbacks/index.ts"
 
+[functions.bot-events]
+enabled = true
+# Called by the database (a trigger when an event is queued, and pg_cron every
+# minute for retries) with the shared secret DISPATCH_SECRET as the bearer
+# token, which the function compares itself; sends new messages, mentions,
+# edits, deletes, reactions, joins and leaves to the event address of a bot,
+# signed with HMAC-SHA256, only to public https addresses. Users never call it.
+verify_jwt = false
+entrypoint = "./functions/bot-events/index.ts"
+
 [functions.sessions]
 enabled = true
 # Signed-in users sign out their own devices; the function acts as the

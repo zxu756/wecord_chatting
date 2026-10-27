@@ -1,8 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertStringIncludes,
-} from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { strFromU8, unzipSync } from "npm:fflate@0.8.2";
 import {
   attachmentOf,
@@ -27,7 +23,12 @@ const data: ExportData = {
     createdAt: "2026-01-02T03:04:05.000Z",
     lastSignInAt: "2026-10-16T08:00:00.000Z",
   },
-  profile: { id: "u-1", username: "ada", display_name: "Ada <b>L</b>", bio: "Hi" },
+  profile: {
+    id: "u-1",
+    username: "ada",
+    display_name: "Ada <b>L</b>",
+    bio: "Hi",
+  },
   settings: { privacy: { show_online_status: true } },
   friends: [
     {
@@ -138,7 +139,9 @@ const data: ExportData = {
   moments: null,
   extras: null,
   files: [],
-  attachmentLinks: { "chat-files/c-1/plan.pdf": "https://files.example/plan?token=abc&x=1" },
+  attachmentLinks: {
+    "chat-files/c-1/plan.pdf": "https://files.example/plan?token=abc&x=1",
+  },
   linksExpireAt: "2026-10-24T14:03:00.000Z",
   skipped: [],
 };
@@ -219,7 +222,10 @@ Deno.test("HTML is escaped and conversation pages link attachments", () => {
 
   const page = files["messages/bart.html"];
   assert(!page.includes("<script>"));
-  assertStringIncludes(page, "hello &lt;script&gt;alert(1)&lt;/script&gt; &amp; 你好");
+  assertStringIncludes(
+    page,
+    "hello &lt;script&gt;alert(1)&lt;/script&gt; &amp; 你好",
+  );
   assertStringIncludes(
     page,
     '<a href="https://files.example/plan?token=abc&amp;x=1">plan.pdf</a>',
@@ -288,7 +294,10 @@ Deno.test("attachments are found in files, images and voice messages", () => {
     },
   );
   assertEquals(attachmentOf({ type: "text", attachment: null }), null);
-  assertEquals(attachmentOf({ type: "system", attachment: { kind: "pin" } }), null);
+  assertEquals(
+    attachmentOf({ type: "system", attachment: { kind: "pin" } }),
+    null,
+  );
   const messages = data.messages.concat(data.messages);
   assertEquals(attachmentsToSign(messages), [
     { bucket: "chat-files", path: "c-1/plan.pdf" },
@@ -296,8 +305,14 @@ Deno.test("attachments are found in files, images and voice messages", () => {
 });
 
 Deno.test("helpers", () => {
-  assertEquals(escapeHtml(`<a href="x">'&'</a>`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
-  assertEquals(readableTime("2026-10-17T14:03:59.000Z"), "2026-10-17 14:03 UTC");
+  assertEquals(
+    escapeHtml(`<a href="x">'&'</a>`),
+    "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;",
+  );
+  assertEquals(
+    readableTime("2026-10-17T14:03:59.000Z"),
+    "2026-10-17 14:03 UTC",
+  );
   assertEquals(readableTime(null), "");
   assertEquals(readableTime("soon"), "soon");
   assertEquals(slugify("Climbing Crew!!"), "climbing-crew");
@@ -323,7 +338,10 @@ Deno.test("one export per 24 hours", () => {
     rateLimit(new Date("2026-10-16T11:59:59.000Z"), now).allowed,
     true,
   );
-  assertEquals(rateLimit(new Date("2026-10-16T12:00:00.000Z"), now).allowed, true);
+  assertEquals(
+    rateLimit(new Date("2026-10-16T12:00:00.000Z"), now).allowed,
+    true,
+  );
   assertEquals(rateLimit(new Date("2026-10-17T11:00:00.000Z"), now), {
     allowed: false,
     retryAfterSeconds: 23 * 3600,

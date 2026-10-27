@@ -777,6 +777,21 @@ export async function collectExportData(
     null,
   );
 
+  // The bots I made, with their settings and event addresses, never a token
+  // or a secret (export_my_developer).
+  const developer = await tryRead<Row | null>(
+    skipped,
+    "bots I made",
+    async () => {
+      const result = await admin.rpc("export_my_developer", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // My quick replies and away auto-reply (export_my_quick_replies).
   const quickReplies = await tryRead<Row | null>(
     skipped,
@@ -923,6 +938,7 @@ export async function collectExportData(
     circlePosts,
     workflows,
     accountSecurity,
+    developer,
     files,
     attachmentLinks,
     linksExpireAt: linksExpireAt.toISOString(),

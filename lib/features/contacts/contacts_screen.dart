@@ -7,6 +7,7 @@ import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/contacts/contact_alias_sheet.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
+import 'package:wecord/features/developer/bot_directory.dart';
 import 'package:wecord/features/friend_tags/friend_profile_extras.dart';
 import 'package:wecord/features/friend_tags/friend_tags_models.dart';
 import 'package:wecord/features/friend_tags/friend_tags_repository.dart';
@@ -96,6 +97,7 @@ class ContactsScreen extends ConsumerWidget {
                       _SearchSection(),
                       _IncomingRequestsSection(),
                       _FriendsSection(),
+                      FindBotEntry(),
                     ],
                   ),
                 ),

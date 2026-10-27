@@ -211,6 +211,7 @@ const emptyRpc: Record<string, unknown> = {
     recovery_codes: { remaining: null, made_at: null },
     passkeys: [],
   },
+  export_my_developer: { bots: [] },
 };
 
 const feedbackAnswer = [{
@@ -554,6 +555,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         recovery_codes: { remaining: null, made_at: null },
         passkeys: [],
       },
+      export_my_developer: { bots: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -596,6 +598,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_group_space", args: { target_user_id: me } },
     { name: "export_my_circle_posts", args: { target_user_id: me } },
     { name: "export_my_account_security", args: { target_user_id: me } },
+    { name: "export_my_developer", args: { target_user_id: me } },
     { name: "export_my_quick_replies", args: { target_user_id: me } },
     { name: "export_my_workflows", args: { target_user_id: me } },
   ]);
@@ -668,6 +671,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         recovery_codes: { remaining: null, made_at: null },
         passkeys: [],
       },
+      export_my_developer: { bots: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -803,6 +807,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         recovery_codes: { remaining: null, made_at: null },
         passkeys: [],
       },
+      export_my_developer: { bots: [] },
       export_my_moments_more: {
         pinned: [],
         reminded: [],
@@ -846,10 +851,12 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.circlePosts, null);
   assertEquals(data.workflows, null);
   assertEquals(data.accountSecurity, null);
+  assertEquals(data.developer, null);
   assertEquals(data.skipped.sort(), [
     "account security record",
     "advanced chat privacy",
     "bot buttons and commands",
+    "bots I made",
     "chat tabs",
     "check-ins",
     "circle posts",

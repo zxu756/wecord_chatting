@@ -107,6 +107,7 @@ import 'package:wecord/shared/l10n/zh/zh_stories.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_ask.dart';
 import 'package:wecord/shared/l10n/zh/zh_favorites2.dart';
 import 'package:wecord/shared/l10n/zh/zh_platforms.dart';
+import 'package:wecord/shared/l10n/zh/zh_developer.dart';
 import 'package:wecord/shared/l10n/zh/zh_hashtags_posts.dart';
 
 /// Every area's map, for checks.
@@ -194,6 +195,7 @@ const zhAreas = <Map<String, String>>[
   zhTasks2,
   zhFavorites2,
   zhPlatforms,
+  zhDeveloper,
   zhStorageA11y,
   zhMoments2,
   zhGuard2,

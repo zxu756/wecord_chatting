@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WeCord bot API</title>
+<meta name="description" content="Reference for the WeCord bot API 2.0: endpoints, event subscriptions, signing and limits.">
+<style>
+  :root {
+    --bg: #f5f4f0; --panel: #fff; --ink: #17171a; --muted: #5f5e66; --line: #e4e2dc;
+    --accent: #3b64e8; --code: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #101012; --panel: #1b1b1f; --ink: #f2f2f4; --muted: #a3a2ab; --line: #2c2c32; --accent: #8aa2ff; --code: #26262b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 2rem; margin: 8px 0; }
+  h2 { font-size: 1.35rem; margin: 40px 0 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 4px; }
+  p, li { color: var(--ink); }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  code, pre { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 6px; }
+  code { padding: 1px 5px; overflow-wrap: anywhere; }
+  pre { padding: 12px 14px; overflow-x: auto; margin: 8px 0; }
+  pre code { background: none; padding: 0; overflow-wrap: normal; }
+  .table { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 0; }
+  .method { font-weight: 700; font-family: ui-monospace, Menlo, monospace; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WeCord bot API</h1>
+  <p class="muted">Version 2.0. A bot is a member account that a program controls over HTTP. Make bots in
+    <em>Circle settings, Bots</em>; manage tokens, events and availability in <em>Settings, Developer</em>.</p>
+  <nav>
+    <a href="#start">Start</a><a href="#endpoints">Endpoints</a><a href="#events">Events</a>
+    <a href="#signing">Signing</a><a href="#limits">Limits</a><a href="openapi.json">OpenAPI file</a>
+  </nav>
+
+  <h2 id="start">Start</h2>
+  <pre><code>BASE=https://&lt;project&gt;.supabase.co/functions/v1/bot-api
+TOKEN=&lt;the bot token&gt;
+curl -H "Authorization: Bot $TOKEN" $BASE/me</code></pre>
+  <p>Every request sends <code>Authorization: Bot $TOKEN</code>. Bodies are JSON (at most 32 KB); files are
+    <code>multipart/form-data</code> (at most 8 MB). The token is shown once. Reset it or revoke it in Developer.
+    A bot has exactly the permissions of a member with its roles, and sees only the chats it is in.</p>
+
+  <h2 id="endpoints">Endpoints</h2>
+  <div class="table"><table>
+    <thead><tr><th>Request</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method">GET</span> <code>/me</code></td><td>Who the bot is</td></tr>
+      <tr><td><span class="method">GET</span> <code>/channels</code></td><td>Channels of its circle the bot can see</td></tr>
+      <tr><td><span class="method">GET</span> <code>/channels/{id}/messages</code></td><td>Recent messages of a channel (<code>limit</code>, <code>before</code>)</td></tr>
+      <tr><td><span class="method">POST</span> <code>/channels/{id}/messages</code></td><td>Send a message: <code>{"content", "reply_to", "components"}</code></td></tr>
+      <tr><td><span class="method">PATCH</span> <code>/messages/{id}</code></td><td>Change the bot's own message</td></tr>
+      <tr><td><span class="method">DELETE</span> <code>/messages/{id}</code></td><td>Delete the bot's own message (and its uploaded file)</td></tr>
+      <tr><td><span class="method">PUT</span> <code>/messages/{id}/reactions/{emoji}</code></td><td>Add a reaction</td></tr>
+      <tr><td><span class="method">DELETE</span> <code>/messages/{id}/reactions/{emoji}</code></td><td>Take the bot's reaction back</td></tr>
+      <tr><td><span class="method">POST</span> <code>/messages/{id}/thread</code></td><td>Start a thread: <code>{"title"}</code></td></tr>
+      <tr><td><span class="method">GET</span> <code>/chats</code></td><td>Every chat the bot is in: channels, threads, groups, direct chats</td></tr>
+      <tr><td><span class="method">GET</span> <code>/chats/{id}/messages</code></td><td>Recent messages of any chat the bot is in</td></tr>
+      <tr><td><span class="method">POST</span> <code>/chats/{id}/messages</code></td><td>Send a message to a chat</td></tr>
+      <tr><td><span class="method">POST</span> <code>/chats/{id}/files</code></td><td>Send a file or image (<code>file</code>, <code>caption</code>)</td></tr>
+      <tr><td><span class="method">POST</span> <code>/chats/{id}/polls</code></td><td>Create a poll: question, 2 to 10 options, <code>multiple</code>, <code>duration_hours</code>, <code>anonymous</code></td></tr>
+      <tr><td><span class="method">GET</span> <code>/chats/{id}/members</code></td><td>Members (<code>limit</code>, <code>after</code>)</td></tr>
+      <tr><td><span class="method">GET</span> <code>/chats/{id}/members/{user}</code></td><td>One member</td></tr>
+      <tr><td><span class="method">GET</span> <code>/commands</code>, <span class="method">PUT</span> <code>/commands</code></td><td>Read or replace the slash commands</td></tr>
+      <tr><td><span class="method">GET</span> <code>/interactions</code></td><td>Poll button presses and slash commands</td></tr>
+      <tr><td><span class="method">POST</span> <code>/interactions/{id}/respond</code></td><td>Answer a press or command</td></tr>
+    </tbody>
+  </table></div>
+  <p>In a chat with Advanced chat privacy (<code>restricted: true</code> in <code>/chats</code>) the API gives no
+    message text. Bots can be open to direct chats and group chats: see Developer, Availability. The full
+    description is in <a href="openapi.json">openapi.json</a> (OpenAPI 3).</p>
+
+  <h3>Example: post a poll, then a file</h3>
+  <pre><code>curl -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
+  -d '{"question":"Where to?","options":["Lake","Ridge"]}' $BASE/chats/$CHAT/polls
+curl -X POST -H "Authorization: Bot $TOKEN" -F file=@map.png -F caption="Route" $BASE/chats/$CHAT/files</code></pre>
+
+  <h2 id="events">Event subscriptions</h2>
+  <p>Give a bot an event address in Developer and choose the kinds of event. WeCord POSTs each one as JSON as it
+    happens. Any <code>2xx</code> counts as delivered.</p>
+  <div class="table"><table>
+    <thead><tr><th>Event</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td><code>message.created</code></td><td>A message was sent in a chat the bot is in</td></tr>
+      <tr><td><code>message.mentioned</code></td><td>The bot was mentioned</td></tr>
+      <tr><td><code>message.updated</code></td><td>A message was edited</td></tr>
+      <tr><td><code>message.deleted</code></td><td>A message was deleted (its id only)</td></tr>
+      <tr><td><code>reaction.added</code></td><td>Someone reacted</td></tr>
+      <tr><td><code>member.joined</code>, <code>member.left</code></td><td>Someone joined or left</td></tr>
+      <tr><td><code>interaction.created</code></td><td>A button press or slash command</td></tr>
+      <tr><td><code>ping</code></td><td>The test event from Developer</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>{"version": 1, "type": "event", "event": "message.created",
+ "event_id": "…", "bot_id": "…", "circle_id": "…",
+ "occurred_at": "2026-10-28T09:00:00Z", "attempt": 1,
+ "data": {"chat": {"id": "…", "kind": "channel", "name": "general"},
+          "message": {"id": "…", "type": "text", "content": "hi",
+                      "author": {"id": "…", "username": "ann", "name": "Ann", "is_bot": false}}}}</code></pre>
+  <p>Events only cover chats the bot is in. In a restricted or locked chat, and for disappearing and view-once
+    messages, the event arrives without the text: <code>content_withheld</code> says why. Texts are cut at 4000
+    characters.</p>
+
+  <h2 id="signing">Check every request</h2>
+  <p>Headers: <code>X-WeCord-Timestamp</code> (seconds), <code>X-WeCord-Signature</code>
+    (<code>v1=</code> and the hex HMAC-SHA256 of <code>"&lt;timestamp&gt;.&lt;raw body&gt;"</code> with the secret),
+    <code>X-WeCord-Delivery</code> (an id, for de-duplication) and <code>X-WeCord-Event</code>. Reject a timestamp
+    more than five minutes from your clock. The secret is shown once, when the address is set or reset.</p>
+<pre><code>import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verify(secret, headers, rawBody) {
+  const ts = Number(headers["x-wecord-timestamp"]);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) &gt; 300) return false;
+  const expected = "v1=" + createHmac("sha256", secret).update(`${ts}.${rawBody}`).digest("hex");
+  const given = headers["x-wecord-signature"] ?? "";
+  return given.length === expected.length &&
+    timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}</code></pre>
+
+  <h2 id="limits">Limits and errors</h2>
+  <ul>
+    <li>The address must be <code>https://</code> with a real website name on the usual port. IP addresses, inner
+      names and names that point at inner addresses are refused, before every send. Redirects are not followed. The
+      timeout is 5 seconds.</li>
+    <li>A failed event is tried again after 5 seconds, 30 seconds, 2 minutes, 10 minutes and 1 hour, then lost.
+      20 lost in a row pause the subscription; saving the address again turns it on. Events older than 6 hours are
+      dropped.</li>
+    <li>At most 300 events a minute and 1000 waiting events per bot; at most 60 writes a minute through the API.</li>
+    <li>Errors are JSON <code>{"error", "message"}</code>: <code>400</code> bad body, <code>401</code> bad token,
+      <code>403</code> not allowed, <code>404</code> unknown or not visible, <code>405</code> wrong method,
+      <code>409</code> conflict, <code>413</code> too big, <code>429</code> too fast.</li>
+  </ul>
+</main>
+</body>
+</html>

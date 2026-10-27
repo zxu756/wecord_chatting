@@ -52,7 +52,10 @@ const questions = [
     id: "food",
     type: "multiple_choice",
     label: "Food",
-    options: [{ id: "veg", label: "Vegetarian" }, { id: "fish", label: "Fish" }],
+    options: [{ id: "veg", label: "Vegetarian" }, {
+      id: "fish",
+      label: "Fish",
+    }],
   },
   { id: "photo", type: "image", label: "A photo", options: null },
 ];
@@ -136,8 +139,10 @@ Deno.test("forms add a page and a JSON file with my own answers", () => {
     answer: "Medium",
     picture: null,
   });
-  assertEquals(json[0].my_responses[0].readable[3].picture.download_url,
-    "https://files.example/pic?t=1");
+  assertEquals(
+    json[0].my_responses[0].readable[3].picture.download_url,
+    "https://files.example/pic?t=1",
+  );
 });
 
 Deno.test("no forms say so; an export without the part has no page", () => {

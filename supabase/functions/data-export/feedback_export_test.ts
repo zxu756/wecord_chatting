@@ -87,7 +87,10 @@ Deno.test("feedback adds a page and a JSON file with the replies", () => {
   const json = JSON.parse(files["data/feedback.json"]);
   assertEquals(json.length, 2);
   assertEquals(json[0].replies[0].body, "Fixed in 1.4.1");
-  assertEquals(json[0].screenshot.download_url, "https://files.example/shot?t=1");
+  assertEquals(
+    json[0].screenshot.download_url,
+    "https://files.example/shot?t=1",
+  );
   assertEquals(json[1].screenshot, null);
   // The raw bucket and path are replaced by the link.
   assert(!("screenshot_path" in json[0]));

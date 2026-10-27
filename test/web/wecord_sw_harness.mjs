@@ -446,6 +446,16 @@ for (const stamped of [true, false]) {
   );
 }
 
+// The developer documentation is a static page: the worker leaves it alone.
+{
+  const worker = makeWorker({});
+  await fire(worker, 'install');
+  const docs = await fire(worker, 'fetch', {
+    request: request(`${ORIGIN}/developers/`, { mode: 'navigate' }),
+  });
+  check('the developer docs are not the app shell', docs.responded === null);
+}
+
 // An unstamped copy does nothing.
 {
   const worker = makeWorker({ stamped: false });

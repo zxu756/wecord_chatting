@@ -89,7 +89,9 @@ FakeWhiteboardServer _sampleBoard() {
         },
       ),
     )
-    ..write(_note('n1', 'Pack the tent and the stove', x: -170, y: -110, z: 'V3'))
+    ..write(
+      _note('n1', 'Pack the tent and the stove', x: -170, y: -110, z: 'V3'),
+    )
     ..write(
       _note(
         'n2',
@@ -133,7 +135,16 @@ FakeWhiteboardServer _sampleBoard() {
         z: 'V7',
         data: const {
           'p': [
-            -170.0, 70.0, -140.0, 40.0, -110.0, 90.0, -80.0, 40.0, -50.0, 80.0,
+            -170.0,
+            70.0,
+            -140.0,
+            40.0,
+            -110.0,
+            90.0,
+            -80.0,
+            40.0,
+            -50.0,
+            80.0,
           ],
           'sw': 4,
           'c': 0xFF30A46C,
@@ -215,7 +226,10 @@ Future<_Opened> _open(
   await controller.load();
   if (peers.isNotEmpty) {
     repository.live.peersController.add(peers);
-    await Future<void>.delayed(Duration.zero);
+    // Microtasks only: a timer would never fire in the test's fake clock.
+    for (var i = 0; i < 5; i++) {
+      await Future<void>.value();
+    }
   }
   world.extraOverrides = [
     ...world.extraOverrides,
@@ -264,7 +278,9 @@ Future<void> _board(
 
 Future<void> _selected(WidgetTester tester, PhoneWorld world) async {
   final opened = await _open(world);
-  opened.controller.select(['n1']);
+  opened.controller
+    ..setTool(WhiteboardTool.select)
+    ..select(['n1']);
   await _pump(tester, world, opened);
 }
 
@@ -395,16 +411,28 @@ final whiteboardA11yScreens = <A11yScreen>[
   ),
   A11yScreen('whiteboard-board-pen', _penTool, viewport: smallPhone),
   A11yScreen('whiteboard-board-selected', _selected),
-  A11yScreen('whiteboard-board-selected-narrow', _selected, viewport: smallPhone),
+  A11yScreen(
+    'whiteboard-board-selected-narrow',
+    _selected,
+    viewport: smallPhone,
+  ),
   A11yScreen(
     'whiteboard-board-selected-large-text',
     _selected,
     viewport: notchedPhoneLargeText,
   ),
   A11yScreen('whiteboard-board-shapes', _shapeTool),
-  A11yScreen('whiteboard-board-shapes-narrow', _shapeTool, viewport: smallPhone),
+  A11yScreen(
+    'whiteboard-board-shapes-narrow',
+    _shapeTool,
+    viewport: smallPhone,
+  ),
   A11yScreen('whiteboard-board-read-only', _readOnly),
-  A11yScreen('whiteboard-board-read-only-narrow', _readOnly, viewport: smallPhone),
+  A11yScreen(
+    'whiteboard-board-read-only-narrow',
+    _readOnly,
+    viewport: smallPhone,
+  ),
   A11yScreen('whiteboard-board-offline', _offline),
   A11yScreen('whiteboard-board-offline-narrow', _offline, viewport: smallPhone),
   A11yScreen('whiteboard-list-view', _listView),

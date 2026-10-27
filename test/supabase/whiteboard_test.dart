@@ -154,7 +154,7 @@ void main() {
       expect(files, contains('5242880'));
       expect(files, contains('false'));
       expect(files, contains('image/jpeg'));
-      expect(files, contains('<= 60'));
+      expect(files, contains(') < 60'));
     });
 
     test('the live channel lets viewers listen and only editors broadcast', () {

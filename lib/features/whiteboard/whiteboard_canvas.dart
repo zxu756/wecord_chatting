@@ -215,7 +215,8 @@ class _WhiteboardCanvasState extends State<WhiteboardCanvas> {
       }
       return;
     }
-    if (e.kind == PointerDeviceKind.touch || e.kind == PointerDeviceKind.stylus) {
+    if (e.kind == PointerDeviceKind.touch ||
+        e.kind == PointerDeviceKind.stylus) {
       // A finger on empty space pans; a tap clears the selection on lift.
       _gesture = _Gesture.pan;
     } else {
@@ -382,7 +383,8 @@ class _WhiteboardCanvasState extends State<WhiteboardCanvas> {
       return;
     }
     if (isDouble &&
-        (hit.kind == WhiteboardKind.sticky || hit.kind == WhiteboardKind.text)) {
+        (hit.kind == WhiteboardKind.sticky ||
+            hit.kind == WhiteboardKind.text)) {
       c.beginEditing(hit.id);
     } else {
       c.select([hit.id]);
@@ -553,7 +555,8 @@ class _WhiteboardCanvasState extends State<WhiteboardCanvas> {
                   onPointerMove: _move,
                   onPointerUp: _up,
                   onPointerCancel: _cancel,
-                  onPointerHover: (e) => c.pointerMoved(c.toBoard(e.localPosition)),
+                  onPointerHover: (e) =>
+                      c.pointerMoved(c.toBoard(e.localPosition)),
                   onPointerSignal: _signal,
                   onPointerPanZoomStart: _panZoomStart,
                   onPointerPanZoomUpdate: _panZoomUpdate,
@@ -588,7 +591,8 @@ class _WhiteboardCanvasState extends State<WhiteboardCanvas> {
     final view = c.view;
     final box = element.box;
     final topLeft = view.toScreen(box.topLeft);
-    final fontSize = (element.kind == WhiteboardKind.sticky
+    final fontSize =
+        (element.kind == WhiteboardKind.sticky
             ? element.number('fs', 18)
             : element.fontSize) *
         view.scale;

@@ -40,7 +40,10 @@ String formatWhiteboardTime(BuildContext context, DateTime time) {
 }
 
 class _VersionsBody extends StatefulWidget {
-  const _VersionsBody({required this.controller, required this.scrollController});
+  const _VersionsBody({
+    required this.controller,
+    required this.scrollController,
+  });
 
   final WhiteboardController controller;
   final ScrollController? scrollController;

@@ -87,7 +87,8 @@ Future<WhiteboardPicture?> prepareWhiteboardPicture(
       final width = image.width;
       final height = image.height;
       image.dispose();
-      if (data != null && data.lengthInBytes <= WhiteboardLimits.maxPictureBytes) {
+      if (data != null &&
+          data.lengthInBytes <= WhiteboardLimits.maxPictureBytes) {
         return WhiteboardPicture(
           bytes: data.buffer.asUint8List(),
           fileName: '${_baseName(fileName)}.png',

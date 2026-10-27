@@ -16,8 +16,6 @@ const zhWhiteboard = <String, String>{
   'This chat already has {max} whiteboards. Delete one to make another.':
       '这个聊天已经有 {max} 块白板。删除一块后才能再新建。',
   'Could not make a whiteboard.': '无法新建白板。',
-  'That couldn\'t load. Try again.': '无法加载，请重试。',
-  '{count} items': '{count} 个元素',
   'Only managers can draw': '仅管理者可画',
 
   // Colors and kinds, as read out by a screen reader.
@@ -112,7 +110,6 @@ const zhWhiteboard = <String, String>{
   'Could not save a version.': '无法保存版本。',
   'WeCord keeps the latest versions of this whiteboard. Going back to one first saves the board as it is now.':
       'WeCord 会保留这块白板最近的几个版本。回到某个版本之前，会先把现在的白板存为一个版本。',
-  'Save a version now': '现在存一个版本',
   'No earlier versions yet.': '还没有以前的版本。',
   'Could not go back to this version.': '无法回到这个版本。',
   'This version was empty.': '这个版本是空白的。',
@@ -120,6 +117,5 @@ const zhWhiteboard = <String, String>{
   'Go back to this version': '回到这个版本',
 
   // Guard and audit log.
-  'AI guard flagged a whiteboard name by {target}':
-      'AI 守护标记了 {target} 的一个白板名称',
+  'AI guard flagged a whiteboard name by {target}': 'AI 守护标记了 {target} 的一个白板名称',
 };

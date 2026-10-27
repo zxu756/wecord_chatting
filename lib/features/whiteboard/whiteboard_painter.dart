@@ -213,10 +213,12 @@ void _paintShape(Canvas canvas, WhiteboardElement element) {
       final angle = math.atan2(b.dy - a.dy, b.dx - a.dx);
       final head = element.strokeWidth * 3 + 6;
       for (final side in [-1.0, 1.0]) {
-        final tip = b - Offset(
-          math.cos(angle + side * 0.45) * head,
-          math.sin(angle + side * 0.45) * head,
-        );
+        final tip =
+            b -
+            Offset(
+              math.cos(angle + side * 0.45) * head,
+              math.sin(angle + side * 0.45) * head,
+            );
         canvas.drawLine(b, tip, line);
       }
     }
@@ -271,7 +273,11 @@ void _paintShape(Canvas canvas, WhiteboardElement element) {
   canvas.restore();
 }
 
-void _paintSticky(Canvas canvas, WhiteboardElement element, {required bool editing}) {
+void _paintSticky(
+  Canvas canvas,
+  WhiteboardElement element, {
+  required bool editing,
+}) {
   final box = element.box;
   canvas.save();
   if (element.rotation != 0) {
@@ -301,7 +307,11 @@ void _paintSticky(Canvas canvas, WhiteboardElement element, {required bool editi
   canvas.restore();
 }
 
-void _paintText(Canvas canvas, WhiteboardElement element, {required bool editing}) {
+void _paintText(
+  Canvas canvas,
+  WhiteboardElement element, {
+  required bool editing,
+}) {
   if (editing || element.text.isEmpty) {
     return;
   }
@@ -324,7 +334,11 @@ void _paintText(Canvas canvas, WhiteboardElement element, {required bool editing
   canvas.restore();
 }
 
-void _paintImage(Canvas canvas, WhiteboardElement element, WhiteboardImageStore? images) {
+void _paintImage(
+  Canvas canvas,
+  WhiteboardElement element,
+  WhiteboardImageStore? images,
+) {
   final box = element.box;
   final image = images?.imageFor(element.path);
   if (image == null) {

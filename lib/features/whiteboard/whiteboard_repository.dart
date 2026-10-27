@@ -245,9 +245,7 @@ class SupabaseWhiteboardRepository implements WhiteboardRepository {
       'whiteboard_apply_ops',
       params: {'p_board_id': boardId, 'p_ops': ops},
     );
-    return [
-      for (final row in _rows(data)) WhiteboardOpResult.fromJson(row),
-    ];
+    return [for (final row in _rows(data)) WhiteboardOpResult.fromJson(row)];
   }
 
   @override

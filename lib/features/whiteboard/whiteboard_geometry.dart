@@ -32,8 +32,12 @@ class WhiteboardView {
   Offset toScreen(Offset board) => board * scale + offset;
 
   /// The part of the board a screen of [size] shows.
-  Rect visible(Size size) =>
-      Rect.fromLTWH(-offset.dx / scale, -offset.dy / scale, size.width / scale, size.height / scale);
+  Rect visible(Size size) => Rect.fromLTWH(
+    -offset.dx / scale,
+    -offset.dy / scale,
+    size.width / scale,
+    size.height / scale,
+  );
 
   WhiteboardView panned(Offset delta) =>
       WhiteboardView(scale: scale, offset: offset + delta);
@@ -42,10 +46,7 @@ class WhiteboardView {
   WhiteboardView zoomed(double factor, Offset focal) {
     final next = (scale * factor).clamp(minScale, maxScale);
     final real = next / scale;
-    return WhiteboardView(
-      scale: next,
-      offset: focal - (focal - offset) * real,
-    );
+    return WhiteboardView(scale: next, offset: focal - (focal - offset) * real);
   }
 
   /// A view that shows all of [content] inside a screen of [size], with
@@ -226,7 +227,11 @@ bool _hitShape(WhiteboardElement element, Offset point, double tolerance) {
         return true;
       }
       for (var i = 0; i < corners.length; i++) {
-        if (distanceToSegment(local, corners[i], corners[(i + 1) % corners.length]) <=
+        if (distanceToSegment(
+              local,
+              corners[i],
+              corners[(i + 1) % corners.length],
+            ) <=
             reach) {
           return true;
         }
@@ -412,7 +417,10 @@ Map<WhiteboardHandle, Offset> handlesOf(WhiteboardElement element) {
   if (element.kind == WhiteboardKind.shape && element.shape.isSegment) {
     return {
       WhiteboardHandle.start: Offset(element.x, element.y),
-      WhiteboardHandle.end: Offset(element.x + element.w, element.y + element.h),
+      WhiteboardHandle.end: Offset(
+        element.x + element.w,
+        element.y + element.h,
+      ),
     };
   }
   final box = element.box;

@@ -169,8 +169,7 @@ class WhiteboardToolbar extends StatelessWidget {
         tool == WhiteboardTool.highlighter ||
         tool == WhiteboardTool.shape ||
         tool == WhiteboardTool.text ||
-        (tool == WhiteboardTool.select &&
-            (anyStroke || anyShape || anyText));
+        (tool == WhiteboardTool.select && (anyStroke || anyShape || anyText));
     final showWidths =
         tool == WhiteboardTool.pen ||
         tool == WhiteboardTool.highlighter ||
@@ -348,15 +347,24 @@ class _Swatch extends StatelessWidget {
           width: 48,
           height: 48,
           child: Center(
+            // A ring round the chosen colour, and a visible edge on every
+            // colour so black does not vanish on a dark toolbar.
             child: Container(
-              width: 30,
-              height: 30,
+              width: 36,
+              height: 36,
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: value,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? c.accent : c.line,
-                  width: selected ? 3 : 1,
+                  color: selected ? c.accent : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: value,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.muted),
                 ),
               ),
             ),
@@ -496,12 +504,17 @@ class _ActionChip extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: color),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
+              // The row sits on top of the drawing: big text would eat the
+              // board, so it grows only up to 1.3x.
+              MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.3,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
               ),
             ],

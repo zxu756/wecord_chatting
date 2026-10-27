@@ -185,10 +185,7 @@ class WhiteboardController extends ChangeNotifier {
           case WhiteboardKind.sticky:
             return e.withData({'c': color});
           case WhiteboardKind.shape:
-            return e.withData({
-              'c': color,
-              if (e.fill != null) 'f': color,
-            });
+            return e.withData({'c': color, if (e.fill != null) 'f': color});
           case WhiteboardKind.stroke:
           case WhiteboardKind.text:
             return e.withData({'c': color});
@@ -679,10 +676,7 @@ class WhiteboardController extends ChangeNotifier {
   void _addInkPoint(Offset point, double? pressure) {
     final current = ink!;
     current.points.add(
-      Offset(
-        clampCoordinate(point.dx),
-        clampCoordinate(point.dy),
-      ),
+      Offset(clampCoordinate(point.dx), clampCoordinate(point.dy)),
     );
     current.pressures.add((pressure ?? 0.5).clamp(0.0, 1.0));
   }
@@ -767,7 +761,11 @@ class WhiteboardController extends ChangeNotifier {
 
   WhiteboardElement _shapeFrom(Offset a, Offset b) {
     final id = shapeDraft?.id ?? _newId();
-    final data = <String, Object?>{'s': shapeKind.value, 'c': inkColor, 'sw': inkWidth};
+    final data = <String, Object?>{
+      's': shapeKind.value,
+      'c': inkColor,
+      'sw': inkWidth,
+    };
     if (shapeKind.isSegment) {
       data
         ..['x'] = round1(clampCoordinate(a.dx))
@@ -947,11 +945,17 @@ class WhiteboardController extends ChangeNotifier {
   /// Adds a sticky note or a text with its words already written (the list
   /// view uses this; no typing on the canvas needed). Placed at [at] or in
   /// the middle of what is on screen.
-  WhiteboardElement? addWords({required bool sticky, required String text, Offset? at}) {
+  WhiteboardElement? addWords({
+    required bool sticky,
+    required String text,
+    Offset? at,
+  }) {
     if (!_allowEdit() || !_hasRoomFor(1)) {
       return null;
     }
-    final limit = sticky ? WhiteboardLimits.maxStickyText : WhiteboardLimits.maxTextLength;
+    final limit = sticky
+        ? WhiteboardLimits.maxStickyText
+        : WhiteboardLimits.maxTextLength;
     final words = text.length > limit ? text.substring(0, limit) : text;
     final center = at ?? view.toBoard(viewport.center(Offset.zero));
     final measured = sticky ? null : measureWords(words, 24);
@@ -990,7 +994,8 @@ class WhiteboardController extends ChangeNotifier {
     final element = engine.elementById(id);
     if (element == null ||
         !_allowEdit() ||
-        (element.kind != WhiteboardKind.sticky && element.kind != WhiteboardKind.text)) {
+        (element.kind != WhiteboardKind.sticky &&
+            element.kind != WhiteboardKind.text)) {
       return;
     }
     final limit = element.kind == WhiteboardKind.sticky
@@ -1258,7 +1263,9 @@ class WhiteboardController extends ChangeNotifier {
       final next = change(element);
       if (!next.sameContent(element)) {
         puts.add(next);
-        changes.add(ElementChange(id: element.id, before: element, after: next));
+        changes.add(
+          ElementChange(id: element.id, before: element, after: next),
+        );
       }
     }
     if (puts.isEmpty) {
@@ -1279,7 +1286,9 @@ class WhiteboardController extends ChangeNotifier {
       return;
     }
     engine.removeAll([for (final e in victims) e.id]);
-    history.record([for (final e in victims) ElementChange(id: e.id, before: e)]);
+    history.record([
+      for (final e in victims) ElementChange(id: e.id, before: e),
+    ]);
     selection = const {};
     _local();
     _changed();
@@ -1329,14 +1338,24 @@ class WhiteboardController extends ChangeNotifier {
         if (!selection.contains(e.id)) e,
     ];
     final keys = toFront
-        ? keysBetween(others.isEmpty ? null : others.last.z, null, chosen.length)
-        : keysBetween(null, others.isEmpty ? null : others.first.z, chosen.length);
+        ? keysBetween(
+            others.isEmpty ? null : others.last.z,
+            null,
+            chosen.length,
+          )
+        : keysBetween(
+            null,
+            others.isEmpty ? null : others.first.z,
+            chosen.length,
+          );
     final changes = <ElementChange>[];
     final puts = <WhiteboardElement>[];
     for (var i = 0; i < chosen.length; i++) {
       final next = chosen[i].copyWith(z: keys[i]);
       puts.add(next);
-      changes.add(ElementChange(id: chosen[i].id, before: chosen[i], after: next));
+      changes.add(
+        ElementChange(id: chosen[i].id, before: chosen[i], after: next),
+      );
     }
     engine.upsertAll(puts);
     history.record(changes);

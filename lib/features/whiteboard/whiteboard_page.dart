@@ -32,15 +32,7 @@ const whiteboardPalette = WhiteboardPalette(
   label: Color(0xFF1B1B1F),
 );
 
-enum _MenuAction {
-  rename,
-  fit,
-  export,
-  versions,
-  lock,
-  clear,
-  delete,
-}
+enum _MenuAction { rename, fit, export, versions, lock, clear, delete }
 
 /// One whiteboard: the drawing, the tools, who else is here, and the
 /// board's menu. `/chats/<id>/whiteboards/<board id>`.
@@ -412,19 +404,25 @@ class _WhiteboardPageState extends ConsumerState<WhiteboardPage>
                     ? () => unawaited(_rename())
                     : null,
                 borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: c.ink,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: c.ink,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -740,10 +738,10 @@ class _Peers extends StatelessWidget {
     final c = context.tokens.colors;
     final shown = peers.take(3).toList();
     return Semantics(
-      label: tr(
-        '{count} others here: {names}',
-        {'count': peers.length, 'names': peers.map((p) => p.name).join(', ')},
-      ),
+      label: tr('{count} others here: {names}', {
+        'count': peers.length,
+        'names': peers.map((p) => p.name).join(', '),
+      }),
       child: ExcludeSemantics(
         child: Row(
           mainAxisSize: MainAxisSize.min,

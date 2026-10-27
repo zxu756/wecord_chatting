@@ -87,7 +87,9 @@ class SharedPreferencesWhiteboardDraftStore implements WhiteboardDraftStore {
     }
     try {
       final json = jsonDecode(raw);
-      return json is Map<String, dynamic> ? WhiteboardDraft.fromJson(json) : null;
+      return json is Map<String, dynamic>
+          ? WhiteboardDraft.fromJson(json)
+          : null;
     } on Object {
       return null;
     }
@@ -116,7 +118,8 @@ class InMemoryWhiteboardDraftStore implements WhiteboardDraftStore {
   Future<WhiteboardDraft?> load(String boardId) async => drafts[boardId];
 
   @override
-  Future<void> save(WhiteboardDraft draft) async => drafts[draft.boardId] = draft;
+  Future<void> save(WhiteboardDraft draft) async =>
+      drafts[draft.boardId] = draft;
 
   @override
   Future<void> clear(String boardId) async => drafts.remove(boardId);
@@ -401,7 +404,11 @@ class WhiteboardSyncEngine extends ChangeNotifier {
       // We held it rubbed out and somebody brought it back meanwhile.
       _local[theirs.id] = theirs;
     } else {
-      _local[theirs.id] = mergeElements(base: prior, mine: mine, theirs: theirs);
+      _local[theirs.id] = mergeElements(
+        base: prior,
+        mine: mine,
+        theirs: theirs,
+      );
     }
     if (notify) {
       _changed();

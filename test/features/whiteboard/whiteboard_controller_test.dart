@@ -1,21 +1,15 @@
 import 'dart:ui';
 
-import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/whiteboard/whiteboard_controller.dart';
 import 'package:wecord/features/whiteboard/whiteboard_geometry.dart';
 import 'package:wecord/features/whiteboard/whiteboard_models.dart';
-import 'package:wecord/features/whiteboard/whiteboard_repository.dart';
 import 'package:wecord/features/whiteboard/whiteboard_sync.dart';
 
 import 'whiteboard_fakes.dart';
 
 Future<(WhiteboardController, FakeWhiteboardRepository, FakeWhiteboardServer)>
-open({
-  FakeWhiteboardServer? server,
-  WhiteboardMeta? meta,
-  int? ids,
-}) async {
+open({FakeWhiteboardServer? server, WhiteboardMeta? meta, int? ids}) async {
   final world = server ?? FakeWhiteboardServer();
   final repository = FakeWhiteboardRepository(world, meta: meta);
   var counter = 0;
@@ -57,46 +51,55 @@ void main() {
     c.dispose();
   });
 
-  test('a stylus line keeps its pressure, a finger or mouse line does not', () async {
-    final (c, _, _) = await open();
-    c.beginStroke(
-      const Offset(0, 0),
-      pressure: 0.2,
-      kind: PointerDeviceKind.stylus,
-    );
-    c.extendStroke(const Offset(50, 0), pressure: 0.9);
-    c.extendStroke(const Offset(100, 40), pressure: 0.5);
-    c.endStroke();
-    final stroke = c.engine.elements.single;
-    expect(stroke.pressures, isNotNull);
-    expect(stroke.pressures!.length, stroke.points.length ~/ 2);
-    expect(c.stylusSeen, isTrue);
-    c.dispose();
-  });
+  test(
+    'a stylus line keeps its pressure, a finger or mouse line does not',
+    () async {
+      final (c, _, _) = await open();
+      c.beginStroke(
+        const Offset(0, 0),
+        pressure: 0.2,
+        kind: PointerDeviceKind.stylus,
+      );
+      c.extendStroke(const Offset(50, 0), pressure: 0.9);
+      c.extendStroke(const Offset(100, 40), pressure: 0.5);
+      c.endStroke();
+      final stroke = c.engine.elements.single;
+      expect(stroke.pressures, isNotNull);
+      expect(stroke.pressures!.length, stroke.points.length ~/ 2);
+      expect(c.stylusSeen, isTrue);
+      c.dispose();
+    },
+  );
 
-  test('a very long line is cut into elements of at most 2000 points', () async {
-    final (c, _, _) = await open();
-    c.beginStroke(const Offset(0, 0));
-    for (var i = 1; i < 6000; i++) {
-      c.extendStroke(Offset(i * 0.5, (i.isEven ? 30.0 : -30.0)));
-    }
-    c.endStroke();
-    expect(c.engine.liveCount, greaterThan(1));
-    for (final e in c.engine.elements) {
-      expect(e.points.length ~/ 2, lessThanOrEqualTo(2000));
-    }
-    c.dispose();
-  });
+  test(
+    'a very long line is cut into elements of at most 2000 points',
+    () async {
+      final (c, _, _) = await open();
+      c.beginStroke(const Offset(0, 0));
+      for (var i = 1; i < 6000; i++) {
+        c.extendStroke(Offset(i * 0.5, (i.isEven ? 30.0 : -30.0)));
+      }
+      c.endStroke();
+      expect(c.engine.liveCount, greaterThan(1));
+      for (final e in c.engine.elements) {
+        expect(e.points.length ~/ 2, lessThanOrEqualTo(2000));
+      }
+      c.dispose();
+    },
+  );
 
-  test('live strokes are shown to others while drawing and ended after', () async {
-    final (c, repository, _) = await open();
-    c.beginStroke(const Offset(0, 0));
-    c.extendStroke(const Offset(40, 40));
-    expect(repository.live.sentStrokes, isNotEmpty);
-    c.endStroke();
-    expect(repository.live.sentStrokes.last.done, isTrue);
-    c.dispose();
-  });
+  test(
+    'live strokes are shown to others while drawing and ended after',
+    () async {
+      final (c, repository, _) = await open();
+      c.beginStroke(const Offset(0, 0));
+      c.extendStroke(const Offset(40, 40));
+      expect(repository.live.sentStrokes, isNotEmpty);
+      c.endStroke();
+      expect(repository.live.sentStrokes.last.done, isTrue);
+      c.dispose();
+    },
+  );
 
   test('undo and redo of a line reach the server', () async {
     final (c, _, server) = await open();
@@ -238,20 +241,25 @@ void main() {
     c.dispose();
   });
 
-  test('changes by others arrive and a selected element that goes is dropped', () async {
-    final server = FakeWhiteboardServer()..write(sticky('a', text: 'one'));
-    final (c, _, _) = await open(server: server);
-    c.select(['a']);
-    await Future<void>.delayed(Duration.zero);
-    server.write(server.elements['a']!.withData({'t': 'two'}));
-    await Future<void>.delayed(Duration.zero);
-    expect(c.engine.elementById('a')!.text, 'two');
-    server.write(server.elements['a']!.copyWith(deleted: true, data: const {}));
-    await Future<void>.delayed(Duration.zero);
-    expect(c.engine.elementById('a'), isNull);
-    expect(c.selection, isEmpty);
-    c.dispose();
-  });
+  test(
+    'changes by others arrive and a selected element that goes is dropped',
+    () async {
+      final server = FakeWhiteboardServer()..write(sticky('a', text: 'one'));
+      final (c, _, _) = await open(server: server);
+      c.select(['a']);
+      await Future<void>.delayed(Duration.zero);
+      server.write(server.elements['a']!.withData({'t': 'two'}));
+      await Future<void>.delayed(Duration.zero);
+      expect(c.engine.elementById('a')!.text, 'two');
+      server.write(
+        server.elements['a']!.copyWith(deleted: true, data: const {}),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(c.engine.elementById('a'), isNull);
+      expect(c.selection, isEmpty);
+      c.dispose();
+    },
+  );
 
   test('words added from the list view, and edited', () async {
     final (c, _, _) = await open();
@@ -298,10 +306,7 @@ void main() {
     drawLine(c);
     await c.flushNow();
     expect(c.engine.status, WhiteboardSyncStatus.offline);
-    expect(
-      (await c.drafts.load('board-1'))!.local.length,
-      1,
-    );
+    expect((await c.drafts.load('board-1'))!.local.length, 1);
     c.dispose();
   });
 

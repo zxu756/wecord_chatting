@@ -132,8 +132,9 @@ class _WhiteboardListPageState extends ConsumerState<WhiteboardListPage> {
                 ),
                 Expanded(
                   child: boards.when(
-                    loading: () =>
-                        Center(child: CircularProgressIndicator(color: c.muted)),
+                    loading: () => Center(
+                      child: CircularProgressIndicator(color: c.muted),
+                    ),
                     error: (error, stack) => Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -179,7 +180,9 @@ class _WhiteboardListPageState extends ConsumerState<WhiteboardListPage> {
                                 children: [
                                   for (final board in list)
                                     SettingsRow(
-                                      key: ValueKey('whiteboard-row-${board.id}'),
+                                      key: ValueKey(
+                                        'whiteboard-row-${board.id}',
+                                      ),
                                       icon: board.managersOnly
                                           ? Icons.lock_outline_rounded
                                           : Icons.draw_outlined,

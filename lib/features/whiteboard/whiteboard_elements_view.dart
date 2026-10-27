@@ -72,10 +72,9 @@ class WhiteboardElementsView extends StatelessWidget {
               child: Text(
                 items.isEmpty
                     ? tr('Nothing on this whiteboard yet.')
-                    : tr(
-                        '{count} items on this whiteboard, top to bottom.',
-                        {'count': items.length},
-                      ),
+                    : tr('{count} items on this whiteboard, top to bottom.', {
+                        'count': items.length,
+                      }),
                 style: TextStyle(fontSize: 15, color: c.muted, height: 1.4),
               ),
             ),
@@ -183,7 +182,14 @@ class _Row extends StatelessWidget {
 
   IconData get _icon => switch (element.kind) {
     WhiteboardKind.stroke => Icons.edit_outlined,
-    WhiteboardKind.shape => Icons.crop_square_rounded,
+    WhiteboardKind.shape => switch (element.shape) {
+      WhiteboardShape.rect => Icons.crop_square_rounded,
+      WhiteboardShape.ellipse => Icons.circle_outlined,
+      WhiteboardShape.triangle => Icons.change_history_rounded,
+      WhiteboardShape.diamond => Icons.diamond_outlined,
+      WhiteboardShape.line => Icons.horizontal_rule_rounded,
+      WhiteboardShape.arrow => Icons.arrow_right_alt_rounded,
+    },
     WhiteboardKind.sticky => Icons.sticky_note_2_outlined,
     WhiteboardKind.text => Icons.text_fields_rounded,
     WhiteboardKind.image => Icons.image_outlined,

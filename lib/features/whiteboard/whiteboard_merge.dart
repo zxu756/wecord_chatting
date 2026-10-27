@@ -26,10 +26,14 @@ WhiteboardElement mergeElements({
   for (final key in keys) {
     final before = origin[key];
     final now = mine.data[key];
-    if (deepEquals(before, now) && origin.containsKey(key) == mine.data.containsKey(key)) {
+    if (deepEquals(before, now) &&
+        origin.containsKey(key) == mine.data.containsKey(key)) {
       continue;
     }
-    if (key == 't' && before is String && now is String && theirs.data['t'] is String) {
+    if (key == 't' &&
+        before is String &&
+        now is String &&
+        theirs.data['t'] is String) {
       data['t'] = mergeText(
         base: before,
         baseMarks: const [],
@@ -50,7 +54,9 @@ WhiteboardElement mergeElements({
   return WhiteboardElement(
     id: mine.id,
     kind: mine.kind,
-    z: baseZ != null && mine.z != baseZ ? mine.z : (base == null ? mine.z : theirs.z),
+    z: baseZ != null && mine.z != baseZ
+        ? mine.z
+        : (base == null ? mine.z : theirs.z),
     data: data,
     rev: theirs.rev,
     deleted: false,

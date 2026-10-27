@@ -95,21 +95,22 @@ String describeWhiteboardElement(WhiteboardElement element) {
             : tr('{kind}, empty', {'kind': kind});
       }
       return element.kind == WhiteboardKind.sticky
-          ? tr(
-              '{kind}, {color}: {words}',
-              {'kind': kind, 'color': color, 'words': words},
-            )
+          ? tr('{kind}, {color}: {words}', {
+              'kind': kind,
+              'color': color,
+              'words': words,
+            })
           : tr('{kind}: {words}', {'kind': kind, 'words': words});
     case WhiteboardKind.stroke:
-      return tr(
-        '{kind}, {color}',
-        {'kind': kind, 'color': whiteboardColorName(element.color)},
-      );
+      return tr('{kind}, {color}', {
+        'kind': kind,
+        'color': whiteboardColorName(element.color),
+      });
     case WhiteboardKind.shape:
-      return tr(
-        '{kind}, {color}',
-        {'kind': kind, 'color': whiteboardColorName(element.color)},
-      );
+      return tr('{kind}, {color}', {
+        'kind': kind,
+        'color': whiteboardColorName(element.color),
+      });
     case WhiteboardKind.image:
       return kind;
   }
@@ -118,10 +119,10 @@ String describeWhiteboardElement(WhiteboardElement element) {
 /// Where [element] is, in words a person can use.
 String describeWhiteboardPlace(WhiteboardElement element) {
   final box = element.bounds;
-  return tr(
-    'At {x} across, {y} down',
-    {'x': box.left.round(), 'y': box.top.round()},
-  );
+  return tr('At {x} across, {y} down', {
+    'x': box.left.round(),
+    'y': box.top.round(),
+  });
 }
 
 /// The board's elements in reading order: top to bottom, then left to right

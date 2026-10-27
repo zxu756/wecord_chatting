@@ -52,4 +52,5 @@ const careHiddenComposerMenuIds = <String>{
   'ask-wecord-ai',
   'send-silently',
   'check-in',
+  'ai-draft-reply',
 };

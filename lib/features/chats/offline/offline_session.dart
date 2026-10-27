@@ -5,11 +5,13 @@ import 'package:wecord/features/auth/auth_repository.dart';
 import 'package:wecord/features/chats/media_cache.dart';
 import 'package:wecord/features/chats/offline/chat_cache.dart';
 import 'package:wecord/features/chats/offline/outbox_provider.dart';
+import 'package:wecord/features/local_data/local_data_wipe.dart';
 import 'package:wecord/features/lists/task_patch_sync.dart';
 
 /// Keeps the offline copy to the signed-in user: when they sign out (or
-/// another account signs in) the cache, the outbox and the cached media
-/// links are wiped. Watched by the app for as long as it runs.
+/// another account signs in) the cache, the outbox, the cached media
+/// links, the texts read from messages and the key that encrypts them are
+/// wiped. Watched by the app for as long as it runs.
 final offlineSessionGuardProvider = Provider<void>((ref) {
   var userId = ref.read(authRepositoryProvider).currentUser?.id;
 
@@ -27,6 +29,9 @@ final offlineSessionGuardProvider = Provider<void>((ref) {
     } catch (_) {
       // Nothing kept, or storage is gone.
     }
+    // Texts read from pictures, transcripts, drafts, recent searches, and
+    // then the key all of it was encrypted with (G8).
+    await wipeLocalChatData(ref);
   }
 
   if (userId == null) {

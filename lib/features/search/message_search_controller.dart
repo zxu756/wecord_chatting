@@ -64,6 +64,7 @@ class MessageSearchState {
     this.total,
     this.totalCapped = false,
     this.nextCursor,
+    this.offline = false,
     this.isLoading = false,
     this.isLoadingMore = false,
     this.error,
@@ -82,6 +83,10 @@ class MessageSearchState {
   final int? total;
   final bool totalCapped;
   final Map<String, dynamic>? nextCursor;
+
+  /// The results come from the messages saved on this device, because the
+  /// server could not be reached (L3).
+  final bool offline;
   final bool isLoading;
   final bool isLoadingMore;
   final Object? error;
@@ -110,6 +115,7 @@ class MessageSearchState {
     int? Function()? total,
     bool? totalCapped,
     Map<String, dynamic>? Function()? nextCursor,
+    bool? offline,
     bool? isLoading,
     bool? isLoadingMore,
     Object? Function()? error,
@@ -127,6 +133,7 @@ class MessageSearchState {
       total: total == null ? this.total : total(),
       totalCapped: totalCapped ?? this.totalCapped,
       nextCursor: nextCursor == null ? this.nextCursor : nextCursor(),
+      offline: offline ?? this.offline,
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: error == null ? this.error : error(),
@@ -214,6 +221,7 @@ class MessageSearchController extends Notifier<MessageSearchState> {
         conversationCounts: const {},
         total: () => null,
         nextCursor: () => null,
+        offline: false,
         isLoading: false,
         isLoadingMore: false,
         error: () => null,
@@ -299,7 +307,11 @@ class MessageSearchController extends Notifier<MessageSearchState> {
       );
       final discovery = _discover(parsed);
       final page = _withoutLocked(await _repository.search(request), request);
-      final people = await discovery;
+      _lastPageOffline = page.offline;
+      // Not waited for when the server did not answer: the people lookup
+      // would only wait for it too.
+      final lookedUp = _lastPageOffline ? null : await discovery;
+      final people = lookedUp ?? const <DiscoveryResult>[];
       if (generation != _generation) {
         return;
       }
@@ -310,10 +322,11 @@ class MessageSearchController extends Notifier<MessageSearchState> {
         total: () => page.total,
         totalCapped: page.totalCapped,
         nextCursor: () => page.nextCursor,
+        offline: page.offline,
         isLoading: false,
         unresolved: const [],
         searchedInput: () => input,
-        discovery: people,
+        discovery: page.offline ? const [] : people,
       );
     } catch (error) {
       if (generation != _generation) {
@@ -328,6 +341,7 @@ class MessageSearchController extends Notifier<MessageSearchState> {
   }
 
   MessageSearchRequest? _lastRequest;
+  var _lastPageOffline = false;
 
   /// [page] without the messages of chats the person locked (G2). A search
   /// inside one chat is left alone: the person has it open.
@@ -361,6 +375,7 @@ class MessageSearchController extends Notifier<MessageSearchState> {
       total: total == null ? null : (total - removed).clamp(0, total),
       totalCapped: page.totalCapped,
       conversationCounts: counts,
+      offline: page.offline,
     );
   }
 

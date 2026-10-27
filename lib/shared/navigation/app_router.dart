@@ -23,6 +23,7 @@ import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/member_honors/honors_screen.dart';
 import 'package:wecord/features/circles/circle_invite_link.dart';
 import 'package:wecord/features/circles/circle_invite_screen.dart';
+import 'package:wecord/features/circles/circle_posts_screens.dart';
 import 'package:wecord/features/circles/circle_routes.dart';
 import 'package:wecord/features/contacts/contacts_screen.dart';
 import 'package:wecord/features/discovery/discovery_screen.dart';
@@ -39,6 +40,7 @@ import 'package:wecord/features/friend_tags/friend_tags_screen.dart';
 import 'package:wecord/features/later/saved_messages_screen.dart';
 import 'package:wecord/features/moments/moment_composer_screen.dart';
 import 'package:wecord/features/moments/moment_detail_screen.dart';
+import 'package:wecord/features/moments/moment_topics_screen.dart';
 import 'package:wecord/features/moments/moments_screen.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
@@ -219,6 +221,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => MomentsScreen(
                   key: ValueKey('moments-of-${state.pathParameters['userId']}'),
                   userId: state.pathParameters['userId'],
+                ),
+              ),
+              // Topics (#话题): the ones friends use, and the Moments with one.
+              GoRoute(
+                path: 'topics',
+                builder: (context, state) => const MomentTopicsScreen(),
+              ),
+              GoRoute(
+                path: 'tag/:tag',
+                builder: (context, state) => MomentsScreen(
+                  key: ValueKey('moments-tag-${state.pathParameters['tag']}'),
+                  tag: state.pathParameters['tag'],
                 ),
               ),
               GoRoute(
@@ -454,6 +468,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     circleId: state.pathParameters['circleId']!,
                   );
                 },
+              ),
+              // The circle's posts, filtered by ?tag= or ?featured=1, and one
+              // post (a link from a push or the search).
+              GoRoute(
+                path: 'posts',
+                builder: (context, state) {
+                  final query = state.uri.queryParameters;
+                  return CirclePostsScreen(
+                    key: ValueKey('posts-${state.uri}'),
+                    circleId: state.pathParameters['circleId']!,
+                    tag: query['tag'],
+                    featuredOnly: query['featured'] == '1',
+                  );
+                },
+                routes: [
+                  GoRoute(
+                    path: ':postId',
+                    builder: (context, state) {
+                      return CirclePostDetailScreen(
+                        circleId: state.pathParameters['circleId']!,
+                        postId: state.pathParameters['postId']!,
+                      );
+                    },
+                  ),
+                ],
               ),
               // Circle channels opened full screen on narrow layouts. Living
               // under /circles keeps the Circles destination highlighted.

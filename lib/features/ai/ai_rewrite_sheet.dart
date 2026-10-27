@@ -19,6 +19,7 @@ Future<void> showAiRewriteSheet(
   required ValueChanged<String> onReplace,
   required ValueChanged<String> onInsertBelow,
   String? conversationId,
+  VoidCallback? onHelpReply,
 }) {
   return showWeCordSheet<void>(
     context,
@@ -28,6 +29,7 @@ Future<void> showAiRewriteSheet(
       conversationId: conversationId,
       onReplace: onReplace,
       onInsertBelow: onInsertBelow,
+      onHelpReply: onHelpReply,
     ),
   );
 }
@@ -40,6 +42,7 @@ class AiRewriteSheet extends ConsumerStatefulWidget {
     required this.onReplace,
     required this.onInsertBelow,
     this.conversationId,
+    this.onHelpReply,
     super.key,
   });
 
@@ -47,6 +50,10 @@ class AiRewriteSheet extends ConsumerStatefulWidget {
   final String? conversationId;
   final ValueChanged<String> onReplace;
   final ValueChanged<String> onInsertBelow;
+
+  /// Opens "Help me reply" (F6) in place of this sheet; null where there is
+  /// nothing to reply to (the note to self).
+  final VoidCallback? onHelpReply;
 
   @override
   ConsumerState<AiRewriteSheet> createState() => _AiRewriteSheetState();
@@ -147,12 +154,37 @@ class _AiRewriteSheetState extends ConsumerState<AiRewriteSheet> {
       );
     }
 
+    // "Help me reply" (F6): replies to the chat instead of polishing a draft.
+    final helpReply = widget.onHelpReply == null
+        ? null
+        : SettingsGroup(
+            children: [
+              SettingsRow(
+                key: const ValueKey('ai-rewrite-help-reply'),
+                icon: Icons.reply_all_rounded,
+                title: tr('Help me reply'),
+                onTap: () {
+                  final open = widget.onHelpReply!;
+                  Navigator.of(context).pop();
+                  open();
+                },
+              ),
+            ],
+          );
+
     final Widget content;
     if (text.isEmpty) {
-      content = _Note(
+      final note = _Note(
         key: const ValueKey('ai-rewrite-empty'),
         text: tr('Write a message first, then use AI to polish it.'),
       );
+      content = helpReply == null
+          ? note
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [helpReply, const SizedBox(height: 14), note],
+            );
     } else if (text.length > aiMaxDraftLength) {
       content = _Note(
         key: const ValueKey('ai-rewrite-too-long'),
@@ -167,6 +199,7 @@ class _AiRewriteSheetState extends ConsumerState<AiRewriteSheet> {
             children: [
               draftBox(tr('Your message'), text),
               const SizedBox(height: 14),
+              if (helpReply != null) ...[helpReply, const SizedBox(height: 14)],
               SettingsGroup(
                 children: [
                   for (final (mode, icon) in const [

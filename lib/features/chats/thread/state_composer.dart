@@ -70,10 +70,47 @@ extension _ThreadComposerState on _ChatThreadScreenState {
         context,
         draft: _composerController.text,
         conversationId: widget.conversationId,
+        onHelpReply: _isNoteToSelf ? null : _openAiDraftReply,
         onReplace: setDraft,
         onInsertBelow: (text) {
           final current = _composerController.text.trimRight();
           setDraft(current.isEmpty ? text : '$current\n$text');
+        },
+      ),
+    );
+  }
+
+  /// Opens "Help me reply" (F6: the composer's AI menu, the "+" menu on
+  /// phones). What the person picks goes in the message box and is never sent.
+  /// The AI is only asked when they tap "Suggest replies" in the sheet.
+  void _openAiDraftReply() {
+    if (!ref.read(aiAvailableProvider(_circleId)) ||
+        _isNoteToSelf ||
+        _isRecordingVoice ||
+        _isSending ||
+        _isSendingVoice ||
+        !mounted) {
+      return;
+    }
+    final boxAtOpen = _composerController.text;
+    unawaited(
+      showDraftReplySheet(
+        context,
+        conversationId: widget.conversationId,
+        initialIntent: boxAtOpen,
+        onUse: (reply, intent) {
+          // A note taken from the box is replaced by the reply it asked for;
+          // anything else already in the box stays, with the reply below it.
+          final current = _composerController.text;
+          final replaces =
+              current.trim().isEmpty || intent.trim() == current.trim();
+          final text = replaces ? reply : '${current.trimRight()}\n$reply';
+          _composerController.value = TextEditingValue(
+            text: text,
+            selection: TextSelection.collapsed(offset: text.length),
+          );
+          _handleComposerChanged(text);
+          _composerFocus.requestFocus();
         },
       ),
     );

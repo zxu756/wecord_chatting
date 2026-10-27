@@ -9,6 +9,7 @@ import {
   attachmentsToSign,
   channelPostFilesToSign,
   checkInFilesToSign,
+  circlePostsFilesToSign,
   eventFilesToSign,
   EXPORT_LIFETIME_MS,
   type ExportBlob,
@@ -747,6 +748,20 @@ export async function collectExportData(
     null,
   );
 
+  // The circle posts I wrote (export_my_circle_posts).
+  const circlePosts = await tryRead<Row | null>(
+    skipped,
+    "circle posts",
+    async () => {
+      const result = await admin.rpc("export_my_circle_posts", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // The record of codes made and used and of passkeys, without any hash or
   // key (export_my_account_security).
   const accountSecurity = await tryRead<Row | null>(
@@ -819,6 +834,10 @@ export async function collectExportData(
   for (const { bucket, path } of groupSpaceFilesToSign(groupSpace)) {
     byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
   }
+  // The pictures of my circle posts are linked.
+  for (const { bucket, path } of circlePostsFilesToSign(circlePosts)) {
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), path]);
+  }
   // My own photos, videos, covers and wallpapers go into the ZIP while they
   // fit; the rest is linked.
   let files: ExportBlob[] = [];
@@ -887,6 +906,7 @@ export async function collectExportData(
     interactions,
     chatPrivacy,
     groupSpace,
+    circlePosts,
     accountSecurity,
     files,
     attachmentLinks,

@@ -74,6 +74,17 @@
 //     the app's own rule signals go to the model; see link_check.ts. Counts
 //     against the same daily limit; honours the circle's and the person's AI
 //     switches.
+//   draft_reply {conversation_id, intent?, language?}
+//     -> {replies: [string, ...], message_count, reason?}. "Help me reply" in
+//     the message box (F6): two or three replies to the end of the chat, or to
+//     what the person wants to say (`intent`, one line). Only a person's own
+//     tap starts it. The last 20 messages go to the model, as the person sees
+//     them (the database decides: not recalled, expired, held, view-once or
+//     blocked; never a chat the person locked, or one where the circle, the
+//     group's owner or the person turned AI off: 403 chat_locked,
+//     ai_disabled_in_circle, ai_disabled_for_user); the app only puts a reply
+//     in the box. See draft_reply.ts and migration 202610280800. Counts
+//     against the same daily limit. Nothing is stored.
 // Chat is read as the caller, so only messages they can see are used.
 // Nothing is stored beyond the day's request count (ai_usage) and the
 // translations of translate_batch (message_translations, which go with the
@@ -88,6 +99,7 @@ import { createDigestStore } from "./digest_store.ts";
 import { createNoteAssistStore } from "./note_assist_store.ts";
 import { createTranslationStore } from "./translations_store.ts";
 import { createGuard2Store, createLinkCheckStore } from "./guard2_store.ts";
+import { createDraftReplyStore } from "./draft_reply_store.ts";
 
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -246,5 +258,6 @@ Deno.serve(async (request) => {
     ask: createAskStore(admin),
     guard2: createGuard2Store(admin),
     linkCheck: createLinkCheckStore(admin),
+    draftReply: createDraftReplyStore(admin),
   });
 });

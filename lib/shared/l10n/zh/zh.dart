@@ -18,6 +18,8 @@ import 'package:wecord/shared/l10n/zh/zh_group_checkin_tabs.dart';
 import 'package:wecord/shared/l10n/zh/zh_interactions.dart';
 import 'package:wecord/shared/l10n/zh/zh_scheduled_calls.dart';
 import 'package:wecord/shared/l10n/zh/zh_group_space.dart';
+import 'package:wecord/shared/l10n/zh/zh_ai_suggest.dart';
+import 'package:wecord/shared/l10n/zh/zh_local_data.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -103,6 +105,7 @@ import 'package:wecord/shared/l10n/zh/zh_stories.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_ask.dart';
 import 'package:wecord/shared/l10n/zh/zh_favorites2.dart';
 import 'package:wecord/shared/l10n/zh/zh_platforms.dart';
+import 'package:wecord/shared/l10n/zh/zh_hashtags_posts.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -207,6 +210,9 @@ const zhAreas = <Map<String, String>>[
   zhScheduledCalls,
   zhGroupSpace,
   zhChatPrivacy,
+  zhAiSuggest,
+  zhHashtagsPosts,
+  zhLocalData,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

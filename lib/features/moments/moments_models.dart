@@ -325,6 +325,29 @@ class MomentMention {
 /// A Moment as the viewer may see it: the likes and comments are already
 /// only the ones the viewer is allowed to read.
 @immutable
+/// A topic (#话题) in the Moments the person can see, with how many of those
+/// Moments use it.
+@immutable
+class MomentTopic {
+  const MomentTopic({
+    required this.tag,
+    required this.postCount,
+    required this.lastAt,
+  });
+
+  factory MomentTopic.fromJson(Map<String, dynamic> json) {
+    return MomentTopic(
+      tag: json['tag'] as String,
+      postCount: (json['post_count'] as num?)?.toInt() ?? 0,
+      lastAt: DateTime.parse(json['last_at'] as String),
+    );
+  }
+
+  final String tag;
+  final int postCount;
+  final DateTime lastAt;
+}
+
 class MomentPost {
   const MomentPost({
     required this.id,

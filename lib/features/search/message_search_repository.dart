@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
+import 'package:wecord/features/chats/offline/connectivity.dart';
+import 'package:wecord/features/local_search/local_search_providers.dart';
+import 'package:wecord/features/local_search/offline_search_repository.dart';
 import 'package:wecord/features/search/message_search_models.dart';
 import 'package:wecord/shared/api/supabase_providers.dart';
 
@@ -8,8 +11,19 @@ final messageSearchRepositoryProvider = Provider<MessageSearchRepository>((
 ) {
   try {
     final client = ref.watch(supabaseClientProvider);
-    return SupabaseMessageSearchRepository(
+    final online = SupabaseMessageSearchRepository(
       (name, params) => client.rpc<Object?>(name, params: params),
+    );
+    // With no connection the search falls back to what this device has
+    // saved (L3); with one, the server's answer is the only one.
+    final local = ref.watch(localMessageSearchProvider);
+    if (local == null) {
+      return online;
+    }
+    return OfflineFallbackSearchRepository(
+      online: online,
+      local: local,
+      deviceOffline: () => ref.read(deviceConnectivityProvider).value == false,
     );
   } on ProviderException {
     return const UninitializedMessageSearchRepository();

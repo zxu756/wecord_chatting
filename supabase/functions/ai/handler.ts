@@ -33,6 +33,7 @@ import {
   visionReady,
 } from "./guard2.ts";
 import { type LinkCheckStore, runLinkCheck } from "./link_check.ts";
+import { type DraftReplyStore, runDraftReply } from "./draft_reply.ts";
 import {
   audioFileName,
   MAX_AUDIO_BYTES,
@@ -190,6 +191,9 @@ export interface AiDeps {
   /// What link_check reads (see link_check.ts). Without it that action
   /// answers 503.
   linkCheck?: LinkCheckStore;
+  /// What draft_reply reads (see draft_reply.ts). Without it that action
+  /// answers 503.
+  draftReply?: DraftReplyStore;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -329,6 +333,10 @@ async function route(request: Request, deps: AiDeps): Promise<Response> {
   }
   if (parsed.action === "link_check") {
     const result = await runLinkCheck(parsed, userId, config, deps);
+    return json(result.body, result.status);
+  }
+  if (parsed.action === "draft_reply") {
+    const result = await runDraftReply(parsed, userId, config, deps);
     return json(result.body, result.status);
   }
 

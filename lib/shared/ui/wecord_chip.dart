@@ -87,13 +87,16 @@ class WeCordChip extends StatelessWidget {
                 Icon(icon, size: 16, color: foreground),
                 const SizedBox(width: 6),
               ],
-              Text(
-                count == null || count == 0 ? label : '$label $count',
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: foreground,
+              Flexible(
+                child: Text(
+                  count == null || count == 0 ? label : '$label $count',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: foreground,
+                  ),
                 ),
               ),
               if (trailing != null) ...[const SizedBox(width: 6), trailing!],

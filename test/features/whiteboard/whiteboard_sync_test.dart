@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/whiteboard/whiteboard_history.dart';
 import 'package:wecord/features/whiteboard/whiteboard_merge.dart';
-import 'package:wecord/features/whiteboard/whiteboard_models.dart';
 import 'package:wecord/features/whiteboard/whiteboard_sync.dart';
 
 import 'whiteboard_fakes.dart';

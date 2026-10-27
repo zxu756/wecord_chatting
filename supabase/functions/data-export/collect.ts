@@ -806,6 +806,20 @@ export async function collectExportData(
     null,
   );
 
+  // The workflows I made and the runs about me (export_my_workflows).
+  const workflows = await tryRead<Row | null>(
+    skipped,
+    "workflows",
+    async () => {
+      const result = await admin.rpc("export_my_workflows", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   await stage("attachments");
   const linksExpireAt = new Date(now.getTime() + EXPORT_LIFETIME_MS);
   const attachmentLinks: Record<string, string> = {};
@@ -923,6 +937,7 @@ export async function collectExportData(
     groupSpace,
     circlePosts,
     whiteboards,
+    workflows,
     accountSecurity,
     files,
     attachmentLinks,

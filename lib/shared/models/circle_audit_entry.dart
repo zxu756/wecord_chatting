@@ -121,6 +121,7 @@ enum CircleAuditActionGroup {
   ban('ban', 'Ban appeals'),
   raid('raid', 'Raid protection'),
   discovery('discovery', 'Discovery'),
+  workflow('workflow', 'Workflows'),
   other('', 'Other');
 
   const CircleAuditActionGroup(this.filter, this._label);
@@ -165,5 +166,6 @@ enum CircleAuditActionGroup {
     ban,
     raid,
     discovery,
+    workflow,
   ];
 }

@@ -20,6 +20,7 @@ import 'package:wecord/features/group_tabs/group_tabs_chat.dart';
 import 'package:wecord/features/circles/mod_tools/thread_lock.dart';
 import 'package:wecord/features/scheduled_calls/scheduled_calls.dart';
 import 'package:wecord/features/group_space/space_actions.dart';
+import 'package:wecord/features/workflows/workflow_chat.dart';
 
 /// Feature contributions to the header. Append yours here.
 final List<HeaderActionContribution> headerActionExtensions = [
@@ -32,6 +33,7 @@ final List<HeaderActionContribution> headerActionExtensions = [
   scheduleCallHeaderAction,
   groupSpaceHeaderAction,
   chatPrivacyHeaderAction,
+  workflowHeaderAction,
 ];
 
 /// The header's registry. Tests can override it to add or drop actions.

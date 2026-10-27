@@ -21,6 +21,7 @@ import 'package:wecord/shared/l10n/zh/zh_group_space.dart';
 import 'package:wecord/shared/l10n/zh/zh_ai_suggest.dart';
 import 'package:wecord/shared/l10n/zh/zh_local_data.dart';
 import 'package:wecord/shared/l10n/zh/zh_whiteboard.dart';
+import 'package:wecord/shared/l10n/zh/zh_workflows.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin.dart';
 import 'package:wecord/shared/l10n/zh/zh_admin_ops.dart';
 import 'package:wecord/shared/l10n/zh/zh_agenda.dart';
@@ -215,6 +216,7 @@ const zhAreas = <Map<String, String>>[
   zhHashtagsPosts,
   zhLocalData,
   zhWhiteboard,
+  zhWorkflows,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

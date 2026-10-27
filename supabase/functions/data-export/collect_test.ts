@@ -206,6 +206,7 @@ const emptyRpc: Record<string, unknown> = {
   export_my_group_space: { albums: [], items: [], folders: [], files: [] },
   export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
   export_my_circle_posts: { posts: [] },
+  export_my_workflows: { workflows_made: [], runs_about_me: [] },
   export_my_account_security: {
     events: [],
     recovery_codes: { remaining: null, made_at: null },
@@ -549,6 +550,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_circle_posts: { posts: [] },
+      export_my_workflows: { workflows_made: [], runs_about_me: [] },
       export_my_account_security: {
         events: [],
         recovery_codes: { remaining: null, made_at: null },
@@ -598,6 +600,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_account_security", args: { target_user_id: me } },
     { name: "export_my_quick_replies", args: { target_user_id: me } },
     { name: "export_my_whiteboards", args: { target_user_id: me } },
+    { name: "export_my_workflows", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
   // The pictures of my notes are linked, never put into the archive.
@@ -663,6 +666,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_circle_posts: { posts: [] },
+      export_my_workflows: { workflows_made: [], runs_about_me: [] },
       export_my_account_security: {
         events: [],
         recovery_codes: { remaining: null, made_at: null },
@@ -798,6 +802,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
       export_my_group_space: { albums: [], items: [], folders: [], files: [] },
       export_my_chat_privacy: { requested_in: [], screenshot_reports: [] },
       export_my_circle_posts: { posts: [] },
+      export_my_workflows: { workflows_made: [], runs_about_me: [] },
       export_my_account_security: {
         events: [],
         recovery_codes: { remaining: null, made_at: null },
@@ -845,6 +850,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.chatPrivacy, null);
   assertEquals(data.circlePosts, null);
   assertEquals(data.whiteboards, null);
+  assertEquals(data.workflows, null);
   assertEquals(data.accountSecurity, null);
   assertEquals(data.skipped.sort(), [
     "account security record",
@@ -870,6 +876,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "quick replies",
     "task list fields",
     "whiteboards",
+    "workflows",
   ]);
   assertEquals(data.messages.length, 2);
   assertEquals(data.files, []);

@@ -235,6 +235,12 @@ export interface ExportData {
    */
   whiteboards?: Json | null;
   /**
+   * The workflows I made (what they listen for and do) and the times one ran
+   * because of me (export_my_workflows, migration 202610281340); null when it
+   * could not be read, absent in older callers.
+   */
+  workflows?: Json | null;
+  /**
    * The security record: recovery codes made or used, recovery locked,
    * passkeys added or removed, how many recovery codes are left and the names
    * and dates of my passkeys (export_my_account_security, migration
@@ -837,6 +843,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.whiteboards) {
     out.push({ path: "data/whiteboards.json", value: whiteboardsJson(data) });
+  }
+  if (data.workflows) {
+    out.push({ path: "data/workflows.json", value: workflowsJson(data) });
   }
   if (data.accountSecurity) {
     out.push({
@@ -2562,6 +2571,62 @@ messages.</p>
   );
 }
 
+/** The workflows I made and the runs about me (D9). */
+function workflowsJson(data: ExportData): Json {
+  const source = isObject(data.workflows) ? data.workflows : {};
+  return {
+    workflows_made: objects(source["workflows_made"]),
+    runs_about_me: objects(source["runs_about_me"]),
+  };
+}
+
+/** The workflows I made and the times one ran because of me (D9). */
+export function buildWorkflowsHtml(data: ExportData): string {
+  const source = isObject(data.workflows) ? data.workflows : {};
+  const made = objects(source["workflows_made"]).map((item) =>
+    entry(
+      str(item["created_at"]),
+      `<div><strong>${
+        escapeHtml(str(item["name"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(item["where"]) ?? "")
+      } · ${escapeHtml(str(item["trigger"]) ?? "")}${
+        item["running"] === true
+          ? " · on"
+          : ` · paused${
+            str(item["paused_reason"])
+              ? ` (${escapeHtml(str(item["paused_reason"]) ?? "")})`
+              : ""
+          }`
+      }</span></div><div class="muted">${
+        escapeHtml(
+          objects(item["actions"]).map((action) => str(action["type"]) ?? "")
+            .join(", "),
+        )
+      }</div>`,
+    )
+  ).join("");
+  const runs = objects(source["runs_about_me"]).map((item) =>
+    entry(
+      str(item["at"]),
+      `<div><strong>${
+        escapeHtml(str(item["workflow"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(item["status"]) ?? "")
+      }</span></div>`,
+    )
+  ).join("");
+  return page(
+    "Workflows — your WeCord data",
+    `${backLink()}<h1>Workflows</h1>
+<p class="muted">The workflows you made in circles and groups (what they listen
+for and what they do), and the times a workflow ran because of something you
+did. The messages a workflow sent as you are with your messages.</p>
+${section("Workflows you made", made, "None.")}
+${section("Runs because of you", runs, "None.")}`,
+  );
+}
+
 /** The pictures of the circle posts I wrote. */
 export function circlePostsFilesToSign(
   posts: Json | null | undefined,
@@ -3039,6 +3104,17 @@ export function buildSectionPages(
       content: buildWhiteboardsHtml(data),
     });
   }
+  if (data.workflows) {
+    const count = objects(
+      isObject(data.workflows) ? data.workflows["workflows_made"] : null,
+    ).length;
+    out.push({
+      path: "pages/workflows.html",
+      label: "Workflows",
+      summary: `${count} workflow${count === 1 ? "" : "s"}`,
+      content: buildWorkflowsHtml(data),
+    });
+  }
   if (data.accountSecurity) {
     const events = objects(
       isObject(data.accountSecurity) ? data.accountSecurity["events"] : null,
@@ -3179,6 +3255,9 @@ data/circle_posts.json The posts you wrote in circles: title, text, topics,
 data/whiteboards.json The whiteboards you started and what you drew or wrote
                       on whiteboards of your chats (counts and the words of
                       your notes and texts; never other people's work).
+data/workflows.json   The workflows you made in circles and groups (what they
+                      listen for and do) and the times one ran because of
+                      you (never what others did).
 data/account_security.json The record of your recovery codes and passkeys:
                       codes made or used, passkeys added or removed, how many
                       codes are left and your passkeys' names and dates (never

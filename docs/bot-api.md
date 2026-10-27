@@ -460,6 +460,91 @@ events are skipped (counted on the Developer page). **Send a test event** and
 status and a short reason, never what your server answered). Setting,
 resetting and removing the address is in the circle's audit log.
 
+## Rich webhooks, RSS feeds and GitHub (I6)
+
+Channel settings → **Integrations** (members who can manage webhooks) holds
+three kinds of things that post into a text or announcement channel. All three
+post as a hidden webhook named after the source, show the **BOT** mark, honour
+the circle's AutoMod rules for the text they carry, and stop (they are paused,
+not deleted) when the person who set them up can no longer post in the
+channel, leaves the circle or deletes the account. A circle that was taken down
+(K1) takes no posts from any of them.
+
+### Cards in a webhook message
+
+`POST /functions/v1/webhook/{id}/{token}` still takes `content`, `username` and
+`avatar_url`, and now also:
+
+| Field | Meaning |
+| --- | --- |
+| `embeds` | Up to **3** cards (Discord-style) |
+| `components` | Rows of **link buttons** under the cards (I1 rules: https only; nobody answers a press, so buttons and lists are refused) |
+
+A card has any of: `title` (120), `url`, `description` (1500, line breaks
+kept), `color` (`"#rrggbb"`), `author` (`name` 60, `url`, `icon_url`),
+`fields` (up to 10: `name` 60, `value` 300, `inline`), `image` and
+`thumbnail` (`{"url": "https://…"}` or the address), `footer` (`text` 100,
+`icon_url`) and `timestamp` (ISO 8601). Every address must be an https web
+site name (no IP addresses, inner names, other ports, user names or spaces).
+All texts of a message together are at most 6000 characters and the cards at
+most 8 KB. `content` may be left out when there are cards; the message's text
+is then a one-line summary (the first title, line of description or field)
+that chat lists, notifications and search use, and the chat page draws only
+the cards. Texts are drawn as plain text, never as markdown or HTML. A bad
+card is `400` with `error: "invalid_embeds"` (or `invalid_components`) and
+the reason in `detail`. The rate limit is the webhook's: 30 messages a
+minute.
+
+### RSS and Atom feeds
+
+**Follow a feed** takes a public https address of an RSS 2.0, Atom or RSS 1.0
+feed. A circle can follow 10 feeds and a channel 5. A separate Edge Function
+(`feed-fetch`) reads the feeds that are due every 15 minutes or so: one
+request per feed, 8 seconds, 512 KB at most, redirects only to other public
+https addresses, never to inner addresses (the same address check the bots'
+event sends use, run again before every redirect), a feed that sends
+`ETag` or `Last-Modified` is asked "has it changed?" next time, one web site
+at a time. Only the title, link, summary and date of each item are read; the
+text is cut and cleaned, HTML is removed, and feeds with a `DOCTYPE` or
+entities are refused. The first read of a feed posts nothing (it only
+remembers what is there); after that at most **5 new items per read** and 48
+a day are posted as one card each (title, link, a short summary). A feed that
+fails gets longer waits and is **paused after 8 failures in a row** or when it
+is gone for good (410) or is not a feed; resuming it tries again. Removing a
+feed leaves the messages it posted.
+
+### GitHub
+
+**Connect a repository** makes a connection with its own **secret**, shown
+once, and an address `https://<project>.supabase.co/functions/v1/github/<id>`.
+In the repository: Settings → Webhooks → Add webhook; paste the address and
+the secret, set the content type to `application/json`, and choose the same
+events. No GitHub App, OAuth or token is involved. GitHub's
+`X-Hub-Signature-256` is checked (HMAC-SHA256 of the raw body, constant-time)
+before anything else is read; a wrong or missing signature is `401`. Events
+(chosen per connection): `push`, `pull_request`, `issues`, `issue_comment`,
+`release`, `workflow_run`; each becomes a card. Noise is left out (labels,
+assignments, synchronize, pushes without commits, skipped runs, edited
+comments); `ping` answers 200; other events are `202` and ignored. GitHub's
+delivery id is remembered for 10 minutes so a redelivery is not posted twice.
+Bodies over 1 MB are refused. Making a new secret stops the old one at once.
+Connections follow the same limits as feeds (10 a circle, 5 a channel).
+
+### Limits at a glance
+
+| | |
+| --- | --- |
+| Cards per message | 3, 10 fields each, 6000 characters, 8 KB |
+| Feeds / GitHub connections | 10 per circle, 5 per channel (each) |
+| Feed reads | every ~15 minutes, 5 new items a read, 48 posts a day per feed |
+| Webhook / GitHub posting | 30 messages a minute per source |
+
+The audit log records `feed_add`, `feed_pause`, `feed_resume`, `feed_remove`,
+`github_add`, `github_update`, `github_regenerate`, `github_pause`,
+`github_resume`, `github_remove` (never a secret). **Download my data** lists
+the feeds and connections you added (`data/integrations.json`, never a
+secret).
+
 ## The developer page
 
 **Settings → Developer** is for people who manage a circle (it is not shown to
@@ -498,6 +583,15 @@ which only the service role may call. Deploy it with
 `supabase functions deploy bot-api` after pushing the migrations
 (`202610160030_bot_api.sql`, and `202610280610`-`202610280660` for components,
 private replies and callbacks).
+
+The I6 functions come with `202610290200`-`202610290230`. `webhook` is
+redeployed (cards); `feed-fetch` and `github` are new. All three are public
+(`verify_jwt = false`) because their callers are not signed-in people: the
+feed function accepts only the `DISPATCH_SECRET` bearer the database sends
+when it wakes it (`wake_feed_fetch_if_due()`, pg_cron `wecord-feed-fetch`
+every 5 minutes, using the same Vault secrets as `wecord-later-dispatch`),
+and `github` accepts only a request signed with a connection's own secret.
+No new function secret is needed.
 
 Events are sent by the `bot-events` function, woken by the database the same
 way (`verify_jwt = false`, the shared secret `DISPATCH_SECRET` as the bearer

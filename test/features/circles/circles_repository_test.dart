@@ -155,7 +155,10 @@ void main() {
     expect(detail.categories.single.name, 'Media');
     expect(detail.posts.single.comments.single.body, 'Hi');
     expect(dataSource.calls.single.functionName, 'get_circle_detail');
-    expect(dataSource.calls.single.params, {'target_circle_id': 'circle-1'});
+    expect(dataSource.calls.single.params, {
+      'target_circle_id': 'circle-1',
+      'member_limit': circleDetailMemberLimit,
+    });
   });
 
   test('setNickname trims and calls set_circle_nickname', () async {

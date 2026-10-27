@@ -3,6 +3,10 @@ import 'package:wecord/shared/models/forum.dart';
 import 'package:wecord/shared/models/message.dart';
 import 'package:wecord/shared/models/profile.dart';
 
+/// How many members a circle's details load; a bigger circle's others come a
+/// page at a time (L6). A circle with fewer members gets all of them.
+const circleDetailMemberLimit = 200;
+
 class CircleSummary {
   const CircleSummary({
     required this.id,
@@ -100,7 +104,20 @@ class CircleDetail {
   }
 
   final CircleSummary circle;
+
+  /// The members that were loaded: everyone in a small circle, the first page
+  /// (and the current user) in a big one.
   final List<CircleMember> members;
+
+  /// How many members the circle has: the server's count when the list is
+  /// only a page of them.
+  int get memberCount => hasMoreMembers ? circle.memberCount : members.length;
+
+  /// Whether [members] is only the first page of a big circle: the server
+  /// cut the list at [circleDetailMemberLimit] and says there are more.
+  bool get hasMoreMembers =>
+      members.length >= circleDetailMemberLimit &&
+      circle.memberCount > members.length;
 
   /// Every channel, ordered by position.
   final List<CircleChannel> channels;

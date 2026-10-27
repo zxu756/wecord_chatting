@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:wecord/features/developer/developer_screen.dart';
 import 'package:wecord/features/chat_privacy/chat_privacy_ui.dart';
 import 'package:wecord/features/settings/data_export.dart';
 import 'package:flutter/material.dart';
@@ -928,6 +929,7 @@ class PrivacySettingsGroup extends ConsumerWidget {
         const PrivacyPermissionsGroups(),
         const SizedBox(height: 12),
         const ErrorReportsSettingsGroup(),
+        const DeveloperSettingsGroup(),
       ],
     );
   }

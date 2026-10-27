@@ -564,6 +564,10 @@ IconData circleAuditIcon(String action) {
     'bot_callback_set' ||
     'bot_callback_rotate' ||
     'bot_callback_clear' => Icons.webhook_outlined,
+    'bot_events_set' ||
+    'bot_events_rotate' ||
+    'bot_events_clear' => Icons.bolt_rounded,
+    'bot_open_update' => Icons.smart_toy_outlined,
     'emoji_create' || 'sticker_create' => Icons.add_reaction_outlined,
     'emoji_update' || 'sticker_update' => Icons.drive_file_rename_outline,
     'emoji_delete' || 'sticker_delete' => Icons.delete_outline,
@@ -1001,6 +1005,19 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       tr('{actor} removed the callback of bot {target}'),
       {},
     ),
+    'bot_events_set' => (
+      tr('{actor} set the event address of bot {target}'),
+      {},
+    ),
+    'bot_events_rotate' => (
+      tr('{actor} reset the event secret of bot {target}'),
+      {},
+    ),
+    'bot_events_clear' => (
+      tr('{actor} removed the event address of bot {target}'),
+      {},
+    ),
+    'bot_open_update' => (tr('{actor} changed who can use bot {target}'), {}),
     _ => (
       tr('{actor} did {action} to {target}', {
         'action': entry.action.replaceAll('_', ' '),

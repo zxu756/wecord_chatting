@@ -482,9 +482,12 @@ class _CircleChannelSidebarState extends ConsumerState<CircleChannelSidebar> {
     };
     final onlineUserIds =
         ref.watch(onlineUserIdsProvider).value ?? const <String>{};
-    final onlineCount = detail.members
-        .where((member) => onlineUserIds.contains(member.profile.id))
-        .length;
+    // Counted among the members loaded, so not for a big circle's first page.
+    final onlineCount = detail.hasMoreMembers
+        ? 0
+        : detail.members
+              .where((member) => onlineUserIds.contains(member.profile.id))
+              .length;
     final session = ref.watch(voiceSessionProvider);
 
     final list = ReorderableListView.builder(
@@ -1195,7 +1198,7 @@ class _CircleMenuHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  tr('{count} members', {'count': detail.members.length}),
+                  tr('{count} members', {'count': detail.memberCount}),
                   style: TextStyle(fontSize: 13, color: c.muted),
                 ),
               ],
@@ -1271,7 +1274,7 @@ class CircleBannerCard extends StatelessWidget {
       Colors.black.withValues(alpha: 0.1),
       WeCordAvatarColors.forSeed(circle.name),
     );
-    final memberCount = detail.members.length;
+    final memberCount = detail.memberCount;
     final subtitle = [
       tr('{count} members', {'count': memberCount}),
       if (onlineCount > 0) tr('{count} online', {'count': onlineCount}),

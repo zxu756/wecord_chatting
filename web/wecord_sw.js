@@ -209,6 +209,9 @@ self.addEventListener('fetch', (event) => {
   // Media and downloads use ranges; leave them to the network.
   if (request.headers.has('range')) return;
 
+  // The developer documentation is a plain static page, not the app.
+  if (url.pathname.startsWith('/developers/')) return;
+
   if (request.mode === 'navigate') {
     event.respondWith(shellFor(request));
   } else if (isCacheableAppFile(url)) {

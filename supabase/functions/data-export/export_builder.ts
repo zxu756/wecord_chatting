@@ -248,6 +248,13 @@ export interface ExportData {
    * read, absent in older callers.
    */
   accountSecurity?: Json | null;
+  /**
+   * The bots I made: name, circle, settings, the address and kinds of events
+   * they send to (export_my_developer, migration 202610281160); never a
+   * token or a secret. Null when it could not be read, absent in older
+   * callers.
+   */
+  developer?: Json | null;
   /** My own files (photos, videos, covers, wallpapers) inside the ZIP. */
   files: ExportBlob[];
   /**
@@ -852,6 +859,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
       path: "data/account_security.json",
       value: data.accountSecurity,
     });
+  }
+  if (data.developer) {
+    out.push({ path: "data/developer.json", value: developerJson(data) });
   }
   const extras = data.extras;
   if (extras) {
@@ -2772,6 +2782,60 @@ const securityEventLabels: Record<string, string> = {
   passkey_removed: "A passkey was removed",
 };
 
+/** The bots I made (I3): settings and event addresses, never a secret. */
+function developerJson(data: ExportData): Json {
+  const developer = isObject(data.developer) ? data.developer : {};
+  return { bots: objects(developer["bots"]) };
+}
+
+/** The bots I made, with how they are set up. */
+export function buildDeveloperHtml(data: ExportData): string {
+  const developer = isObject(data.developer) ? data.developer : {};
+  const bots = objects(developer["bots"]).map((bot) => {
+    const kinds = Array.isArray(bot["event_kinds"])
+      ? bot["event_kinds"].map(String).join(", ")
+      : "";
+    const open = [
+      bot["open_to_direct_chats"] === true ? "direct chats" : "",
+      bot["open_to_groups"] === true ? "groups" : "",
+    ].filter((item) => item !== "").join(" and ");
+    return entry(
+      str(bot["made_at"]),
+      `<div><strong>${
+        escapeHtml(str(bot["name"]) ?? "")
+      }</strong> <span class="muted">${
+        escapeHtml(str(bot["circle"]) ?? "")
+      }</span></div>${
+        bot["description"] ? text(bot["description"]) : ""
+      }<div class="muted">${
+        open ? `Open to ${escapeHtml(open)}` : "Only in its circle"
+      }</div>${
+        bot["event_address"]
+          ? `<div class="muted">Events (${
+            bot["event_subscription_on"] === false ? "paused" : "on"
+          }): ${escapeHtml(str(bot["event_address"]) ?? "")} · ${
+            escapeHtml(kinds)
+          }</div>`
+          : ""
+      }${
+        bot["callback_address"]
+          ? `<div class="muted">Button presses go to: ${
+            escapeHtml(str(bot["callback_address"]) ?? "")
+          }</div>`
+          : ""
+      }`,
+    );
+  }).join("");
+  return page(
+    "Bots you made — your WeCord data",
+    `${backLink()}<h1>Bots you made</h1>
+<p class="muted">The bots you created in circles, how they are set up and where
+they send events. Tokens and secrets are never in this archive, and neither is
+anything the bots said.</p>
+${section("Bots", bots, "None.")}`,
+  );
+}
+
 /** The security record: codes, passkeys and what was done with them (G4). */
 export function buildAccountSecurityHtml(data: ExportData): string {
   const security = isObject(data.accountSecurity) ? data.accountSecurity : {};
@@ -3131,6 +3195,17 @@ export function buildSectionPages(
       content: buildAccountSecurityHtml(data),
     });
   }
+  if (data.developer) {
+    const count = objects(
+      isObject(data.developer) ? data.developer["bots"] : null,
+    ).length;
+    out.push({
+      path: "pages/developer.html",
+      label: "Bots you made",
+      summary: `${count} bot${count === 1 ? "" : "s"}`,
+      content: buildDeveloperHtml(data),
+    });
+  }
   if (data.quickReplies) {
     const replies = objects(
       isObject(data.quickReplies) ? data.quickReplies["quick_replies"] : null,
@@ -3262,6 +3337,9 @@ data/account_security.json The record of your recovery codes and passkeys:
                       codes made or used, passkeys added or removed, how many
                       codes are left and your passkeys' names and dates (never
                       a code, a hash or a key).
+data/developer.json  The bots you made: their circle, settings, and the address
+                      and kinds of events they send to (never a token or a
+                      secret).
 data/quick_replies.json The quick replies you keep and your away auto-reply
                       (the auto-replies it sent are with your messages).
 data/moments_more.json The Moments you pinned, the people you reminded to

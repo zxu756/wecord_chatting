@@ -39,7 +39,13 @@ Deno.test("each claimed message is pushed as one the creator just sent", async (
     "claim_workflow_message_pushes",
     "claim_push_delivery",
   ]);
-  assertEquals(calls[1].args, { target_message_id: "m1", caller_id: "ada" });
+  // The first batch of people; a small chat is one batch.
+  assertEquals(calls[1].args, {
+    target_message_id: "m1",
+    caller_id: "ada",
+    after_user_id: null,
+    page_size: 200,
+  });
   assertEquals(targets.length, 1);
   // The message id rides along so silent messages and quiet hours can look
   // at it.

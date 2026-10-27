@@ -6,10 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/groups/group_detail_sheet.dart';
+import 'package:wecord/features/groups/group_members_source.dart';
 import 'package:wecord/shared/models/group.dart';
 import 'package:wecord/shared/models/profile.dart';
 
 void main() {
+  _bigGroupTests();
   testWidgets('invite friends picker renders contact aliases', (tester) async {
     final contactsRepository = _FakeContactsRepository()
       ..friends = [
@@ -67,6 +69,112 @@ void main() {
 
     expect(find.text('Ada L.'), findsOneWidget);
     expect(find.text('Ada Lovelace'), findsNothing);
+  });
+}
+
+class _FakeMembersSource implements GroupMembersSource {
+  final pageCalls = <GroupMembersCursor?>[];
+  final searches = <String>[];
+
+  @override
+  Future<GroupMembersPage> page(
+    String conversationId, {
+    GroupMembersCursor? after,
+    int pageSize = 100,
+  }) async {
+    pageCalls.add(after);
+    return GroupMembersPage(
+      members: [
+        GroupMember(
+          profile: _profile(id: 'late-1', username: 'lateone'),
+          role: 'member',
+          joinedAt: DateTime.utc(2026, 2),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<GroupMember>> search(
+    String conversationId,
+    String query, {
+    int limit = 30,
+  }) async {
+    searches.add(query);
+    return [
+      GroupMember(
+        profile: _profile(id: 'found-1', username: 'needle'),
+        role: 'member',
+      ),
+    ];
+  }
+}
+
+void _bigGroupTests() {
+  testWidgets('a big group shows a page, loads more and searches remotely', (
+    tester,
+  ) async {
+    final source = _FakeMembersSource();
+    final chatsRepository = _FakeChatsRepository(
+      detail: GroupDetail(
+        conversationId: 'group-1',
+        title: 'Big Crew',
+        currentUserRole: 'member',
+        totalMemberCount: 5000,
+        moreMembersAfter: GroupMembersCursor(
+          joinedAt: DateTime.utc(2026),
+          userId: 'first-1',
+        ),
+        members: [
+          GroupMember(
+            profile: _profile(id: 'first-1', username: 'firstone'),
+            role: 'owner',
+            joinedAt: DateTime.utc(2026),
+          ),
+        ],
+      ),
+    );
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatsRepositoryProvider.overrideWithValue(chatsRepository),
+          groupMembersSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: GroupDetailSheet(
+              conversationId: 'group-1',
+              title: 'Big Crew',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The total is the group's, not the page's.
+    expect(find.text('5000'), findsOneWidget);
+    expect(find.text('Firstone Lovelace'), findsOneWidget);
+
+    final more = find.byKey(const ValueKey('group-detail-more-members'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    expect(source.pageCalls.single?.userId, 'first-1');
+    expect(find.text('Lateone Lovelace'), findsOneWidget);
+    // That page was short: nothing more to show.
+    expect(more, findsNothing);
+
+    // A search asks the database, once typing has paused.
+    await tester.enterText(find.byType(TextField).last, 'needle');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(source.searches, ['needle']);
+    expect(find.text('Needle Lovelace'), findsOneWidget);
+    expect(find.text('Firstone Lovelace'), findsNothing);
   });
 }
 

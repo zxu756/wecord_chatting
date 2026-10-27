@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
-import { callbackHeaders, signBody } from "./sign.ts";
-import { isAuthorized } from "./auth.ts";
+import { callbackHeaders, signBody } from "../_shared/sign.ts";
+import { isAuthorized } from "../_shared/auth.ts";
 
 // Worked out independently: HMAC-SHA256, key "secret", message
 // "1700000000.{"a":1}".

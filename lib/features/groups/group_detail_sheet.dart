@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wecord/features/developer/bot_directory.dart';
 import 'package:wecord/features/ai/assistant/group_ai_row.dart';
 import 'package:wecord/features/chats/chats_repository.dart';
 import 'package:wecord/features/chats/image_picker_service.dart';
@@ -10,6 +11,7 @@ import 'package:wecord/features/contacts/contacts_repository.dart';
 import 'package:wecord/features/settings/settings_repository.dart';
 import 'package:wecord/features/groups/group_creation_sheet.dart';
 import 'package:wecord/features/groups/group_invitations.dart';
+import 'package:wecord/features/groups/group_members_source.dart';
 import 'package:wecord/features/profile/profile_avatar.dart';
 import 'package:wecord/features/profile/profile_social_models.dart';
 import 'package:wecord/features/profile/user_profile_screen.dart';
@@ -63,6 +65,17 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
   final _announcementController = TextEditingController();
   final _memberSearchController = TextEditingController();
   var _query = '';
+
+  // A big group's members (L6): the sheet holds the first page; "show more"
+  // adds the next ones and a search asks the database.
+  var _moreMembers = const <GroupMember>[];
+  GroupMembersCursor? _moreCursor;
+  var _moreStarted = false;
+  var _moreExhausted = false;
+  var _loadingMore = false;
+  List<GroupMember>? _searchResults;
+  Timer? _searchDebounce;
+  var _searchToken = 0;
   var _pendingAvatarUrl = '';
   var _isSaving = false;
   String? _errorText;
@@ -76,6 +89,7 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     _titleController.dispose();
     _announcementController.dispose();
     _memberSearchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -140,7 +154,8 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
     final c = context.tokens.colors;
     _syncControllers(detail);
     final canManage = detail.canManageGroup;
-    final members = _filteredMembers(detail.members);
+    final members = _visibleMembers(detail);
+    final searching = _query.trim().isNotEmpty;
     return ListView(
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -240,6 +255,11 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             // The owner decides whether WeCord AI answers in the group.
             if (detail.currentUserRole == 'owner')
               AiAssistantGroupRow(conversationId: widget.conversationId),
+            // Everyone sees the bots in the group; the owner brings them in.
+            GroupBotsRow(
+              chatId: widget.conversationId,
+              isOwner: detail.currentUserRole == 'owner',
+            ),
             SettingsRow(
               key: const ValueKey('group-detail-leave'),
               icon: Icons.logout_rounded,
@@ -269,9 +289,21 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             setState(() {
               _query = value;
             });
+            if (detail.hasMoreMembers) {
+              _scheduleMemberSearch(detail, value);
+            }
           },
         ),
         const SizedBox(height: 10),
+        if (members.isEmpty && searching && detail.hasMoreMembers)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              _searchResults == null ? '' : tr('No members found'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: c.muted),
+            ),
+          ),
         if (members.isNotEmpty)
           SettingsGroup(
             color: c.well,
@@ -293,8 +325,92 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
                 ),
             ],
           ),
+        if (detail.hasMoreMembers && !searching && !_moreExhausted) ...[
+          const SizedBox(height: 10),
+          WeCordButton(
+            key: const ValueKey('group-detail-more-members'),
+            label: tr('Show more members'),
+            variant: WeCordButtonVariant.secondary,
+            expand: true,
+            loading: _loadingMore,
+            onPressed: _loadingMore ? null : () => _loadMoreMembers(detail),
+          ),
+        ],
       ],
     );
+  }
+
+  /// The members the list shows: for a big group the pages loaded so far, or
+  /// the database's answer to the search; otherwise everyone, filtered here.
+  List<GroupMember> _visibleMembers(GroupDetail detail) {
+    if (!detail.hasMoreMembers) {
+      return _filteredMembers(detail.members);
+    }
+    if (_query.trim().isNotEmpty) {
+      return _searchResults ?? _filteredMembers(detail.members);
+    }
+    final seen = <String>{};
+    return [
+      ...detail.members,
+      ..._moreMembers,
+    ].where((member) => seen.add(member.profile.id)).toList(growable: false);
+  }
+
+  void _scheduleMemberSearch(GroupDetail detail, String value) {
+    _searchDebounce?.cancel();
+    final query = value.trim();
+    final token = ++_searchToken;
+    if (query.isEmpty) {
+      setState(() => _searchResults = null);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final found = await ref
+            .read(groupMembersSourceProvider)
+            .search(detail.conversationId, query);
+        if (mounted && token == _searchToken) {
+          setState(() => _searchResults = found);
+        }
+      } catch (_) {
+        if (mounted && token == _searchToken) {
+          setState(() {
+            _searchResults = const [];
+            _errorText = tr('Could not load members.');
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _loadMoreMembers(GroupDetail detail) async {
+    final after = _moreStarted ? _moreCursor : detail.moreMembersAfter;
+    if (after == null) {
+      return;
+    }
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ref
+          .read(groupMembersSourceProvider)
+          .page(detail.conversationId, after: after);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _moreStarted = true;
+        _moreMembers = [..._moreMembers, ...page.members];
+        _moreCursor = page.next;
+        _moreExhausted = page.next == null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorText = tr('Could not load members.'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMore = false);
+      }
+    }
   }
 
   void _syncControllers(GroupDetail detail) {
@@ -589,6 +705,14 @@ class _GroupDetailSheetState extends ConsumerState<GroupDetailSheet> {
             conversationId: detail.conversationId,
             memberId: member.profile.id,
           );
+      if (mounted) {
+        // The pages loaded here are not part of the reloaded detail.
+        setState(() {
+          bool kept(GroupMember m) => m.profile.id != member.profile.id;
+          _moreMembers = _moreMembers.where(kept).toList(growable: false);
+          _searchResults = _searchResults?.where(kept).toList(growable: false);
+        });
+      }
       ref.invalidate(groupDetailProvider(detail.conversationId));
     } catch (_) {
       if (mounted) {

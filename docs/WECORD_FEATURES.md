@@ -489,6 +489,14 @@
   - **机器人怎么回应**（`POST /interactions/{id}/respond`，一次点按只能回应一次）：`message` 在频道发一条消息（消息上方显示「xx 点了「按钮」」）、`ephemeral` 只有点的人看得到的私密回复、`update` 修改被点的那条消息（文字和 / 或组件）、`ack` 什么都不显示。私密回复存在单独的表 `bot_ephemeral_messages`，不是消息：不进聊天历史、未读、搜索、推送、AI 守护和别人的导出，只有本人能读（RLS），每人每个聊天最多留 20 条，保留 1 天，可以关闭；显示在被点的那条消息下面，「仅你可见」。机器人也可以用 `PATCH /messages/{id}` 修改自己消息的文字和组件，也可以发消息时直接带 `components`。
   - **账号与导出**：注销账号时清掉该账号点过的按钮、填过的表单和机器人给他的私密回复；数据导出新增 `data/bot_interactions.json` 和 `pages/bot_interactions.html`（`export_my_interactions`：最近 7 天点过的按钮和斜杠命令、填过的表单内容、机器人私下对我说的话，不含任何令牌或密钥）。
   - **审计**：设置、重置密钥和移除回调地址都写进圈子审计日志（`bot_callback_set` / `bot_callback_rotate` / `bot_callback_clear`，不含密钥）。
+- **事件订阅（I2）与 Bot API 2.0 + 开发者页面（I3）**（迁移 `202610281100`–`202610281160`，客户端在 `lib/features/developer/`，文档 `docs/bot-api.md`，静态参考 `web/developers/`）：
+  - **事件订阅**：设置 → 开发者 → 某个机器人 → 事件地址，选择要收到的事件（`message.created` / `message.mentioned` / `message.updated` / `message.deleted` / `reaction.added` / `member.joined` / `member.left` / `interaction.created`），事件由新函数 `bot-events`（`verify_jwt = false`，用 `DISPATCH_SECRET` 当 bearer，和 `bot-callbacks` 一样由数据库唤醒）POST 出去。签名、SSRF 检查、DNS 检查、重试和暂停沿用 I1，代码移到 `supabase/functions/_shared`，两个函数共用：`X-WeCord-Signature: v1=<HMAC-SHA256(密钥, "时间戳.请求体")>`，多一个 `X-WeCord-Event`；失败 5 秒 / 30 秒 / 2 分钟 / 10 分钟 / 1 小时后重试，再失败丢弃，连续 20 个彻底失败自动暂停，设置人不再管理圈子也暂停，6 小时没发出去的丢弃，7 天后清理。每个机器人每分钟最多 300 个事件、最多 1000 个排队。密钥只在设置和重置时显示一次，可以发「测试事件」，页面上能看到最近 30 次发送结果（状态和简短原因，不含对方服务器返回的内容）。
+  - **只给机器人看得到的**：事件只发给在这个聊天里的机器人（`bot_conversation_access`），入队时和发送前各查一次；被屏蔽、隐私设置、G2 上锁的聊天、G6 受限聊天（`conversation_restricts_sharing`）、限时消息和阅后即焚的消息只发「发生了」，不带正文和文件信息（`content_withheld`）。
+  - **Bot API 2.0**（`bot-api` 函数扩展）：`GET /chats`、`GET/POST /chats/{id}/messages`、`POST /chats/{id}/files`（multipart，最大 8 MB）、`POST /chats/{id}/polls`、`POST /messages/{id}/thread`、`DELETE /messages/{id}`（只能删自己发的，附件一并删除）、`DELETE /messages/{id}/reactions/{emoji}`、`GET /chats/{id}/members[/{user}]`。每次调用记入 `bot_api_calls`（方法、路由模板、状态，不记内容和 id，保留 7 天）。
+  - **私聊和群里的机器人**：机器人所属圈子的管理者可以在开发者页打开「任何人可以给它发消息」和「群主可以添加它」，并写简介；联系人页「查找机器人」按名字搜索开放的机器人并开始私聊；群主在群详情「机器人」里添加 / 移除（每个群最多 5 个，开启高级聊天隐私的群不能加）；群里所有人都能看到有哪些机器人。
+  - **开发者页面**：设置 → 隐私 → 开发者，只对管理某个圈子的人显示：我的机器人、令牌（重置 / 吊销）、API 地址、事件地址、回调地址、可用范围、最近的事件和 API 调用。
+  - **账号与导出**：注销账号时清掉该账号设置的事件订阅和排队事件；数据导出新增 `data/developer.json` 和 `pages/developer.html`（`export_my_developer`：我做的机器人、设置、事件地址和事件类型，不含令牌和密钥）。
+  - **审计**：`bot_events_set` / `bot_events_rotate` / `bot_events_clear` / `bot_open_update`。pg_cron：`wecord-bot-events-retry`（每分钟）、`wecord-bot-events-purge`、`wecord-bot-api-calls-purge`（每小时）；没有改 `run_later_dispatch()`。
 - **Webhook**（`webhook` 函数）：外部服务往频道发消息；公告频道转发。
 - **链接预览**（`link-preview` 函数）。
 - **GIF 搜索**（`gif-search` 函数，GIPHY）。
@@ -514,6 +522,7 @@
 - 位置卡片改为静态地图图片；接龙卡片批量读取 + 每会话一个通道；打开聊天时权限查询合并为一次（`get_conversation_capabilities`）、摘要单独查询（`get_conversation_summary`）。
 - 页面隐藏时暂停实时位置轮询和在线心跳；通话中「谁在说话」不再导致侧栏重建。
 - 修复过的严重问题：打开「隐私与安全」导致令牌刷新死循环并被登出（已修，带回归测试）；Mac 正式版连不上语音（补网络权限）；设置窗口跳回外观（路由通知修复）。
+- **大群 / 大圈子（L6）**：在本地库造了 1 万成员的圈子、5000 人的群、约 41 万条消息来测（脚本 `tool/scale/`，报告 `docs/scale-report.md`）。改了这些，返回的内容不变：群里发一条消息从 60–130 ms 降到几毫秒（屏蔽检查先看会话类型）；会话列表、圈子列表、旧版消息搜索不再先算全库再取自己的；未读数改成走 `(conversation_id, created_at)` 索引的范围（数字完全一样）。成员分页：打开圈子只取前 200 位成员（`get_circle_detail(…, member_limit)`，圈子里有 `member_count`），成员列表「显示更多成员」+ 在库里搜名字（`list_circle_members_page`）；群详情先取前 100 位，同样「显示更多成员」+ 搜索（`list_conversation_members_page`），输入 `@` 时在大群里按名字去库里查候选人；顶栏的人数用总数。群发推送按 200 人一批取（`claim_push_delivery` 加了游标和批大小），一次最多同时发 50 个设备，不再被接口每次最多 1000 行截断。
 
 ## 21. 运维与部署
 
@@ -557,6 +566,7 @@
 - **圈子知识库**：页面不支持评论、笔记 AI、发布到网页和分享到聊天；还没有接进 AI 问答（F1）的检索，也没有从模板新建页面；限制的身份组被删除后，页面仍只对管理者可见（直到有人重新设置）；页面里的 @提及没有候选人（页面不属于某个会话）；删除页面时图片由删除它的客户端清理，客户端中途断网会留下无人读得到的文件。
 - **高级聊天隐私和截屏提示**（G6 / G7）：挡不住截屏、录屏、翻拍和手抄，界面已直说；开启前的消息、已转发或已保存的内容不会收回；已经保存的收藏不会因为之后开启而被删除；被 AI 闸门拒绝时提示沿用「此圈子里 AI 已关闭」（措辞不完全贴切）；通知文字不因它改变（要隐藏通知内容用聊天锁）；截屏提示只有 iPhone / iPad 能用，只管阅后即焚媒体，一般聊天里的截屏不提示；只能真机验证（见下）。
 - **反诈提示和链接检查**都是提示，不是拦截：规则会有误报（正常的转账、客服话术），用户可以对某个人关掉提示、对某个主机放行；短链接的最终地址只在预览能拿到时才知道；链接规则看不出页面内容。
+- **大群 / 大圈子（L6）**：超过 200 位成员的圈子、超过 100 位成员的群，打开时只载入第一页成员——「转让所有权」候选人、频道权限覆盖的成员候选、邀请时排除已有成员、论坛帖子的 @ 候选只看已载入的那些（所以大群里邀请好友的选择列表可能还会列出已在群里的人）；在线人数在大圈子/大群里不显示（只数得出已载入的）。每位新成员「从未读过」的大群（15 万条消息）算未读数仍然要数一遍（约 0.4 秒/次打开会话列表）：数字必须准确，没有加上限。Realtime 没有改：会话列表已经是一个共享通道，聊天页内部的通道只在页面打开时存在；每个 postgres_changes 事件仍要对每个订阅者各算一次行级安全，圈子到几万人在线时要升级 Supabase 套餐（见 `docs/scale-report.md`）。
 - **iPad**（H4）：Xcode 工程是 iPhone + iPad（`TARGETED_DEVICE_FAMILY = "1,2"`），iPad 支持四个方向，不设 `UIRequiresFullScreen`，所以支持分屏（Split View）、Slide Over 和台前调度（Stage Manager）；窗口宽度变化时界面按宽度重新布局（≥840 电脑布局，600–840 手机布局但不紧凑，<600 紧凑手机布局），页面状态保留。做了三处 iPad 修正：① 触控板/鼠标悬停消息出现操作条（以前 iPad 因为「触屏平台」被关掉了；手指不会触发悬停，所以触屏不受影响）；② 设置里的「键盘快捷键」入口在 iPad 上显示（窗口较长边 ≥960 就算平板，分屏窄窗口也算）；③ Cmd+K / Cmd+/ / Cmd+J / Option+↑↓ 在 iPad 外接键盘上沿用 Mac 的键。截图测试：`tool/screenshots/ipad_screenshots_test.dart`（1024×1366、1366×1024、834×1194、分屏 507×1366）。
 - **存储空间**：iPhone/Mac 的图片只在内存里缓存（没有磁盘图片缓存），所以「已下载的文件」只含在查看器里打开过的文件、视频和语音；清理前下载的文件按「不属于任何聊天的文件」归类（之后再打开会记下来源）；网页的 Service Worker/浏览器自己的缓存不在统计里（只在浏览器用量里体现）。
 - **图片描述**：没做 AI 生成建议；新增语言界面（繁体、日、韩）需要母语者校对，没做。

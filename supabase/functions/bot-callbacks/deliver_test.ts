@@ -5,8 +5,8 @@ import {
   deliverOne,
   runCallbacks,
 } from "./deliver.ts";
-import { signBody } from "./sign.ts";
-import { dohResolver, systemResolver } from "./dns.ts";
+import { signBody } from "../_shared/sign.ts";
+import { dohResolver, systemResolver } from "../_shared/dns.ts";
 
 const item: Claimed = {
   interaction_id: "11111111-1111-4111-8111-111111111111",

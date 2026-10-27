@@ -9,6 +9,7 @@
 // of the subscription and the like apply unchanged; the caller then holds it
 // back in quiet hours and masks a locked chat like every other push. It is
 // kept out of logic.ts so that file stays untouched by this feature.
+import { claimAllPushRows } from "../push/claim_pages.ts";
 import type { PushTarget } from "./logic.ts";
 
 /// What the dispatcher needs from the database client.
@@ -42,16 +43,18 @@ export async function workflowMessageTargets(
   }
   const targets: PushTarget[] = [];
   for (const row of (sent ?? []) as WorkflowMessageRow[]) {
-    const { data, error: claimError } = await admin.rpc("claim_push_delivery", {
-      target_message_id: row.message_id,
-      caller_id: row.sender_id,
-    });
+    // In pages, so a big group is not cut off at the API's row limit (L6).
+    const { rows, error: claimError } = await claimAllPushRows<PushTarget>(
+      admin,
+      row.message_id,
+      row.sender_id,
+    );
     if (claimError) {
-      console.error("claim_push_delivery failed", claimError.message);
-      continue;
+      console.error("claim_push_delivery failed", claimError);
+      if (rows.length === 0) continue;
     }
     targets.push(
-      ...((data ?? []) as PushTarget[]).map((target) => ({
+      ...rows.map((target) => ({
         ...target,
         message_id: row.message_id,
       })),

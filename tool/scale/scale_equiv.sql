@@ -73,7 +73,7 @@ begin
   perform pg_temp.act(pg_temp.uid(1));
   perform pg_temp.same('get_circle_detail',
     format('select l6old.get_circle_detail(%L)', current_setting('l6.circle')),
-    format('select public.get_circle_detail(%L)', current_setting('l6.circle')));
+    format('select public.get_circle_detail(%L) #- ''{circle,member_count}'' as get_circle_detail', current_setting('l6.circle')));
   perform pg_temp.root();
 end $do$;
 

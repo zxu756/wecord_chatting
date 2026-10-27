@@ -125,14 +125,23 @@ $new$    case when s.language = 'zh' then body_zh else body_en end,
     -- The people, one batch at a time, in user id order; the checks are the
     -- ones that were on the whole list before.
     select cm.user_id
-    from public.conversation_members cm
+    from (
+      -- The members in user id order, from the cursor on. "offset 0" keeps
+      -- this a query of its own, so the checks below (a function call each)
+      -- run on the people in turn and stop at page_size, instead of on every
+      -- member of the chat for each batch.
+      select c0.user_id, c0.muted_until
+      from public.conversation_members c0
+      where c0.conversation_id = message.conversation_id
+        and (after_user_id is null or c0.user_id > after_user_id)
+      order by c0.user_id
+      offset 0
+    ) cm
     left join public.circle_notification_settings ns
       on ns.circle_id = channel.circle_id
       and ns.user_id = cm.user_id
     left join public.user_privacy_settings ups on ups.user_id = cm.user_id
-    where cm.conversation_id = message.conversation_id
-      and cm.user_id <> message.sender_id
-      and (after_user_id is null or cm.user_id > after_user_id)
+    where cm.user_id <> message.sender_id
       and exists (
         select 1
         from public.push_subscriptions has_subscription

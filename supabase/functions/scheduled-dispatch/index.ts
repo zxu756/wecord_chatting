@@ -20,6 +20,11 @@
 // Answers 503 push_not_configured until the VAPID keys are set, and 500
 // not_configured without DISPATCH_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  claimAllPushRows,
+  forEachLimited,
+  SEND_CONCURRENCY,
+} from "../push/claim_pages.ts";
 import { newTally, recordPushOutcome, tallyPush } from "../push/outcome.ts";
 import { maskLockedPushes } from "../push/locked_chats.ts";
 import { dropSilentPushes } from "../push/silent_messages.ts";
@@ -106,15 +111,14 @@ Deno.serve(async (request) => {
   for (
     const row of (sent ?? []) as { message_id: string; sender_id: string }[]
   ) {
-    const { data } = await admin.rpc("claim_push_delivery", {
-      target_message_id: row.message_id,
-      caller_id: row.sender_id,
-    });
+    // In batches of people: a big group has more devices than one answer holds.
+    const { rows } = await claimAllPushRows<PushTarget>(
+      admin,
+      row.message_id,
+      row.sender_id,
+    );
     targets.push(
-      ...((data ?? []) as PushTarget[]).map((target) => ({
-        ...target,
-        message_id: row.message_id,
-      })),
+      ...rows.map((target) => ({ ...target, message_id: row.message_id })),
     );
   }
 
@@ -135,15 +139,13 @@ Deno.serve(async (request) => {
   for (
     const row of (released ?? []) as { message_id: string; sender_id: string }[]
   ) {
-    const { data } = await admin.rpc("claim_push_delivery", {
-      target_message_id: row.message_id,
-      caller_id: row.sender_id,
-    });
+    const { rows } = await claimAllPushRows<PushTarget>(
+      admin,
+      row.message_id,
+      row.sender_id,
+    );
     targets.push(
-      ...((data ?? []) as PushTarget[]).map((target) => ({
-        ...target,
-        message_id: row.message_id,
-      })),
+      ...rows.map((target) => ({ ...target, message_id: row.message_id })),
     );
   }
 
@@ -426,7 +428,8 @@ Deno.serve(async (request) => {
   let delivered = 0;
   // How it went, as three numbers for the monitoring (K3).
   const tally = newTally();
-  await Promise.all(ready.map(async (target) => {
+  // At most a few dozen devices at a time (a big group has thousands).
+  await forEachLimited(ready, SEND_CONCURRENCY, async (target) => {
     try {
       const status = await sendWebPush(keys, target, {
         title: target.title,
@@ -444,7 +447,7 @@ Deno.serve(async (request) => {
       // One unreachable push service doesn't stop the others.
       tallyPush(tally, null);
     }
-  }));
+  });
   if (gone.length > 0) {
     await admin.rpc("remove_push_subscriptions", { target_ids: gone });
   }

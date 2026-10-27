@@ -115,6 +115,31 @@ insert into pg_temp.bench_results (area, label, runs, min_ms, median_ms, max_ms)
 values ('push', 'claim_push_delivery: big group (' || :claimed_group || ' rows)', 1, :claim_group_ms, :claim_group_ms, :claim_group_ms),
   ('push', 'claim_push_delivery: circle channel (' || :claimed_channel || ' rows)', 1, :claim_channel_ms, :claim_channel_ms, :claim_channel_ms);
 
+-- ------------------------------------------- pages (only after the L6 migrations)
+select exists (select 1 from pg_proc where proname = 'list_circle_members_page') as has_pages \gset
+\if :has_pages
+\o /dev/null
+select pg_temp.act(:'u1') \gset
+select pg_temp.bench('pages', 'get_circle_detail(circle, 50): the first 50 members', format('select public.get_circle_detail(%L, 50)', :'circle_id'), 5);
+select pg_temp.bench('pages', 'list_circle_members_page: first 100', format('select * from public.list_circle_members_page(%L, 100)', :'circle_id'), 5);
+select pg_temp.bench('pages', 'list_circle_members_page: search "scale user 77"', format($q$select * from public.list_circle_members_page(%L, 30, null, null, null, 'scale user 77')$q$, :'circle_id'), 3);
+select pg_temp.bench('pages', 'list_conversation_members_page: first 100 of the group', format('select * from public.list_conversation_members_page(%L, 100)', :'group_id'), 5);
+select pg_temp.bench('pages', 'list_conversation_members_page: mention search "scale user 4"', format($q$select * from public.list_conversation_members_page(%L, 8, null, null, 'scale user 4')$q$, :'group_id'), 5);
+select pg_temp.bench('pages', 'list_conversation_members_page: first 100 of a circle channel', format('select * from public.list_conversation_members_page(%L, 100)', :'chan1_conv'), 3);
+select public.send_text_message(:'group_id', 'push bench 3') as push_msg_paged \gset
+select pg_temp.root() \gset
+select clock_timestamp() as t0 \gset
+select count(*) as paged_rows, (array_agg(recipient_id order by recipient_id desc))[1] as paged_cursor
+  from public.claim_push_delivery(:'push_msg_paged', :'u1', null, 500) \gset
+select round(extract(epoch from clock_timestamp() - :'t0'::timestamptz) * 1000, 1) as paged_first_ms \gset
+select clock_timestamp() as t0 \gset
+select count(*) as paged_rows2 from public.claim_push_delivery(:'push_msg_paged', :'u1', :'paged_cursor', 500) \gset
+select round(extract(epoch from clock_timestamp() - :'t0'::timestamptz) * 1000, 1) as paged_next_ms \gset
+insert into pg_temp.bench_results (area, label, runs, min_ms, median_ms, max_ms)
+values ('pages', 'claim_push_delivery batch of 500 people, first (' || :paged_rows || ' rows)', 1, :paged_first_ms, :paged_first_ms, :paged_first_ms),
+  ('pages', 'claim_push_delivery batch of 500 people, next (' || :paged_rows2 || ' rows)', 1, :paged_next_ms, :paged_next_ms, :paged_next_ms);
+\endif
+
 \o /dev/null
 -- ----------------------------------------------------- membership changes
 select pg_temp.root() \gset

@@ -345,7 +345,9 @@ class _MessageContent extends StatelessWidget {
           ),
         ),
       );
-    } else {
+    } else if (message.embeds?.summary != true) {
+      // A message of only cards (I6) carries a one-line summary as its text:
+      // the cards are drawn by the footer slot instead.
       content.add(
         MessageMarkdownText(
           body: message.body,

@@ -12,6 +12,7 @@ import 'package:wecord/features/circles/channel_types/qa_actions.dart';
 import 'package:wecord/features/chats/read_status/read_status_chat.dart';
 import 'package:wecord/features/ai/assistant/assistant_chat.dart';
 import 'package:wecord/features/ai/auto_translate.dart';
+import 'package:wecord/features/integrations/embed_cards_view.dart';
 import 'package:wecord/features/interactions/interactions_chat.dart';
 import 'package:wecord/features/safety/scam_hint.dart';
 import 'package:wecord/features/chats/thread/registry/bubble_footer.dart';
@@ -30,6 +31,7 @@ final List<BubbleFooterEntry> bubbleFooterExtensions = [
   autoReplyFooterEntry,
   botComponentsFooterEntry,
   botPrivateRepliesFooterEntry,
+  embedCardsFooterEntry,
 ];
 
 /// The slot's registry. Tests can override it to add or drop entries.

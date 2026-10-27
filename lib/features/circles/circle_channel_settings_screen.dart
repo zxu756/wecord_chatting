@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wecord/features/chats/chats_screen.dart';
 import 'package:wecord/features/circles/announcement_widgets.dart';
 import 'package:wecord/features/circles/channel_webhooks_section.dart';
+import 'package:wecord/features/integrations/channel_connections_section.dart';
 import 'package:wecord/features/circles/circle_detail_screen.dart';
 import 'package:wecord/features/circles/circle_roles_screen.dart';
 import 'package:wecord/features/circles/circle_ui.dart';
@@ -344,6 +345,13 @@ class _CircleChannelSettingsScreenState
           detail.canInChannel(channel, CirclePermission.manageWebhooks))
         ChannelWebhooksSection(
           key: ValueKey('channel-webhooks-${channel.id}'),
+          channel: channel,
+        ),
+      // RSS feeds and GitHub connections (I6) sit with the webhooks.
+      if (channel.isTextLike &&
+          detail.canInChannel(channel, CirclePermission.manageWebhooks))
+        ChannelConnectionsSection(
+          key: ValueKey('channel-connections-${channel.id}'),
           channel: channel,
         ),
       if (detail.canManageChannels) ...[

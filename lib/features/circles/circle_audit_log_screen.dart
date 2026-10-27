@@ -517,6 +517,16 @@ IconData circleAuditIcon(String action) {
     'webhook_update' => Icons.drive_file_rename_outline,
     'webhook_regenerate' => Icons.key_outlined,
     'webhook_delete' => Icons.delete_outline,
+    'feed_add' => Icons.rss_feed_rounded,
+    'feed_pause' => Icons.pause_circle_outline_rounded,
+    'feed_resume' => Icons.play_circle_outline_rounded,
+    'feed_remove' => Icons.delete_outline,
+    'github_add' => Icons.code_rounded,
+    'github_update' => Icons.drive_file_rename_outline,
+    'github_regenerate' => Icons.key_outlined,
+    'github_pause' => Icons.pause_circle_outline_rounded,
+    'github_resume' => Icons.play_circle_outline_rounded,
+    'github_remove' => Icons.delete_outline,
     'automod_rule_create' => Icons.add_moderator_outlined,
     'automod_rule_update' => CircleIcons.autoMod,
     'automod_rule_delete' => Icons.remove_moderator_outlined,
@@ -574,6 +584,13 @@ IconData circleAuditIcon(String action) {
     _ => Icons.history,
   };
 }
+
+/// A sentence that names the channel when the entry knows it.
+(String, Map<String, String>) _inChannelText(
+  String? inChannel,
+  String without,
+  String withChannel,
+) => inChannel == null ? (without, {}) : (withChannel, {'channel': inChannel});
 
 /// "Ada created channel #general", with names in bold.
 TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
@@ -802,6 +819,43 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
               tr('{actor} deleted webhook {target} in {channel}'),
               {'channel': inChannel},
             ),
+    'feed_add' => _inChannelText(
+      inChannel,
+      tr('{actor} followed feed {target}'),
+      tr('{actor} followed feed {target} in {channel}'),
+    ),
+    'feed_pause' => _inChannelText(
+      inChannel,
+      tr('{actor} paused feed {target}'),
+      tr('{actor} paused feed {target} in {channel}'),
+    ),
+    'feed_resume' => _inChannelText(
+      inChannel,
+      tr('{actor} resumed feed {target}'),
+      tr('{actor} resumed feed {target} in {channel}'),
+    ),
+    'feed_remove' => _inChannelText(
+      inChannel,
+      tr('{actor} stopped following feed {target}'),
+      tr('{actor} stopped following feed {target} in {channel}'),
+    ),
+    'github_add' => _inChannelText(
+      inChannel,
+      tr('{actor} connected GitHub repository {target}'),
+      tr('{actor} connected GitHub repository {target} in {channel}'),
+    ),
+    'github_update' => (tr('{actor} changed GitHub connection {target}'), {}),
+    'github_regenerate' => (
+      tr('{actor} made a new secret for GitHub connection {target}'),
+      {},
+    ),
+    'github_pause' => (tr('{actor} paused GitHub connection {target}'), {}),
+    'github_resume' => (tr('{actor} resumed GitHub connection {target}'), {}),
+    'github_remove' => _inChannelText(
+      inChannel,
+      tr('{actor} disconnected GitHub repository {target}'),
+      tr('{actor} disconnected GitHub repository {target} in {channel}'),
+    ),
     'emoji_create' => (
       tr('{actor} added emoji {emoji}'),
       {'emoji': ':$target:'},

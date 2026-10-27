@@ -20,6 +20,9 @@ abstract final class GroupTabKinds {
 
   /// The circle's featured posts (B8): needs a circle channel, no target.
   static const featuredPosts = 'featured_posts';
+
+  /// A whiteboard of the chat (D10); the target is the board's id.
+  static const whiteboard = 'whiteboard';
 }
 
 /// The most tabs a chat can have.

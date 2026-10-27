@@ -13,6 +13,8 @@ import 'package:wecord/features/circles/guard2/guard2_repository.dart';
 import 'package:wecord/features/knowledge_base/kb_screen.dart';
 import 'package:wecord/features/reports/circle_message_reports_section.dart'
     show ReviewSectionHeader;
+import 'package:wecord/features/whiteboard/whiteboard_routes.dart'
+    show whiteboardPath;
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/ui/ui.dart';
 
@@ -108,6 +110,12 @@ class _GuardItemCardState extends ConsumerState<GuardItemCard> {
       return;
     }
     final conversationId = item.conversationId;
+    if (item.type == GuardItemType.whiteboard && conversationId != null) {
+      unawaited(
+        router.push(whiteboardPath(conversationId, item.itemId)),
+      );
+      return;
+    }
     if (conversationId != null) {
       unawaited(
         router.push(

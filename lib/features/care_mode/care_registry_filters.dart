@@ -53,4 +53,5 @@ const careHiddenComposerMenuIds = <String>{
   'send-silently',
   'check-in',
   'ai-draft-reply',
+  'whiteboard',
 };

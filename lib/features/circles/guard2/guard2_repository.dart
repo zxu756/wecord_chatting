@@ -51,7 +51,10 @@ enum GuardItemType {
   taskItem('task_item'),
 
   /// A post in the circle's feed (B8).
-  circlePost('circle_post');
+  circlePost('circle_post'),
+
+  /// A whiteboard's name in a circle channel (D10).
+  whiteboard('whiteboard');
 
   const GuardItemType(this.key);
 
@@ -68,6 +71,7 @@ enum GuardItemType {
     GuardItemType.taskList => tr('Task list'),
     GuardItemType.taskItem => tr('Task'),
     GuardItemType.circlePost => tr('Post'),
+    GuardItemType.whiteboard => tr('Whiteboard'),
   };
 }
 

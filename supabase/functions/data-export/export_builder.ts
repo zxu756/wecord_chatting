@@ -228,6 +228,13 @@ export interface ExportData {
    */
   circlePosts?: Json | null;
   /**
+   * The whiteboards I started and what I drew or wrote on boards of my chats
+   * (export_my_whiteboards, migration 202610281450): counts of strokes,
+   * shapes, notes, texts and pictures, and the words of my notes and texts;
+   * null when it could not be read, absent in older callers.
+   */
+  whiteboards?: Json | null;
+  /**
    * The workflows I made (what they listen for and do) and the times one ran
    * because of me (export_my_workflows, migration 202610281340); null when it
    * could not be read, absent in older callers.
@@ -840,6 +847,9 @@ export function buildSectionJson(data: ExportData): SectionJson[] {
   }
   if (data.circlePosts) {
     out.push({ path: "data/circle_posts.json", value: circlePostsJson(data) });
+  }
+  if (data.whiteboards) {
+    out.push({ path: "data/whiteboards.json", value: whiteboardsJson(data) });
   }
   if (data.workflows) {
     out.push({ path: "data/workflows.json", value: workflowsJson(data) });
@@ -2464,6 +2474,64 @@ ${
   );
 }
 
+/** Whiteboards: the boards I started and my part in boards of my chats (D10). */
+function whiteboardsJson(data: ExportData): Json {
+  const source = isObject(data.whiteboards) ? data.whiteboards : {};
+  return {
+    boards_made: objects(source["boards_made"]),
+    drawn_on: objects(source["drawn_on"]),
+  };
+}
+
+/** The boards I started and what I put on boards of my chats (D10). */
+export function buildWhiteboardsHtml(data: ExportData): string {
+  const source = isObject(data.whiteboards) ? data.whiteboards : {};
+  const made = objects(source["boards_made"]).map((board) =>
+    entry(
+      str(board["created_at"]),
+      `<div><strong>${
+        escapeHtml(str(board["title"]) || "Untitled whiteboard")
+      }</strong> ${
+        str(board["chat"])
+          ? `<span class="muted">${escapeHtml(str(board["chat"]) ?? "")}</span>`
+          : ""
+      }</div><div class="muted">${Number(board["elements"] ?? 0)} items</div>`,
+    )
+  ).join("");
+  const words = (value: unknown): string =>
+    Array.isArray(value)
+      ? value.map((w) => `<li>${escapeHtml(String(w))}</li>`).join("")
+      : "";
+  const drawn = objects(source["drawn_on"]).map((board) =>
+    entry(
+      null,
+      `<div><strong>${
+        escapeHtml(str(board["board"]) || "Untitled whiteboard")
+      }</strong> ${
+        str(board["chat"])
+          ? `<span class="muted">${escapeHtml(str(board["chat"]) ?? "")}</span>`
+          : ""
+      }</div><div class="muted">${Number(board["strokes"] ?? 0)} lines · ${
+        Number(board["shapes"] ?? 0)
+      } shapes · ${Number(board["sticky_notes"] ?? 0)} sticky notes · ${
+        Number(board["texts"] ?? 0)
+      } texts · ${Number(board["pictures"] ?? 0)} pictures</div>${
+        words(board["words"]) ? `<ul>${words(board["words"])}</ul>` : ""
+      }`,
+    )
+  ).join("");
+  return page(
+    "Whiteboards — your WeCord data",
+    `${backLink()}<h1>Whiteboards</h1>
+<p class="muted">The whiteboards you started, and what you drew or wrote on the
+whiteboards of your chats: how many lines, shapes, notes, texts and pictures,
+and the words of your notes and texts. The drawings themselves and other
+people's work are not copied.</p>
+${section("Whiteboards you started", made, "None.")}
+${section("What you drew or wrote", drawn, "None.")}`,
+  );
+}
+
 /** My quick replies and my away auto-reply (A8). */
 function quickRepliesJson(data: ExportData): Json {
   const source = isObject(data.quickReplies) ? data.quickReplies : {};
@@ -3088,6 +3156,18 @@ export function buildSectionPages(
       content: buildCirclePostsHtml(data),
     });
   }
+  if (data.whiteboards) {
+    const counts = (key: string) =>
+      objects(isObject(data.whiteboards) ? data.whiteboards[key] : null).length;
+    out.push({
+      path: "pages/whiteboards.html",
+      label: "Whiteboards",
+      summary: `${counts("boards_made")} started · ${
+        counts("drawn_on")
+      } drawn on`,
+      content: buildWhiteboardsHtml(data),
+    });
+  }
   if (data.workflows) {
     const count = objects(
       isObject(data.workflows) ? data.workflows["workflows_made"] : null,
@@ -3247,6 +3327,9 @@ data/group_space.json The albums and folders you made in group chats and the
 data/circle_posts.json The posts you wrote in circles: title, text, topics,
                       whether they were featured, and a link to the picture
                       (never other people's posts).
+data/whiteboards.json The whiteboards you started and what you drew or wrote
+                      on whiteboards of your chats (counts and the words of
+                      your notes and texts; never other people's work).
 data/workflows.json   The workflows you made in circles and groups (what they
                       listen for and do) and the times one ran because of
                       you (never what others did).

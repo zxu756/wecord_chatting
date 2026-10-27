@@ -806,6 +806,21 @@ export async function collectExportData(
     null,
   );
 
+  // The whiteboards I started and what I drew or wrote on boards of my chats
+  // (export_my_whiteboards).
+  const whiteboards = await tryRead<Row | null>(
+    skipped,
+    "whiteboards",
+    async () => {
+      const result = await admin.rpc("export_my_whiteboards", {
+        target_user_id: userId,
+      });
+      if (result.error) throw result.error;
+      return object(result.data);
+    },
+    null,
+  );
+
   // The workflows I made and the runs about me (export_my_workflows).
   const workflows = await tryRead<Row | null>(
     skipped,
@@ -936,6 +951,7 @@ export async function collectExportData(
     chatPrivacy,
     groupSpace,
     circlePosts,
+    whiteboards,
     workflows,
     accountSecurity,
     developer,

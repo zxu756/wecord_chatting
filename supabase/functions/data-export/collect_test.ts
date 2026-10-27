@@ -196,6 +196,7 @@ const emptyRpc: Record<string, unknown> = {
     events_made: [],
   },
   export_my_quick_replies: { quick_replies: [], away: null },
+  export_my_whiteboards: { boards_made: [], drawn_on: [] },
   export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
   export_my_group_tabs: { tabs_added: [] },
   export_my_interactions: {
@@ -540,6 +541,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
         events_made: [],
       },
       export_my_quick_replies: { quick_replies: [], away: null },
+      export_my_whiteboards: { boards_made: [], drawn_on: [] },
       export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
       export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
@@ -600,6 +602,7 @@ Deno.test("Moments and the rest come from the database functions, for this perso
     { name: "export_my_account_security", args: { target_user_id: me } },
     { name: "export_my_developer", args: { target_user_id: me } },
     { name: "export_my_quick_replies", args: { target_user_id: me } },
+    { name: "export_my_whiteboards", args: { target_user_id: me } },
     { name: "export_my_workflows", args: { target_user_id: me } },
   ]);
   assertEquals((data.favorites?.["items"] as unknown[] | undefined)?.length, 1);
@@ -656,6 +659,7 @@ Deno.test("my photos go into the ZIP; a video of known size above the cap is lin
         events_made: [],
       },
       export_my_quick_replies: { quick_replies: [], away: null },
+      export_my_whiteboards: { boards_made: [], drawn_on: [] },
       export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
       export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
@@ -792,6 +796,7 @@ Deno.test("a file that cannot be downloaded is linked instead", async () => {
         events_made: [],
       },
       export_my_quick_replies: { quick_replies: [], away: null },
+      export_my_whiteboards: { boards_made: [], drawn_on: [] },
       export_my_check_ins: { check_ins: [], streaks: [], boards_made: [] },
       export_my_group_tabs: { tabs_added: [] },
       export_my_interactions: {
@@ -849,6 +854,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
   assertEquals(data.groupSpace, null);
   assertEquals(data.chatPrivacy, null);
   assertEquals(data.circlePosts, null);
+  assertEquals(data.whiteboards, null);
   assertEquals(data.workflows, null);
   assertEquals(data.accountSecurity, null);
   assertEquals(data.developer, null);
@@ -876,6 +882,7 @@ Deno.test("a database function that is missing is skipped, not fatal", async () 
     "pins and reminders",
     "quick replies",
     "task list fields",
+    "whiteboards",
     "workflows",
   ]);
   assertEquals(data.messages.length, 2);

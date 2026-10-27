@@ -882,6 +882,10 @@ TextSpan circleAuditSummary(CircleAuditEntry entry, TextStyle? style) {
       'circle_event' => (tr('AI guard flagged an event by {target}'), {}),
       'note' => (tr('AI guard flagged a note by {target}'), {}),
       'circle_post' => (tr('AI guard flagged a post by {target}'), {}),
+      'whiteboard' => (
+        tr('AI guard flagged a whiteboard name by {target}'),
+        {},
+      ),
       'task_list' ||
       'task_item' => (tr('AI guard flagged a task by {target}'), {}),
       _ => (tr('AI guard flagged something made by {target}'), {}),

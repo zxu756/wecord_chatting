@@ -54,6 +54,8 @@ import 'package:wecord/features/events2/event_check_in.dart';
 import 'package:wecord/features/group_space/album_screen.dart';
 import 'package:wecord/features/group_space/folder_screen.dart';
 import 'package:wecord/features/group_space/group_space_screen.dart';
+import 'package:wecord/features/whiteboard/whiteboard_list_page.dart';
+import 'package:wecord/features/whiteboard/whiteboard_page.dart';
 import 'package:wecord/features/voice/call_links/call_link_screen.dart';
 import 'package:wecord/features/discovery/public_circle_link.dart';
 import 'package:wecord/features/discovery/public_circle_screen.dart';
@@ -390,6 +392,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   key: ValueKey('space-folder-$folderId'),
                   conversationId: conversationId,
                   folderId: folderId,
+                  title: state.extra is String ? state.extra! as String : null,
+                ),
+              );
+            },
+          ),
+          // A chat's whiteboards (D10): the list, and one board.
+          GoRoute(
+            path: '/chats/:conversationId/whiteboards',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: WhiteboardListPage(conversationId: conversationId),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/chats/:conversationId/whiteboards/:boardId',
+            builder: (context, state) {
+              final conversationId = state.pathParameters['conversationId']!;
+              final boardId = state.pathParameters['boardId']!;
+              return ChatLockGate(
+                conversationId: conversationId,
+                child: WhiteboardPage(
+                  key: ValueKey('whiteboard-$boardId'),
+                  conversationId: conversationId,
+                  boardId: boardId,
                   title: state.extra is String ? state.extra! as String : null,
                 ),
               );

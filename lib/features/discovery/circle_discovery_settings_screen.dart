@@ -493,7 +493,7 @@ class _DiscoveryEditorState extends ConsumerState<_DiscoveryEditor> {
                     category: _category,
                     language: _language,
                     tags: _tags,
-                    memberCount: widget.detail.members.length,
+                    memberCount: widget.detail.memberCount,
                   ),
                   onOpen: () {},
                 ),

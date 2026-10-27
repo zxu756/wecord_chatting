@@ -457,6 +457,10 @@ class SupabaseCirclesRepository implements CirclesRepository {
   Future<CircleDetail> getCircleDetail(String circleId) async {
     final payload = await _dataSource.rpc('get_circle_detail', {
       'target_circle_id': circleId,
+      // A big circle's members come a page at a time (L6): the first
+      // [circleDetailMemberLimit] and the current user. A circle with fewer
+      // members gets all of them.
+      'member_limit': circleDetailMemberLimit,
     });
     if (payload == null) {
       throw CircleMembershipLostException(circleId);

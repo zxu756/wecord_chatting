@@ -31,7 +31,15 @@ extension _ThreadHeaderState on _ChatThreadScreenState {
       ConversationType.channel => widget.circleMemberIds,
       _ => null,
     };
+    // A big group or circle has only its first page of members loaded: the
+    // count is theirs, the online ones are those among the loaded.
+    final total = switch (type) {
+      ConversationType.group => groupDetail?.memberCount,
+      ConversationType.channel => widget.circleMemberCount,
+      _ => null,
+    };
     final count =
+        total ??
         ids?.length ??
         (type == ConversationType.group && (summary?.memberCount ?? 0) > 0
             ? summary!.memberCount
@@ -39,7 +47,12 @@ extension _ThreadHeaderState on _ChatThreadScreenState {
     if (count == null) {
       return null;
     }
-    final online = ids == null ? 0 : ids.where(onlineUserIds.contains).length;
+    // The online ones are counted among the members loaded, so only when
+    // those are everyone.
+    final partial = total != null && ids != null && total > ids.length;
+    final online = ids == null || partial
+        ? 0
+        : ids.where(onlineUserIds.contains).length;
     return [
       count == 1 ? tr('1 member') : tr('{count} members', {'count': count}),
       if (online > 0) tr('{count} online', {'count': online}),

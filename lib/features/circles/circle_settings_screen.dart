@@ -125,7 +125,7 @@ class _CircleHeaderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  tr('{count} members', {'count': detail.members.length}),
+                  tr('{count} members', {'count': detail.memberCount}),
                   style: TextStyle(fontSize: 13, color: c.muted),
                 ),
               ],

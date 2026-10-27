@@ -144,6 +144,35 @@ extension _ThreadComposerState on _ChatThreadScreenState {
       _isMentioning = isMentioning;
       _mentionQuery = nextQuery;
     });
+    _searchRemoteMentions(nextQuery);
+  }
+
+  /// In a big group the members loaded are only its first page, so a name
+  /// being typed after `@` is looked up in the database, a moment after the
+  /// typing pauses.
+  void _searchRemoteMentions(String query) {
+    _mentionSearchTimer?.cancel();
+    final token = ++_mentionSearchToken;
+    final conversationId = widget.conversationId;
+    final detail = ref.read(groupDetailProvider(conversationId)).value;
+    if (query.isEmpty || detail == null || !detail.hasMoreMembers) {
+      if (_remoteMentions.isNotEmpty) {
+        setState(() => _remoteMentions = const []);
+      }
+      return;
+    }
+    _mentionSearchTimer = Timer(const Duration(milliseconds: 250), () async {
+      try {
+        final found = await ref
+            .read(groupMembersSourceProvider)
+            .search(conversationId, query, limit: 8);
+        if (mounted && token == _mentionSearchToken) {
+          setState(() => _remoteMentions = found);
+        }
+      } catch (_) {
+        // The people already loaded still match.
+      }
+    });
   }
 
   void _updateEmojiQuery() {
@@ -490,7 +519,16 @@ extension _ThreadComposerState on _ChatThreadScreenState {
     if (detail == null || !_isMentioning) {
       return const [];
     }
-    return mentionCandidates(detail.members, _mentionQuery);
+    final loaded = mentionCandidates(detail.members, _mentionQuery);
+    if (!detail.hasMoreMembers || _mentionQuery.isEmpty) {
+      return loaded;
+    }
+    // A big group: the ones loaded first, then the database's matches.
+    final seen = {for (final member in loaded) member.profile.id};
+    return [
+      ...loaded,
+      ..._remoteMentions.where((member) => seen.add(member.profile.id)),
+    ].take(6).toList(growable: false);
   }
 
   void _insertMention(GroupMember member) {

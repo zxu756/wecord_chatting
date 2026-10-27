@@ -51,7 +51,12 @@ function makeWorker({ stamped = true, active = false, existingCaches = [] }) {
   const handlers = {};
   const stores = new Map(existingCaches.map((name) => [name, new FakeCache()]));
   const posted = [];
-  const network = { online: true, requests: [], files: new Map() };
+  const network = {
+    online: true,
+    requests: [],
+    files: new Map(),
+    types: new Map(),
+  };
   const state = { skipWaiting: 0, claimed: 0 };
 
   const fakeSelf = {
@@ -86,7 +91,11 @@ function makeWorker({ stamped = true, active = false, existingCaches = [] }) {
       if (!network.online) throw new TypeError('offline');
       const body = network.files.get(url);
       if (body === undefined) return new Response('missing', { status: 404 });
-      const response = new Response(body, { status: 200 });
+      const type = network.types.get(url);
+      const response = new Response(body, {
+        status: 200,
+        headers: type ? { 'content-type': type } : {},
+      });
       // Same-origin responses are 'basic'; Node's constructor says 'default'.
       Object.defineProperty(response, 'type', { value: 'basic' });
       return response;
@@ -162,6 +171,50 @@ function request(url, { method = 'GET', mode = 'no-cors', range = false } = {}) 
   );
   check('first install skips waiting', worker.state.skipWaiting === 1);
   check('first install announces no update', worker.posted.length === 0);
+}
+
+// A WebAssembly build: its browsers cache main.dart.wasm and main.dart.mjs
+// instead of main.dart.js, and a path the site answers with the app shell
+// (single-page-app fallback) is not kept as a file.
+{
+  const worker = makeWorker({});
+  worker.network.files.set(
+    `${ORIGIN}/flutter_bootstrap.js`,
+    '_flutter.buildConfig = {"builds":[{"compileTarget":"dart2wasm"}]};',
+  );
+  worker.network.files.set(`${ORIGIN}/main.dart.wasm`, 'wasm bytes');
+  worker.network.files.set(`${ORIGIN}/main.dart.mjs`, 'support runtime');
+  await fire(worker, 'install');
+  const cache = worker.stores.get('wecord-shell-v1');
+  check('a wasm build caches main.dart.wasm', Boolean(await cache.match(`${ORIGIN}/main.dart.wasm`)));
+  check('a wasm build caches main.dart.mjs', Boolean(await cache.match(`${ORIGIN}/main.dart.mjs`)));
+  check('a wasm build does not also fetch main.dart.js', !(await cache.match(`${ORIGIN}/main.dart.js`)));
+  worker.network.requests.length = 0;
+  const served = await fire(worker, 'fetch', {
+    request: request(`${ORIGIN}/main.dart.wasm`),
+  });
+  check(
+    'main.dart.wasm is served from the cache',
+    (await (await served.responded).text()) === 'wasm bytes' &&
+      worker.network.requests.length === 0,
+  );
+  const uncached = await fire(worker, 'fetch', {
+    request: request(`${ORIGIN}/main.dart.wasm?v=2`),
+  });
+  check('main.dart.wasm is an app file', uncached.responded !== null);
+}
+{
+  // A JS build whose previous version (a wasm one) had kept the wasm file:
+  // the site now answers that path with the shell, which is not kept.
+  const worker = makeWorker({ active: true, existingCaches: ['wecord-shell-v0'] });
+  await worker.stores.get('wecord-shell-v0').put(`${ORIGIN}/main.dart.wasm`, new Response('old'));
+  worker.network.files.set(`${ORIGIN}/main.dart.wasm`, '<html>shell</html>');
+  worker.network.types.set(`${ORIGIN}/main.dart.wasm`, 'text/html; charset=utf-8');
+  await fire(worker, 'install');
+  const cache = worker.stores.get('wecord-shell-v1');
+  check('a JS build caches main.dart.js', Boolean(await cache.match(`${ORIGIN}/main.dart.js`)));
+  check('a shell answered for a missing file is not kept', !(await cache.match(`${ORIGIN}/main.dart.wasm`)));
+  check('the shell itself is still kept', Boolean(await cache.match(`${ORIGIN}/`)));
 }
 
 // An install fails (and retries later) when the shell cannot be fetched.

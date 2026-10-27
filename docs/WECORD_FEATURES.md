@@ -512,7 +512,7 @@
 - **分享到 WeCord**（H12，Android 和 ChromeOS 的 Chrome）：安装后，其他 App 的「分享」菜单里出现 WeCord，可分享链接、文字、图片、视频、PDF、Office 文档（`manifest.json` 的 `share_target`，POST 到 `/share-target`）。`wecord_sw.js` 接住这个 POST：把标题、文字、链接和文件（最多 10 个，单个不超过聊天的 50 MB 上限）存进缓存 `wecord-share-inbox`（部署清理不会删它，新分享会覆盖没打开过的旧分享），再 303 跳到 `/#/share`。`/share` 页（`ShareTargetScreen`）显示要分享的内容，并列出单聊和群聊，**文件传输助手排第一**；点一下就发送（文字一条消息，图片发成聊天图片，其余发成文件），发完清空缓存并打开那个聊天。没登录时会先登录，再回到分享页；缓存里没有内容时显示「没有要分享的内容」。圈子频道和话题不在列表里。iPhone Safari 不支持 Web Share Target。
 - **`web+wecord:` 链接**（H12）：安装后浏览器可把 `web+wecord:invite/<码>`、`call/<码>`、`u/<码>`、`g/<码>`（圈子邀请、通话链接、个人二维码、群二维码）交给 WeCord（`protocol_handlers`，落到 `/open?uri=…`）；只认这四种，其他内容一律忽略并回到首页。
 - **推送更稳（Declarative Web Push）**（H12）：推送的内容同时带经典字段（`title`、`body`、`tag`、`url`，旧浏览器的 `push_sw.js` 读）和 Declarative Web Push 字段（`web_push: 8030`、`notification.navigate` 等，Safari 18.4 及以上直接显示，不唤醒脚本，iPhone 主屏 PWA 的订阅不会因为「收到推送却没显示」而被系统收回）。由 `sendWebPush` 统一加，`push`、`scheduled-dispatch`、`chat-event-reminders` 三个函数都走它；`navigate` 的网址取函数密钥 `WECORD_SITE_URL`，没设就用 `https://wecord.jokebear.fyi`。没有服务端算的未读数，所以暂不带 `app_badge`（App 打开时仍由前端设角标）。`push_sw.js` 同时改了：Safari 里即使 WeCord 窗口在前台也显示通知（Safari 要求每次推送都显示，否则收回订阅）；点击通知时窗口无法聚焦就新开窗口；浏览器替换订阅（`pushsubscriptionchange`）时用同一把钥匙重新订阅，下次打开 App 自动存回服务器。
-- **Android Chrome 适配检查**（H1 阶段 0）：见第 23 节。
+- **WebAssembly 构建试验（L5）**：`flutter build web --wasm` 能编过（项目本来就只用 `package:web` + `dart:js_interop`）；唯一的真问题是 `local_notification_service.dart` 的条件导入 `dart.library.html`（wasm 里是 false，网页通知会悄悄失效），已改成 `dart.library.js_interop`，测试禁止再写旧写法。wasm 构建同时带着 `main.dart.js`：只有 Chromium 内核浏览器（Flutter 默认允许列表）并且支持 WasmGC 和 WebGL 时才用 wasm，Safari、Firefox 和旧浏览器自动用 JS；打开 `?wasm=0` 可强制用 JS。`wecord_sw.js` 认得 `main.dart.wasm` / `main.dart.mjs`（wasm 构建预缓存它们，不再多缓存一份 `main.dart.js`，断网重开已验证）。**默认部署不变**；`WECORD_WEB_WASM=1 sh tool/deploy_web.sh` 才会用 wasm。不开 COOP/COEP（`require-corp` 会拦没有 CORS/CORP 头的跨站图片和脚本，`credentialless` 拦不了跨站 iframe）。无头 Chrome 里实测：冷启动首帧约快 2 倍，回访约快 3–4 倍，首次下载多约 6%，慢 CPU 上滚动更稳（单线程 wasm 比 JS 流畅约 1.8 倍）。测量脚本在 `tool/web_bench/`，完整报告和建议见 `docs/wasm-report.md`。**只能真机验证**：登录后的页面、摄像头/麦克风/推送/通话/扫码在 wasm 下的行为。以后引入 `openmls` / `flutter_rust_bridge`（G9）会让 wasm 构建编不过。
 
 ## 20. 性能与稳定性（已完成的优化）
 
@@ -526,7 +526,7 @@
 
 ## 21. 运维与部署
 
-- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`，同时部署 `worker/src` 的公开圈子页面 Worker）；上线后对比线上和本地 `main.dart.js` 的哈希。
+- **网页**：`sh tool/deploy_web.sh`（flutter build web + 给 Service Worker 打版本戳 + `npx wrangler deploy`，同时部署 `worker/src` 的公开圈子页面 Worker）；上线后对比线上和本地 `main.dart.js` 的哈希。可选 wasm 构建：`WECORD_WEB_WASM=1 sh tool/deploy_web.sh`（默认关闭，先读 `docs/wasm-report.md` 的风险；部署后用 `curl -I` 检查 `main.dart.wasm` 的 `Content-Type` 是 `application/wasm`）。
 - **iPhone**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build ios --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/ios` → `xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app`（手机需解锁；免费签名约 7 天过期）。
 - **Mac**：`V=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml); flutter build macos --release --dart-define-from-file=.env --dart-define=APP_VERSION=$V --split-debug-info=build/symbols/$V/macos`，产物 `build/macos/Build/Products/Release/wecord.app`。
 - **符号文件**：`--split-debug-info` 把符号存到 `build/symbols/<版本>/<平台>/`（不提交，每个发布版本留一份，丢了就还原不了那个版本的崩溃栈）；用法见 `sh tool/errors_report.sh --symbolize`。网页版不适用。

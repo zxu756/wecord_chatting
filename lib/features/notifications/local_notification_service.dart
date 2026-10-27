@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wecord/features/notifications/notification_service_base.dart';
 import 'package:wecord/features/notifications/web_local_notification_service.dart';
 import 'package:wecord/features/notifications/web_notification_gateway_stub.dart'
-    if (dart.library.html) 'package:wecord/features/notifications/web_notification_gateway_html.dart';
+    if (dart.library.js_interop) 'package:wecord/features/notifications/web_notification_gateway_html.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 
 export 'package:wecord/features/notifications/notification_service_base.dart';

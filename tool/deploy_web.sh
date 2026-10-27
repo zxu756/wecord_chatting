@@ -6,6 +6,16 @@
 #
 #   sh tool/deploy_web.sh
 #
+# Optional, off by default: a WebAssembly build (L5, docs/wasm-report.md).
+#
+#   WECORD_WEB_WASM=1 sh tool/deploy_web.sh
+#
+# builds with `flutter build web --wasm`, which ships main.dart.wasm next to
+# the usual main.dart.js. Browsers that can run it (Chromium-based ones, by
+# Flutter's default) use it; every other browser gets main.dart.js as before.
+# Read the risks in docs/wasm-report.md first; without the variable nothing
+# here changes.
+#
 # The build reads SUPABASE_URL and SUPABASE_ANON_KEY (and optionally
 # WECORD_SITE_URL) from .env at the project root; its contents are never
 # printed. wrangler asks you to log in to Cloudflare the first time.
@@ -30,8 +40,21 @@ done
 # pubspec.yaml, without the build number.
 app_version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
 
-flutter build web --release --dart-define-from-file=.env \
+wasm_flag=""
+if [ "${WECORD_WEB_WASM:-0}" = "1" ]; then
+  wasm_flag="--wasm"
+  echo "deploy_web: WebAssembly build (WECORD_WEB_WASM=1); main.dart.js stays as the fallback."
+fi
+
+# $wasm_flag is empty (and so left out) unless WECORD_WEB_WASM=1.
+# shellcheck disable=SC2086
+flutter build web --release $wasm_flag --dart-define-from-file=.env \
   --dart-define=APP_VERSION="$app_version"
+
+if [ -n "$wasm_flag" ] && [ ! -f build/web/main.dart.wasm ]; then
+  echo "deploy_web: the wasm build produced no build/web/main.dart.wasm." >&2
+  exit 1
+fi
 
 # Stamp the build's version into the service worker (web/wecord_sw.js). It is
 # a hash of every built file except the worker itself, so it only changes when

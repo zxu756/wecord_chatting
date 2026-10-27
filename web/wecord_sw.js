@@ -1,8 +1,9 @@
 // WeCord's app-shell service worker (scope: the whole site).
 //
 // What it does
-// - Keeps the app shell (index.html, flutter_bootstrap.js, main.dart.js,
-//   CanvasKit, fonts, icons) in a cache named after this deploy, so the
+// - Keeps the app shell (index.html, flutter_bootstrap.js, main.dart.js or,
+//   in a WebAssembly build, main.dart.wasm and main.dart.mjs, CanvasKit or
+//   skwasm, fonts, icons) in a cache named after this deploy, so the
 //   second load is instant and the app opens with no network (chats come
 //   from the app's own IndexedDB copy).
 // - Shows a friendly offline page when the shell is not cached and the
@@ -65,10 +66,18 @@ const OPTIONAL = [
   'assets/fonts/MaterialIcons-Regular.otf',
 ];
 
+// A WebAssembly build (tool/deploy_web.sh with WECORD_WEB_WASM=1) is told by
+// "dart2wasm" in its flutter_bootstrap.js. Its browsers load these instead of
+// main.dart.js; a browser that cannot run wasm still loads main.dart.js, which
+// is then kept the way every other file is, from the page's own list on the
+// first visit and from the previous cache on an update, rather than making
+// every wasm browser download a second copy of the app.
+const OPTIONAL_WASM = ['main.dart.mjs', 'main.dart.wasm'];
+
 // Same-origin paths (below the scope) that are app files and safe to keep:
 // everything is versioned by the deploy, so cache-first is correct.
 const APP_FILES =
-  /^(?:main\.dart\.js[^/]*|flutter(?:_bootstrap)?\.js|manifest\.json|favicon\.png|icons\/.*|canvaskit\/.*|assets\/.*|blur\/.*)$/;
+  /^(?:main\.dart\.(?:js|mjs|wasm)[^/]*|flutter(?:_bootstrap)?\.js|manifest\.json|favicon\.png|icons\/.*|canvaskit\/.*|assets\/.*|blur\/.*)$/;
 
 // Never cached even if they were somehow served from this origin: the
 // Supabase API families, and any URL carrying a signature or token.
@@ -104,6 +113,12 @@ async function addToCache(cache, path, mode) {
   const url = new URL(path, SCOPE).href;
   const response = await fetch(new Request(url, { cache: mode }));
   if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  // The site answers an unknown path with the app shell (single-page-app
+  // fallback): a file this deploy does not have must not be kept as that page.
+  const type = response.headers.get('content-type') || '';
+  if (url !== SHELL_URL && type.includes('text/html')) {
+    throw new Error(`${url}: not a file of this build`);
+  }
   await cache.put(url, await cleanCopy(response));
 }
 
@@ -124,7 +139,14 @@ self.addEventListener('install', (event) => {
       // Everything the last version had cached (CanvasKit's variant for this
       // browser, deferred parts, ...) comes along, so an update keeps the
       // app as offline-ready as it was.
-      const extra = new Set(OPTIONAL.map((path) => new URL(path, SCOPE).href));
+      const bootstrap = await cache.match(new URL('flutter_bootstrap.js', SCOPE).href);
+      const wasmBuild = bootstrap
+        ? (await bootstrap.text()).includes('"dart2wasm"')
+        : false;
+      const optional = wasmBuild
+        ? OPTIONAL.filter((path) => path !== 'main.dart.js').concat(OPTIONAL_WASM)
+        : OPTIONAL;
+      const extra = new Set(optional.map((path) => new URL(path, SCOPE).href));
       for (const name of await caches.keys()) {
         if (!name.startsWith(CACHE_PREFIX) || name === CACHE) continue;
         for (const request of await (await caches.open(name)).keys()) {

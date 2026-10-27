@@ -29,6 +29,21 @@ void main() {
       expect(read('tool/deploy_web.sh'), contains('__WECORD_VERSION__'));
     });
 
+    test('deploys the JS build unless WECORD_WEB_WASM=1 asks for wasm', () {
+      final script = read('tool/deploy_web.sh');
+      expect(script, contains('WECORD_WEB_WASM'));
+      // The default command line carries no --wasm of its own.
+      final build = RegExp(
+        r'^flutter build web [^\n]*',
+        multiLine: true,
+      ).firstMatch(script)!;
+      expect(build.group(0), isNot(contains('--wasm')));
+      expect(build.group(0), contains(r'$wasm_flag'));
+      expect(script, contains('wasm_flag="--wasm"'));
+      // The loader keeps a way back to the JS build.
+      expect(read('web/flutter_bootstrap.js'), contains('wasm=0'));
+    });
+
     test('does not take over push (push_sw.js keeps its own scope)', () {
       expect(read('web/wecord_sw.js'), isNot(contains("'push'")));
       expect(read('web/wecord_sw.js'), isNot(contains('showNotification')));

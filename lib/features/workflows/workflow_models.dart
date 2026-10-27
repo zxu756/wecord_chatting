@@ -117,7 +117,8 @@ class WorkflowLimits {
   });
 
   factory WorkflowLimits.fromJson(Map<String, dynamic> json) {
-    int read(String key, int fallback) => (json[key] as num?)?.toInt() ?? fallback;
+    int read(String key, int fallback) =>
+        (json[key] as num?)?.toInt() ?? fallback;
     return WorkflowLimits(
       maxPerCircle: read('max_per_circle', 20),
       maxPerGroup: read('max_per_group', 5),
@@ -277,7 +278,9 @@ class Workflow {
   /// Paused by the system rather than by a person: it needs somebody to look
   /// at it before it is turned back on.
   bool get needsAttention =>
-      !enabled && pausedReason != null && pausedReason != WorkflowPauseReason.manual;
+      !enabled &&
+      pausedReason != null &&
+      pausedReason != WorkflowPauseReason.manual;
 }
 
 DateTime? _time(Object? value) =>
@@ -357,11 +360,17 @@ class WorkflowOptions {
     return WorkflowOptions(
       channels: [
         for (final c in maps('channels'))
-          WorkflowChannel(id: c['id'] as String, name: (c['name'] as String?) ?? ''),
+          WorkflowChannel(
+            id: c['id'] as String,
+            name: (c['name'] as String?) ?? '',
+          ),
       ],
       roles: [
         for (final r in maps('roles'))
-          WorkflowRoleOption(id: r['id'] as String, name: (r['name'] as String?) ?? ''),
+          WorkflowRoleOption(
+            id: r['id'] as String,
+            name: (r['name'] as String?) ?? '',
+          ),
       ],
       forms: [
         for (final f in maps('forms'))
@@ -467,7 +476,7 @@ class WorkflowRun {
     'failed' => tr('Failed'),
     'skipped' => tr('Skipped'),
     'running' => tr('Running'),
-    _ => tr('Waiting'),
+    _ => trIn('workflows', 'Waiting'),
   };
 
   /// Why a run did not happen, or what went wrong, in words.
@@ -567,18 +576,14 @@ class WorkflowException implements Exception {
     WorkflowFailureKind.textInvalid => tr(
       'Check the name and the texts: none of them can be empty.',
     ),
-    WorkflowFailureKind.triggerInvalid => tr(
-      'Check what starts the workflow.',
-    ),
+    WorkflowFailureKind.triggerInvalid => tr('Check what starts the workflow.'),
     WorkflowFailureKind.actionsInvalid => tr(
       'A workflow needs between 1 and 5 actions.',
     ),
     WorkflowFailureKind.actionInvalid => tr('Check the actions.'),
     WorkflowFailureKind.channelInvalid => tr('Pick a channel for this step.'),
     WorkflowFailureKind.roleInvalid => tr('Pick a role that can be given.'),
-    WorkflowFailureKind.formInvalid => tr(
-      'Pick a form from this place.',
-    ),
+    WorkflowFailureKind.formInvalid => tr('Pick a form from this place.'),
     WorkflowFailureKind.formAnonymous => tr(
       'Workflows cannot use anonymous forms.',
     ),

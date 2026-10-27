@@ -443,6 +443,7 @@ class _ChannelConnectionsSectionState
                     title: feed.displayName,
                     subtitle: _feedSubtitle(feed),
                     warning: !feed.enabled || feed.hasProblem,
+                    menuKey: ValueKey('feed-menu-${feed.id}'),
                     menuTooltip: tr('Feed actions'),
                     busy: _busy,
                     onMenu: (position) => _feedMenu(feed, position),
@@ -488,6 +489,7 @@ class _ChannelConnectionsSectionState
                     title: hook.label,
                     subtitle: _hookSubtitle(hook),
                     warning: !hook.enabled,
+                    menuKey: ValueKey('github-menu-${hook.id}'),
                     menuTooltip: tr('Connection actions'),
                     busy: _busy,
                     onMenu: (position) => _hookMenu(hook, position),
@@ -557,6 +559,7 @@ class _ConnectionRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.warning,
+    required this.menuKey,
     required this.menuTooltip,
     required this.busy,
     required this.onMenu,
@@ -569,6 +572,7 @@ class _ConnectionRow extends StatelessWidget {
 
   /// Paused or failing: the line is drawn in the warning color.
   final bool warning;
+  final Key menuKey;
   final String menuTooltip;
   final bool busy;
   final ValueChanged<Offset?> onMenu;
@@ -615,6 +619,7 @@ class _ConnectionRow extends StatelessWidget {
           ),
           Builder(
             builder: (buttonContext) => WeCordIconButton(
+              key: menuKey,
               tooltip: menuTooltip,
               icon: Icons.more_horiz_rounded,
               variant: WeCordButtonVariant.ghost,
@@ -821,18 +826,6 @@ class _GithubSecretDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.tokens.colors;
-    Widget value(Key key, String text) => Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: c.raised,
-        borderRadius: BorderRadius.circular(WeCordRadii.md),
-      ),
-      child: SelectableText(
-        text,
-        key: key,
-        style: TextStyle(fontSize: 12.5, fontFamily: 'monospace', color: c.ink),
-      ),
-    );
     Widget label(String text) => Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
       child: Text(
@@ -850,6 +843,34 @@ class _GithubSecretDialog extends StatelessWidget {
         context,
       )?.showSnackBar(SnackBar(content: Text(done)));
     }
+
+    // Pressing a value copies it.
+    Widget value(Key key, String text, VoidCallback? onCopy) => WeCordPressable(
+      key: key,
+      onPressed: onCopy,
+      pressedScale: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(WeCordRadii.md),
+      ),
+      semanticLabel: text,
+      hint: onCopy == null ? null : tr('Copy'),
+      excludeSemantics: true,
+      builder: (context, states) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.raised,
+          borderRadius: BorderRadius.circular(WeCordRadii.md),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontFamily: 'monospace',
+            color: c.ink,
+          ),
+        ),
+      ),
+    );
 
     return CircleDialog(
       title: title,
@@ -888,11 +909,17 @@ class _GithubSecretDialog extends StatelessWidget {
           value(
             const ValueKey('github-payload-url'),
             payloadUrl ?? tr('The app does not know its server address.'),
+            payloadUrl == null
+                ? null
+                : () => copy(context, payloadUrl!, tr('URL copied.')),
           ),
           label(tr('Secret')),
           value(
             const ValueKey('github-secret'),
             secret ?? tr('No secret to show.'),
+            secret == null
+                ? null
+                : () => copy(context, secret!, tr('Secret copied.')),
           ),
           const SizedBox(height: 10),
           Text(

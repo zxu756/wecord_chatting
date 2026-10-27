@@ -96,8 +96,8 @@ class ContactsScreen extends ConsumerWidget {
                     children: [
                       _SearchSection(),
                       _IncomingRequestsSection(),
-                      FindBotEntry(),
                       _FriendsSection(),
+                      FindBotEntry(),
                     ],
                   ),
                 ),

@@ -67,6 +67,7 @@ import 'stories_a11y_screens.dart';
 import 'mod_tools_a11y_screens.dart';
 import 'urgent_a11y_screens.dart';
 import 'captions_a11y_screens.dart';
+import 'watch_together_a11y_screens.dart';
 import 'ai_ask_a11y_screens.dart';
 import 'platforms_a11y_screens.dart';
 import 'workspace_a11y_screens.dart';
@@ -868,4 +869,5 @@ final allA11yScreens = <A11yScreen>[
   ...whiteboardA11yScreens,
   ...workflowsA11yScreens,
   ...onDeviceAiA11yScreens,
+  ...watchTogetherA11yScreens,
 ];

@@ -24,6 +24,9 @@ import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_settings.dart';
 import 'package:wecord/features/voice/voice_ui.dart';
 import 'package:wecord/features/voice/voice_widgets.dart';
+import 'package:wecord/features/voice/watch_together/watch_together_panel.dart';
+import 'package:wecord/features/voice/watch_together/watch_together_controller.dart';
+import 'package:wecord/features/voice/watch_together/watch_together_sheets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/layout/adaptive_layout.dart';
 import 'package:wecord/shared/models/conversation.dart';
@@ -350,6 +353,7 @@ class _VoiceChannelViewState extends ConsumerState<VoiceChannelView> {
                     ),
                     if (connected) const VoiceQualityBanner(),
                     if (connected) const CaptionStrip(),
+                    if (connected) const WatchTogetherPanel(),
                   ],
                 ),
                 controls: controls,
@@ -1408,6 +1412,9 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
     final session = widget.session;
     final controller = ref.read(voiceSessionProvider.notifier);
     final canShareScreen = ref.watch(voiceScreenShareSupportedProvider);
+    final watching = ref.watch(
+      watchTogetherProvider.select((watch) => watch.active),
+    );
     final hasKey = ref.watch(
       voiceSettingsProvider.select(
         (settings) => settings.pushToTalkKeyId != null,
@@ -1524,6 +1531,19 @@ class _VoiceCallControlsState extends ConsumerState<VoiceCallControls> {
                 ),
               ),
             ),
+          // E4: in the bar rather than the header, which has no room left
+          // for the channel's name on a phone.
+          VoiceControl(
+            key: const ValueKey('voice-watch-button'),
+            tooltip: watching
+                ? tr('Watching together')
+                : tr('Watch or listen together'),
+            icon: watching
+                ? Icons.smart_display_rounded
+                : Icons.smart_display_outlined,
+            on: watching,
+            onPressed: () => unawaited(showWatchTogetherSheet(context, ref)),
+          ),
           VoiceControl(
             key: const ValueKey('voice-control-reactions'),
             tooltip: tr('Reactions'),

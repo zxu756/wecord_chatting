@@ -13,6 +13,8 @@ import 'package:wecord/features/voice/voice_channel_view.dart';
 import 'package:wecord/features/voice/voice_repository.dart';
 import 'package:wecord/features/voice/voice_session.dart';
 import 'package:wecord/features/voice/voice_ui.dart';
+import 'package:wecord/features/voice/watch_together/watch_together_panel.dart';
+import 'package:wecord/features/voice/watch_together/watch_together_sheets.dart';
 import 'package:wecord/shared/l10n/l10n.dart';
 import 'package:wecord/shared/models/conversation.dart';
 import 'package:wecord/shared/models/voice.dart';
@@ -113,6 +115,7 @@ class DirectCallBar extends ConsumerWidget {
                                     ),
                                   ),
                                   const CaptionsButton(size: 36),
+                                  const WatchTogetherButton(size: 36),
                                   VoiceControlButton(
                                     key: const ValueKey(
                                       'voice-call-link-button',
@@ -147,6 +150,7 @@ class DirectCallBar extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                            const WatchTogetherPanel(pictureShare: 0.24),
                             const CaptionStrip(),
                             Padding(
                               padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),

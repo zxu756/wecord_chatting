@@ -111,6 +111,7 @@ import 'package:wecord/shared/l10n/zh/zh_favorites2.dart';
 import 'package:wecord/shared/l10n/zh/zh_platforms.dart';
 import 'package:wecord/shared/l10n/zh/zh_developer.dart';
 import 'package:wecord/shared/l10n/zh/zh_hashtags_posts.dart';
+import 'package:wecord/shared/l10n/zh/zh_watch_together.dart';
 
 /// Every area's map, for checks.
 const zhAreas = <Map<String, String>>[
@@ -223,6 +224,7 @@ const zhAreas = <Map<String, String>>[
   zhWorkflows,
   zhScale,
   zhOnDeviceAi,
+  zhWatchTogether,
 ];
 
 final zhStrings = <String, String>{for (final area in zhAreas) ...area};

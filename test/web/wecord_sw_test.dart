@@ -31,15 +31,19 @@ void main() {
 
     test('deploys the JS build unless WECORD_WEB_WASM=1 asks for wasm', () {
       final script = read('tool/deploy_web.sh');
-      expect(script, contains('WECORD_WEB_WASM'));
-      // The default command line carries no --wasm of its own.
-      final build = RegExp(
-        r'^flutter build web [^\n]*',
-        multiLine: true,
-      ).firstMatch(script)!;
-      expect(build.group(0), isNot(contains('--wasm')));
-      expect(build.group(0), contains(r'$wasm_flag'));
-      expect(script, contains('wasm_flag="--wasm"'));
+      final switchAt = script.indexOf(r'if [ "${WECORD_WEB_WASM:-0}" = "1" ]');
+      final wasmAt = script.indexOf(
+        'flutter build web --release --wasm --dart-define-from-file=.env',
+      );
+      final jsAt = script.indexOf(
+        'flutter build web --release --dart-define-from-file=.env',
+      );
+      expect(switchAt, greaterThan(-1));
+      // The wasm build is inside the switch; the default one after it is the
+      // plain JS build, as it always was.
+      expect(wasmAt, greaterThan(switchAt));
+      expect(jsAt, greaterThan(wasmAt));
+      expect(script.indexOf('--wasm', jsAt), -1);
       // The loader keeps a way back to the JS build.
       expect(read('web/flutter_bootstrap.js'), contains('wasm=0'));
     });

@@ -40,20 +40,17 @@ done
 # pubspec.yaml, without the build number.
 app_version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
 
-wasm_flag=""
 if [ "${WECORD_WEB_WASM:-0}" = "1" ]; then
-  wasm_flag="--wasm"
   echo "deploy_web: WebAssembly build (WECORD_WEB_WASM=1); main.dart.js stays as the fallback."
-fi
-
-# $wasm_flag is empty (and so left out) unless WECORD_WEB_WASM=1.
-# shellcheck disable=SC2086
-flutter build web --release $wasm_flag --dart-define-from-file=.env \
-  --dart-define=APP_VERSION="$app_version"
-
-if [ -n "$wasm_flag" ] && [ ! -f build/web/main.dart.wasm ]; then
-  echo "deploy_web: the wasm build produced no build/web/main.dart.wasm." >&2
-  exit 1
+  flutter build web --release --wasm --dart-define-from-file=.env \
+    --dart-define=APP_VERSION="$app_version"
+  if [ ! -f build/web/main.dart.wasm ]; then
+    echo "deploy_web: the wasm build produced no build/web/main.dart.wasm." >&2
+    exit 1
+  fi
+else
+  flutter build web --release --dart-define-from-file=.env \
+    --dart-define=APP_VERSION="$app_version"
 fi
 
 # Stamp the build's version into the service worker (web/wecord_sw.js). It is
